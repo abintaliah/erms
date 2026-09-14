@@ -40,6 +40,7 @@ NULLABLE_UUID = SearchField(FieldType.UUID, nullable=True)
 SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
     "aggregations": {
         "id": INTEGER,
+        "version": INTEGER,
         "parent_aggregation_id": NULLABLE_INTEGER,
         "aggregation_number": TEXT,
         "title": TEXT,
@@ -50,6 +51,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
     },
     "records": {
         "id": INTEGER,
+        "version": INTEGER,
         "aggregation_id": INTEGER,
         "record_number": TEXT,
         "title": TEXT,
@@ -59,6 +61,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
     },
     "digital_components": {
         "id": INTEGER,
+        "version": INTEGER,
         "record_id": INTEGER,
         "component_order": INTEGER,
         "file_name": TEXT,
@@ -68,6 +71,9 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "size_in_bytes": INTEGER,
         "checksum_algo": TEXT,
         "checksum_value": TEXT,
+        "storage_backend": TEXT,
+        "storage_key": NULLABLE_TEXT,
+        "content_status": TEXT,
     },
     "event_history": {
         "id": INTEGER,
@@ -85,6 +91,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
     },
     "org_units": {
         "id": INTEGER,
+        "version": INTEGER,
         "parent_org_unit_id": NULLABLE_INTEGER,
         "code": TEXT,
         "name": TEXT,
@@ -95,6 +102,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
     },
     "users": {
         "id": INTEGER,
+        "version": INTEGER,
         "name": TEXT,
         "email": NULLABLE_TEXT,
         "external_id": NULLABLE_TEXT,
@@ -104,6 +112,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
     },
     "roles": {
         "id": INTEGER,
+        "version": INTEGER,
         "org_unit_id": INTEGER,
         "supervisor_role_id": NULLABLE_INTEGER,
         "code": TEXT,
@@ -115,6 +124,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
     },
     "user_role_assignments": {
         "id": INTEGER,
+        "version": INTEGER,
         "user_id": INTEGER,
         "role_id": INTEGER,
         "assigned_by": NULLABLE_INTEGER,

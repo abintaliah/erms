@@ -45,17 +45,20 @@ def test_aggregation_crud_and_hierarchy(client: TestClient, aggregation: dict):
     response = client.patch(
         f"/api/v1/aggregations/{child['id']}",
         json={"description": "Updated description"},
+        headers={"If-Match": str(child["version"])},
     )
     assert response.status_code == 200
     assert response.json()["description"] == "Updated description"
+    child = response.json()
 
     response = client.patch(
         f"/api/v1/aggregations/{aggregation['id']}",
         json={"parent_aggregation_id": child["id"]},
+        headers={"If-Match": str(aggregation["version"])},
     )
     assert response.status_code == 409
 
-    assert client.delete(f"/api/v1/aggregations/{child['id']}").status_code == 204
+    assert client.delete(f"/api/v1/aggregations/{child['id']}", headers={"If-Match": str(child["version"])}).status_code == 204
     assert client.get(f"/api/v1/aggregations/{child['id']}").status_code == 404
 
 
@@ -79,10 +82,12 @@ def test_record_crud_and_required_aggregation(
     assert [item["id"] for item in response.json()] == [record["id"]]
 
     response = client.patch(
-        f"/api/v1/records/{record['id']}", json={"title": "Updated record"}
+        f"/api/v1/records/{record['id']}", json={"title": "Updated record"},
+        headers={"If-Match": str(record["version"])},
     )
     assert response.status_code == 200
     assert response.json()["title"] == "Updated record"
+    record = response.json()
 
     response = client.post(
         "/api/v1/records",
@@ -90,7 +95,7 @@ def test_record_crud_and_required_aggregation(
     )
     assert response.status_code == 409
 
-    assert client.delete(f"/api/v1/records/{record['id']}").status_code == 204
+    assert client.delete(f"/api/v1/records/{record['id']}", headers={"If-Match": str(record["version"])}).status_code == 204
 
 
 def test_digital_component_crud_and_order(client: TestClient, record: dict):
@@ -130,15 +135,17 @@ def test_digital_component_crud_and_order(client: TestClient, record: dict):
     response = client.patch(
         f"/api/v1/digital-components/{first['id']}",
         json={"file_name": "renamed.pdf"},
+        headers={"If-Match": str(first["version"])},
     )
     assert response.status_code == 200
     assert response.json()["file_name"] == "renamed.pdf"
+    first = response.json()
 
-    assert client.delete(f"/api/v1/digital-components/{first['id']}").status_code == 204
+    assert client.delete(f"/api/v1/digital-components/{first['id']}", headers={"If-Match": str(first["version"])}).status_code == 204
 
 
 def test_parent_deletion_is_rejected(client: TestClient, aggregation: dict, record: dict):
-    response = client.delete(f"/api/v1/aggregations/{aggregation['id']}")
+    response = client.delete(f"/api/v1/aggregations/{aggregation['id']}", headers={"If-Match": str(aggregation["version"])})
     assert response.status_code == 409
 
 
@@ -449,10 +456,11 @@ def test_update_and_delete_snapshots_remain_available(
     update_response = client.patch(
         f"/api/v1/records/{record['id']}",
         json={"title": "Changed title", "description": "Changed description"},
+        headers={"If-Match": str(record["version"])},
     )
     assert update_response.status_code == 200
 
-    delete_response = client.delete(f"/api/v1/records/{record['id']}")
+    delete_response = client.delete(f"/api/v1/records/{record['id']}", headers={"If-Match": str(update_response.json()["version"])})
     assert delete_response.status_code == 204
 
     history_response = client.get(f"/api/v1/records/{record['id']}/history")
@@ -512,3 +520,94 @@ def test_request_context_headers_are_validated(client: TestClient):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.headers["X-Request-ID"] == response.headers["X-Correlation-ID"]
+
+
+def test_optimistic_concurrency_requires_current_version(
+    client: TestClient, record: dict
+):
+    missing = client.patch(
+        f"/api/v1/records/{record['id']}", json={"title": "No precondition"}
+    )
+    assert missing.status_code == 428
+
+    updated = client.patch(
+        f"/api/v1/records/{record['id']}",
+        json={"title": "First writer"},
+        headers={"If-Match": str(record["version"])},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["version"] == record["version"] + 1
+
+    stale = client.patch(
+        f"/api/v1/records/{record['id']}",
+        json={"title": "Stale writer"},
+        headers={"If-Match": str(record["version"])},
+    )
+    assert stale.status_code == 412
+    assert stale.json()["detail"]["current_version"] == updated.json()["version"]
+
+
+def test_upload_download_replace_and_delete_content(client: TestClient, record: dict):
+    content = "مرحبا ERMS".encode()
+    uploaded = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": "1"},
+        files={"file": ("note.txt", content, "text/plain")},
+    )
+    assert uploaded.status_code == 201
+    component = uploaded.json()
+    assert component["content_status"] == "available"
+    assert component["storage_backend"] == "postgresql"
+    assert component["size_in_bytes"] == len(content)
+    assert component["checksum_algo"] == "sha256"
+
+    downloaded = client.get(
+        f"/api/v1/digital-components/{component['id']}/content"
+    )
+    assert downloaded.status_code == 200
+    assert downloaded.content == content
+
+    replacement = b"replacement"
+    replaced = client.put(
+        f"/api/v1/digital-components/{component['id']}/content",
+        files={"file": ("replacement.bin", replacement, "application/octet-stream")},
+        headers={"If-Match": str(component["version"])},
+    )
+    assert replaced.status_code == 200
+    component = replaced.json()
+    assert component["version"] == 2
+    assert client.get(
+        f"/api/v1/digital-components/{component['id']}/content"
+    ).content == replacement
+
+    deleted = client.delete(
+        f"/api/v1/digital-components/{component['id']}/content",
+        headers={"If-Match": str(component["version"])},
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["content_status"] == "deleted"
+    assert client.get(
+        f"/api/v1/digital-components/{component['id']}/content"
+    ).status_code == 404
+
+    history = client.get(
+        f"/api/v1/digital-components/{component['id']}/history"
+    ).json()
+    operations = [event["operation"] for event in history]
+    assert "CONTENT_UPLOADED" in operations
+    assert "CONTENT_DOWNLOADED" in operations
+    assert "CONTENT_REPLACED" in operations
+    assert "CONTENT_DELETED" in operations
+    domain_events = [event for event in history if event["operation"].startswith("CONTENT_")]
+    assert all(event["before_state"] is None for event in domain_events)
+    assert all(event["after_state"] is None for event in domain_events)
+
+
+def test_upload_size_limit(client: TestClient, record: dict, monkeypatch):
+    monkeypatch.setenv("MAX_UPLOAD_SIZE_BYTES", "4")
+    response = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": "1"},
+        files={"file": ("too-large.bin", b"12345", "application/octet-stream")},
+    )
+    assert response.status_code == 413

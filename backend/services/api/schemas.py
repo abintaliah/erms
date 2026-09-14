@@ -49,6 +49,7 @@ class AggregationRead(ApiModel):
     date_created: datetime
     date_opened: datetime
     date_closed: datetime | None
+    version: int
 
 
 class RecordCreate(ApiModel):
@@ -75,6 +76,7 @@ class RecordRead(ApiModel):
     description: str | None
     date_created: datetime
     date_originated: datetime
+    version: int
 
 
 class DigitalComponentCreate(ApiModel):
@@ -110,6 +112,10 @@ class DigitalComponentRead(ApiModel):
     size_in_bytes: int
     checksum_algo: str
     checksum_value: str
+    storage_backend: Literal["postgresql", "s3"]
+    storage_key: str | None
+    content_status: Literal["pending", "available", "failed", "quarantined", "deleted"]
+    version: int
 
 
 class EventHistoryRead(ApiModel):
@@ -156,6 +162,7 @@ class OrgUnitRead(ApiModel):
     status: Literal["active", "inactive"]
     date_created: datetime
     date_closed: datetime | None
+    version: int
 
 
 class UserCreate(ApiModel):
@@ -180,6 +187,7 @@ class UserRead(ApiModel):
     status: Literal["active", "inactive", "suspended"]
     date_created: datetime
     date_deactivated: datetime | None
+    version: int
 
 
 class RoleCreate(ApiModel):
@@ -210,6 +218,7 @@ class RoleRead(ApiModel):
     status: Literal["active", "inactive"]
     date_created: datetime
     date_deactivated: datetime | None
+    version: int
 
 
 class UserRoleAssignmentCreate(ApiModel):
@@ -246,6 +255,7 @@ class UserRoleAssignmentRead(ApiModel):
     date_assigned: datetime
     valid_from: datetime
     valid_until: datetime | None
+    version: int
 
 
 SearchOperator = Literal[

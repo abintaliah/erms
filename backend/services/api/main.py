@@ -1,10 +1,14 @@
 from contextlib import asynccontextmanager
+from datetime import datetime
+from io import BytesIO
+from urllib.parse import quote
 from uuid import UUID, uuid4
 
 import psycopg
-from fastapi import Depends, FastAPI, Query, Request, Response, status
-from fastapi.responses import JSONResponse
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.responses import JSONResponse, StreamingResponse
 from psycopg import Connection
+from psycopg.types.json import Jsonb
 
 from .audit_context import (
     actor_type_context,
@@ -14,6 +18,8 @@ from .audit_context import (
     request_id_context,
 )
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
+from .concurrency import expected_version
+from .content_storage import configured_storage, read_upload
 from .database import close_pool, get_connection, open_pool
 from .schemas import (
     AggregationCreate,
@@ -172,16 +178,17 @@ def get_aggregation(aggregation_id: int, connection: Connection = Depends(get_co
 def update_aggregation(
     aggregation_id: int,
     payload: AggregationUpdate,
+    version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection),
 ):
     return update_row(
-        connection, "aggregations", aggregation_id, payload.model_dump(exclude_unset=True)
+        connection, "aggregations", aggregation_id, payload.model_dump(exclude_unset=True), version
     )
 
 
 @app.delete("/api/v1/aggregations/{aggregation_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["aggregations"])
-def delete_aggregation(aggregation_id: int, connection: Connection = Depends(get_connection)):
-    delete_row(connection, "aggregations", aggregation_id)
+def delete_aggregation(aggregation_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
+    delete_row(connection, "aggregations", aggregation_id, version)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -227,14 +234,15 @@ def get_record(record_id: int, connection: Connection = Depends(get_connection))
 def update_record(
     record_id: int,
     payload: RecordUpdate,
+    version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection),
 ):
-    return update_row(connection, "records", record_id, payload.model_dump(exclude_unset=True))
+    return update_row(connection, "records", record_id, payload.model_dump(exclude_unset=True), version)
 
 
 @app.delete("/api/v1/records/{record_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["records"])
-def delete_record(record_id: int, connection: Connection = Depends(get_connection)):
-    delete_row(connection, "records", record_id)
+def delete_record(record_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
+    delete_row(connection, "records", record_id, version)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -301,6 +309,7 @@ def get_digital_component(component_id: int, connection: Connection = Depends(ge
 def update_digital_component(
     component_id: int,
     payload: DigitalComponentUpdate,
+    version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection),
 ):
     return update_row(
@@ -308,6 +317,7 @@ def update_digital_component(
         "digital_components",
         component_id,
         payload.model_dump(exclude_unset=True),
+        version,
     )
 
 
@@ -318,10 +328,146 @@ def update_digital_component(
 )
 def delete_digital_component(
     component_id: int,
+    version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection),
 ):
-    delete_row(connection, "digital_components", component_id)
+    delete_row(connection, "digital_components", component_id, version)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _append_content_event(
+    connection: Connection,
+    component_id: int,
+    operation: str,
+    metadata: dict,
+) -> None:
+    connection.execute(
+        "SELECT append_domain_event(%s, %s, %s, %s)",
+        ("digital_component", component_id, operation, Jsonb(metadata)),
+    )
+
+
+@app.post(
+    "/api/v1/records/{record_id}/digital-components/upload",
+    response_model=DigitalComponentRead,
+    status_code=status.HTTP_201_CREATED,
+    tags=["digital component content"],
+)
+def upload_digital_component(
+    record_id: int,
+    file: UploadFile = File(...),
+    component_order: int = Form(..., gt=0),
+    date_originated: datetime | None = Form(default=None),
+    connection: Connection = Depends(get_connection),
+):
+    get_or_404(connection, "records", record_id)
+    uploaded = read_upload(file)
+    mime_type = file.content_type or "application/octet-stream"
+    component = create_row(
+        connection,
+        "digital_components",
+        {
+            "record_id": record_id,
+            "component_order": component_order,
+            "file_name": file.filename or "unnamed",
+            "date_originated": date_originated,
+            "mime_type": mime_type,
+            "size_in_bytes": uploaded.size_in_bytes,
+            "checksum_algo": "sha256",
+            "checksum_value": uploaded.checksum_value,
+            "storage_backend": "postgresql",
+            "content_status": "available",
+        },
+    )
+    configured_storage().store(connection, component["id"], uploaded.content)
+    _append_content_event(
+        connection,
+        component["id"],
+        "CONTENT_UPLOADED",
+        {"file_name": component["file_name"], "mime_type": mime_type,
+         "size_in_bytes": uploaded.size_in_bytes, "checksum_algo": "sha256",
+         "checksum_value": uploaded.checksum_value},
+    )
+    return component
+
+
+@app.get(
+    "/api/v1/digital-components/{component_id}/content",
+    tags=["digital component content"],
+)
+def download_digital_component_content(
+    component_id: int,
+    connection: Connection = Depends(get_connection),
+):
+    component = get_or_404(connection, "digital_components", component_id)
+    content = configured_storage().read(connection, component_id)
+    if content is None or component["content_status"] != "available":
+        raise HTTPException(status_code=404, detail="digital component content not found")
+    _append_content_event(connection, component_id, "CONTENT_DOWNLOADED", {
+        "size_in_bytes": component["size_in_bytes"],
+        "checksum_algo": component["checksum_algo"],
+        "checksum_value": component["checksum_value"],
+    })
+    encoded_name = quote(component["file_name"], safe="")
+    return StreamingResponse(
+        BytesIO(content),
+        media_type=component["mime_type"],
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"},
+    )
+
+
+@app.put(
+    "/api/v1/digital-components/{component_id}/content",
+    response_model=DigitalComponentRead,
+    tags=["digital component content"],
+)
+def replace_digital_component_content(
+    component_id: int,
+    file: UploadFile = File(...),
+    version: int = Depends(expected_version),
+    connection: Connection = Depends(get_connection),
+):
+    uploaded = read_upload(file)
+    mime_type = file.content_type or "application/octet-stream"
+    component = update_row(connection, "digital_components", component_id, {
+        "file_name": file.filename or "unnamed",
+        "mime_type": mime_type,
+        "size_in_bytes": uploaded.size_in_bytes,
+        "checksum_algo": "sha256",
+        "checksum_value": uploaded.checksum_value,
+        "storage_backend": "postgresql",
+        "storage_key": None,
+        "content_status": "available",
+    }, version)
+    configured_storage().store(connection, component_id, uploaded.content)
+    _append_content_event(connection, component_id, "CONTENT_REPLACED", {
+        "file_name": component["file_name"], "mime_type": mime_type,
+        "size_in_bytes": uploaded.size_in_bytes, "checksum_algo": "sha256",
+        "checksum_value": uploaded.checksum_value,
+    })
+    return component
+
+
+@app.delete(
+    "/api/v1/digital-components/{component_id}/content",
+    response_model=DigitalComponentRead,
+    tags=["digital component content"],
+)
+def delete_digital_component_content(
+    component_id: int,
+    version: int = Depends(expected_version),
+    connection: Connection = Depends(get_connection),
+):
+    configured_storage().delete(connection, component_id)
+    component = update_row(connection, "digital_components", component_id, {
+        "content_status": "deleted",
+    }, version)
+    _append_content_event(connection, component_id, "CONTENT_DELETED", {
+        "size_in_bytes": component["size_in_bytes"],
+        "checksum_algo": component["checksum_algo"],
+        "checksum_value": component["checksum_value"],
+    })
+    return component
 
 
 @app.get(

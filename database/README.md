@@ -25,6 +25,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/002_add_user_management.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/003_add_content_storage_and_entity_versions.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -33,6 +36,8 @@ were initially installed before migration tracking was introduced; it preserves
 existing events and records the migration version. Migration 002 adds users,
 organizational units, roles, temporal role assignments, hierarchy safeguards,
 searchable indexes, and event-history triggers.
+Migration 003 adds PostgreSQL-backed digital-component content storage and
+database-managed optimistic-concurrency versions for all mutable entities.
 
 ## Tests
 
