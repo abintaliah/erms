@@ -402,3 +402,113 @@ def test_search_rejects_unsafe_or_invalid_grammar(
         "/api/v1/records/search", json={"where": expression}
     )
     assert excessive_depth.status_code == 422
+
+
+def test_api_change_creates_correlated_history(client: TestClient):
+    request_id = "11111111-1111-4111-8111-111111111111"
+    correlation_id = "22222222-2222-4222-8222-222222222222"
+    response = client.post(
+        "/api/v1/aggregations",
+        headers={
+            "X-Request-ID": request_id,
+            "X-Correlation-ID": correlation_id,
+            "X-Change-Reason": "Created for audit testing",
+        },
+        json={"aggregation_number": "AUDIT-001", "title": "Audited item"},
+    )
+    assert response.status_code == 201
+    aggregation = response.json()
+    assert response.headers["X-Request-ID"] == request_id
+    assert response.headers["X-Correlation-ID"] == correlation_id
+
+    history_response = client.get(
+        f"/api/v1/aggregations/{aggregation['id']}/history"
+    )
+    assert history_response.status_code == 200
+    history = history_response.json()
+    assert len(history) == 1
+    event = history[0]
+    assert event["entity_type"] == "aggregation"
+    assert event["entity_id"] == aggregation["id"]
+    assert event["operation"] == "CREATE"
+    assert event["actor_user_id"] is None
+    assert event["actor_type"] == "anonymous"
+    assert event["source"] == "api"
+    assert event["request_id"] == request_id
+    assert event["correlation_id"] == correlation_id
+    assert event["reason"] == "Created for audit testing"
+    assert event["before_state"] is None
+    assert event["after_state"]["title"] == "Audited item"
+    assert "title" in event["changed_fields"]
+    assert event["metadata"] == {}
+
+
+def test_update_and_delete_snapshots_remain_available(
+    client: TestClient, record: dict
+):
+    update_response = client.patch(
+        f"/api/v1/records/{record['id']}",
+        json={"title": "Changed title", "description": "Changed description"},
+    )
+    assert update_response.status_code == 200
+
+    delete_response = client.delete(f"/api/v1/records/{record['id']}")
+    assert delete_response.status_code == 204
+
+    history_response = client.get(f"/api/v1/records/{record['id']}/history")
+    assert history_response.status_code == 200
+    history = history_response.json()
+    assert [event["operation"] for event in history] == ["DELETE", "UPDATE", "CREATE"]
+
+    update_event = history[1]
+    assert update_event["before_state"]["title"] == "Example record"
+    assert update_event["after_state"]["title"] == "Changed title"
+    assert update_event["changed_fields"] == ["description", "title"]
+
+    delete_event = history[0]
+    assert delete_event["before_state"]["title"] == "Changed title"
+    assert delete_event["after_state"] is None
+
+
+def test_event_history_is_read_only_and_searchable(
+    client: TestClient, aggregation: dict
+):
+    history = client.get(
+        "/api/v1/event-history",
+        params={"entity_type": "aggregation", "entity_id": aggregation["id"]},
+    )
+    assert history.status_code == 200
+    event = history.json()[0]
+
+    get_response = client.get(f"/api/v1/event-history/{event['id']}")
+    assert get_response.status_code == 200
+    assert get_response.json()["id"] == event["id"]
+
+    search_response = client.post(
+        "/api/v1/event-history/search",
+        json={
+            "where": {
+                "and": [
+                    {"field": "entity_type", "operator": "eq", "value": "aggregation"},
+                    {"field": "operation", "operator": "eq", "value": "CREATE"},
+                    {"field": "request_id", "operator": "is_not_null"},
+                ]
+            }
+        },
+    )
+    assert search_response.status_code == 200
+    assert search_response.json()["total"] == 1
+
+    assert client.patch(
+        f"/api/v1/event-history/{event['id']}", json={"reason": "tampered"}
+    ).status_code == 405
+    assert client.delete(f"/api/v1/event-history/{event['id']}").status_code == 405
+
+
+def test_request_context_headers_are_validated(client: TestClient):
+    response = client.get("/health", headers={"X-Correlation-ID": "not-a-uuid"})
+    assert response.status_code == 400
+
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == response.headers["X-Correlation-ID"]

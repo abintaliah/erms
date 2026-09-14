@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Annotated, Any, Generic, Literal, TypeVar
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -109,6 +110,25 @@ class DigitalComponentRead(ApiModel):
     size_in_bytes: int
     checksum_algo: str
     checksum_value: str
+
+
+class EventHistoryRead(ApiModel):
+    id: int
+    occurred_at: datetime
+    transaction_id: int
+    entity_type: str
+    entity_id: int
+    operation: str
+    actor_user_id: int | None
+    actor_type: str
+    source: str
+    request_id: UUID | None
+    correlation_id: UUID | None
+    before_state: dict[str, Any] | None
+    after_state: dict[str, Any] | None
+    changed_fields: list[str]
+    reason: str | None
+    metadata: dict[str, Any]
 
 
 SearchOperator = Literal[

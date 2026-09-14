@@ -20,6 +20,7 @@ def list_rows(
     offset: int,
     filters: dict[str, Any] | None = None,
     order_by: tuple[str, ...] = ("id",),
+    descending: bool = False,
 ) -> list[dict[str, Any]]:
     filters = {key: value for key, value in (filters or {}).items() if value is not None}
     query = sql.SQL("SELECT * FROM {}").format(sql.Identifier(table))
@@ -32,8 +33,9 @@ def list_rows(
         query += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(clauses)
         parameters.extend(filters.values())
 
+    direction = sql.SQL(" DESC") if descending else sql.SQL(" ASC")
     query += sql.SQL(" ORDER BY ") + sql.SQL(", ").join(
-        sql.Identifier(column) for column in order_by
+        sql.Identifier(column) + direction for column in order_by
     )
     query += sql.SQL(" LIMIT %s OFFSET %s")
     parameters.extend((limit, offset))

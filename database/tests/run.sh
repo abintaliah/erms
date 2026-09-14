@@ -67,7 +67,12 @@ readonly HOST_PORT="$(docker port "${CONTAINER_NAME}" 5432/tcp | sed 's/.*://')"
 readonly DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${POSTGRES_DB}"
 
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/schema.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${SCRIPT_DIR}/reset_to_pre_event_history.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/001_add_event_history.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"
 env DATABASE_URL="${DATABASE_URL}" PYTHONPATH="${PROJECT_DIR}" \
     "${API_VENV}/bin/python" -m pytest "${API_DIR}/tests"
 

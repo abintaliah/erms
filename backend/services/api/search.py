@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from psycopg import Connection, sql
@@ -19,6 +20,7 @@ class FieldType(str, Enum):
     INTEGER = "integer"
     TEXT = "text"
     DATETIME = "datetime"
+    UUID = "uuid"
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,7 @@ TEXT = SearchField(FieldType.TEXT)
 NULLABLE_TEXT = SearchField(FieldType.TEXT, nullable=True)
 DATETIME = SearchField(FieldType.DATETIME)
 NULLABLE_DATETIME = SearchField(FieldType.DATETIME, nullable=True)
+NULLABLE_UUID = SearchField(FieldType.UUID, nullable=True)
 
 SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
     "aggregations": {
@@ -66,6 +69,20 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "checksum_algo": TEXT,
         "checksum_value": TEXT,
     },
+    "event_history": {
+        "id": INTEGER,
+        "occurred_at": DATETIME,
+        "transaction_id": INTEGER,
+        "entity_type": TEXT,
+        "entity_id": INTEGER,
+        "operation": TEXT,
+        "actor_user_id": NULLABLE_INTEGER,
+        "actor_type": TEXT,
+        "source": TEXT,
+        "request_id": NULLABLE_UUID,
+        "correlation_id": NULLABLE_UUID,
+        "reason": NULLABLE_TEXT,
+    },
 }
 
 SET_OPERATORS = {"in", "not_in"}
@@ -94,6 +111,8 @@ def _coerce_value(field_name: str, field: SearchField, value: Any) -> Any:
             if not isinstance(value, str):
                 raise ValueError
             return value
+        if field.type is FieldType.UUID:
+            return TypeAdapter(UUID).validate_python(value)
         parsed = TypeAdapter(datetime).validate_python(value)
         if parsed.tzinfo is None:
             raise ValueError
