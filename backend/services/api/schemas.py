@@ -1,0 +1,184 @@
+from datetime import datetime
+from typing import Annotated, Any, Generic, Literal, TypeVar
+
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+
+
+NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
+class ApiModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class AggregationCreate(ApiModel):
+    parent_aggregation_id: int | None = None
+    aggregation_number: NonBlankString
+    title: NonBlankString
+    description: str | None = None
+    date_opened: datetime | None = None
+    date_closed: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if (
+            self.date_opened is not None
+            and self.date_closed is not None
+            and self.date_closed < self.date_opened
+        ):
+            raise ValueError("date_closed cannot be earlier than date_opened")
+        return self
+
+
+class AggregationUpdate(ApiModel):
+    parent_aggregation_id: int | None = None
+    aggregation_number: NonBlankString | None = None
+    title: NonBlankString | None = None
+    description: str | None = None
+    date_opened: datetime | None = None
+    date_closed: datetime | None = None
+
+
+class AggregationRead(ApiModel):
+    id: int
+    parent_aggregation_id: int | None
+    aggregation_number: str
+    title: str
+    description: str | None
+    date_created: datetime
+    date_opened: datetime
+    date_closed: datetime | None
+
+
+class RecordCreate(ApiModel):
+    aggregation_id: int
+    record_number: NonBlankString
+    title: NonBlankString
+    description: str | None = None
+    date_originated: datetime | None = None
+
+
+class RecordUpdate(ApiModel):
+    aggregation_id: int | None = None
+    record_number: NonBlankString | None = None
+    title: NonBlankString | None = None
+    description: str | None = None
+    date_originated: datetime | None = None
+
+
+class RecordRead(ApiModel):
+    id: int
+    aggregation_id: int
+    record_number: str
+    title: str
+    description: str | None
+    date_created: datetime
+    date_originated: datetime
+
+
+class DigitalComponentCreate(ApiModel):
+    record_id: int
+    component_order: int = Field(gt=0)
+    file_name: NonBlankString
+    date_originated: datetime | None = None
+    mime_type: NonBlankString
+    size_in_bytes: int = Field(ge=0)
+    checksum_algo: NonBlankString
+    checksum_value: NonBlankString
+
+
+class DigitalComponentUpdate(ApiModel):
+    record_id: int | None = None
+    component_order: int | None = Field(default=None, gt=0)
+    file_name: NonBlankString | None = None
+    date_originated: datetime | None = None
+    mime_type: NonBlankString | None = None
+    size_in_bytes: int | None = Field(default=None, ge=0)
+    checksum_algo: NonBlankString | None = None
+    checksum_value: NonBlankString | None = None
+
+
+class DigitalComponentRead(ApiModel):
+    id: int
+    record_id: int
+    component_order: int
+    file_name: str
+    date_created: datetime
+    date_originated: datetime
+    mime_type: str
+    size_in_bytes: int
+    checksum_algo: str
+    checksum_value: str
+
+
+SearchOperator = Literal[
+    "eq",
+    "ne",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "in",
+    "not_in",
+    "between",
+    "is_null",
+    "is_not_null",
+    "contains_ci",
+    "starts_with_ci",
+    "ends_with_ci",
+]
+
+
+class SearchExpression(ApiModel):
+    field: str | None = None
+    operator: SearchOperator | None = None
+    value: Any = None
+    and_: list["SearchExpression"] | None = Field(default=None, alias="and", min_length=1)
+    or_: list["SearchExpression"] | None = Field(default=None, alias="or", min_length=1)
+    not_: "SearchExpression | None" = Field(default=None, alias="not")
+
+    @model_validator(mode="after")
+    def validate_expression_shape(self):
+        comparison_keys = self.model_fields_set & {"field", "operator", "value"}
+        logical_nodes = sum(
+            node is not None for node in (self.and_, self.or_, self.not_)
+        )
+        is_comparison = self.field is not None or self.operator is not None
+
+        if logical_nodes + int(is_comparison) != 1:
+            raise ValueError("use exactly one comparison, and, or, or not expression")
+        if logical_nodes and comparison_keys:
+            raise ValueError("logical expressions cannot contain field, operator, or value")
+        if is_comparison and (self.field is None or self.operator is None):
+            raise ValueError("comparison expressions require field and operator")
+
+        has_value = "value" in self.model_fields_set
+        if is_comparison and self.operator in {"is_null", "is_not_null"} and has_value:
+            raise ValueError(f"{self.operator} does not accept a value")
+        if is_comparison and self.operator not in {"is_null", "is_not_null"}:
+            if not has_value or self.value is None:
+                raise ValueError(f"{self.operator} requires a non-null value")
+        return self
+
+
+class SearchSort(ApiModel):
+    field: str
+    direction: Literal["asc", "desc"] = "asc"
+
+
+class SearchRequest(ApiModel):
+    where: SearchExpression | None = None
+    sort: list[SearchSort] = Field(default_factory=list, max_length=10)
+    limit: int = Field(default=100, ge=1, le=500)
+    offset: int = Field(default=0, ge=0)
+
+
+SearchItem = TypeVar("SearchItem")
+
+
+class SearchResponse(ApiModel, Generic[SearchItem]):
+    items: list[SearchItem]
+    total: int
+    limit: int
+    offset: int
+    returned: int
