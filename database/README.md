@@ -16,17 +16,23 @@ migration files when initializing a new database.
 ## Existing database
 
 Apply only migrations not already recorded in `schema_migrations`, in filename
-order. To add event history to a database containing the core records schema:
+order. To add event history and then user management to a database containing
+the core records schema:
 
 ```bash
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/001_add_event_history.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/002_add_user_management.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
 to apply to the current development database where the event-history objects
 were initially installed before migration tracking was introduced; it preserves
-existing events and records the migration version.
+existing events and records the migration version. Migration 002 adds users,
+organizational units, roles, temporal role assignments, hierarchy safeguards,
+searchable indexes, and event-history triggers.
 
 ## Tests
 

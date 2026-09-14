@@ -18,7 +18,17 @@ def clean_database(client: TestClient):
     yield
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
         connection.execute(
-            "TRUNCATE digital_components, records, aggregations RESTART IDENTITY CASCADE"
+            """
+            TRUNCATE
+                user_role_assignments,
+                roles,
+                users,
+                org_units,
+                digital_components,
+                records,
+                aggregations
+            RESTART IDENTITY CASCADE
+            """
         )
         connection.execute("ALTER TABLE event_history DISABLE TRIGGER USER")
         connection.execute("TRUNCATE event_history RESTART IDENTITY")
