@@ -30,6 +30,7 @@ from .schemas import (
     SearchResponse,
 )
 from .search import search_rows
+from .user_management import router as user_management_router
 
 
 @asynccontextmanager
@@ -47,6 +48,7 @@ app = FastAPI(
     description="REST API for the Electronic Records Management System.",
     lifespan=lifespan,
 )
+app.include_router(user_management_router)
 
 
 def _request_uuid(value: str | None, header_name: str) -> str:

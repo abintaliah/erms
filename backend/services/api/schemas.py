@@ -131,6 +131,123 @@ class EventHistoryRead(ApiModel):
     metadata: dict[str, Any]
 
 
+class OrgUnitCreate(ApiModel):
+    parent_org_unit_id: int | None = None
+    code: NonBlankString
+    name: NonBlankString
+    description: str | None = None
+
+
+class OrgUnitUpdate(ApiModel):
+    parent_org_unit_id: int | None = None
+    code: NonBlankString | None = None
+    name: NonBlankString | None = None
+    description: str | None = None
+    status: Literal["active", "inactive"] | None = None
+    date_closed: datetime | None = None
+
+
+class OrgUnitRead(ApiModel):
+    id: int
+    parent_org_unit_id: int | None
+    code: str
+    name: str
+    description: str | None
+    status: Literal["active", "inactive"]
+    date_created: datetime
+    date_closed: datetime | None
+
+
+class UserCreate(ApiModel):
+    name: NonBlankString
+    email: NonBlankString | None = None
+    external_id: NonBlankString | None = None
+
+
+class UserUpdate(ApiModel):
+    name: NonBlankString | None = None
+    email: NonBlankString | None = None
+    external_id: NonBlankString | None = None
+    status: Literal["active", "inactive", "suspended"] | None = None
+    date_deactivated: datetime | None = None
+
+
+class UserRead(ApiModel):
+    id: int
+    name: str
+    email: str | None
+    external_id: str | None
+    status: Literal["active", "inactive", "suspended"]
+    date_created: datetime
+    date_deactivated: datetime | None
+
+
+class RoleCreate(ApiModel):
+    org_unit_id: int
+    supervisor_role_id: int | None = None
+    code: NonBlankString
+    name: NonBlankString
+    description: str | None = None
+
+
+class RoleUpdate(ApiModel):
+    org_unit_id: int | None = None
+    supervisor_role_id: int | None = None
+    code: NonBlankString | None = None
+    name: NonBlankString | None = None
+    description: str | None = None
+    status: Literal["active", "inactive"] | None = None
+    date_deactivated: datetime | None = None
+
+
+class RoleRead(ApiModel):
+    id: int
+    org_unit_id: int
+    supervisor_role_id: int | None
+    code: str
+    name: str
+    description: str | None
+    status: Literal["active", "inactive"]
+    date_created: datetime
+    date_deactivated: datetime | None
+
+
+class UserRoleAssignmentCreate(ApiModel):
+    user_id: int
+    role_id: int
+    assigned_by: int | None = None
+    valid_from: datetime | None = None
+    valid_until: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if (
+            self.valid_from is not None
+            and self.valid_until is not None
+            and self.valid_until < self.valid_from
+        ):
+            raise ValueError("valid_until cannot be earlier than valid_from")
+        return self
+
+
+class UserRoleAssignmentUpdate(ApiModel):
+    user_id: int | None = None
+    role_id: int | None = None
+    assigned_by: int | None = None
+    valid_from: datetime | None = None
+    valid_until: datetime | None = None
+
+
+class UserRoleAssignmentRead(ApiModel):
+    id: int
+    user_id: int
+    role_id: int
+    assigned_by: int | None
+    date_assigned: datetime
+    valid_from: datetime
+    valid_until: datetime | None
+
+
 SearchOperator = Literal[
     "eq",
     "ne",

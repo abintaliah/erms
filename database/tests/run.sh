@@ -71,8 +71,11 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${SCRIPT_DIR}/reset_to_pre_event_history.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
     --file "${DATABASE_DIR}/migrations/001_add_event_history.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/002_add_user_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/user_management.sql"
 env DATABASE_URL="${DATABASE_URL}" PYTHONPATH="${PROJECT_DIR}" \
     "${API_VENV}/bin/python" -m pytest "${API_DIR}/tests"
 

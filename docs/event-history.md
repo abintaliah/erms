@@ -2,7 +2,8 @@
 
 The ERMS event history subsystem provides an immutable, chronological audit
 trail for entity state changes. It currently records every insert, update, and
-delete affecting aggregations, records, and digital components.
+delete affecting aggregations, records, digital components, users,
+organizational units, roles, and user-role assignments.
 
 Event history is not event sourcing: the entity tables remain the source of
 current state. History explains who or what changed an entity, when it changed,

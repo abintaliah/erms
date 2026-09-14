@@ -11,6 +11,10 @@ POST /api/v1/aggregations/search
 POST /api/v1/records/search
 POST /api/v1/digital-components/search
 POST /api/v1/event-history/search
+POST /api/v1/users/search
+POST /api/v1/org-units/search
+POST /api/v1/roles/search
+POST /api/v1/user-role-assignments/search
 ```
 
 The ordinary `GET` collection endpoints remain available for simple equality
@@ -197,6 +201,26 @@ records with “draft” in the title:
 
 `id`, `occurred_at`, `transaction_id`, `entity_type`, `entity_id`, `operation`,
 `actor_user_id`, `actor_type`, `source`, `request_id`, `correlation_id`, `reason`
+
+### Users
+
+`id`, `name`, `email`, `external_id`, `status`, `date_created`,
+`date_deactivated`
+
+### Organizational units
+
+`id`, `parent_org_unit_id`, `code`, `name`, `description`, `status`,
+`date_created`, `date_closed`
+
+### Roles
+
+`id`, `org_unit_id`, `supervisor_role_id`, `code`, `name`, `description`,
+`status`, `date_created`, `date_deactivated`
+
+### User-role assignments
+
+`id`, `user_id`, `role_id`, `assigned_by`, `date_assigned`, `valid_from`,
+`valid_until`
 
 The same field allowlists apply to sorting. Case-insensitive text operators are
 valid only for text fields. Null operators are valid only for nullable fields.
