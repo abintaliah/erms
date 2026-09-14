@@ -3,6 +3,11 @@ set -Eeuo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly DATABASE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+readonly PROJECT_DIR="$(cd "${DATABASE_DIR}/.." && pwd)"
+readonly API_DIR="${PROJECT_DIR}/backend/services/api"
+readonly API_VENV="${ERMS_API_VENV:-${API_DIR}/.venv}"
+readonly TEST_REQUIREMENTS="${API_DIR}/requirements-test.txt"
+readonly TEST_DEPENDENCY_STAMP="${API_VENV}/.test-requirements-checksum"
 readonly CONTAINER_NAME="erms-postgres-test-$$"
 readonly POSTGRES_IMAGE="${POSTGRES_TEST_IMAGE:-postgres:17-alpine}"
 readonly POSTGRES_USER="erms_test"
@@ -10,9 +15,28 @@ readonly POSTGRES_PASSWORD="erms_test_password"
 readonly POSTGRES_DB="erms_test"
 
 cleanup() {
+    local exit_code=$?
+    trap - EXIT INT TERM
     docker rm --force "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+    exit "${exit_code}"
 }
 trap cleanup EXIT INT TERM
+
+if [[ ! -x "${API_VENV}/bin/python" ]]; then
+    python3 -m venv "${API_VENV}"
+fi
+
+readonly CURRENT_TEST_CHECKSUM="$(cksum "${API_DIR}/requirements.txt" "${TEST_REQUIREMENTS}")"
+INSTALLED_TEST_CHECKSUM=""
+if [[ -f "${TEST_DEPENDENCY_STAMP}" ]]; then
+    INSTALLED_TEST_CHECKSUM="$(<"${TEST_DEPENDENCY_STAMP}")"
+fi
+
+if [[ "${CURRENT_TEST_CHECKSUM}" != "${INSTALLED_TEST_CHECKSUM}" ]]; then
+    "${API_VENV}/bin/python" -m pip install --disable-pip-version-check \
+        --requirement "${TEST_REQUIREMENTS}"
+    printf '%s\n' "${CURRENT_TEST_CHECKSUM}" >"${TEST_DEPENDENCY_STAMP}"
+fi
 
 docker run \
     --detach \
@@ -44,5 +68,7 @@ readonly DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.
 
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/schema.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
+env DATABASE_URL="${DATABASE_URL}" PYTHONPATH="${PROJECT_DIR}" \
+    "${API_VENV}/bin/python" -m pytest "${API_DIR}/tests"
 
-echo "Core records management database tests passed."
+echo "Core records management database and API tests passed."
