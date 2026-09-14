@@ -1,0 +1,85 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging and build output
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Test, type-checker, and coverage artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# FastAPI / ASGI runtime files
+*.pid
+*.log
+uvicorn*.log
+gunicorn*.log
+
+# NiceGUI runtime state and generated files
+.nicegui/
+nicegui_storage/
+
+# Local SQL databases and transient database files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+
+# Database dumps and backups (migration source files remain tracked)
+*.dump
+*.bak
+*.backup
+*.sql.gz
+*.sql.bz2
+*.sql.xz
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+
+# Editor and IDE settings
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+
+# Temporary files
+.cache/
+tmp/
+temp/
+*.tmp
