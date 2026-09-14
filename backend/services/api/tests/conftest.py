@@ -20,6 +20,9 @@ def clean_database(client: TestClient):
         connection.execute(
             "TRUNCATE digital_components, records, aggregations RESTART IDENTITY CASCADE"
         )
+        connection.execute("ALTER TABLE event_history DISABLE TRIGGER USER")
+        connection.execute("TRUNCATE event_history RESTART IDENTITY")
+        connection.execute("ALTER TABLE event_history ENABLE TRIGGER USER")
 
 
 @pytest.fixture

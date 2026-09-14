@@ -10,6 +10,7 @@ unapproved column names from clients.
 POST /api/v1/aggregations/search
 POST /api/v1/records/search
 POST /api/v1/digital-components/search
+POST /api/v1/event-history/search
 ```
 
 The ordinary `GET` collection endpoints remain available for simple equality
@@ -191,6 +192,11 @@ records with “draft” in the title:
 `id`, `record_id`, `component_order`, `file_name`, `date_created`,
 `date_originated`, `mime_type`, `size_in_bytes`, `checksum_algo`,
 `checksum_value`
+
+### Event history
+
+`id`, `occurred_at`, `transaction_id`, `entity_type`, `entity_id`, `operation`,
+`actor_user_id`, `actor_type`, `source`, `request_id`, `correlation_id`, `reason`
 
 The same field allowlists apply to sorting. Case-insensitive text operators are
 valid only for text fields. Null operators are valid only for nullable fields.
