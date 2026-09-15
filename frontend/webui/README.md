@@ -49,4 +49,5 @@ handling, and record-scoped digital-component upload/listing. See
 operations and security behavior. Digital components can be downloaded in their
 original format or viewed through the bundled, self-hosted PDF.js viewer. See
 [`../../docs/document-viewing.md`](../../docs/document-viewing.md). Authorization
-remains a later subsystem.
+remains a later subsystem. Direct and inherited closure behavior is described in
+[`../../docs/aggregation-closure.md`](../../docs/aggregation-closure.md).

@@ -1,5 +1,6 @@
 import os
 
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
@@ -147,6 +148,126 @@ def test_digital_component_crud_and_order(client: TestClient, record: dict):
 def test_parent_deletion_is_rejected(client: TestClient, aggregation: dict, record: dict):
     response = client.delete(f"/api/v1/aggregations/{aggregation['id']}", headers={"If-Match": str(aggregation["version"])})
     assert response.status_code == 409
+
+
+def test_record_deletion_cascades_to_components_and_content(client: TestClient, record: dict):
+    component = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": 1},
+        files={"file": ("delete-with-record.txt", b"content", "text/plain")},
+    ).json()
+
+    deleted = client.delete(
+        f"/api/v1/records/{record['id']}",
+        headers={"If-Match": str(record["version"])},
+    )
+
+    assert deleted.status_code == 204
+    assert client.get(f"/api/v1/records/{record['id']}").status_code == 404
+    assert client.get(f"/api/v1/digital-components/{component['id']}").status_code == 404
+    assert client.get(f"/api/v1/digital-components/{component['id']}/content").status_code == 404
+
+
+def test_closed_aggregation_makes_its_entire_subtree_immutable(client: TestClient):
+    root = client.post("/api/v1/aggregations", json={
+        "aggregation_number": "CLOSE-ROOT", "title": "Closed root",
+    }).json()
+    child = client.post("/api/v1/aggregations", json={
+        "parent_aggregation_id": root["id"], "aggregation_number": "CLOSE-CHILD",
+        "title": "Child",
+    }).json()
+    sibling = client.post("/api/v1/aggregations", json={
+        "aggregation_number": "CLOSE-SIBLING", "title": "Independent root",
+    }).json()
+    record = client.post("/api/v1/records", json={
+        "aggregation_id": child["id"], "record_number": "CLOSE-REC", "title": "Protected record",
+    }).json()
+    component = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": 1}, files={"file": ("locked.txt", b"locked", "text/plain")},
+    ).json()
+
+    future = client.patch(
+        f"/api/v1/aggregations/{root['id']}", json={"date_closed": "2999-01-01T00:00:00Z"},
+        headers={"If-Match": str(root["version"])},
+    )
+    assert future.status_code == 422
+
+    closed = client.patch(
+        f"/api/v1/aggregations/{root['id']}", json={"date_closed": root["date_created"]},
+        headers={"If-Match": str(root["version"])},
+    )
+    assert closed.status_code == 200
+    root = closed.json()
+
+    assert client.patch(
+        f"/api/v1/aggregations/{root['id']}", json={"title": "Cannot rename"},
+        headers={"If-Match": str(root["version"])},
+    ).status_code == 409
+    assert client.patch(
+        f"/api/v1/aggregations/{root['id']}", json={"date_closed": "2026-01-01T00:00:00Z"},
+        headers={"If-Match": str(root["version"])},
+    ).status_code == 409
+    assert client.patch(
+        f"/api/v1/aggregations/{child['id']}", json={"description": "Cannot edit inherited closure"},
+        headers={"If-Match": str(child["version"])},
+    ).status_code == 409
+
+    assert client.get(f"/api/v1/records/{record['id']}").status_code == 200
+    assert client.get(f"/api/v1/digital-components/{component['id']}/content").content == b"locked"
+    assert client.patch(
+        f"/api/v1/records/{record['id']}", json={"title": "No"},
+        headers={"If-Match": str(record["version"])},
+    ).status_code == 409
+    assert client.delete(
+        f"/api/v1/digital-components/{component['id']}",
+        headers={"If-Match": str(component["version"])},
+    ).status_code == 409
+    assert client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": 2}, files={"file": ("no.txt", b"no", "text/plain")},
+    ).status_code == 409
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        with pytest.raises(psycopg.errors.RaiseException):
+            connection.execute(
+                "UPDATE digital_component_blobs SET content = %s WHERE digital_component_id = %s",
+                (b"bypass", component["id"]),
+            )
+        connection.rollback()
+    assert client.post("/api/v1/records", json={
+        "aggregation_id": child["id"], "record_number": "CLOSE-NO", "title": "No",
+    }).status_code == 409
+    assert client.post("/api/v1/aggregations", json={
+        "parent_aggregation_id": child["id"], "aggregation_number": "CLOSE-NO-CHILD", "title": "No",
+    }).status_code == 409
+    assert client.delete(
+        f"/api/v1/aggregations/{child['id']}", headers={"If-Match": str(child["version"])},
+    ).status_code == 409
+
+    reopened = client.patch(
+        f"/api/v1/aggregations/{root['id']}", json={"date_closed": None},
+        headers={"If-Match": str(root["version"])},
+    )
+    assert reopened.status_code == 200
+    updated_record = client.patch(
+        f"/api/v1/records/{record['id']}", json={"title": "Allowed again"},
+        headers={"If-Match": str(record["version"])},
+    )
+    assert updated_record.status_code == 200
+
+    child_closed = client.patch(
+        f"/api/v1/aggregations/{child['id']}", json={"date_closed": child["date_created"]},
+        headers={"If-Match": str(child["version"])},
+    )
+    assert child_closed.status_code == 200
+    assert client.patch(
+        f"/api/v1/records/{record['id']}", json={"title": "Still blocked"},
+        headers={"If-Match": str(updated_record.json()["version"])},
+    ).status_code == 409
+    sibling_record = client.post("/api/v1/records", json={
+        "aggregation_id": sibling["id"], "record_number": "CLOSE-SIB-REC", "title": "Independent",
+    })
+    assert sibling_record.status_code == 201
 
 
 def test_request_validation(client: TestClient, record: dict):

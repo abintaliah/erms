@@ -79,6 +79,12 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
     --file "${DATABASE_DIR}/migrations/004_add_record_drafts.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
     --file "${DATABASE_DIR}/migrations/005_add_authentication.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/006_enforce_closed_aggregations.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/007_freeze_closed_aggregation_metadata.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/008_cascade_record_digital_components.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/user_management.sql"
