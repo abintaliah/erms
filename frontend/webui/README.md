@@ -46,4 +46,7 @@ login-session administration, role-aware user menu, list views, search-first
 aggregation and record views, add/edit dialogs, optimistic concurrency
 handling, and record-scoped digital-component upload/listing. See
 [`../../docs/authentication.md`](../../docs/authentication.md) for authentication
-operations and security behavior. Authorization remains a later subsystem.
+operations and security behavior. Digital components can be downloaded in their
+original format or viewed through the bundled, self-hosted PDF.js viewer. See
+[`../../docs/document-viewing.md`](../../docs/document-viewing.md). Authorization
+remains a later subsystem.

@@ -196,6 +196,12 @@ class ErmsApiClient:
     async def delete_component(self, component_id: int, version: int) -> None:
         await self.request("DELETE", f"/api/v1/digital-components/{component_id}", headers={"If-Match": str(version)})
 
+    async def download_component(self, component_id: int) -> bytes:
+        return await self.request("GET", f"/api/v1/digital-components/{component_id}/content")
+
+    async def view_component_pdf(self, component_id: int) -> bytes:
+        return await self.request("GET", f"/api/v1/digital-components/{component_id}/rendition")
+
     async def create_record_draft(self) -> dict[str, Any]:
         return await self.request("POST", "/api/v1/record-drafts", json={})
 

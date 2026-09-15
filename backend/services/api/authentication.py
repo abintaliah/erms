@@ -131,7 +131,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
 
 @router.post("/login", response_model=PrincipalRead)
-def login(payload: LoginRequest, request: Request, response: Response, connection: Connection = Depends(get_connection)):
+def login(payload: LoginRequest, request: Request, response: Response, connection: Connection = Depends(get_connection, scope="function")):
     generic = HTTPException(status_code=401, detail="invalid email or password")
     row = connection.execute(
         """
@@ -213,7 +213,7 @@ def me(principal: Principal = Depends(principal_from_request)):
 
 
 @router.post("/logout", status_code=204)
-def logout(response: Response, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection)):
+def logout(response: Response, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
     connection.execute("UPDATE login_sessions SET revoked_at=CURRENT_TIMESTAMP, revoked_by=%s WHERE id=%s", (principal.user_id, principal.session_id))
     _append_event(connection, principal.user_id, "SESSION_REVOKED", {"session_id": principal.session_id, "scope": "current"})
     response.delete_cookie(SESSION_COOKIE, path="/")
@@ -223,7 +223,7 @@ def logout(response: Response, principal: Principal = Depends(principal_from_req
 
 
 @router.post("/change-password", status_code=204)
-def change_password(payload: ChangePasswordRequest, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection)):
+def change_password(payload: ChangePasswordRequest, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
     credential = connection.execute("SELECT password_hash FROM user_credentials WHERE user_id=%s", (principal.user_id,)).fetchone()
     try:
         valid = password_hasher.verify(credential["password_hash"], payload.current_password)
@@ -245,7 +245,7 @@ def change_password(payload: ChangePasswordRequest, principal: Principal = Depen
 
 
 @router.get("/sessions", response_model=list[LoginSessionRead])
-def list_sessions(principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection)):
+def list_sessions(principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
     admin = principal.is_system_administrator
     return list(connection.execute(
         """
@@ -263,7 +263,7 @@ def list_sessions(principal: Principal = Depends(principal_from_request), connec
 
 
 @router.delete("/sessions/{session_id}", status_code=204)
-def revoke_session(session_id: int, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection)):
+def revoke_session(session_id: int, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
     target = connection.execute("SELECT user_id FROM login_sessions WHERE id=%s", (session_id,)).fetchone()
     if not target:
         raise HTTPException(status_code=404, detail="session not found")
@@ -275,14 +275,14 @@ def revoke_session(session_id: int, principal: Principal = Depends(principal_fro
 
 
 @router.delete("/users/{user_id}/sessions", status_code=204, dependencies=[Depends(require_system_administrator)])
-def revoke_user_sessions(user_id: int, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection)):
+def revoke_user_sessions(user_id: int, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
     connection.execute("UPDATE login_sessions SET revoked_at=CURRENT_TIMESTAMP, revoked_by=%s WHERE user_id=%s AND revoked_at IS NULL", (principal.user_id, user_id))
     _append_event(connection, user_id, "SESSION_REVOKED", {"scope": "all", "revoked_by": principal.user_id})
     return Response(status_code=204)
 
 
 @router.post("/users/{user_id}/temporary-password", dependencies=[Depends(require_system_administrator)])
-def issue_temporary_password(user_id: int, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection)):
+def issue_temporary_password(user_id: int, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
     user = connection.execute("SELECT id, email, account_type FROM users WHERE id=%s", (user_id,)).fetchone()
     if not user:
         raise HTTPException(status_code=404, detail="user not found")

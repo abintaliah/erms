@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from nicegui import app, background_tasks, context, events, ui
@@ -10,6 +12,9 @@ from nicegui import app, background_tasks, context, events, ui
 from .api_client import ApiError, ErmsApiClient
 from .config import api_url, host, port, reload_enabled, storage_secret
 from .entities import ENTITIES, EntitySpec, FieldSpec
+
+
+app.add_static_files("/static/pdfjs", Path(__file__).with_name("static") / "pdfjs")
 
 
 def display_value(value: Any) -> str:
@@ -61,6 +66,17 @@ def component_file_icon(mime_type: str | None) -> str:
     return "draft"
 
 
+def native_preview_kind(mime_type: str | None) -> str | None:
+    value = (mime_type or "").lower()
+    if value in {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/avif"}:
+        return "image"
+    if value.startswith("audio/"):
+        return "audio"
+    if value.startswith("video/"):
+        return "video"
+    return None
+
+
 def buffer_upload_batch(event: events.MultiUploadEventArguments) -> list[tuple[bytes, str, str]]:
     """Copy NiceGUI temporary uploads before any awaited API operation can release them."""
     return [
@@ -69,7 +85,10 @@ def buffer_upload_batch(event: events.MultiUploadEventArguments) -> list[tuple[b
     ]
 
 
-def render_component_cards(rows: list[dict[str, Any]], on_move, on_remove, on_history=None) -> None:
+def render_component_cards(
+    rows: list[dict[str, Any]], on_move, on_remove, on_history=None,
+    on_view=None, on_download=None,
+) -> None:
     for index, component in enumerate(rows):
         status = component.get("content_status", "pending")
         status_color = {
@@ -87,6 +106,14 @@ def render_component_cards(rows: list[dict[str, Any]], on_move, on_remove, on_hi
                 with ui.column().classes("items-end gap-1"):
                     ui.badge(f"#{component.get('component_order', '—')}").props("outline color=primary")
                     with ui.row().classes("gap-0 no-wrap"):
+                        if on_view is not None:
+                            ui.button(icon="visibility", on_click=lambda _, item=component: on_view(item)).props(
+                                "flat round dense" + (" disable" if status != "available" else "")
+                            ).tooltip("View document")
+                        if on_download is not None:
+                            ui.button(icon="download", on_click=lambda _, item=component: on_download(item)).props(
+                                "flat round dense" + (" disable" if status != "available" else "")
+                            ).tooltip("Download original")
                         ui.button(icon="arrow_upward", on_click=lambda _, item=component: on_move(item, -1)).props(
                             "flat round dense" + (" disable" if index == 0 else "")
                         ).tooltip("Move earlier")
@@ -483,7 +510,7 @@ def index() -> None:
     def event_entity_identity(event: dict[str, Any]) -> tuple[str, str]:
         entity_type = event["entity_type"]
         snapshot = event.get("after_state") or event.get("before_state") or {}
-        current = event.get("_current_entity") or {}
+        current = event.get("_current_entity") or event.get("_historical_entity") or {}
         value = lambda field: snapshot.get(field) or current.get(field)
         identities = {
             "aggregation": (value("aggregation_number"), value("title")),
@@ -502,11 +529,37 @@ def index() -> None:
         heading = f"{entity_type.replace('_', ' ').title()} #{event['entity_id']}"
         return heading, identity
 
+    def hydrate_historical_audit_identities(events_list: list[dict[str, Any]]) -> None:
+        """Reuse immutable snapshots within the result set without extra API calls."""
+        identities: dict[tuple[str, int], dict[str, Any]] = {}
+        for event in reversed(events_list):
+            snapshot = event.get("after_state") or event.get("before_state")
+            if snapshot:
+                identities[(event["entity_type"], event["entity_id"])] = snapshot
+        for event in events_list:
+            event["_historical_entity"] = identities.get((event["entity_type"], event["entity_id"]))
+
     async def navigate_to_event_entity(event: dict[str, Any]) -> None:
         entity = event.get("_current_entity")
         if not entity:
-            ui.notify("This entity no longer exists; its historical details remain in the audit event.", color="warning")
-            return
+            resources = {
+                "aggregation": "aggregations", "record": "records",
+                "digital_component": "digital-components", "org_unit": "org-units",
+                "user": "users", "role": "roles",
+            }
+            resource = resources.get(event["entity_type"])
+            if not resource:
+                ui.notify("This event type does not have a standalone entity page.", color="warning")
+                return
+            try:
+                entity = await api.get(resource, event["entity_id"])
+                event["_current_entity"] = entity
+            except ApiError as error:
+                if error.status_code == 404:
+                    ui.notify("This entity no longer exists; its historical details remain in the audit event.", color="warning")
+                else:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+                return
         origin_dialog = event.get("_origin_dialog")
         if origin_dialog:
             origin_dialog.close()
@@ -529,24 +582,6 @@ def index() -> None:
             await select_entity(resource)
             with table_container:
                 await open_editor(entity)
-
-    async def enrich_audit_events(events_list: list[dict[str, Any]]) -> None:
-        resources = {
-            "aggregation": "aggregations", "record": "records",
-            "digital_component": "digital-components", "org_unit": "org-units",
-            "user": "users", "role": "roles",
-        }
-        keys = list({
-            (event["entity_type"], event["entity_id"])
-            for event in events_list if event["entity_type"] in resources
-        })
-        resolved = await asyncio.gather(
-            *(api.get(resources[entity_type], entity_id) for entity_type, entity_id in keys),
-            return_exceptions=True,
-        )
-        current = {key: value for key, value in zip(keys, resolved) if isinstance(value, dict)}
-        for event in events_list:
-            event["_current_entity"] = current.get((event["entity_type"], event["entity_id"]))
 
     def show_event_detail(event: dict[str, Any]) -> None:
         entity_heading, entity_identity = event_entity_identity(event)
@@ -571,7 +606,7 @@ def index() -> None:
                     ui.label(entity_heading).classes("text-sm text-slate-500")
                     if entity_identity:
                         ui.label(entity_identity).classes("text-sm font-medium text-slate-700 line-clamp-1")
-                if event.get("_current_entity"):
+                if event["entity_type"] in {"aggregation", "record", "digital_component", "org_unit", "user", "role"}:
                     ui.button(
                         "Open entity", icon="open_in_new",
                         on_click=open_entity,
@@ -652,7 +687,7 @@ def index() -> None:
                         with ui.column().classes("items-end gap-0"):
                             ui.label(format_timestamp(event["occurred_at"])).classes("text-xs font-medium text-slate-600")
                             ui.label(f"{event.get('actor_type', 'unknown')} · {event.get('source', 'unknown')}").classes("text-xs text-slate-400")
-                        if event.get("_current_entity"):
+                        if event["entity_type"] in {"aggregation", "record", "digital_component", "org_unit", "user", "role"}:
                             ui.button(
                                 icon="open_in_new",
                                 on_click=lambda _, item=event: navigate_to_event_entity(item),
@@ -689,6 +724,83 @@ def index() -> None:
         current_rows: list[dict[str, Any]] = []
         upload_lock = asyncio.Lock()
         uploader_control: dict[str, Any] = {}
+
+        async def download_component(component: dict[str, Any]) -> None:
+            try:
+                content = await api.download_component(component["id"])
+                ui.download(content, component["file_name"], component.get("mime_type") or "application/octet-stream")
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        async def view_component(component: dict[str, Any]) -> None:
+            try:
+                preview = await api.view_component_pdf(component["id"])
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+                return
+            preview_kind = native_preview_kind(component.get("mime_type"))
+            if preview_kind:
+                mime_type = component.get("mime_type") or "application/octet-stream"
+                data_url = f"data:{mime_type};base64,{base64.b64encode(preview).decode('ascii')}"
+                dialog = ui.dialog().props("maximized transition-show=fade transition-hide=fade")
+                with dialog, ui.card().classes("w-full h-full p-0 gap-0 bg-slate-100"):
+                    with ui.row().classes("w-full items-center no-wrap px-4 py-2 bg-white border-b"):
+                        ui.icon(component_file_icon(mime_type), color="primary", size="28px")
+                        ui.label(component["file_name"]).classes("font-semibold grow min-w-0 truncate")
+                        ui.button(icon="download", on_click=lambda: download_component(component)).props("flat round dense").tooltip("Download original")
+                        ui.button(icon="close", on_click=dialog.close).props("flat round dense").tooltip("Close viewer")
+                    with ui.element("div").classes("w-full grow overflow-auto flex items-center justify-center p-6"):
+                        if preview_kind == "image":
+                            ui.image(data_url).classes("max-w-full max-h-[calc(100vh-100px)] object-contain shadow-lg")
+                        elif preview_kind == "audio":
+                            with ui.card().classes("w-[680px] max-w-full p-8"):
+                                ui.icon("audio_file", size="72px").classes("self-center text-primary")
+                                ui.label(component["file_name"]).classes("self-center font-semibold")
+                                ui.audio(data_url, controls=True).classes("w-full")
+                        else:
+                            ui.video(data_url, controls=True).classes("w-full max-w-[1200px] max-h-[calc(100vh-110px)] bg-black")
+                dialog.open()
+                return
+            canvas_id = f"erms-pdf-canvas-{component['id']}"
+            dialog = ui.dialog().props("maximized transition-show=fade transition-hide=fade")
+
+            def close_viewer() -> None:
+                ui.run_javascript(f"window.ermsPdfViewer?.close({json.dumps(canvas_id)})")
+                dialog.close()
+
+            with dialog, ui.card().classes("w-full h-full p-0 gap-0 bg-slate-100"):
+                with ui.row().classes("w-full items-center no-wrap px-4 py-2 bg-white border-b"):
+                    ui.icon("picture_as_pdf", color="primary", size="28px")
+                    ui.label(component["file_name"]).classes("font-semibold grow min-w-0 truncate")
+                    ui.button(icon="chevron_left", on_click=lambda: ui.run_javascript(
+                        f"window.ermsPdfViewer.previous({json.dumps(canvas_id)})"
+                    )).props("flat round dense").tooltip("Previous page")
+                    ui.label("Loading…").props(f'id={canvas_id}-status').classes("text-sm text-slate-500 min-w-32 text-center")
+                    ui.button(icon="chevron_right", on_click=lambda: ui.run_javascript(
+                        f"window.ermsPdfViewer.next({json.dumps(canvas_id)})"
+                    )).props("flat round dense").tooltip("Next page")
+                    ui.button(icon="zoom_out", on_click=lambda: ui.run_javascript(
+                        f"window.ermsPdfViewer.zoomOut({json.dumps(canvas_id)})"
+                    )).props("flat round dense").tooltip("Zoom out")
+                    ui.button(icon="zoom_in", on_click=lambda: ui.run_javascript(
+                        f"window.ermsPdfViewer.zoomIn({json.dumps(canvas_id)})"
+                    )).props("flat round dense").tooltip("Zoom in")
+                    ui.button(icon="download", on_click=lambda: download_component(component)).props("flat round dense").tooltip("Download original")
+                    ui.button(icon="close", on_click=close_viewer).props("flat round dense").tooltip("Close viewer")
+                with ui.element("div").classes("w-full grow overflow-auto flex justify-center items-start p-5"):
+                    ui.element("canvas").props(f"id={canvas_id}").classes("bg-white shadow-lg")
+            dialog.open()
+            encoded = base64.b64encode(preview).decode("ascii")
+            try:
+                await ui.run_javascript(
+                    "import('/static/pdfjs/erms-viewer.mjs').then(() => true)", timeout=15,
+                )
+                await ui.run_javascript(
+                    f"window.ermsPdfViewer.open({json.dumps(canvas_id)}, {json.dumps(encoded)})",
+                    timeout=30,
+                )
+            except TimeoutError:
+                ui.notify("The PDF viewer did not finish loading", color="negative")
 
         def uploaded(event: events.MultiUploadEventArguments) -> None:
             try:
@@ -733,6 +845,20 @@ def index() -> None:
                 with ui.element("div").classes("component-list w-full mt-3"):
                     component_area = ui.element("div").classes("component-grid w-full")
 
+            def render_current_components() -> None:
+                component_area.clear()
+                with component_area:
+                    if not current_rows:
+                        with ui.column().classes("w-full items-center py-8 gap-2 text-slate-400"):
+                            ui.icon("cloud_upload").classes("text-4xl")
+                            ui.label("No digital components uploaded yet.")
+                    else:
+                        render_component_cards(
+                            current_rows, move_component, remove_component,
+                            lambda item: show_entity_history("digital-components", item),
+                            view_component, download_component,
+                        )
+
             async def move_component(component: dict[str, Any], direction: int) -> None:
                 index = next((i for i, item in enumerate(current_rows) if item["id"] == component["id"]), -1)
                 target = index + direction
@@ -750,11 +876,16 @@ def index() -> None:
                     ui.notify(error_message(error), color="negative")
 
             async def remove_component(component: dict[str, Any]) -> None:
+                previous_rows = list(current_rows)
+                current_rows[:] = [item for item in current_rows if item["id"] != component["id"]]
+                render_current_components()
                 try:
                     await api.delete_component(component["id"], component["version"])
                     ui.notify("Digital component removed", color="positive")
                     await refresh_components()
                 except ApiError as error:
+                    current_rows[:] = previous_rows
+                    render_current_components()
                     ui.notify(error_message(error), color="negative")
 
             async def refresh_components() -> None:
@@ -762,17 +893,7 @@ def index() -> None:
                     rows = await api.components(record["id"])
                     current_rows.clear()
                     current_rows.extend(rows)
-                    component_area.clear()
-                    with component_area:
-                        if not rows:
-                            with ui.column().classes("w-full items-center py-8 gap-2 text-slate-400"):
-                                ui.icon("cloud_upload").classes("text-4xl")
-                                ui.label("No digital components uploaded yet.")
-                        else:
-                            render_component_cards(
-                                rows, move_component, remove_component,
-                                lambda item: show_entity_history("digital-components", item),
-                            )
+                    render_current_components()
                 except ApiError as error:
                     ui.notify(error_message(error), color="negative")
 
@@ -1659,8 +1780,15 @@ def index() -> None:
                         correlation_filter = ui.input("Correlation ID").props("outlined dense clearable").classes("w-full")
                     with ui.row().classes("w-full justify-end"):
                         refresh_button = ui.button("Apply filters", icon="filter_alt").props("unelevated no-caps")
-                result_summary = ui.label().classes("text-sm text-slate-500")
+                with ui.row().classes("w-full items-center gap-2"):
+                    result_summary = ui.label().classes("text-sm text-slate-500 grow")
+                    previous_button = ui.button("Previous", icon="chevron_left").props("flat dense no-caps")
+                    next_button = ui.button("Next", icon="chevron_right").props("flat dense no-caps")
+                    previous_button.disable()
+                    next_button.disable()
                 results_container = ui.column().classes("w-full gap-2")
+
+        page = {"offset": 0, "size": 50, "total": 0}
 
         async def load_audit_events() -> None:
             refresh_button.props("loading disable")
@@ -1679,15 +1807,26 @@ def index() -> None:
                     conditions.append({"field": field, "operator": operator, "value": value})
             payload: dict[str, Any] = {
                 "sort": [{"field": "occurred_at", "direction": "desc"}, {"field": "id", "direction": "desc"}],
-                "limit": 200, "offset": 0,
+                "limit": page["size"], "offset": page["offset"],
             }
             if conditions:
                 payload["where"] = conditions[0] if len(conditions) == 1 else {"and": conditions}
             try:
                 response = await api.search_request("event-history", payload)
                 events_list = response["items"]
-                await enrich_audit_events(events_list)
-                result_summary.text = f"Showing {len(events_list)} of {response['total']} matching events"
+                hydrate_historical_audit_identities(events_list)
+                page["total"] = response["total"]
+                first = page["offset"] + 1 if events_list else 0
+                last = page["offset"] + len(events_list)
+                result_summary.text = f"Showing {first}–{last} of {page['total']} matching events"
+                if page["offset"] > 0:
+                    previous_button.enable()
+                else:
+                    previous_button.disable()
+                if last < page["total"]:
+                    next_button.enable()
+                else:
+                    next_button.disable()
                 render_event_timeline(events_list, results_container)
                 set_connection_status(True)
             except ApiError as error:
@@ -1695,7 +1834,22 @@ def index() -> None:
             finally:
                 refresh_button.props(remove="loading disable")
 
-        refresh_button.on("click", load_audit_events)
+        async def apply_filters() -> None:
+            page["offset"] = 0
+            await load_audit_events()
+
+        async def previous_page() -> None:
+            page["offset"] = max(0, page["offset"] - page["size"])
+            await load_audit_events()
+
+        async def next_page() -> None:
+            if page["offset"] + page["size"] < page["total"]:
+                page["offset"] += page["size"]
+                await load_audit_events()
+
+        refresh_button.on("click", apply_filters)
+        previous_button.on("click", previous_page)
+        next_button.on("click", next_page)
         await load_audit_events()
 
     async def load_rows(*, repeat_search: bool = False) -> None:
@@ -1803,6 +1957,11 @@ def index() -> None:
     api.set_unauthorized_handler(handle_unauthorized)
 
     async def initialize_authenticated_ui() -> None:
+        # NiceGUI adds body HTML dynamically, where script tags are inert.
+        # Dynamic import executes the self-hosted module in the live page.
+        await ui.run_javascript(
+            "import('/static/pdfjs/erms-viewer.mjs').then(() => true)", timeout=15,
+        )
         token = app.storage.user.get("session_token")
         if token:
             api.set_session_token(token)
