@@ -220,12 +220,14 @@ class UserCreate(ApiModel):
     name: NonBlankString
     email: NonBlankString | None = None
     external_id: NonBlankString | None = None
+    account_type: Literal["human", "system"] = "human"
 
 
 class UserUpdate(ApiModel):
     name: NonBlankString | None = None
     email: NonBlankString | None = None
     external_id: NonBlankString | None = None
+    account_type: Literal["human", "system"] | None = None
     status: Literal["active", "inactive", "suspended"] | None = None
     date_deactivated: datetime | None = None
 
@@ -235,10 +237,63 @@ class UserRead(ApiModel):
     name: str
     email: str | None
     external_id: str | None
+    account_type: Literal["human", "system"]
     status: Literal["active", "inactive", "suspended"]
     date_created: datetime
     date_deactivated: datetime | None
     version: int
+
+
+class LoginRequest(ApiModel):
+    email: NonBlankString
+    password: str
+
+
+class ChangePasswordRequest(ApiModel):
+    current_password: str
+    new_password: str
+
+
+class PrincipalUserRead(ApiModel):
+    id: int
+    name: str
+    email: str
+    account_type: Literal["human", "system"]
+
+
+class PrincipalRoleRead(ApiModel):
+    id: int
+    code: str
+    name: str
+    org_unit: dict[str, Any]
+
+
+class PrincipalSessionRead(ApiModel):
+    id: int
+
+
+class PrincipalRead(ApiModel):
+    user: PrincipalUserRead
+    roles: list[PrincipalRoleRead]
+    session: PrincipalSessionRead
+    must_change_password: bool
+
+
+class LoginSessionRead(ApiModel):
+    id: int
+    user_id: int
+    user_name: str
+    user_email: str | None
+    account_type: Literal["human", "system"]
+    date_created: datetime
+    last_seen_at: datetime
+    expires_at: datetime
+    absolute_expires_at: datetime
+    revoked_at: datetime | None
+    client_ip: str | None
+    user_agent: str | None
+    is_current: bool
+    status: Literal["active", "expired", "revoked"]
 
 
 class RoleCreate(ApiModel):

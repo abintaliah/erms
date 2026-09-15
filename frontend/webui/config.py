@@ -22,3 +22,7 @@ def port() -> int:
 
 def reload_enabled() -> bool:
     return os.getenv("WEBUI_RELOAD", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def storage_secret() -> str:
+    return os.getenv("WEBUI_STORAGE_SECRET", "local-development-change-me")

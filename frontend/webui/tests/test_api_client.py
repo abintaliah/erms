@@ -141,6 +141,69 @@ def test_count_uses_search_total_without_loading_all_rows():
     }
 
 
+def test_login_extracts_opaque_cookie_and_forwards_browser_identity():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["user_agent"] = request.headers["user-agent"]
+        return httpx.Response(
+            200,
+            json={"user": {"id": 1}, "roles": [], "session": {"id": 2}, "must_change_password": False},
+            headers={"set-cookie": "erms_session=opaque-token; HttpOnly; Path=/; SameSite=Lax"},
+        )
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.login("user@example.org", "secret", user_agent="Browser/Test")
+        finally:
+            await client.close()
+
+    principal, token = asyncio.run(exercise())
+    assert principal["user"]["id"] == 1
+    assert token == "opaque-token"
+    assert captured["user_agent"] == "Browser/Test"
+
+
+def test_page_scoped_token_survives_parallel_background_requests():
+    authorization_headers = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        authorization_headers.append(request.headers.get("authorization"))
+        return httpx.Response(200, json={"items": [], "total": 0})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        client.set_session_token("page-specific-token")
+        try:
+            await asyncio.gather(client.count("records"), client.count("aggregations"))
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert authorization_headers == ["Bearer page-specific-token"] * 2
+
+
+def test_unauthorized_response_clears_page_through_handler():
+    handled = []
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"detail": "authentication required"})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        client.set_session_token("expired-token")
+        client.set_unauthorized_handler(lambda: handled.append(True))
+        try:
+            with pytest.raises(ApiError):
+                await client.me()
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert handled == [True]
+
+
 def test_entity_history_uses_read_only_timeline_route():
     captured = {}
 

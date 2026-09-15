@@ -77,6 +77,8 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
     --file "${DATABASE_DIR}/migrations/003_add_content_storage_and_entity_versions.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
     --file "${DATABASE_DIR}/migrations/004_add_record_drafts.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/005_add_authentication.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/user_management.sql"

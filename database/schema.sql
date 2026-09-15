@@ -352,6 +352,7 @@ CREATE TABLE users (
     name             text NOT NULL,
     email            text,
     external_id      text,
+    account_type     text NOT NULL DEFAULT 'human',
     status           text NOT NULL DEFAULT 'active',
     date_created     timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_deactivated timestamptz,
@@ -360,6 +361,8 @@ CREATE TABLE users (
     CONSTRAINT users_email_not_blank CHECK (email IS NULL OR btrim(email) <> ''),
     CONSTRAINT users_external_id_not_blank
         CHECK (external_id IS NULL OR btrim(external_id) <> ''),
+    CONSTRAINT users_account_type_valid
+        CHECK (account_type IN ('human', 'system')),
     CONSTRAINT users_status_valid
         CHECK (status IN ('active', 'inactive', 'suspended')),
     CONSTRAINT users_dates_in_order
@@ -417,6 +420,46 @@ CREATE INDEX user_role_assignments_role_id_idx
     ON user_role_assignments (role_id);
 CREATE INDEX user_role_assignments_assigned_by_idx
     ON user_role_assignments (assigned_by) WHERE assigned_by IS NOT NULL;
+
+CREATE TABLE user_credentials (
+    id                   bigserial PRIMARY KEY,
+    user_id              bigint NOT NULL UNIQUE REFERENCES users (id) ON DELETE CASCADE,
+    password_hash        text NOT NULL,
+    must_change_password boolean NOT NULL DEFAULT true,
+    temporary_expires_at timestamptz,
+    password_changed_at  timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    failed_attempt_count integer NOT NULL DEFAULT 0,
+    last_failed_at       timestamptz,
+    locked_until         timestamptz,
+    last_authenticated_at timestamptz,
+    date_created         timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    date_updated         timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT user_credentials_password_hash_not_blank CHECK (btrim(password_hash) <> ''),
+    CONSTRAINT user_credentials_failed_attempts_nonnegative CHECK (failed_attempt_count >= 0)
+);
+
+CREATE TABLE login_sessions (
+    id                  bigserial PRIMARY KEY,
+    user_id             bigint NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    session_token_hash  bytea NOT NULL UNIQUE,
+    csrf_token_hash     bytea NOT NULL,
+    date_created        timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at        timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at          timestamptz NOT NULL,
+    absolute_expires_at timestamptz NOT NULL,
+    revoked_at          timestamptz,
+    revoked_by          bigint REFERENCES users (id) ON DELETE SET NULL,
+    client_ip           inet,
+    user_agent          text,
+
+    CONSTRAINT login_sessions_expiry_valid CHECK (expires_at > date_created),
+    CONSTRAINT login_sessions_absolute_expiry_valid CHECK (absolute_expires_at >= expires_at)
+);
+
+CREATE INDEX login_sessions_user_id_idx ON login_sessions (user_id);
+CREATE INDEX login_sessions_active_idx
+    ON login_sessions (expires_at, absolute_expires_at) WHERE revoked_at IS NULL;
 
 CREATE FUNCTION set_user_management_default_dates()
 RETURNS trigger
@@ -752,6 +795,10 @@ $$;
 
 INSERT INTO schema_migrations (version)
 VALUES ('003_add_content_storage_and_entity_versions')
+ON CONFLICT (version) DO NOTHING;
+
+INSERT INTO schema_migrations (version)
+VALUES ('005_add_authentication')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

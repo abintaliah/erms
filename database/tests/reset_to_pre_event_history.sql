@@ -2,6 +2,10 @@
 -- existed immediately before migration 001.
 DROP TABLE IF EXISTS record_draft_components;
 DROP TABLE IF EXISTS record_drafts;
+DROP TABLE IF EXISTS login_sessions;
+DROP TABLE IF EXISTS user_credentials;
+ALTER TABLE users DROP COLUMN IF EXISTS account_type;
+DELETE FROM schema_migrations WHERE version IN ('004_add_record_drafts', '005_add_authentication');
 DROP TABLE IF EXISTS digital_component_blobs;
 DROP TRIGGER IF EXISTS aggregations_bump_version ON aggregations;
 DROP TRIGGER IF EXISTS records_bump_version ON records;

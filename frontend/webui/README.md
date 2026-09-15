@@ -34,13 +34,16 @@ defaults:
 - `WEBUI_HOST` defaults to `0.0.0.0`
 - `WEBUI_PORT` defaults to `8080`
 - `WEBUI_RELOAD` defaults to `false`
+- `WEBUI_STORAGE_SECRET` encrypts per-user authentication storage and must be
+  changed outside local development
 
 Real environment variables override `.env` values.
 
 ## Current scope
 
-The initial interface provides the shared application shell, list views,
-search-first aggregation and record views, add/edit dialogs, optimistic
-concurrency handling, and record-scoped digital-component upload/listing.
-Hierarchy visualization, authentication, authorization, role assignment, and
-the fuller digital-component lifecycle will be added in later iterations.
+The interface provides the shared application shell, local authentication,
+login-session administration, role-aware user menu, list views, search-first
+aggregation and record views, add/edit dialogs, optimistic concurrency
+handling, and record-scoped digital-component upload/listing. See
+[`../../docs/authentication.md`](../../docs/authentication.md) for authentication
+operations and security behavior. Authorization remains a later subsystem.

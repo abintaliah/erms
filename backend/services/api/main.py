@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime
 from io import BytesIO
+import secrets
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
@@ -11,16 +12,18 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 
 from .audit_context import (
+    actor_user_id_context,
     actor_type_context,
     change_reason_context,
     correlation_id_context,
     event_source_context,
     request_id_context,
 )
+from .authentication import CSRF_COOKIE, SESSION_COOKIE, hash_secret, resolve_principal, router as authentication_router
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .concurrency import expected_version
 from .content_storage import configured_storage, read_upload
-from .database import close_pool, get_connection, open_pool
+from .database import close_pool, get_connection, open_pool, pool
 from .schemas import (
     AggregationCreate,
     AggregationRead,
@@ -60,6 +63,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(user_management_router)
+app.include_router(authentication_router)
 
 
 def _request_uuid(value: str | None, header_name: str) -> str:
@@ -93,7 +97,32 @@ async def audit_request_context(request: Request, call_next):
 
     request_token = request_id_context.set(request_id)
     correlation_token = correlation_id_context.set(correlation_id)
-    actor_token = actor_type_context.set("anonymous")
+    principal = None
+    cookie_token = request.cookies.get(SESSION_COOKIE)
+    authorization = request.headers.get("authorization", "")
+    bearer_token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else None
+    session_token = bearer_token or cookie_token
+    if session_token:
+        with pool.connection() as authentication_connection:
+            principal = resolve_principal(authentication_connection, session_token)
+    public_path = (
+        request.url.path == "/health"
+        or request.url.path == "/api/v1/auth/login"
+        or request.url.path in {"/docs", "/openapi.json", "/redoc"}
+    )
+    if request.url.path.startswith("/api/v1/") and not public_path and principal is None:
+        return JSONResponse(status_code=401, content={"detail": "authentication required"})
+    if principal and principal.must_change_password and request.url.path not in {
+        "/api/v1/auth/me", "/api/v1/auth/change-password", "/api/v1/auth/logout"
+    }:
+        return JSONResponse(status_code=403, content={"detail": "password change required"})
+    if principal and cookie_token and not bearer_token and request.method not in {"GET", "HEAD", "OPTIONS"}:
+        csrf = request.headers.get("x-csrf-token", "")
+        if not csrf or not secrets.compare_digest(hash_secret(csrf), hash_secret(request.cookies.get(CSRF_COOKIE, ""))):
+            return JSONResponse(status_code=403, content={"detail": "CSRF validation failed"})
+    request.state.principal = principal
+    actor_token = actor_type_context.set("user" if principal else "anonymous")
+    actor_user_token = actor_user_id_context.set(str(principal.user_id) if principal else "")
     source_token = event_source_context.set("api")
     reason_token = change_reason_context.set(change_reason)
     try:
@@ -104,6 +133,7 @@ async def audit_request_context(request: Request, call_next):
     finally:
         change_reason_context.reset(reason_token)
         event_source_context.reset(source_token)
+        actor_user_id_context.reset(actor_user_token)
         actor_type_context.reset(actor_token)
         correlation_id_context.reset(correlation_token)
         request_id_context.reset(request_token)
