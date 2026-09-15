@@ -13,7 +13,16 @@ from frontend.webui.app import (
     format_timestamp,
     relationship_options,
 )
+from frontend.webui.app import native_preview_kind
 from frontend.webui.entities import ENTITIES
+
+
+def test_native_preview_kind_uses_safe_browser_renderers():
+    assert native_preview_kind("image/png") == "image"
+    assert native_preview_kind("audio/mpeg") == "audio"
+    assert native_preview_kind("video/mp4") == "video"
+    assert native_preview_kind("image/svg+xml") is None
+    assert native_preview_kind("application/pdf") is None
 
 
 class Control:

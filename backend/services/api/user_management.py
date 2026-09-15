@@ -42,7 +42,7 @@ def _history(connection: Connection, entity_type: str, entity_id: int):
 
 
 @router.post("/org-units", response_model=OrgUnitRead, status_code=201, tags=["org units"])
-def create_org_unit(payload: OrgUnitCreate, connection: Connection = Depends(get_connection)):
+def create_org_unit(payload: OrgUnitCreate, connection: Connection = Depends(get_connection, scope="function")):
     return create_row(connection, "org_units", payload.model_dump())
 
 
@@ -52,7 +52,7 @@ def list_org_units(
     unit_status: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return list_rows(
         connection,
@@ -64,12 +64,12 @@ def list_org_units(
 
 
 @router.post("/org-units/search", response_model=SearchResponse[OrgUnitRead], tags=["org units"])
-def search_org_units(payload: SearchRequest, connection: Connection = Depends(get_connection)):
+def search_org_units(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
     return search_rows(connection, "org_units", payload)
 
 
 @router.get("/org-units/{org_unit_id}", response_model=OrgUnitRead, tags=["org units"])
-def get_org_unit(org_unit_id: int, connection: Connection = Depends(get_connection)):
+def get_org_unit(org_unit_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "org_units", org_unit_id)
 
 
@@ -78,7 +78,7 @@ def update_org_unit(
     org_unit_id: int,
     payload: OrgUnitUpdate,
     version: int = Depends(expected_version),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return update_row(
         connection, "org_units", org_unit_id, payload.model_dump(exclude_unset=True), version
@@ -86,7 +86,7 @@ def update_org_unit(
 
 
 @router.delete("/org-units/{org_unit_id}", status_code=204, tags=["org units"])
-def deactivate_org_unit(org_unit_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
+def deactivate_org_unit(org_unit_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     update_row(
         connection,
         "org_units",
@@ -102,12 +102,12 @@ def deactivate_org_unit(org_unit_id: int, version: int = Depends(expected_versio
     response_model=list[EventHistoryRead],
     tags=["event history"],
 )
-def get_org_unit_history(org_unit_id: int, connection: Connection = Depends(get_connection)):
+def get_org_unit_history(org_unit_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return _history(connection, "org_unit", org_unit_id)
 
 
 @router.post("/users", response_model=UserRead, status_code=201, tags=["users"])
-def create_user(payload: UserCreate, connection: Connection = Depends(get_connection)):
+def create_user(payload: UserCreate, connection: Connection = Depends(get_connection, scope="function")):
     return create_row(connection, "users", payload.model_dump())
 
 
@@ -116,7 +116,7 @@ def list_users(
     user_status: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return list_rows(
         connection,
@@ -128,12 +128,12 @@ def list_users(
 
 
 @router.post("/users/search", response_model=SearchResponse[UserRead], tags=["users"])
-def search_users(payload: SearchRequest, connection: Connection = Depends(get_connection)):
+def search_users(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
     return search_rows(connection, "users", payload)
 
 
 @router.get("/users/{user_id}", response_model=UserRead, tags=["users"])
-def get_user(user_id: int, connection: Connection = Depends(get_connection)):
+def get_user(user_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "users", user_id)
 
 
@@ -142,13 +142,13 @@ def update_user(
     user_id: int,
     payload: UserUpdate,
     version: int = Depends(expected_version),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return update_row(connection, "users", user_id, payload.model_dump(exclude_unset=True), version)
 
 
 @router.delete("/users/{user_id}", status_code=204, tags=["users"])
-def deactivate_user(user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
+def deactivate_user(user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     update_row(
         connection,
         "users",
@@ -164,12 +164,12 @@ def deactivate_user(user_id: int, version: int = Depends(expected_version), conn
     response_model=list[EventHistoryRead],
     tags=["event history"],
 )
-def get_user_history(user_id: int, connection: Connection = Depends(get_connection)):
+def get_user_history(user_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return _history(connection, "user", user_id)
 
 
 @router.post("/roles", response_model=RoleRead, status_code=201, tags=["roles"])
-def create_role(payload: RoleCreate, connection: Connection = Depends(get_connection)):
+def create_role(payload: RoleCreate, connection: Connection = Depends(get_connection, scope="function")):
     return create_row(connection, "roles", payload.model_dump())
 
 
@@ -180,7 +180,7 @@ def list_roles(
     role_status: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return list_rows(
         connection,
@@ -196,12 +196,12 @@ def list_roles(
 
 
 @router.post("/roles/search", response_model=SearchResponse[RoleRead], tags=["roles"])
-def search_roles(payload: SearchRequest, connection: Connection = Depends(get_connection)):
+def search_roles(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
     return search_rows(connection, "roles", payload)
 
 
 @router.get("/roles/{role_id}", response_model=RoleRead, tags=["roles"])
-def get_role(role_id: int, connection: Connection = Depends(get_connection)):
+def get_role(role_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "roles", role_id)
 
 
@@ -210,13 +210,13 @@ def update_role(
     role_id: int,
     payload: RoleUpdate,
     version: int = Depends(expected_version),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return update_row(connection, "roles", role_id, payload.model_dump(exclude_unset=True), version)
 
 
 @router.delete("/roles/{role_id}", status_code=204, tags=["roles"])
-def deactivate_role(role_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
+def deactivate_role(role_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     update_row(
         connection,
         "roles",
@@ -232,7 +232,7 @@ def deactivate_role(role_id: int, version: int = Depends(expected_version), conn
     response_model=list[EventHistoryRead],
     tags=["event history"],
 )
-def get_role_history(role_id: int, connection: Connection = Depends(get_connection)):
+def get_role_history(role_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return _history(connection, "role", role_id)
 
 
@@ -244,7 +244,7 @@ def get_role_history(role_id: int, connection: Connection = Depends(get_connecti
 )
 def create_assignment(
     payload: UserRoleAssignmentCreate,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return create_row(connection, "user_role_assignments", payload.model_dump())
 
@@ -259,7 +259,7 @@ def list_assignments(
     role_id: int | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return list_rows(
         connection,
@@ -277,7 +277,7 @@ def list_assignments(
 )
 def search_assignments(
     payload: SearchRequest,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return search_rows(connection, "user_role_assignments", payload)
 
@@ -287,7 +287,7 @@ def search_assignments(
     response_model=UserRoleAssignmentRead,
     tags=["user role assignments"],
 )
-def get_assignment(assignment_id: int, connection: Connection = Depends(get_connection)):
+def get_assignment(assignment_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "user_role_assignments", assignment_id)
 
 
@@ -300,7 +300,7 @@ def update_assignment(
     assignment_id: int,
     payload: UserRoleAssignmentUpdate,
     version: int = Depends(expected_version),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return update_row(
         connection,
@@ -316,7 +316,7 @@ def update_assignment(
     status_code=204,
     tags=["user role assignments"],
 )
-def delete_assignment(assignment_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
+def delete_assignment(assignment_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     delete_row(connection, "user_role_assignments", assignment_id, version)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -328,7 +328,7 @@ def delete_assignment(assignment_id: int, version: int = Depends(expected_versio
 )
 def get_assignment_history(
     assignment_id: int,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return _history(connection, "user_role_assignment", assignment_id)
 
@@ -338,7 +338,7 @@ def get_assignment_history(
     response_model=list[UserRoleAssignmentRead],
     tags=["user role assignments"],
 )
-def get_user_roles(user_id: int, connection: Connection = Depends(get_connection)):
+def get_user_roles(user_id: int, connection: Connection = Depends(get_connection, scope="function")):
     get_or_404(connection, "users", user_id)
     return list_rows(
         connection,
@@ -354,7 +354,7 @@ def get_user_roles(user_id: int, connection: Connection = Depends(get_connection
     response_model=list[UserRoleAssignmentRead],
     tags=["user role assignments"],
 )
-def get_role_users(role_id: int, connection: Connection = Depends(get_connection)):
+def get_role_users(role_id: int, connection: Connection = Depends(get_connection, scope="function")):
     get_or_404(connection, "roles", role_id)
     return list_rows(
         connection,

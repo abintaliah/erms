@@ -603,6 +603,49 @@ def test_upload_download_replace_and_delete_content(client: TestClient, record: 
     assert all(event["after_state"] is None for event in domain_events)
 
 
+def test_pdf_rendition_is_inline_and_audited(client: TestClient, record: dict):
+    pdf = b"%PDF-1.4\n% minimal test fixture\n%%EOF"
+    uploaded = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": "1"},
+        files={"file": ("letter.pdf", pdf, "application/pdf")},
+    ).json()
+    response = client.get(f"/api/v1/digital-components/{uploaded['id']}/rendition")
+    assert response.status_code == 200
+    assert response.content == pdf
+    assert response.headers["content-type"].startswith("application/pdf")
+    assert response.headers["content-disposition"].startswith("inline;")
+    history = client.get(f"/api/v1/digital-components/{uploaded['id']}/history").json()
+    assert "CONTENT_VIEWED" in [event["operation"] for event in history]
+
+
+def test_unsupported_preview_preserves_original_download(client: TestClient, record: dict):
+    uploaded = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": "1"},
+        files={"file": ("archive.zip", b"not really a zip", "application/zip")},
+    ).json()
+    assert client.get(f"/api/v1/digital-components/{uploaded['id']}/rendition").status_code == 415
+    assert client.get(f"/api/v1/digital-components/{uploaded['id']}/content").content == b"not really a zip"
+
+
+def test_browser_native_image_preview_preserves_mime_type_and_is_audited(client: TestClient, record: dict):
+    image = b"\x89PNG\r\n\x1a\nsynthetic-test-image"
+    uploaded = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": "1"},
+        files={"file": ("scan.png", image, "image/png")},
+    ).json()
+    response = client.get(f"/api/v1/digital-components/{uploaded['id']}/rendition")
+    assert response.status_code == 200
+    assert response.content == image
+    assert response.headers["content-type"].startswith("image/png")
+    assert response.headers["content-disposition"].startswith("inline;")
+    history = client.get(f"/api/v1/digital-components/{uploaded['id']}/history").json()
+    viewed = next(event for event in history if event["operation"] == "CONTENT_VIEWED")
+    assert viewed["metadata"]["rendering_method"] == "browser-native"
+
+
 def test_upload_size_limit(client: TestClient, record: dict, monkeypatch):
     monkeypatch.setenv("MAX_UPLOAD_SIZE_BYTES", "4")
     response = client.post(

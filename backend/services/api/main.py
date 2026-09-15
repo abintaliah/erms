@@ -24,6 +24,7 @@ from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .concurrency import expected_version
 from .content_storage import configured_storage, read_upload
 from .database import close_pool, get_connection, open_pool, pool
+from .document_conversion import ConversionUnavailable, UnsupportedPreview, pdf_rendition
 from .schemas import (
     AggregationCreate,
     AggregationRead,
@@ -158,7 +159,7 @@ async def database_error_handler(_, exception: psycopg.Error):
 
 
 @app.get("/health", tags=["system"])
-def health(connection: Connection = Depends(get_connection)) -> dict[str, str]:
+def health(connection: Connection = Depends(get_connection, scope="function")) -> dict[str, str]:
     connection.execute("SELECT 1")
     return {"status": "ok"}
 
@@ -171,7 +172,7 @@ def health(connection: Connection = Depends(get_connection)) -> dict[str, str]:
 )
 def create_aggregation(
     payload: AggregationCreate,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return create_row(connection, "aggregations", payload.model_dump())
 
@@ -181,7 +182,7 @@ def list_aggregations(
     parent_aggregation_id: int | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return list_rows(
         connection,
@@ -199,13 +200,13 @@ def list_aggregations(
 )
 def search_aggregations(
     payload: SearchRequest,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return search_rows(connection, "aggregations", payload)
 
 
 @app.get("/api/v1/aggregations/{aggregation_id}", response_model=AggregationRead, tags=["aggregations"])
-def get_aggregation(aggregation_id: int, connection: Connection = Depends(get_connection)):
+def get_aggregation(aggregation_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "aggregations", aggregation_id)
 
 
@@ -214,7 +215,7 @@ def update_aggregation(
     aggregation_id: int,
     payload: AggregationUpdate,
     version: int = Depends(expected_version),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return update_row(
         connection, "aggregations", aggregation_id, payload.model_dump(exclude_unset=True), version
@@ -222,13 +223,13 @@ def update_aggregation(
 
 
 @app.delete("/api/v1/aggregations/{aggregation_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["aggregations"])
-def delete_aggregation(aggregation_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
+def delete_aggregation(aggregation_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     delete_row(connection, "aggregations", aggregation_id, version)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.post("/api/v1/records", response_model=RecordRead, status_code=status.HTTP_201_CREATED, tags=["records"])
-def create_record(payload: RecordCreate, connection: Connection = Depends(get_connection)):
+def create_record(payload: RecordCreate, connection: Connection = Depends(get_connection, scope="function")):
     return create_row(connection, "records", payload.model_dump())
 
 
@@ -237,7 +238,7 @@ def list_records(
     aggregation_id: int | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return list_rows(
         connection,
@@ -255,13 +256,13 @@ def list_records(
 )
 def search_records(
     payload: SearchRequest,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return search_rows(connection, "records", payload)
 
 
 @app.get("/api/v1/records/{record_id}", response_model=RecordRead, tags=["records"])
-def get_record(record_id: int, connection: Connection = Depends(get_connection)):
+def get_record(record_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "records", record_id)
 
 
@@ -270,13 +271,13 @@ def update_record(
     record_id: int,
     payload: RecordUpdate,
     version: int = Depends(expected_version),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return update_row(connection, "records", record_id, payload.model_dump(exclude_unset=True), version)
 
 
 @app.delete("/api/v1/records/{record_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["records"])
-def delete_record(record_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
+def delete_record(record_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     delete_row(connection, "records", record_id, version)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -296,7 +297,7 @@ def _open_draft(connection: Connection, draft_id: int, *, lock: bool = False) ->
 
 
 @app.post("/api/v1/record-drafts", response_model=RecordDraftRead, status_code=201, tags=["record drafts"])
-def create_record_draft(payload: RecordDraftCreate, connection: Connection = Depends(get_connection)):
+def create_record_draft(payload: RecordDraftCreate, connection: Connection = Depends(get_connection, scope="function")):
     values = payload.model_dump(exclude_none=True)
     if not values:
         return connection.execute("INSERT INTO record_drafts DEFAULT VALUES RETURNING *").fetchone()
@@ -304,12 +305,12 @@ def create_record_draft(payload: RecordDraftCreate, connection: Connection = Dep
 
 
 @app.get("/api/v1/record-drafts/{draft_id}", response_model=RecordDraftRead, tags=["record drafts"])
-def get_record_draft(draft_id: int, connection: Connection = Depends(get_connection)):
+def get_record_draft(draft_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return _open_draft(connection, draft_id)
 
 
 @app.patch("/api/v1/record-drafts/{draft_id}", response_model=RecordDraftRead, tags=["record drafts"])
-def update_record_draft(draft_id: int, payload: RecordDraftUpdate, connection: Connection = Depends(get_connection)):
+def update_record_draft(draft_id: int, payload: RecordDraftUpdate, connection: Connection = Depends(get_connection, scope="function")):
     _open_draft(connection, draft_id)
     values = payload.model_dump(exclude_unset=True)
     if not values:
@@ -322,14 +323,14 @@ def update_record_draft(draft_id: int, payload: RecordDraftUpdate, connection: C
 
 
 @app.delete("/api/v1/record-drafts/{draft_id}", status_code=204, tags=["record drafts"])
-def discard_record_draft(draft_id: int, connection: Connection = Depends(get_connection)):
+def discard_record_draft(draft_id: int, connection: Connection = Depends(get_connection, scope="function")):
     _open_draft(connection, draft_id, lock=True)
     connection.execute("DELETE FROM record_drafts WHERE id = %s", (draft_id,))
     return Response(status_code=204)
 
 
 @app.get("/api/v1/record-drafts/{draft_id}/components", response_model=list[RecordDraftComponentRead], tags=["record drafts"])
-def list_record_draft_components(draft_id: int, connection: Connection = Depends(get_connection)):
+def list_record_draft_components(draft_id: int, connection: Connection = Depends(get_connection, scope="function")):
     _open_draft(connection, draft_id)
     return list(connection.execute(
         """SELECT id, draft_id, component_order, file_name, date_created,
@@ -347,7 +348,7 @@ def upload_record_draft_component(
     file: UploadFile = File(...),
     component_order: int = Form(..., gt=0),
     date_originated: datetime | None = Form(default=None),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     _open_draft(connection, draft_id, lock=True)
     uploaded = read_upload(file)
@@ -387,7 +388,7 @@ def _reorder_components(connection: Connection, table: str, parent_column: str, 
 
 
 @app.put("/api/v1/record-drafts/{draft_id}/components/order", status_code=204, tags=["record drafts"])
-def reorder_record_draft_components(draft_id: int, payload: ComponentReorderRequest, connection: Connection = Depends(get_connection)):
+def reorder_record_draft_components(draft_id: int, payload: ComponentReorderRequest, connection: Connection = Depends(get_connection, scope="function")):
     _open_draft(connection, draft_id, lock=True)
     _reorder_components(connection, "record_draft_components", "draft_id", draft_id, payload)
     connection.execute("UPDATE record_drafts SET date_updated = CURRENT_TIMESTAMP WHERE id = %s", (draft_id,))
@@ -395,7 +396,7 @@ def reorder_record_draft_components(draft_id: int, payload: ComponentReorderRequ
 
 
 @app.delete("/api/v1/record-drafts/{draft_id}/components/{component_id}", status_code=204, tags=["record drafts"])
-def delete_record_draft_component(draft_id: int, component_id: int, connection: Connection = Depends(get_connection)):
+def delete_record_draft_component(draft_id: int, component_id: int, connection: Connection = Depends(get_connection, scope="function")):
     _open_draft(connection, draft_id, lock=True)
     deleted = connection.execute(
         "DELETE FROM record_draft_components WHERE id = %s AND draft_id = %s RETURNING id",
@@ -414,7 +415,7 @@ def delete_record_draft_component(draft_id: int, component_id: int, connection: 
 
 
 @app.post("/api/v1/record-drafts/{draft_id}/commit", response_model=RecordRead, status_code=201, tags=["record drafts"])
-def commit_record_draft(draft_id: int, connection: Connection = Depends(get_connection)):
+def commit_record_draft(draft_id: int, connection: Connection = Depends(get_connection, scope="function")):
     draft = _open_draft(connection, draft_id, lock=True)
     missing = [name for name in ("aggregation_id", "record_number", "title") if not draft.get(name)]
     if missing:
@@ -453,7 +454,7 @@ def commit_record_draft(draft_id: int, connection: Connection = Depends(get_conn
 )
 def create_digital_component(
     payload: DigitalComponentCreate,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return create_row(connection, "digital_components", payload.model_dump())
 
@@ -467,7 +468,7 @@ def list_digital_components(
     record_id: int | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return list_rows(
         connection,
@@ -486,7 +487,7 @@ def list_digital_components(
 )
 def search_digital_components(
     payload: SearchRequest,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return search_rows(connection, "digital_components", payload)
 
@@ -496,7 +497,7 @@ def search_digital_components(
     response_model=DigitalComponentRead,
     tags=["digital components"],
 )
-def get_digital_component(component_id: int, connection: Connection = Depends(get_connection)):
+def get_digital_component(component_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "digital_components", component_id)
 
 
@@ -509,7 +510,7 @@ def update_digital_component(
     component_id: int,
     payload: DigitalComponentUpdate,
     version: int = Depends(expected_version),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return update_row(
         connection,
@@ -528,7 +529,7 @@ def update_digital_component(
 def delete_digital_component(
     component_id: int,
     version: int = Depends(expected_version),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     component = get_or_404(connection, "digital_components", component_id)
     delete_row(connection, "digital_components", component_id, version)
@@ -553,7 +554,7 @@ def delete_digital_component(
 def reorder_digital_components(
     record_id: int,
     payload: ComponentReorderRequest,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     get_or_404(connection, "records", record_id)
     _reorder_components(connection, "digital_components", "record_id", record_id, payload)
@@ -583,7 +584,7 @@ def upload_digital_component(
     file: UploadFile = File(...),
     component_order: int = Form(..., gt=0),
     date_originated: datetime | None = Form(default=None),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     get_or_404(connection, "records", record_id)
     uploaded = read_upload(file)
@@ -622,7 +623,7 @@ def upload_digital_component(
 )
 def download_digital_component_content(
     component_id: int,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     component = get_or_404(connection, "digital_components", component_id)
     content = configured_storage().read(connection, component_id)
@@ -641,6 +642,63 @@ def download_digital_component_content(
     )
 
 
+@app.get(
+    "/api/v1/digital-components/{component_id}/rendition",
+    tags=["digital component content"],
+)
+def view_digital_component_rendition(
+    component_id: int,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    component = get_or_404(connection, "digital_components", component_id)
+    content = configured_storage().read(connection, component_id)
+    if content is None or component["content_status"] != "available":
+        raise HTTPException(status_code=404, detail="digital component content not found")
+    mime_type = component["mime_type"].lower()
+    native_preview = (
+        mime_type in {
+            "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/avif",
+        }
+        or mime_type.startswith("audio/")
+        or mime_type.startswith("video/")
+    )
+    if native_preview:
+        _append_content_event(connection, component_id, "CONTENT_VIEWED", {
+            "rendition_mime_type": mime_type, "rendering_method": "browser-native",
+            "original_checksum": component["checksum_value"],
+        })
+        encoded_name = quote(component["file_name"], safe="")
+        return StreamingResponse(
+            BytesIO(content),
+            media_type=mime_type,
+            headers={
+                "Content-Disposition": f"inline; filename*=UTF-8''{encoded_name}",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": "sandbox",
+            },
+        )
+    try:
+        rendition, method = pdf_rendition(content, component["file_name"], mime_type)
+    except UnsupportedPreview as error:
+        raise HTTPException(status_code=415, detail=str(error)) from error
+    except ConversionUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    _append_content_event(connection, component_id, "CONTENT_VIEWED", {
+        "rendition_mime_type": "application/pdf", "rendering_method": method,
+        "original_checksum": component["checksum_value"],
+    })
+    encoded_name = quote(f"{component['file_name']}.pdf", safe="")
+    return StreamingResponse(
+        BytesIO(rendition),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{encoded_name}",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "sandbox",
+        },
+    )
+
+
 @app.put(
     "/api/v1/digital-components/{component_id}/content",
     response_model=DigitalComponentRead,
@@ -650,7 +708,7 @@ def replace_digital_component_content(
     component_id: int,
     file: UploadFile = File(...),
     version: int = Depends(expected_version),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     uploaded = read_upload(file)
     mime_type = file.content_type or "application/octet-stream"
@@ -681,7 +739,7 @@ def replace_digital_component_content(
 def delete_digital_component_content(
     component_id: int,
     version: int = Depends(expected_version),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     configured_storage().delete(connection, component_id)
     component = update_row(connection, "digital_components", component_id, {
@@ -708,7 +766,7 @@ def list_event_history(
     correlation_id: UUID | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return list_rows(
         connection,
@@ -734,7 +792,7 @@ def list_event_history(
 )
 def search_event_history(
     payload: SearchRequest,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return search_rows(connection, "event_history", payload)
 
@@ -744,7 +802,7 @@ def search_event_history(
     response_model=EventHistoryRead,
     tags=["event history"],
 )
-def get_event_history(event_id: int, connection: Connection = Depends(get_connection)):
+def get_event_history(event_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "event_history", event_id)
 
 
@@ -775,7 +833,7 @@ def get_aggregation_history(
     aggregation_id: int,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return _entity_history(connection, "aggregation", aggregation_id, limit, offset)
 
@@ -789,7 +847,7 @@ def get_record_history(
     record_id: int,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return _entity_history(connection, "record", record_id, limit, offset)
 
@@ -803,6 +861,6 @@ def get_digital_component_history(
     component_id: int,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     return _entity_history(connection, "digital_component", component_id, limit, offset)

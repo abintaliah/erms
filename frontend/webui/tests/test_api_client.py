@@ -204,6 +204,28 @@ def test_unauthorized_response_clears_page_through_handler():
     assert handled == [True]
 
 
+def test_component_download_and_view_use_distinct_content_routes():
+    paths = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        return httpx.Response(200, content=b"document", headers={"content-type": "application/pdf"})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            assert await client.download_component(8) == b"document"
+            assert await client.view_component_pdf(8) == b"document"
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert paths == [
+        "/api/v1/digital-components/8/content",
+        "/api/v1/digital-components/8/rendition",
+    ]
+
+
 def test_entity_history_uses_read_only_timeline_route():
     captured = {}
 
