@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -21,16 +23,30 @@ class ApiError(RuntimeError):
 
 class ErmsApiClient:
     def __init__(self, base_url: str, *, transport: httpx.AsyncBaseTransport | None = None):
+        self._transport = transport
         self._client = httpx.AsyncClient(
             base_url=base_url,
             timeout=httpx.Timeout(30, connect=5),
             transport=transport,
         )
+        self._session_token: str | None = None
+        self._unauthorized_handler: Callable[[], Any] | None = None
+
+    def set_session_token(self, token: str | None) -> None:
+        """Keep authentication attached to this browser page's API client."""
+        self._session_token = token
+
+    def set_unauthorized_handler(self, handler: Callable[[], Any]) -> None:
+        self._unauthorized_handler = handler
 
     async def close(self) -> None:
         await self._client.aclose()
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        if self._session_token:
+            headers = dict(kwargs.pop("headers", {}))
+            headers.setdefault("Authorization", f"Bearer {self._session_token}")
+            kwargs["headers"] = headers
         try:
             response = await self._client.request(method, path, **kwargs)
         except httpx.HTTPError as error:
@@ -40,11 +56,51 @@ class ErmsApiClient:
                 detail = response.json().get("detail", response.text)
             except ValueError:
                 detail = response.text or response.reason_phrase
+            if response.status_code == 401 and self._unauthorized_handler:
+                result = self._unauthorized_handler()
+                if inspect.isawaitable(result):
+                    await result
             raise ApiError(response.status_code, detail)
         if response.status_code == 204:
             return None
         content_type = response.headers.get("content-type", "")
         return response.json() if "json" in content_type else response.content
+
+    async def login(self, email: str, password: str, *, user_agent: str | None = None) -> tuple[dict[str, Any], str]:
+        async with httpx.AsyncClient(
+            base_url=str(self._client.base_url), timeout=30, transport=self._transport
+        ) as client:
+            response = await client.post(
+                "/api/v1/auth/login", json={"email": email, "password": password},
+                headers={"User-Agent": user_agent} if user_agent else None,
+            )
+        if response.is_error:
+            raise ApiError(response.status_code, response.json().get("detail", "login failed"))
+        token = response.cookies.get("erms_session")
+        if not token:
+            raise ApiError(500, "authentication service did not issue a session")
+        return response.json(), token
+
+    async def me(self) -> dict[str, Any]:
+        return await self.request("GET", "/api/v1/auth/me")
+
+    async def logout(self) -> None:
+        await self.request("POST", "/api/v1/auth/logout")
+
+    async def change_password(self, current_password: str, new_password: str) -> None:
+        await self.request("POST", "/api/v1/auth/change-password", json={"current_password": current_password, "new_password": new_password})
+
+    async def login_sessions(self) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/auth/sessions")
+
+    async def revoke_session(self, session_id: int) -> None:
+        await self.request("DELETE", f"/api/v1/auth/sessions/{session_id}")
+
+    async def revoke_user_sessions(self, user_id: int) -> None:
+        await self.request("DELETE", f"/api/v1/auth/users/{user_id}/sessions")
+
+    async def issue_temporary_password(self, user_id: int) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/auth/users/{user_id}/temporary-password")
 
     async def list(self, resource: str, *, limit: int = 500, **filters: Any) -> list[dict[str, Any]]:
         return await self.request(

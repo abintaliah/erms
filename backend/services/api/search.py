@@ -106,6 +106,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "name": TEXT,
         "email": NULLABLE_TEXT,
         "external_id": NULLABLE_TEXT,
+        "account_type": TEXT,
         "status": TEXT,
         "date_created": DATETIME,
         "date_deactivated": NULLABLE_DATETIME,

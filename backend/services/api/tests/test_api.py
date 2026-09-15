@@ -438,8 +438,8 @@ def test_api_change_creates_correlated_history(client: TestClient):
     assert event["entity_type"] == "aggregation"
     assert event["entity_id"] == aggregation["id"]
     assert event["operation"] == "CREATE"
-    assert event["actor_user_id"] is None
-    assert event["actor_type"] == "anonymous"
+    assert event["actor_user_id"] == 1
+    assert event["actor_type"] == "user"
     assert event["source"] == "api"
     assert event["request_id"] == request_id
     assert event["correlation_id"] == correlation_id

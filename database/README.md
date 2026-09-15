@@ -28,6 +28,12 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/003_add_content_storage_and_entity_versions.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/004_add_record_drafts.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/005_add_authentication.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -38,6 +44,8 @@ organizational units, roles, temporal role assignments, hierarchy safeguards,
 searchable indexes, and event-history triggers.
 Migration 003 adds PostgreSQL-backed digital-component content storage and
 database-managed optimistic-concurrency versions for all mutable entities.
+Migration 004 adds transactional record drafts. Migration 005 adds local
+credentials, database-backed login sessions, and human/system account types.
 
 ## Tests
 

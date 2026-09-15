@@ -5,19 +5,11 @@ import json
 from datetime import datetime
 from typing import Any
 
-from nicegui import app, background_tasks, events, ui
+from nicegui import app, background_tasks, context, events, ui
 
 from .api_client import ApiError, ErmsApiClient
-from .config import api_url, host, port, reload_enabled
+from .config import api_url, host, port, reload_enabled, storage_secret
 from .entities import ENTITIES, EntitySpec, FieldSpec
-
-
-api = ErmsApiClient(api_url())
-
-
-@app.on_shutdown
-async def close_api_client() -> None:
-    await api.close()
 
 
 def display_value(value: Any) -> str:
@@ -287,6 +279,11 @@ def relationship_select(
 
 
 def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | None = None):
+    if field.kind == "account_type":
+        return ui.select(
+            {"human": "Human user", "system": "System account"},
+            label=field.label, value=value or "human",
+        ).props("outlined").classes("w-full")
     if field.kind == "textarea":
         return ui.textarea(field.label, value=value or "").props("outlined autogrow").classes("w-full")
     if field.kind == "int":
@@ -321,6 +318,11 @@ def form_payload(spec: EntitySpec, controls: dict[str, Any], *, creating: bool) 
 
 @ui.page("/")
 def index() -> None:
+    # A client per page prevents one browser's token leaking into another and
+    # keeps it available when dashboard calls run in child asyncio tasks.
+    api = ErmsApiClient(api_url())
+    context.client.on_disconnect(api.close)
+    auth_state: dict[str, Any] = {"principal": None}
     state: dict[str, Any] = {
         "resource": "dashboard", "rows": [], "searched": False,
         "recent_created": [], "recent_updated": [], "aggregation_detail": None,
@@ -371,6 +373,18 @@ def index() -> None:
         ui.space()
         with ui.icon("cloud_done").classes("text-positive text-xl") as connection_icon:
             connection_tooltip = ui.tooltip("Connected")
+        user_menu_button = ui.button(icon="account_circle").props("flat round color=white")
+        with user_menu_button, ui.menu() as user_menu:
+            with ui.column().classes("w-72 p-3 gap-2"):
+                current_user_name = ui.label("Not signed in").classes("font-semibold")
+                current_user_email = ui.label().classes("text-xs text-slate-500")
+                ui.separator()
+                ui.label("Assigned roles").classes("component-meta-label")
+                current_user_roles = ui.column().classes("w-full gap-1")
+                ui.separator()
+                change_password_menu = ui.button("Change password", icon="password").props("flat no-caps align=left").classes("w-full")
+                my_sessions_menu = ui.button("Login sessions", icon="devices").props("flat no-caps align=left").classes("w-full")
+                sign_out_menu = ui.button("Sign out", icon="logout", color="negative").props("flat no-caps align=left").classes("w-full")
 
     def set_connection_status(connected: bool) -> None:
         connection_icon.name = "cloud_done" if connected else "cloud_off"
@@ -402,6 +416,7 @@ def index() -> None:
                 navigation[key], navigation_badges[key] = drawer_link(ENTITIES[key].label, icon)
         ui.label("SYSTEM ADMINISTRATION").classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
         audit_navigation, navigation_badges["event-history"] = drawer_link("Audit trail", "manage_history")
+        sessions_navigation, navigation_badges["login-sessions"] = drawer_link("Login sessions", "devices")
 
     with ui.column().classes("erms-content w-full p-5 gap-4"):
         with ui.row().classes("w-full items-center"):
@@ -411,12 +426,31 @@ def index() -> None:
             ui.space()
             add_button = ui.button("Add", icon="add", color="primary").props("unelevated rounded")
 
-        with ui.card().classes("erms-card w-full p-0"):
+        with ui.card().classes("erms-card w-full p-0") as content_card:
             with ui.row().classes("w-full items-end p-4 gap-2") as search_bar:
                 search_input = ui.input("Search by number, title or description").props("outlined clearable").classes("grow")
                 search_button = ui.button("Search", icon="search").props("unelevated")
             guidance = ui.label().classes("px-4 pb-4 text-slate-500")
             table_container = ui.column().classes("w-full gap-0")
+    content_card.set_visibility(False)
+    add_button.set_visibility(False)
+
+    def clear_authenticated_view() -> None:
+        """Remove protected data as soon as there is no authenticated principal."""
+        state.update(resource="dashboard", rows=[], searched=False, aggregation_detail=None)
+        title.text = ""
+        subtitle.text = ""
+        guidance.text = ""
+        table_container.clear()
+        search_bar.set_visibility(False)
+        add_button.set_visibility(False)
+        content_card.set_visibility(False)
+        for badge in navigation_badges.values():
+            badge.text = "—"
+            badge.update()
+
+    def show_authenticated_view() -> None:
+        content_card.set_visibility(True)
 
     entity_types = {
         "aggregations": "aggregation", "records": "record",
@@ -431,9 +465,13 @@ def index() -> None:
             for resource, count in zip(resources, counts):
                 navigation_badges[resource].text = str(count)
                 navigation_badges[resource].update()
+            sessions = await api.login_sessions()
+            navigation_badges["login-sessions"].text = str(sum(row["status"] == "active" for row in sessions))
+            navigation_badges["login-sessions"].update()
             set_connection_status(True)
-        except ApiError:
-            set_connection_status(False)
+        except ApiError as error:
+            # An HTTP response, including 401, means the API is reachable.
+            set_connection_status(error.status_code != 503)
 
     def event_value(value: Any) -> str:
         if value is None:
@@ -1298,6 +1336,8 @@ def index() -> None:
                 buttons = '<q-btn flat round dense icon="folder_open" color="secondary" @click="$parent.$emit(\'open_aggregation\', props.row)"><q-tooltip>Open aggregation</q-tooltip></q-btn>' + buttons
             if spec.key in {"users", "roles"}:
                 buttons += '<q-btn flat round dense icon="group" color="secondary" @click="$parent.$emit(\'memberships\', props.row)"><q-tooltip>Role assignments</q-tooltip></q-btn>'
+            if spec.key == "users":
+                buttons += '<q-btn flat round dense icon="password" color="orange" @click="$parent.$emit(\'temporary_password\', props.row)"><q-tooltip>Issue temporary password</q-tooltip></q-btn>'
             table.add_slot("body-cell-actions", f'<q-td :props="props">{buttons}</q-td>')
             table.on("edit", lambda event: open_editor(event.args))
             table.on("history", lambda event, resource=spec.key: show_entity_history(resource, event.args))
@@ -1312,8 +1352,170 @@ def index() -> None:
                         event.args, for_user=user_view
                     ),
                 )
+            if spec.key == "users":
+                async def issue_password(event) -> None:
+                    try:
+                        result = await api.issue_temporary_password(event.args["id"])
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+                        return
+                    dialog = ui.dialog().props("persistent")
+                    with dialog, ui.card().classes("w-[520px] max-w-full"):
+                        ui.label("Temporary password").classes("text-xl font-semibold")
+                        ui.label("Copy this password now. It will not be shown again.").classes("text-sm text-slate-500")
+                        ui.code(result["temporary_password"]).classes("w-full text-lg")
+                        ui.label(f"Expires {format_timestamp(result['expires_at'])}").classes("text-xs text-slate-400")
+                        with ui.row().classes("w-full justify-end"):
+                            ui.button("I have copied it", on_click=dialog.close).props("unelevated no-caps")
+                    dialog.open()
+                table.on("temporary_password", issue_password)
+
+    def populate_user_menu(principal: dict[str, Any]) -> None:
+        auth_state["principal"] = principal
+        user = principal["user"]
+        current_user_name.text = user["name"]
+        current_user_email.text = user.get("email") or user["account_type"].title()
+        current_user_roles.clear()
+        with current_user_roles:
+            if not principal["roles"]:
+                ui.label("No assigned roles").classes("text-xs text-slate-400")
+            for role in principal["roles"]:
+                with ui.row().classes("w-full items-center gap-2 no-wrap"):
+                    ui.icon("badge", size="18px").classes("text-primary")
+                    with ui.column().classes("gap-0 min-w-0"):
+                        ui.label(role["name"]).classes("text-sm font-medium line-clamp-1")
+                        ui.label(role["org_unit"]["name"]).classes("text-xs text-slate-400 line-clamp-1")
+
+    async def show_change_password() -> None:
+        dialog = ui.dialog().props("persistent")
+        with dialog, ui.card().classes("w-[480px] max-w-full"):
+            ui.label("Change password").classes("text-xl font-semibold")
+            current = ui.input("Current password", password=True, password_toggle_button=True).props("outlined").classes("w-full")
+            new = ui.input("New password", password=True, password_toggle_button=True).props("outlined").classes("w-full")
+            confirm = ui.input("Confirm new password", password=True).props("outlined").classes("w-full")
+
+            async def save_password() -> None:
+                if new.value != confirm.value:
+                    ui.notify("New passwords do not match", color="warning")
+                    return
+                try:
+                    await api.change_password(current.value or "", new.value or "")
+                    dialog.close()
+                    ui.notify("Password changed", color="positive")
+                    populate_user_menu(await api.me())
+                    await select_dashboard()
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+
+            with ui.row().classes("w-full justify-end"):
+                if not (auth_state.get("principal") or {}).get("must_change_password"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat")
+                ui.button("Change password", icon="password", on_click=save_password).props("unelevated")
+        dialog.open()
+
+    async def sign_out() -> None:
+        try:
+            await api.logout()
+        except ApiError:
+            pass
+        app.storage.user.pop("session_token", None)
+        api.set_session_token(None)
+        auth_state["principal"] = None
+        clear_authenticated_view()
+        login_dialog.open()
+
+    async def select_login_sessions() -> None:
+        show_authenticated_view()
+        state.update(resource="login-sessions", rows=[], searched=True, aggregation_detail=None)
+        title.text = "Login sessions"
+        subtitle.text = "Review and revoke authenticated sessions"
+        add_button.set_visibility(False)
+        search_bar.set_visibility(False)
+        guidance.text = ""
+        table_container.clear()
+        with table_container:
+            outer = ui.column().classes("w-full p-5 gap-4")
+
+        async def load_sessions() -> None:
+            try:
+                rows = await api.login_sessions()
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative")
+                return
+            active_count = sum(row["status"] == "active" for row in rows)
+            is_admin = any(role["code"].lower() == "system-administrator" for role in auth_state["principal"]["roles"])
+            for row in rows:
+                row["can_revoke_all"] = is_admin
+            navigation_badges["login-sessions"].text = str(active_count)
+            navigation_badges["login-sessions"].update()
+            outer.clear()
+            with outer:
+                with ui.row().classes("w-full items-center"):
+                    ui.label(f"{active_count} active session{'s' if active_count != 1 else ''}").classes("text-sm text-slate-500")
+                    ui.space()
+                    ui.button("Refresh", icon="refresh", on_click=load_sessions).props("flat no-caps")
+                table = ui.table(
+                    columns=[
+                        {"name": "user_name", "label": "User", "field": "user_name", "align": "left"},
+                        {"name": "status", "label": "Status", "field": "status", "align": "left"},
+                        {"name": "date_created", "label": "Signed in", "field": "date_created", "align": "left"},
+                        {"name": "last_seen_at", "label": "Last activity", "field": "last_seen_at", "align": "left"},
+                        {"name": "client_ip", "label": "IP address", "field": "client_ip", "align": "left"},
+                        {"name": "user_agent", "label": "Client", "field": "user_agent", "align": "left"},
+                        {"name": "actions", "label": "", "field": "actions", "align": "right"},
+                    ], rows=rows, row_key="id", pagination=25,
+                ).props("flat bordered wrap-cells").classes("w-full")
+                add_timestamp_slots(table, ["date_created", "last_seen_at"])
+                table.add_slot("body-cell-status", '''
+                    <q-td :props="props"><q-badge :color="props.value === 'active' ? 'positive' : (props.value === 'revoked' ? 'negative' : 'grey')" :label="props.value" /></q-td>
+                ''')
+                table.add_slot("body-cell-actions", '''
+                    <q-td :props="props">
+                      <q-btn v-if="props.row.status === 'active'" flat round dense color="negative" icon="logout" @click="$parent.$emit('revoke', props.row)"><q-tooltip>Force logout this session</q-tooltip></q-btn>
+                      <q-btn v-if="props.row.status === 'active' && props.row.can_revoke_all" flat round dense color="negative" icon="phonelink_erase" @click="$parent.$emit('revoke_all', props.row)"><q-tooltip>Force logout all sessions for this user</q-tooltip></q-btn>
+                    </q-td>
+                ''')
+
+                async def confirm_revoke(row: dict[str, Any], *, all_for_user: bool = False) -> None:
+                    confirmation = ui.dialog()
+                    with confirmation, ui.card().classes("w-[460px] max-w-full"):
+                        ui.label("Force logout?").classes("text-xl font-semibold")
+                        scope = "all active sessions for" if all_for_user else "this session for"
+                        ui.label(f"This will immediately revoke {scope} {row['user_name']}.").classes("text-sm text-slate-600")
+
+                        async def proceed() -> None:
+                            confirmation.close()
+                            try:
+                                if all_for_user:
+                                    await api.revoke_user_sessions(row["user_id"])
+                                else:
+                                    await api.revoke_session(row["id"])
+                                if row.get("is_current"):
+                                    app.storage.user.pop("session_token", None)
+                                    login_dialog.open()
+                                else:
+                                    ui.notify("Session revoked", color="positive")
+                                    await load_sessions()
+                            except ApiError as error:
+                                ui.notify(error_message(error), color="negative")
+
+                        with ui.row().classes("w-full justify-end"):
+                            ui.button("Cancel", on_click=confirmation.close).props("flat")
+                            ui.button("Force logout", icon="logout", color="negative", on_click=proceed).props("unelevated no-caps")
+                    confirmation.open()
+
+                async def revoke(event) -> None:
+                    await confirm_revoke(event.args)
+
+                async def revoke_all(event) -> None:
+                    await confirm_revoke(event.args, all_for_user=True)
+
+                table.on("revoke", revoke)
+                table.on("revoke_all", revoke_all)
+        await load_sessions()
 
     async def select_dashboard() -> None:
+        show_authenticated_view()
         state.update(resource="dashboard", rows=[], searched=True, aggregation_detail=None)
         title.text = "Dashboard"
         subtitle.text = "An overview of your records management system"
@@ -1349,6 +1551,9 @@ def index() -> None:
                     "records": (results[8], results[9]),
                 }
             except ApiError as error:
+                if error.status_code == 401:
+                    set_connection_status(True)
+                    return
                 dashboard_content.clear()
                 with dashboard_content:
                     ui.label(error_message(error)).classes("text-negative p-5")
@@ -1414,11 +1619,15 @@ def index() -> None:
                 for resource, count in counts.items():
                     navigation_badges[resource].text = str(count)
                     navigation_badges[resource].update()
+                sessions = await api.login_sessions()
+                navigation_badges["login-sessions"].text = str(sum(row["status"] == "active" for row in sessions))
+                navigation_badges["login-sessions"].update()
                 set_connection_status(True)
 
         await load_dashboard()
 
     async def select_audit_trail() -> None:
+        show_authenticated_view()
         state.update(resource="audit-trail", rows=[], searched=True, aggregation_detail=None)
         title.text = "Audit trail"
         subtitle.text = "Immutable history of changes across the system"
@@ -1508,10 +1717,11 @@ def index() -> None:
             set_connection_status(True)
             render_table(spec)
         except ApiError as error:
-            set_connection_status(False)
+            set_connection_status(error.status_code != 503)
             ui.notify(error_message(error), color="negative", close_button=True)
 
     async def select_entity(key: str) -> None:
+        show_authenticated_view()
         state.update(resource=key, rows=[], searched=False, aggregation_detail=None)
         spec = ENTITIES[key]
         title.text = spec.label
@@ -1526,17 +1736,93 @@ def index() -> None:
             render_table(spec)
             await load_rows()
         except ApiError as error:
-            set_connection_status(False)
+            set_connection_status(error.status_code != 503)
             ui.notify(error_message(error), color="negative", close_button=True)
 
     for key, button in navigation.items():
         button.on("click", lambda _, entity_key=key: select_entity(entity_key))
     dashboard_navigation.on("click", select_dashboard)
     audit_navigation.on("click", select_audit_trail)
+    sessions_navigation.on("click", select_login_sessions)
+    change_password_menu.on("click", show_change_password)
+    my_sessions_menu.on("click", select_login_sessions)
+    sign_out_menu.on("click", sign_out)
     add_button.on("click", lambda: open_editor())
     search_button.on("click", lambda: load_rows())
     search_input.on("keydown.enter", lambda: load_rows())
-    ui.timer(0.05, select_dashboard, once=True)
+    login_dialog = ui.dialog().props("persistent")
+    with login_dialog, ui.card().classes("w-[460px] max-w-[calc(100vw-32px)] p-7 gap-4"):
+        with ui.row().classes("items-center gap-3"):
+            ui.avatar(icon="lock", color="blue-1", text_color="primary")
+            with ui.column().classes("gap-0"):
+                ui.label("Sign in to ERMS").classes("text-2xl font-semibold")
+                ui.label("Use your organization credentials").classes("text-sm text-slate-500")
+        login_email = ui.input("Email address").props("outlined autocomplete=username").classes("w-full")
+        login_password = ui.input("Password", password=True, password_toggle_button=True).props("outlined autocomplete=current-password").classes("w-full")
+        login_error = ui.label().classes("text-negative text-sm")
+
+        async def submit_login() -> None:
+            login_error.text = ""
+            try:
+                principal, token = await api.login(
+                    login_email.value or "", login_password.value or "",
+                    user_agent=context.client.request.headers.get("user-agent"),
+                )
+                app.storage.user["session_token"] = token
+                api.set_session_token(token)
+                populate_user_menu(principal)
+                login_password.value = ""
+                login_dialog.close()
+                if principal["must_change_password"]:
+                    with table_container:
+                        await show_change_password()
+                else:
+                    await select_dashboard()
+            except ApiError as error:
+                login_error.text = error_message(error)
+
+        ui.button("Sign in", icon="login", on_click=submit_login).props("unelevated no-caps").classes("w-full")
+        login_password.on("keydown.enter", submit_login)
+
+    def handle_unauthorized() -> None:
+        """Synchronize the visible UI when FastAPI rejects a session."""
+        api.set_session_token(None)
+        try:
+            app.storage.user.pop("session_token", None)
+        except RuntimeError:
+            # Background tasks may not have NiceGUI's storage request context.
+            pass
+        auth_state["principal"] = None
+        current_user_name.text = "Not signed in"
+        current_user_email.text = ""
+        current_user_roles.clear()
+        clear_authenticated_view()
+        set_connection_status(True)  # A 401 proves that the API is reachable.
+        login_dialog.open()
+
+    api.set_unauthorized_handler(handle_unauthorized)
+
+    async def initialize_authenticated_ui() -> None:
+        token = app.storage.user.get("session_token")
+        if token:
+            api.set_session_token(token)
+            try:
+                principal = await api.me()
+                populate_user_menu(principal)
+                if principal["must_change_password"]:
+                    with table_container:
+                        await show_change_password()
+                else:
+                    await select_dashboard()
+                return
+            except ApiError:
+                app.storage.user.pop("session_token", None)
+                api.set_session_token(None)
+        clear_authenticated_view()
+        set_connection_status(True)
+        login_dialog.open()
+
+    ui.timer(0.05, initialize_authenticated_ui, once=True)
 
 
 def run() -> None:
@@ -1545,6 +1831,7 @@ def run() -> None:
         host=host(),
         port=port(),
         reload=reload_enabled(),
+        storage_secret=storage_secret(),
         favicon="📚",
     )
 
