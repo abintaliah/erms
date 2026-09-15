@@ -1,5 +1,25 @@
 -- Test-only fixture: turn the freshly bootstrapped database into the state that
 -- existed immediately before migration 001.
+DROP TRIGGER IF EXISTS digital_component_blobs_protect_closed_aggregation ON digital_component_blobs;
+DROP TRIGGER IF EXISTS digital_components_protect_closed_aggregation ON digital_components;
+DROP TRIGGER IF EXISTS records_protect_closed_aggregation ON records;
+DROP TRIGGER IF EXISTS aggregations_protect_closed_hierarchy ON aggregations;
+DROP TRIGGER IF EXISTS aggregations_validate_closure_date ON aggregations;
+DROP FUNCTION IF EXISTS protect_blob_in_closed_aggregation();
+DROP FUNCTION IF EXISTS protect_component_in_closed_aggregation();
+DROP FUNCTION IF EXISTS assert_record_effectively_open(bigint);
+DROP FUNCTION IF EXISTS protect_record_in_closed_aggregation();
+DROP FUNCTION IF EXISTS protect_closed_aggregation_hierarchy();
+DROP FUNCTION IF EXISTS validate_aggregation_closure_date();
+DROP FUNCTION IF EXISTS assert_aggregation_effectively_open(bigint);
+DELETE FROM schema_migrations WHERE version IN (
+    '006_enforce_closed_aggregations', '007_freeze_closed_aggregation_metadata',
+    '008_cascade_record_digital_components'
+);
+ALTER TABLE digital_components
+    DROP CONSTRAINT IF EXISTS digital_components_record_id_fkey,
+    ADD CONSTRAINT digital_components_record_id_fkey
+        FOREIGN KEY (record_id) REFERENCES records (id) ON DELETE RESTRICT;
 DROP TABLE IF EXISTS record_draft_components;
 DROP TABLE IF EXISTS record_drafts;
 DROP TABLE IF EXISTS login_sessions;

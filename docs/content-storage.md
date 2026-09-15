@@ -1,5 +1,11 @@
 # Digital component content storage
 
+Digital components are lifecycle-dependent parts of their record. The
+`digital_components.record_id` foreign key uses `ON DELETE CASCADE`: deleting
+an open record atomically deletes its component metadata, and each component's
+stored PostgreSQL blob is then removed by its own cascading foreign key. The
+record-deletion confirmation in the UI states this consequence explicitly.
+
 ## Current design
 
 Digital component metadata remains in `digital_components`. Binary content is

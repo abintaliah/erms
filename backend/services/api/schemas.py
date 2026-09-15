@@ -8,6 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
+def _is_future(value: datetime) -> bool:
+    now = datetime.now(value.tzinfo) if value.tzinfo else datetime.now()
+    return value > now
+
+
 class ApiModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -22,6 +27,8 @@ class AggregationCreate(ApiModel):
 
     @model_validator(mode="after")
     def validate_dates(self):
+        if self.date_closed is not None and _is_future(self.date_closed):
+            raise ValueError("date_closed cannot be in the future")
         if (
             self.date_opened is not None
             and self.date_closed is not None
@@ -38,6 +45,12 @@ class AggregationUpdate(ApiModel):
     description: str | None = None
     date_opened: datetime | None = None
     date_closed: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_closed_date(self):
+        if self.date_closed is not None and _is_future(self.date_closed):
+            raise ValueError("date_closed cannot be in the future")
+        return self
 
 
 class AggregationRead(ApiModel):

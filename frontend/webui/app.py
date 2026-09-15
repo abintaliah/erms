@@ -77,6 +77,37 @@ def native_preview_kind(mime_type: str | None) -> str | None:
     return None
 
 
+CONVERTIBLE_PREVIEW_EXTENSIONS = {
+    ".doc", ".docx", ".odt", ".rtf",
+    ".xls", ".xlsx", ".ods", ".csv",
+    ".ppt", ".pptx", ".odp",
+}
+
+
+def requires_document_conversion(component: dict[str, Any]) -> bool:
+    return (
+        native_preview_kind(component.get("mime_type")) is None
+        and (component.get("mime_type") or "").lower() != "application/pdf"
+        and Path(component.get("file_name") or "").suffix.lower()
+        in CONVERTIBLE_PREVIEW_EXTENSIONS
+    )
+
+
+def effective_closure(
+    aggregation: dict[str, Any] | None,
+    aggregations_by_id: dict[int, dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Return the nearest directly closed aggregation, including the item itself."""
+    current = aggregation
+    seen: set[int] = set()
+    while current and current.get("id") not in seen:
+        seen.add(current["id"])
+        if current.get("date_closed"):
+            return current
+        current = aggregations_by_id.get(current.get("parent_aggregation_id"))
+    return None
+
+
 def buffer_upload_batch(event: events.MultiUploadEventArguments) -> list[tuple[bytes, str, str]]:
     """Copy NiceGUI temporary uploads before any awaited API operation can release them."""
     return [
@@ -87,7 +118,7 @@ def buffer_upload_batch(event: events.MultiUploadEventArguments) -> list[tuple[b
 
 def render_component_cards(
     rows: list[dict[str, Any]], on_move, on_remove, on_history=None,
-    on_view=None, on_download=None,
+    on_view=None, on_download=None, *, readonly: bool = False,
 ) -> None:
     for index, component in enumerate(rows):
         status = component.get("content_status", "pending")
@@ -115,12 +146,14 @@ def render_component_cards(
                                 "flat round dense" + (" disable" if status != "available" else "")
                             ).tooltip("Download original")
                         ui.button(icon="arrow_upward", on_click=lambda _, item=component: on_move(item, -1)).props(
-                            "flat round dense" + (" disable" if index == 0 else "")
+                            "flat round dense" + (" disable" if readonly or index == 0 else "")
                         ).tooltip("Move earlier")
                         ui.button(icon="arrow_downward", on_click=lambda _, item=component: on_move(item, 1)).props(
-                            "flat round dense" + (" disable" if index == len(rows) - 1 else "")
+                            "flat round dense" + (" disable" if readonly or index == len(rows) - 1 else "")
                         ).tooltip("Move later")
-                        ui.button(icon="delete_outline", color="negative", on_click=lambda _, item=component: on_remove(item)).props("flat round dense").tooltip("Remove component")
+                        ui.button(icon="delete_outline", color="negative", on_click=lambda _, item=component: on_remove(item)).props(
+                            "flat round dense" + (" disable" if readonly else "")
+                        ).tooltip("Remove component" if not readonly else "Closed records cannot be changed")
                         if on_history is not None:
                             ui.button(icon="history", color="blue-grey", on_click=lambda _, item=component: on_history(item)).props("flat round dense").tooltip("Event history")
             with ui.row().classes("w-full items-center gap-2"):
@@ -452,6 +485,9 @@ def index() -> None:
                 subtitle = ui.label().classes("text-sm text-slate-500")
             ui.space()
             add_button = ui.button("Add", icon="add", color="primary").props("unelevated rounded")
+            add_record_button = ui.button(
+                "Add record", icon="note_add", color="secondary"
+            ).props("unelevated rounded")
 
         with ui.card().classes("erms-card w-full p-0") as content_card:
             with ui.row().classes("w-full items-end p-4 gap-2") as search_bar:
@@ -461,6 +497,7 @@ def index() -> None:
             table_container = ui.column().classes("w-full gap-0")
     content_card.set_visibility(False)
     add_button.set_visibility(False)
+    add_record_button.set_visibility(False)
 
     def clear_authenticated_view() -> None:
         """Remove protected data as soon as there is no authenticated principal."""
@@ -471,6 +508,7 @@ def index() -> None:
         table_container.clear()
         search_bar.set_visibility(False)
         add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
         content_card.set_visibility(False)
         for badge in navigation_badges.values():
             badge.text = "—"
@@ -721,6 +759,16 @@ def index() -> None:
         dialog.open()
 
     async def show_components(record: dict[str, Any]) -> None:
+        try:
+            aggregations = await api.list("aggregations")
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+        aggregations_by_id = {item["id"]: item for item in aggregations}
+        closure = effective_closure(
+            aggregations_by_id.get(record.get("aggregation_id")), aggregations_by_id
+        )
+        readonly = closure is not None
         current_rows: list[dict[str, Any]] = []
         upload_lock = asyncio.Lock()
         uploader_control: dict[str, Any] = {}
@@ -733,11 +781,33 @@ def index() -> None:
                 ui.notify(error_message(error), color="negative", close_button=True)
 
         async def view_component(component: dict[str, Any]) -> None:
+            converting = requires_document_conversion(component)
+            progress_dialog = ui.dialog().props("persistent")
+            with progress_dialog, ui.card().classes("w-[440px] max-w-full p-6"):
+                with ui.row().classes("w-full items-center no-wrap gap-4"):
+                    ui.spinner("dots", size="3em", color="primary")
+                    with ui.column().classes("gap-1 grow min-w-0"):
+                        ui.label("Preparing preview").classes("text-lg font-semibold")
+                        ui.label(
+                            "Converting this document to PDF. Larger files may take a little while."
+                            if converting else
+                            "Loading the document. Larger files may take a little while."
+                        ).classes("text-sm text-slate-500")
+                        ui.label(component.get("file_name") or "Document").classes(
+                            "text-xs text-slate-400 truncate max-w-full"
+                        )
+                ui.linear_progress(show_value=False, color="primary").props(
+                    "indeterminate"
+                ).classes("w-full mt-3")
+            progress_dialog.open()
+            await asyncio.sleep(0)
             try:
                 preview = await api.view_component_pdf(component["id"])
             except ApiError as error:
+                progress_dialog.close()
                 ui.notify(error_message(error), color="negative", close_button=True)
                 return
+            progress_dialog.close()
             preview_kind = native_preview_kind(component.get("mime_type"))
             if preview_kind:
                 mime_type = component.get("mime_type") or "application/octet-stream"
@@ -841,7 +911,17 @@ def index() -> None:
                     ui.label(f"Record {record['record_number']}").classes("text-sm text-slate-500")
                 ui.button(icon="close", on_click=dialog.close).props("flat round dense")
             with ui.element("div").classes("w-full overflow-y-auto max-h-[calc(100vh-190px)] pr-1"):
-                uploader_control["uploader"] = component_uploader(uploaded)
+                if readonly:
+                    with ui.row().classes("w-full items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg"):
+                        ui.icon("lock", color="amber-8")
+                        with ui.column().classes("gap-0 grow"):
+                            ui.label("Digital components are read-only").classes("font-semibold text-amber-900")
+                            ui.label(
+                                f"Closed by {closure['aggregation_number']} — {closure['title']}. "
+                                "Files may still be viewed or downloaded."
+                            ).classes("text-sm text-amber-800")
+                else:
+                    uploader_control["uploader"] = component_uploader(uploaded)
                 with ui.element("div").classes("component-list w-full mt-3"):
                     component_area = ui.element("div").classes("component-grid w-full")
 
@@ -856,7 +936,7 @@ def index() -> None:
                         render_component_cards(
                             current_rows, move_component, remove_component,
                             lambda item: show_entity_history("digital-components", item),
-                            view_component, download_component,
+                            view_component, download_component, readonly=readonly,
                         )
 
             async def move_component(component: dict[str, Any], direction: int) -> None:
@@ -904,6 +984,58 @@ def index() -> None:
 
     async def show_record_details(record: dict[str, Any]) -> None:
         dialog = ui.dialog()
+
+        async def refresh_record_view(saved: dict[str, Any] | None = None) -> None:
+            dialog.close()
+            aggregation_context = state.get("aggregation_detail")
+            if aggregation_context:
+                await open_aggregation(aggregation_context)
+            elif state.get("resource") == "dashboard":
+                await select_dashboard()
+            else:
+                await select_entity("records")
+            if saved is not None:
+                decorated = await decorate_for_spec(ENTITIES["records"], [saved])
+                await show_record_details(decorated[0])
+
+        async def confirm_delete_record() -> None:
+            confirmation = ui.dialog()
+            try:
+                components = await api.components(record["id"])
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+                return
+            with confirmation, ui.card().classes("w-[500px] max-w-full"):
+                ui.label("Delete record?").classes("text-xl font-semibold")
+                ui.label(
+                    f"{record['record_number']} — {record['title']} will be permanently deleted."
+                ).classes("text-sm text-slate-700")
+                if components:
+                    ui.label(
+                        f"Its {len(components)} digital component{'s' if len(components) != 1 else ''} "
+                        "and all stored content will also be permanently deleted."
+                    ).classes("text-sm font-medium text-negative")
+                ui.label("The immutable event history will be retained.").classes("text-xs text-slate-500")
+
+                async def delete_record() -> None:
+                    try:
+                        await api.delete("records", record["id"], record["version"])
+                        confirmation.close()
+                        ui.notify("Record deleted", color="positive")
+                        await refresh_navigation_counts()
+                        await load_recent(ENTITIES["records"])
+                        await refresh_record_view()
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=confirmation.close).props("flat no-caps")
+                    ui.button(
+                        "Delete record", icon="delete_forever", color="negative",
+                        on_click=delete_record,
+                    ).props("unelevated no-caps")
+            confirmation.open()
+
         with dialog, ui.card().classes("w-[720px] max-w-full"):
             with ui.row().classes("w-full items-start"):
                 ui.avatar(icon="description", color="blue-1", text_color="primary")
@@ -911,6 +1043,10 @@ def index() -> None:
                     ui.label(record["title"]).classes("text-xl font-semibold")
                     ui.label(record["record_number"]).classes("text-sm text-primary font-medium")
                 ui.button(icon="close", on_click=dialog.close).props("flat round")
+            if record.get("_effectively_closed"):
+                with ui.row().classes("w-full items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg"):
+                    ui.icon("lock", color="amber-8")
+                    ui.label("This record is read-only because its aggregation hierarchy is closed.").classes("text-sm text-amber-900")
             if record.get("description"):
                 ui.label(record["description"]).classes("text-slate-600")
             with ui.row().classes("w-full gap-8 text-sm"):
@@ -921,6 +1057,18 @@ def index() -> None:
                     ui.label("Created").classes("text-xs text-slate-400 uppercase")
                     ui.label(format_timestamp(record.get("date_created"))).classes("font-medium text-slate-700")
             with ui.row().classes("w-full justify-end"):
+                if not record.get("_effectively_closed"):
+                    ui.button(
+                        "Delete", icon="delete_outline", color="negative",
+                        on_click=confirm_delete_record,
+                    ).props("flat")
+                    ui.button(
+                        "Edit", icon="edit",
+                        on_click=lambda: open_editor(
+                            record, on_saved=refresh_record_view,
+                            resource_key="records",
+                        ),
+                    ).props("flat")
                 ui.button(
                     "Event history", icon="history",
                     on_click=lambda: show_entity_history("records", record),
@@ -935,12 +1083,36 @@ def index() -> None:
     async def decorate_for_spec(
         spec: EntitySpec, rows: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
+        if spec.key == "aggregations":
+            all_aggregations = await api.list("aggregations")
+            by_id = {item["id"]: item for item in all_aggregations}
+            return [
+                {
+                    **item,
+                    "_effectively_closed": effective_closure(
+                        by_id.get(item["id"], item), by_id
+                    ) is not None,
+                    "_directly_closed": bool(item.get("date_closed")),
+                }
+                for item in rows
+            ]
         if spec.key == "org-units":
             return decorate_relationship_rows(spec.key, rows)
         if spec.key == "roles":
             return decorate_relationship_rows(spec.key, rows, await api.list("org-units"))
         if spec.key == "records":
-            return decorate_relationship_rows(spec.key, rows, await api.list("aggregations"))
+            aggregations = await api.list("aggregations")
+            by_id = {item["id"]: item for item in aggregations}
+            decorated = decorate_relationship_rows(spec.key, rows, aggregations)
+            return [
+                {
+                    **item,
+                    "_effectively_closed": effective_closure(
+                        by_id.get(item.get("aggregation_id")), by_id
+                    ) is not None,
+                }
+                for item in decorated
+            ]
         return rows
 
     async def load_recent(spec: EntitySpec) -> None:
@@ -952,11 +1124,18 @@ def index() -> None:
         state["recent_created"] = await decorate_for_spec(spec, created)
         state["recent_updated"] = await decorate_for_spec(spec, updated)
 
-    async def open_record_draft_editor() -> None:
+    async def open_record_draft_editor(
+        target_aggregation_id: int | None = None, on_committed=None,
+    ) -> None:
         spec = ENTITIES["records"]
         try:
             draft = await api.create_record_draft()
             aggregations = await api.list("aggregations")
+            aggregations_by_id = {item["id"]: item for item in aggregations}
+            aggregations = [
+                item for item in aggregations
+                if effective_closure(item, aggregations_by_id) is None
+            ]
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
             return
@@ -1061,11 +1240,14 @@ def index() -> None:
             try:
                 payload = form_payload(spec, controls, creating=True)
                 await api.update_record_draft(draft["id"], payload)
-                await api.commit_record_draft(draft["id"])
+                committed_record = await api.commit_record_draft(draft["id"])
                 dialog.close()
                 ui.notify("Record and digital components created", color="positive")
                 await refresh_navigation_counts()
                 await load_recent(spec)
+                if on_committed is not None:
+                    await on_committed(committed_record)
+                    return
                 state["searched"] = False
                 render_table(spec)
             except ValueError as error:
@@ -1086,6 +1268,9 @@ def index() -> None:
                     for field in spec.fields:
                         options = relationship_options(aggregations, field.lookup_label_fields) if field.lookup_resource else None
                         controls[field.name] = field_input(field, options=options)
+                        if field.name == "aggregation_id" and target_aggregation_id is not None:
+                            controls[field.name].value = target_aggregation_id
+                            controls[field.name].disable()
                         if field.kind == "textarea":
                             controls[field.name].classes("col-span-2")
                 with ui.row().classes("w-full items-center mt-5 mb-2"):
@@ -1102,9 +1287,20 @@ def index() -> None:
         dialog.open()
         await refresh_draft_components()
 
-    async def open_editor(row: dict[str, Any] | None = None) -> None:
-        spec = ENTITIES[state["resource"]]
+    async def open_editor(
+        row: dict[str, Any] | None = None, on_saved=None,
+        initial_values: dict[str, Any] | None = None,
+        locked_fields: set[str] | None = None,
+        resource_key: str | None = None,
+    ) -> None:
+        spec = ENTITIES[resource_key or state["resource"]]
         creating = row is None
+        if row and spec.key in {"aggregations", "records"} and row.get("_effectively_closed"):
+            ui.notify(
+                f"Closed {spec.singular} metadata cannot be changed",
+                color="warning",
+            )
+            return
         if creating and spec.key == "records":
             await open_record_draft_editor()
             return
@@ -1130,9 +1326,11 @@ def index() -> None:
                 for field in spec.fields:
                     controls[field.name] = field_input(
                         field,
-                        None if creating else row.get(field.name),
+                        (initial_values or {}).get(field.name) if creating else row.get(field.name),
                         lookup_options.get(field.name),
                     )
+                    if field.name in (locked_fields or set()):
+                        controls[field.name].disable()
 
             async def save() -> None:
                 try:
@@ -1145,6 +1343,11 @@ def index() -> None:
                     ui.notify(f"{spec.singular.capitalize()} saved", color="positive")
                     if creating:
                         await refresh_navigation_counts()
+                    if on_saved is not None:
+                        if spec.search_first:
+                            await load_recent(spec)
+                        await on_saved(saved)
+                        return
                     if spec.search_first:
                         await load_recent(spec)
                         query = (search_input.value or "").strip()
@@ -1280,6 +1483,7 @@ def index() -> None:
             all_aggregations = await api.list("aggregations")
             by_id = {item["id"]: item for item in all_aggregations}
             current = by_id.get(aggregation["id"], aggregation)
+            closure = effective_closure(current, by_id)
             ancestors = []
             seen = {current["id"]}
             parent_id = current.get("parent_aggregation_id")
@@ -1294,13 +1498,72 @@ def index() -> None:
                 if item.get("parent_aggregation_id") == current["id"]
             ]
             records = await api.list("records", aggregation_id=current["id"])
+            for record in records:
+                record["_effectively_closed"] = closure is not None
             state["aggregation_detail"] = current
+            if closure is None:
+                add_button.text = "Add child aggregation"
+                add_button.update()
+                add_button.set_visibility(True)
+                add_record_button.set_visibility(True)
+            else:
+                add_button.set_visibility(False)
+                add_record_button.set_visibility(False)
             search_bar.set_visibility(False)
             guidance.text = ""
             title.text = current["title"]
             subtitle.text = current["aggregation_number"]
             table_container.clear()
             with table_container:
+                async def reopen_current() -> None:
+                    try:
+                        reopened = await api.update(
+                            "aggregations", current["id"], current["version"],
+                            {"date_closed": None},
+                        )
+                        ui.notify("Aggregation reopened", color="positive")
+                        await refresh_navigation_counts()
+                        await load_recent(ENTITIES["aggregations"])
+                        await open_aggregation(reopened)
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+
+                async def confirm_delete_current() -> None:
+                    confirmation = ui.dialog()
+                    with confirmation, ui.card().classes("w-[500px] max-w-full"):
+                        ui.label("Delete aggregation?").classes("text-xl font-semibold")
+                        ui.label(
+                            f"{current['aggregation_number']} — {current['title']} will be permanently deleted."
+                        ).classes("text-sm text-slate-700")
+                        ui.label(
+                            "Only an open, empty aggregation can be deleted. Its immutable event history will be retained."
+                        ).classes("text-xs text-slate-500")
+
+                        async def delete_current() -> None:
+                            try:
+                                await api.delete(
+                                    "aggregations", current["id"], current["version"]
+                                )
+                                confirmation.close()
+                                ui.notify("Aggregation deleted", color="positive")
+                                await refresh_navigation_counts()
+                                await load_recent(ENTITIES["aggregations"])
+                                parent = by_id.get(current.get("parent_aggregation_id"))
+                                if parent:
+                                    await open_aggregation(parent)
+                                else:
+                                    await select_entity("aggregations")
+                            except ApiError as error:
+                                ui.notify(error_message(error), color="negative", close_button=True)
+
+                        with ui.row().classes("w-full justify-end gap-2"):
+                            ui.button("Cancel", on_click=confirmation.close).props("flat no-caps")
+                            ui.button(
+                                "Delete aggregation", icon="delete_forever", color="negative",
+                                on_click=delete_current,
+                            ).props("unelevated no-caps")
+                    confirmation.open()
+
                 with ui.row().classes("w-full items-center px-5 pt-4 gap-1 text-sm"):
                     ui.button("Aggregations", icon="folder", on_click=lambda: select_entity("aggregations")).props("flat dense no-caps").classes("breadcrumb-link")
                     for ancestor in ancestors:
@@ -1322,10 +1585,44 @@ def index() -> None:
                         if current.get("description"):
                             ui.label(current["description"]).classes("text-sm text-slate-600")
                         with ui.row().classes("w-full justify-end"):
+                            if closure is None:
+                                delete_button = ui.button(
+                                    "Delete", icon="delete_outline", color="negative",
+                                    on_click=confirm_delete_current,
+                                ).props("flat dense no-caps")
+                                if children or records:
+                                    delete_button.disable()
+                                    delete_button.tooltip(
+                                        "Remove or move all child aggregations and records before deleting"
+                                    )
+                                ui.button(
+                                    "Edit metadata", icon="edit",
+                                    on_click=lambda: open_editor(
+                                        current, on_saved=open_aggregation
+                                    ),
+                                ).props("flat dense no-caps")
                             ui.button(
                                 "Event history", icon="history",
                                 on_click=lambda: show_entity_history("aggregations", current),
                             ).props("flat dense no-caps")
+                    if closure:
+                        with ui.card().classes("shadow-none border border-amber-200 bg-amber-50 min-w-[230px]"):
+                            with ui.row().classes("items-center gap-2"):
+                                ui.icon("lock", color="amber-8")
+                                ui.label("Closed").classes("font-semibold text-amber-900")
+                            if closure["id"] == current["id"]:
+                                ui.label("Closed directly").classes("text-xs text-amber-800")
+                                ui.button(
+                                    "Reopen aggregation", icon="lock_open",
+                                    on_click=reopen_current,
+                                ).props("flat dense no-caps color=primary").tooltip(
+                                    "Clear the closure date; all other metadata remains unchanged"
+                                )
+                            else:
+                                ui.label(
+                                    f"Inherited from {closure['aggregation_number']} — {closure['title']}"
+                                ).classes("text-xs text-amber-800")
+                            ui.label(format_timestamp(closure.get("date_closed"))).classes("text-xs text-amber-700")
                     with ui.card().classes("shadow-none border border-slate-200 min-w-[150px]"):
                         ui.label(str(len(children))).classes("text-2xl font-bold text-primary")
                         ui.label("Child aggregations").classes("text-xs text-slate-500")
@@ -1337,6 +1634,7 @@ def index() -> None:
                     ui.label("Contained aggregations").classes("px-5 text-base font-semibold")
                     with ui.grid(columns=3).classes("w-full px-5 pb-4 gap-3"):
                         for child in children:
+                            child_closure = effective_closure(child, by_id)
                             with ui.card().classes("recent-card cursor-pointer p-4").on(
                                 "click", lambda _, item=child: open_aggregation(item)
                             ):
@@ -1345,6 +1643,8 @@ def index() -> None:
                                     with ui.column().classes("gap-0"):
                                         ui.label(child["title"]).classes("font-semibold")
                                         ui.label(child["aggregation_number"]).classes("text-xs text-slate-500")
+                                    if child_closure:
+                                        ui.badge("Closed", color="amber-8").props("outline")
 
                 ui.label("Records in this aggregation").classes("px-5 pt-2 text-base font-semibold")
                 if not records:
@@ -1449,12 +1749,17 @@ def index() -> None:
                       <span v-else class="text-grey-5">—</span>
                     </q-td>
                 """)
-            buttons = '<q-btn flat round dense icon="edit" color="primary" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>Edit</q-tooltip></q-btn>'
+            if spec.key in {"records", "aggregations"}:
+                closed_label = f"Closed {spec.singular} metadata cannot be changed"
+                buttons = f'<q-btn flat round dense icon="edit" color="primary" :disable="props.row._effectively_closed" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>{{{{ props.row._effectively_closed ? \'{closed_label}\' : \'Edit\' }}}}</q-tooltip></q-btn>'
+            else:
+                buttons = '<q-btn flat round dense icon="edit" color="primary" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>Edit</q-tooltip></q-btn>'
             buttons += '<q-btn flat round dense icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn>'
             if spec.key == "records":
                 buttons += '<q-btn flat round dense icon="attach_file" color="secondary" @click="$parent.$emit(\'components\', props.row)"><q-tooltip>Digital components</q-tooltip></q-btn>'
             if spec.key == "aggregations":
                 buttons = '<q-btn flat round dense icon="folder_open" color="secondary" @click="$parent.$emit(\'open_aggregation\', props.row)"><q-tooltip>Open aggregation</q-tooltip></q-btn>' + buttons
+                buttons += '<q-btn v-if="props.row._directly_closed" flat round dense icon="lock_open" color="primary" @click="$parent.$emit(\'reopen\', props.row)"><q-tooltip>Reopen aggregation</q-tooltip></q-btn>'
             if spec.key in {"users", "roles"}:
                 buttons += '<q-btn flat round dense icon="group" color="secondary" @click="$parent.$emit(\'memberships\', props.row)"><q-tooltip>Role assignments</q-tooltip></q-btn>'
             if spec.key == "users":
@@ -1466,6 +1771,21 @@ def index() -> None:
                 table.on("components", lambda event: show_components(event.args))
             if spec.key == "aggregations":
                 table.on("open_aggregation", lambda event: open_aggregation(event.args))
+                async def reopen_from_table(event) -> None:
+                    row = event.args
+                    try:
+                        await api.update(
+                            "aggregations", row["id"], row["version"], {"date_closed": None}
+                        )
+                        ui.notify("Aggregation reopened", color="positive")
+                        await load_recent(spec)
+                        if state["searched"]:
+                            await load_rows(repeat_search=True)
+                        else:
+                            render_table(spec)
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+                table.on("reopen", reopen_from_table)
             if spec.key in {"users", "roles"}:
                 table.on(
                     "memberships",
@@ -1551,6 +1871,7 @@ def index() -> None:
         title.text = "Login sessions"
         subtitle.text = "Review and revoke authenticated sessions"
         add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
         search_bar.set_visibility(False)
         guidance.text = ""
         table_container.clear()
@@ -1571,8 +1892,32 @@ def index() -> None:
             navigation_badges["login-sessions"].update()
             outer.clear()
             with outer:
+                with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-3"):
+                    ui.label("Filter sessions").classes("font-semibold")
+                    with ui.grid(columns=4).classes("w-full gap-3"):
+                        session_filter = ui.input(
+                            "User or client",
+                            placeholder="Name, email, IP address or browser",
+                        ).props("outlined dense clearable").classes("w-full col-span-2")
+                        status_filter = ui.select(
+                            {"active": "Active", "expired": "Expired", "revoked": "Revoked"},
+                            label="Status", clearable=True,
+                        ).props("outlined dense options-dense").classes("w-full")
+                        timestamp_field = ui.select(
+                            {"date_created": "Signed in", "last_seen_at": "Last activity"},
+                            label="Date field", value="date_created",
+                        ).props("outlined dense options-dense").classes("w-full")
+                        from_filter = ui.input("From").props(
+                            "outlined dense clearable type=datetime-local"
+                        ).classes("w-full col-span-2")
+                        until_filter = ui.input("To").props(
+                            "outlined dense clearable type=datetime-local"
+                        ).classes("w-full col-span-2")
+                    filter_actions = ui.row().classes("w-full justify-end gap-2")
                 with ui.row().classes("w-full items-center"):
-                    ui.label(f"{active_count} active session{'s' if active_count != 1 else ''}").classes("text-sm text-slate-500")
+                    result_summary = ui.label(
+                        f"Showing {len(rows)} sessions · {active_count} active"
+                    ).classes("text-sm text-slate-500")
                     ui.space()
                     ui.button("Refresh", icon="refresh", on_click=load_sessions).props("flat no-caps")
                 table = ui.table(
@@ -1581,12 +1926,22 @@ def index() -> None:
                         {"name": "status", "label": "Status", "field": "status", "align": "left"},
                         {"name": "date_created", "label": "Signed in", "field": "date_created", "align": "left"},
                         {"name": "last_seen_at", "label": "Last activity", "field": "last_seen_at", "align": "left"},
+                        {"name": "expires_at", "label": "Expires", "field": "expires_at", "align": "left"},
                         {"name": "client_ip", "label": "IP address", "field": "client_ip", "align": "left"},
                         {"name": "user_agent", "label": "Client", "field": "user_agent", "align": "left"},
                         {"name": "actions", "label": "", "field": "actions", "align": "right"},
                     ], rows=rows, row_key="id", pagination=25,
                 ).props("flat bordered wrap-cells").classes("w-full")
-                add_timestamp_slots(table, ["date_created", "last_seen_at"])
+                add_timestamp_slots(table, ["date_created", "last_seen_at", "expires_at"])
+                table.add_slot("body-cell-user_name", '''
+                    <q-td :props="props">
+                      <div class="column">
+                        <span class="text-weight-medium">{{ props.row.user_name }}</span>
+                        <span class="text-caption text-grey-6">{{ props.row.user_email || 'No email address' }}</span>
+                        <q-badge v-if="props.row.is_current" outline color="primary" label="Current session" class="self-start q-mt-xs" />
+                      </div>
+                    </q-td>
+                ''')
                 table.add_slot("body-cell-status", '''
                     <q-td :props="props"><q-badge :color="props.value === 'active' ? 'positive' : (props.value === 'revoked' ? 'negative' : 'grey')" :label="props.value" /></q-td>
                 ''')
@@ -1596,6 +1951,66 @@ def index() -> None:
                       <q-btn v-if="props.row.status === 'active' && props.row.can_revoke_all" flat round dense color="negative" icon="phonelink_erase" @click="$parent.$emit('revoke_all', props.row)"><q-tooltip>Force logout all sessions for this user</q-tooltip></q-btn>
                     </q-td>
                 ''')
+
+                def parsed_timestamp(value: Any) -> datetime | None:
+                    if not value:
+                        return None
+                    try:
+                        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                        return parsed.astimezone()
+                    except (TypeError, ValueError):
+                        return None
+
+                def apply_session_filters() -> None:
+                    query = (session_filter.value or "").strip().casefold()
+                    status_value = status_filter.value
+                    selected_timestamp = timestamp_field.value or "date_created"
+                    range_start = parsed_timestamp(from_filter.value)
+                    range_end = parsed_timestamp(until_filter.value)
+                    filtered_rows = []
+                    for row in rows:
+                        searchable = " ".join(str(row.get(field) or "") for field in (
+                            "user_name", "user_email", "status", "client_ip", "user_agent",
+                        )).casefold()
+                        occurred = parsed_timestamp(row.get(selected_timestamp))
+                        if query and query not in searchable:
+                            continue
+                        if status_value and row.get("status") != status_value:
+                            continue
+                        if range_start and (occurred is None or occurred < range_start):
+                            continue
+                        if range_end and (occurred is None or occurred > range_end):
+                            continue
+                        filtered_rows.append(row)
+                    table.rows = filtered_rows
+                    table.update()
+                    result_summary.text = (
+                        f"Showing {len(filtered_rows)} of {len(rows)} sessions · "
+                        f"{sum(row['status'] == 'active' for row in filtered_rows)} active"
+                    )
+                    result_summary.update()
+
+                def clear_session_filters() -> None:
+                    session_filter.value = ""
+                    status_filter.value = None
+                    timestamp_field.value = "date_created"
+                    from_filter.value = ""
+                    until_filter.value = ""
+                    for control in (
+                        session_filter, status_filter, timestamp_field,
+                        from_filter, until_filter,
+                    ):
+                        control.update()
+                    apply_session_filters()
+
+                with filter_actions:
+                    ui.button("Clear", icon="filter_alt_off", on_click=clear_session_filters).props(
+                        "flat dense no-caps"
+                    )
+                    ui.button("Apply filters", icon="filter_alt", on_click=apply_session_filters).props(
+                        "unelevated dense no-caps"
+                    )
+                session_filter.on("keydown.enter", apply_session_filters)
 
                 async def confirm_revoke(row: dict[str, Any], *, all_for_user: bool = False) -> None:
                     confirmation = ui.dialog()
@@ -1641,6 +2056,7 @@ def index() -> None:
         title.text = "Dashboard"
         subtitle.text = "An overview of your records management system"
         add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
         search_bar.set_visibility(False)
         guidance.text = ""
         table_container.clear()
@@ -1670,6 +2086,13 @@ def index() -> None:
                 recent = {
                     "aggregations": (results[6], results[7]),
                     "records": (results[8], results[9]),
+                }
+                recent = {
+                    resource: (
+                        await decorate_for_spec(ENTITIES[resource], created),
+                        await decorate_for_spec(ENTITIES[resource], updated),
+                    )
+                    for resource, (created, updated) in recent.items()
                 }
             except ApiError as error:
                 if error.status_code == 401:
@@ -1753,6 +2176,7 @@ def index() -> None:
         title.text = "Audit trail"
         subtitle.text = "Immutable history of changes across the system"
         add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
         search_bar.set_visibility(False)
         guidance.text = ""
         table_container.clear()
@@ -1883,6 +2307,9 @@ def index() -> None:
         search_bar.set_visibility(spec.search_first)
         guidance.text = "Large collections are search-first to avoid loading unbounded result sets." if spec.search_first else ""
         add_button.set_visibility(True)
+        add_button.text = "Add"
+        add_button.update()
+        add_record_button.set_visibility(False)
         search_input.value = ""
         try:
             if spec.search_first:
@@ -1901,7 +2328,35 @@ def index() -> None:
     change_password_menu.on("click", show_change_password)
     my_sessions_menu.on("click", select_login_sessions)
     sign_out_menu.on("click", sign_out)
-    add_button.on("click", lambda: open_editor())
+    async def add_for_current_context() -> None:
+        current = state.get("aggregation_detail")
+        if not current:
+            await open_editor()
+            return
+
+        async def refresh_parent(_: dict[str, Any]) -> None:
+            await open_aggregation(current)
+
+        await open_editor(
+            initial_values={"parent_aggregation_id": current["id"]},
+            locked_fields={"parent_aggregation_id"},
+            on_saved=refresh_parent,
+        )
+
+    async def add_record_for_current_aggregation() -> None:
+        current = state.get("aggregation_detail")
+        if current is None:
+            return
+
+        async def refresh_parent(_: dict[str, Any]) -> None:
+            await open_aggregation(current)
+
+        await open_record_draft_editor(
+            target_aggregation_id=current["id"], on_committed=refresh_parent,
+        )
+
+    add_button.on("click", add_for_current_context)
+    add_record_button.on("click", add_record_for_current_aggregation)
     search_button.on("click", lambda: load_rows())
     search_input.on("keydown.enter", lambda: load_rows())
     login_dialog = ui.dialog().props("persistent")

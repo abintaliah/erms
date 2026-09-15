@@ -54,6 +54,24 @@ def test_update_sends_if_match_version():
     assert result["version"] == 4
 
 
+def test_delete_sends_if_match_version():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(method=request.method, path=request.url.path, version=request.headers["if-match"])
+        return httpx.Response(204)
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.delete("records", 17, 6)
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured == {"method": "DELETE", "path": "/api/v1/records/17", "version": "6"}
+
+
 def test_api_error_preserves_conflict_details():
     async def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(

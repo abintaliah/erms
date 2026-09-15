@@ -18,6 +18,15 @@ converts these formats to PDF on demand: DOC, DOCX, ODT, RTF, XLS, XLSX, ODS,
 CSV, PPT, PPTX and ODP. Other content remains downloadable but produces an
 unsupported-preview response.
 
+Every View action opens an indeterminate **Preparing preview** progress dialog
+before requesting content. For PDFs and browser-native media it explains that
+the document is loading; for formats handled by LibreOffice it explains that
+conversion is taking place. It remains visible until the content is received or
+the API reports an error, so a large transfer or long-running conversion is not
+mistaken for an unresponsive action. The indicator is intentionally
+indeterminate because the current rendition endpoint does not expose transfer
+or conversion percentage data.
+
 The API searches for `soffice` or `libreoffice` on `PATH`. Set
 `LIBREOFFICE_BINARY` to an absolute executable path when it is installed
 elsewhere. Direct PDF viewing and all original downloads continue to work when

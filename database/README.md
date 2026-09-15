@@ -34,6 +34,15 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/005_add_authentication.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/006_enforce_closed_aggregations.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/007_freeze_closed_aggregation_metadata.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/008_cascade_record_digital_components.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -46,6 +55,14 @@ Migration 003 adds PostgreSQL-backed digital-component content storage and
 database-managed optimistic-concurrency versions for all mutable entities.
 Migration 004 adds transactional record drafts. Migration 005 adds local
 credentials, database-backed login sessions, and human/system account types.
+Migration 006 enforces direct and inherited aggregation closure throughout the
+hierarchy, record, component, and blob layers. The complete business rules are
+documented in [`../docs/aggregation-closure.md`](../docs/aggregation-closure.md).
+Migration 007 freezes the aggregation metadata itself and permits only clearing
+a directly closed aggregation's closure date.
+Migration 008 makes digital components lifecycle-dependent on their record:
+deleting a record atomically cascades to its component metadata and stored
+content.
 
 ## Tests
 

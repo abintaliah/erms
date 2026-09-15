@@ -177,6 +177,13 @@ class ErmsApiClient:
             headers={"If-Match": str(version)},
         )
 
+    async def delete(self, resource: str, entity_id: int, version: int) -> None:
+        await self.request(
+            "DELETE",
+            f"/api/v1/{resource}/{entity_id}",
+            headers={"If-Match": str(version)},
+        )
+
     async def upload_component(self, record_id: int, component_order: int, name: str, content: bytes, mime_type: str) -> dict[str, Any]:
         return await self.request(
             "POST",
