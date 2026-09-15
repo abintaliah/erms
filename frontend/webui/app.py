@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime
 from typing import Any
 
@@ -76,7 +77,7 @@ def buffer_upload_batch(event: events.MultiUploadEventArguments) -> list[tuple[b
     ]
 
 
-def render_component_cards(rows: list[dict[str, Any]], on_move, on_remove) -> None:
+def render_component_cards(rows: list[dict[str, Any]], on_move, on_remove, on_history=None) -> None:
     for index, component in enumerate(rows):
         status = component.get("content_status", "pending")
         status_color = {
@@ -101,6 +102,8 @@ def render_component_cards(rows: list[dict[str, Any]], on_move, on_remove) -> No
                             "flat round dense" + (" disable" if index == len(rows) - 1 else "")
                         ).tooltip("Move later")
                         ui.button(icon="delete_outline", color="negative", on_click=lambda _, item=component: on_remove(item)).props("flat round dense").tooltip("Remove component")
+                        if on_history is not None:
+                            ui.button(icon="history", color="blue-grey", on_click=lambda _, item=component: on_history(item)).props("flat round dense").tooltip("Event history")
             with ui.row().classes("w-full items-center gap-2"):
                 ui.badge(status.replace("_", " ").title(), color=status_color).props("rounded")
                 ui.label(format_file_size(component.get("size_in_bytes"))).classes("text-sm font-medium text-slate-600")
@@ -319,7 +322,7 @@ def form_payload(spec: EntitySpec, controls: dict[str, Any], *, creating: bool) 
 @ui.page("/")
 def index() -> None:
     state: dict[str, Any] = {
-        "resource": "org-units", "rows": [], "searched": False,
+        "resource": "dashboard", "rows": [], "searched": False,
         "recent_created": [], "recent_updated": [], "aggregation_detail": None,
     }
 
@@ -354,6 +357,11 @@ def index() -> None:
         .record-uploader .q-uploader__list { min-height: 58px; padding: 0; }
         .upload-empty { display: flex; align-items: center; justify-content: center; min-height: 58px; color: #94a3b8; font-size: .78rem; }
         .upload-queue { max-height: 144px; overflow-y: auto; background: #f8fafc; }
+        .audit-event { border-left: 3px solid #bfdbfe; box-shadow: none; }
+        .audit-event:hover { border-left-color: #3b82f6; background: #f8fbff; }
+        .audit-value { max-width: 360px; overflow-wrap: anywhere; white-space: pre-wrap; }
+        .dashboard-stat { border: 1px solid #e2e8f0; box-shadow: none; transition: all .16s ease; }
+        .dashboard-stat:hover { border-color: #93b4e8; transform: translateY(-2px); box-shadow: 0 8px 22px rgba(37,99,235,.08); }
     """)
 
     with ui.header(elevated=True).classes("erms-header items-center gap-3"):
@@ -361,18 +369,39 @@ def index() -> None:
         ui.icon("inventory_2").classes("text-2xl")
         ui.label("ERMS").classes("text-xl font-semibold tracking-wide")
         ui.space()
-        connection_badge = ui.badge("API ready", color="positive").props("outline")
+        with ui.icon("cloud_done").classes("text-positive text-xl") as connection_icon:
+            connection_tooltip = ui.tooltip("Connected")
+
+    def set_connection_status(connected: bool) -> None:
+        connection_icon.name = "cloud_done" if connected else "cloud_off"
+        connection_icon.classes(
+            replace="text-positive text-xl" if connected else "text-negative text-xl"
+        )
+        connection_tooltip.text = "Connected" if connected else "Disconnected"
+        connection_icon.update()
+        connection_tooltip.update()
+
+    def drawer_link(label: str, icon: str, *, extra_classes: str = "") -> tuple[Any, Any]:
+        with ui.button(icon=icon).props("flat align=left no-caps").classes(
+            f"w-full justify-start px-4 {extra_classes}"
+        ) as button:
+            ui.label(label).classes("grow text-left")
+            badge = ui.badge("—", color="blue-grey").props("rounded")
+        return button, badge
 
     with ui.left_drawer(value=True).classes("erms-drawer") as drawer:
-        ui.label("RECORDS MANAGEMENT").classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
         navigation: dict[str, Any] = {}
-        for key, spec in ENTITIES.items():
-            icon = {"aggregations": "folder", "records": "description", "org-units": "corporate_fare", "users": "group", "roles": "badge"}[key]
-            navigation[key] = ui.button(spec.label, icon=icon).props("flat align=left").classes("w-full justify-start px-4")
-
-    with ui.footer().classes("bg-white text-slate-500 border-t text-xs justify-between"):
-        ui.label("Electronic Records Management System")
-        ui.label("Initial administration interface")
+        navigation_badges: dict[str, Any] = {}
+        dashboard_navigation = ui.button("Dashboard", icon="dashboard").props("flat align=left no-caps").classes("w-full justify-start px-4 mt-4")
+        for heading, entries in (
+            ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"))),
+            ("ORGANIZATION STRUCTURE", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
+        ):
+            ui.label(heading).classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
+            for key, icon in entries:
+                navigation[key], navigation_badges[key] = drawer_link(ENTITIES[key].label, icon)
+        ui.label("SYSTEM ADMINISTRATION").classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
+        audit_navigation, navigation_badges["event-history"] = drawer_link("Audit trail", "manage_history")
 
     with ui.column().classes("erms-content w-full p-5 gap-4"):
         with ui.row().classes("w-full items-center"):
@@ -388,6 +417,235 @@ def index() -> None:
                 search_button = ui.button("Search", icon="search").props("unelevated")
             guidance = ui.label().classes("px-4 pb-4 text-slate-500")
             table_container = ui.column().classes("w-full gap-0")
+
+    entity_types = {
+        "aggregations": "aggregation", "records": "record",
+        "digital-components": "digital_component", "org-units": "org_unit",
+        "users": "user", "roles": "role",
+    }
+
+    async def refresh_navigation_counts() -> None:
+        resources = ["aggregations", "records", "org-units", "roles", "users", "event-history"]
+        try:
+            counts = await asyncio.gather(*(api.count(resource) for resource in resources))
+            for resource, count in zip(resources, counts):
+                navigation_badges[resource].text = str(count)
+                navigation_badges[resource].update()
+            set_connection_status(True)
+        except ApiError:
+            set_connection_status(False)
+
+    def event_value(value: Any) -> str:
+        if value is None:
+            return "—"
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, ensure_ascii=False, sort_keys=True)
+        return str(value)
+
+    def event_entity_identity(event: dict[str, Any]) -> tuple[str, str]:
+        entity_type = event["entity_type"]
+        snapshot = event.get("after_state") or event.get("before_state") or {}
+        current = event.get("_current_entity") or {}
+        value = lambda field: snapshot.get(field) or current.get(field)
+        identities = {
+            "aggregation": (value("aggregation_number"), value("title")),
+            "record": (value("record_number"), value("title")),
+            "digital_component": (value("file_name"), None),
+            "org_unit": (value("code"), value("name")),
+            "user": (value("name"), value("email")),
+            "role": (value("code"), value("name")),
+            "user_role_assignment": (
+                f"User #{snapshot.get('user_id')}" if snapshot.get("user_id") else None,
+                f"Role #{snapshot.get('role_id')}" if snapshot.get("role_id") else None,
+            ),
+        }
+        primary, secondary = identities.get(entity_type, (None, None))
+        identity = " — ".join(str(value) for value in (primary, secondary) if value)
+        heading = f"{entity_type.replace('_', ' ').title()} #{event['entity_id']}"
+        return heading, identity
+
+    async def navigate_to_event_entity(event: dict[str, Any]) -> None:
+        entity = event.get("_current_entity")
+        if not entity:
+            ui.notify("This entity no longer exists; its historical details remain in the audit event.", color="warning")
+            return
+        origin_dialog = event.get("_origin_dialog")
+        if origin_dialog:
+            origin_dialog.close()
+            await asyncio.sleep(0.15)
+        entity_type = event["entity_type"]
+        if entity_type == "aggregation":
+            await open_aggregation(entity)
+        elif entity_type == "record":
+            with table_container:
+                await show_record_details(entity)
+        elif entity_type == "digital_component":
+            try:
+                record = await api.get("records", entity["record_id"])
+                with table_container:
+                    await show_components(record)
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+        elif entity_type in {"org_unit", "user", "role"}:
+            resource = {"org_unit": "org-units", "user": "users", "role": "roles"}[entity_type]
+            await select_entity(resource)
+            with table_container:
+                await open_editor(entity)
+
+    async def enrich_audit_events(events_list: list[dict[str, Any]]) -> None:
+        resources = {
+            "aggregation": "aggregations", "record": "records",
+            "digital_component": "digital-components", "org_unit": "org-units",
+            "user": "users", "role": "roles",
+        }
+        keys = list({
+            (event["entity_type"], event["entity_id"])
+            for event in events_list if event["entity_type"] in resources
+        })
+        resolved = await asyncio.gather(
+            *(api.get(resources[entity_type], entity_id) for entity_type, entity_id in keys),
+            return_exceptions=True,
+        )
+        current = {key: value for key, value in zip(keys, resolved) if isinstance(value, dict)}
+        for event in events_list:
+            event["_current_entity"] = current.get((event["entity_type"], event["entity_id"]))
+
+    def show_event_detail(event: dict[str, Any]) -> None:
+        entity_heading, entity_identity = event_entity_identity(event)
+        dialog = ui.dialog()
+        before = event.get("before_state") or {}
+        after = event.get("after_state") or {}
+        changed = event.get("changed_fields") or sorted(set(before) | set(after))
+        actor = event.get("actor_type") or "unknown"
+        if event.get("actor_user_id"):
+            actor += f" #{event['actor_user_id']}"
+
+        async def open_entity() -> None:
+            dialog.close()
+            await asyncio.sleep(0.05)
+            await navigate_to_event_entity(event)
+
+        with dialog, ui.card().classes("p-0 max-h-[calc(100vh-32px)]").style("width: 960px; max-width: calc(100vw - 32px)"):
+            with ui.row().classes("w-full items-center px-5 pt-5"):
+                ui.avatar(icon="history", color="blue-1", text_color="primary")
+                with ui.column().classes("gap-0 grow"):
+                    ui.label(event["operation"].replace("_", " ").title()).classes("text-xl font-semibold")
+                    ui.label(entity_heading).classes("text-sm text-slate-500")
+                    if entity_identity:
+                        ui.label(entity_identity).classes("text-sm font-medium text-slate-700 line-clamp-1")
+                if event.get("_current_entity"):
+                    ui.button(
+                        "Open entity", icon="open_in_new",
+                        on_click=open_entity,
+                    ).props("flat no-caps color=primary")
+                ui.button(icon="close", on_click=dialog.close).props("flat round")
+            with ui.column().classes("w-full px-5 pb-4 gap-4 overflow-y-auto"):
+                with ui.row().classes("w-full gap-5 text-sm"):
+                    for label, value in (
+                        ("Occurred", format_timestamp(event.get("occurred_at"))),
+                        ("Actor", actor),
+                        ("Source", event.get("source") or "—"),
+                    ):
+                        with ui.column().classes("gap-0"):
+                            ui.label(label).classes("component-meta-label")
+                            ui.label(value).classes("text-sm text-slate-700")
+                if event.get("reason"):
+                    with ui.card().classes("w-full bg-blue-50 shadow-none border border-blue-100"):
+                        ui.label("Change reason").classes("component-meta-label")
+                        ui.label(event["reason"]).classes("text-sm")
+                if changed:
+                    ui.label("Field changes").classes("font-semibold")
+                    change_rows = [
+                        {"field": field.replace("_", " ").title(), "before": event_value(before.get(field)), "after": event_value(after.get(field))}
+                        for field in changed
+                    ]
+                    change_table = ui.table(
+                        columns=[
+                            {"name": "field", "label": "Field", "field": "field", "align": "left"},
+                            {"name": "before", "label": "Before", "field": "before", "align": "left"},
+                            {"name": "after", "label": "After", "field": "after", "align": "left"},
+                        ], rows=change_rows, row_key="field",
+                    ).props("flat bordered wrap-cells hide-pagination").classes("w-full")
+                    for key in ("before", "after"):
+                        change_table.add_slot(f"body-cell-{key}", f'<q-td :props="props"><div class="audit-value">{{{{ props.row.{key} }}}}</div></q-td>')
+                with ui.grid(columns=2).classes("w-full gap-3"):
+                    for label, value in (
+                        ("Request ID", event.get("request_id")),
+                        ("Correlation ID", event.get("correlation_id")),
+                        ("Transaction", event.get("transaction_id")),
+                        ("Event ID", event.get("id")),
+                    ):
+                        with ui.column().classes("gap-0 min-w-0"):
+                            ui.label(label).classes("component-meta-label")
+                            ui.label(event_value(value)).classes("text-xs text-slate-600 break-all")
+                if event.get("metadata"):
+                    ui.label("Metadata").classes("font-semibold")
+                    ui.code(json.dumps(event["metadata"], ensure_ascii=False, indent=2, sort_keys=True)).classes("w-full text-xs")
+        dialog.open()
+
+    def render_event_timeline(events_list: list[dict[str, Any]], container: Any) -> None:
+        container.clear()
+        with container:
+            if not events_list:
+                with ui.column().classes("w-full items-center py-10 text-slate-400 gap-2"):
+                    ui.icon("history_toggle_off").classes("text-4xl")
+                    ui.label("No matching events")
+                return
+            previous_correlation = None
+            for event in events_list:
+                correlation = event.get("correlation_id")
+                if correlation and correlation != previous_correlation:
+                    ui.label(f"Correlation group · {str(correlation)[:8]}").classes(
+                        "text-xs text-slate-400 font-medium mt-2"
+                    ).tooltip("Events sharing this correlation ID belong to the same request or coordinated operation")
+                previous_correlation = correlation
+                operation = event["operation"].replace("_", " ").title()
+                entity_heading, entity_identity = event_entity_identity(event)
+                with ui.card().classes("audit-event w-full px-4 py-3"):
+                    with ui.row().classes("w-full items-center no-wrap gap-3"):
+                        ui.avatar(icon={"CREATE": "add", "UPDATE": "edit", "DELETE": "delete"}.get(event["operation"], "bolt"), color="blue-1", text_color="primary", size="36px")
+                        with ui.column().classes("gap-0 grow min-w-0"):
+                            ui.label(operation).classes("font-semibold")
+                            ui.label(entity_heading).classes("text-xs text-slate-500")
+                            if entity_identity:
+                                ui.label(entity_identity).classes("text-sm font-medium text-slate-700 line-clamp-1")
+                            if event.get("changed_fields"):
+                                ui.label(", ".join(field.replace("_", " ") for field in event["changed_fields"])).classes("text-xs text-slate-400 line-clamp-1")
+                        with ui.column().classes("items-end gap-0"):
+                            ui.label(format_timestamp(event["occurred_at"])).classes("text-xs font-medium text-slate-600")
+                            ui.label(f"{event.get('actor_type', 'unknown')} · {event.get('source', 'unknown')}").classes("text-xs text-slate-400")
+                        if event.get("_current_entity"):
+                            ui.button(
+                                icon="open_in_new",
+                                on_click=lambda _, item=event: navigate_to_event_entity(item),
+                            ).props("flat round dense color=primary").tooltip("Open current entity")
+                        ui.button(
+                            icon="chevron_right",
+                            on_click=lambda _, item=event: show_event_detail(item),
+                        ).props("flat round dense color=blue-grey").tooltip("View audit details")
+
+    async def show_entity_history(resource: str, entity: dict[str, Any]) -> None:
+        try:
+            history = await api.history(resource, entity["id"])
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+        name = entity.get("title") or entity.get("name") or entity.get("file_name") or f"#{entity['id']}"
+        dialog = ui.dialog()
+        for event in history:
+            event["_current_entity"] = entity
+            event["_origin_dialog"] = dialog
+        with dialog, ui.card().classes("p-0 max-h-[calc(100vh-32px)]").style("width: 820px; max-width: calc(100vw - 32px)"):
+            with ui.row().classes("w-full items-center px-5 py-4 border-b"):
+                ui.avatar(icon="manage_history", color="blue-1", text_color="primary")
+                with ui.column().classes("gap-0 grow min-w-0"):
+                    ui.label("Event history").classes("text-xl font-semibold")
+                    ui.label(name).classes("text-sm text-slate-500 line-clamp-1")
+                ui.badge(str(len(history)), color="primary").props("outline")
+                ui.button(icon="close", on_click=dialog.close).props("flat round")
+            timeline = ui.column().classes("w-full gap-2 px-5 pb-5 overflow-y-auto")
+            render_event_timeline(history, timeline)
+        dialog.open()
 
     async def show_components(record: dict[str, Any]) -> None:
         current_rows: list[dict[str, Any]] = []
@@ -473,7 +731,10 @@ def index() -> None:
                                 ui.icon("cloud_upload").classes("text-4xl")
                                 ui.label("No digital components uploaded yet.")
                         else:
-                            render_component_cards(rows, move_component, remove_component)
+                            render_component_cards(
+                                rows, move_component, remove_component,
+                                lambda item: show_entity_history("digital-components", item),
+                            )
                 except ApiError as error:
                     ui.notify(error_message(error), color="negative")
 
@@ -501,6 +762,10 @@ def index() -> None:
                     ui.label("Created").classes("text-xs text-slate-400 uppercase")
                     ui.label(format_timestamp(record.get("date_created"))).classes("font-medium text-slate-700")
             with ui.row().classes("w-full justify-end"):
+                ui.button(
+                    "Event history", icon="history",
+                    on_click=lambda: show_entity_history("records", record),
+                ).props("flat")
                 ui.button(
                     "Digital components",
                     icon="attach_file",
@@ -640,6 +905,7 @@ def index() -> None:
                 await api.commit_record_draft(draft["id"])
                 dialog.close()
                 ui.notify("Record and digital components created", color="positive")
+                await refresh_navigation_counts()
                 await load_recent(spec)
                 state["searched"] = False
                 render_table(spec)
@@ -718,6 +984,8 @@ def index() -> None:
                         saved = await api.update(spec.key, row["id"], row["version"], payload)
                     dialog.close()
                     ui.notify(f"{spec.singular.capitalize()} saved", color="positive")
+                    if creating:
+                        await refresh_navigation_counts()
                     if spec.search_first:
                         await load_recent(spec)
                         query = (search_input.value or "").strip()
@@ -894,6 +1162,11 @@ def index() -> None:
                                 ui.label(current["title"]).classes("text-lg font-semibold")
                         if current.get("description"):
                             ui.label(current["description"]).classes("text-sm text-slate-600")
+                        with ui.row().classes("w-full justify-end"):
+                            ui.button(
+                                "Event history", icon="history",
+                                on_click=lambda: show_entity_history("aggregations", current),
+                            ).props("flat dense no-caps")
                     with ui.card().classes("shadow-none border border-slate-200 min-w-[150px]"):
                         ui.label(str(len(children))).classes("text-2xl font-bold text-primary")
                         ui.label("Child aggregations").classes("text-xs text-slate-500")
@@ -929,8 +1202,9 @@ def index() -> None:
                         row_key="id",
                     ).props("flat separator=horizontal").classes("w-full")
                     add_timestamp_slots(record_table, ["date_originated"])
-                    record_table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round icon="open_in_new" color="primary" @click="$parent.$emit(\'open_record\', props.row)"><q-tooltip>Open record</q-tooltip></q-btn></q-td>')
+                    record_table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round icon="open_in_new" color="primary" @click="$parent.$emit(\'open_record\', props.row)"><q-tooltip>Open record</q-tooltip></q-btn><q-btn flat round icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn></q-td>')
                     record_table.on("open_record", lambda event: show_record_details(event.args))
+                    record_table.on("history", lambda event: show_entity_history("records", event.args))
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
 
@@ -1017,6 +1291,7 @@ def index() -> None:
                     </q-td>
                 """)
             buttons = '<q-btn flat round dense icon="edit" color="primary" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>Edit</q-tooltip></q-btn>'
+            buttons += '<q-btn flat round dense icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn>'
             if spec.key == "records":
                 buttons += '<q-btn flat round dense icon="attach_file" color="secondary" @click="$parent.$emit(\'components\', props.row)"><q-tooltip>Digital components</q-tooltip></q-btn>'
             if spec.key == "aggregations":
@@ -1025,6 +1300,7 @@ def index() -> None:
                 buttons += '<q-btn flat round dense icon="group" color="secondary" @click="$parent.$emit(\'memberships\', props.row)"><q-tooltip>Role assignments</q-tooltip></q-btn>'
             table.add_slot("body-cell-actions", f'<q-td :props="props">{buttons}</q-td>')
             table.on("edit", lambda event: open_editor(event.args))
+            table.on("history", lambda event, resource=spec.key: show_entity_history(resource, event.args))
             if spec.key == "records":
                 table.on("components", lambda event: show_components(event.args))
             if spec.key == "aggregations":
@@ -1036,6 +1312,182 @@ def index() -> None:
                         event.args, for_user=user_view
                     ),
                 )
+
+    async def select_dashboard() -> None:
+        state.update(resource="dashboard", rows=[], searched=True, aggregation_detail=None)
+        title.text = "Dashboard"
+        subtitle.text = "An overview of your records management system"
+        add_button.set_visibility(False)
+        search_bar.set_visibility(False)
+        guidance.text = ""
+        table_container.clear()
+        with table_container:
+            dashboard_content = ui.column().classes("w-full p-5 gap-6")
+
+        async def load_dashboard() -> None:
+            dashboard_content.clear()
+            with dashboard_content:
+                with ui.row().classes("w-full items-center"):
+                    ui.label("System overview").classes("text-lg font-semibold")
+                    ui.space()
+                    refresh = ui.button("Refresh", icon="refresh").props("flat dense no-caps color=primary")
+                loading = ui.row().classes("w-full items-center justify-center py-12 gap-2")
+                with loading:
+                    ui.spinner("dots", size="32px")
+                    ui.label("Loading dashboard…").classes("text-slate-500")
+
+            try:
+                count_resources = ["aggregations", "records", "org-units", "roles", "users", "event-history"]
+                results = await asyncio.gather(
+                    *(api.count(resource) for resource in count_resources),
+                    api.recently_created("aggregations"), api.recently_updated("aggregations"),
+                    api.recently_created("records"), api.recently_updated("records"),
+                )
+                counts = dict(zip(count_resources, results[:6]))
+                recent = {
+                    "aggregations": (results[6], results[7]),
+                    "records": (results[8], results[9]),
+                }
+            except ApiError as error:
+                dashboard_content.clear()
+                with dashboard_content:
+                    ui.label(error_message(error)).classes("text-negative p-5")
+                set_connection_status(False)
+                return
+
+            dashboard_content.clear()
+            with dashboard_content:
+                with ui.row().classes("w-full items-center"):
+                    ui.label("System overview").classes("text-lg font-semibold")
+                    ui.space()
+                    ui.button("Refresh", icon="refresh", on_click=load_dashboard).props("flat dense no-caps color=primary")
+                with ui.grid(columns=5).classes("w-full gap-3"):
+                    for resource, label, icon in (
+                        ("aggregations", "Aggregations", "folder"),
+                        ("records", "Records", "description"),
+                        ("org-units", "Organization units", "corporate_fare"),
+                        ("roles", "Roles", "badge"),
+                        ("users", "Users", "group"),
+                    ):
+                        with ui.card().classes("dashboard-stat cursor-pointer p-4 gap-2").on(
+                            "click", lambda _, key=resource: select_entity(key)
+                        ):
+                            with ui.row().classes("items-center gap-3 no-wrap"):
+                                ui.avatar(icon=icon, color="blue-1", text_color="primary")
+                                with ui.column().classes("gap-0"):
+                                    ui.label(str(counts[resource])).classes("text-2xl font-bold text-slate-800")
+                                    ui.label(label).classes("text-xs text-slate-500")
+
+                ui.label("Recent records activity").classes("text-lg font-semibold mt-2")
+                with ui.grid(columns=2).classes("w-full gap-5"):
+                    for resource, singular, icon in (
+                        ("aggregations", "aggregation", "folder"),
+                        ("records", "record", "description"),
+                    ):
+                        with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-4"):
+                            with ui.row().classes("items-center gap-2"):
+                                ui.icon(icon, color="primary")
+                                ui.label(ENTITIES[resource].label).classes("font-semibold text-slate-800")
+                            for heading, items, activity_icon in (
+                                ("Recently created", recent[resource][0], "add_circle"),
+                                ("Recently updated", recent[resource][1], "history"),
+                            ):
+                                ui.label(heading).classes("component-meta-label mt-1")
+                                if not items:
+                                    ui.label("Nothing here yet").classes("text-sm text-slate-400")
+                                for item in items[:4]:
+                                    handler = (
+                                        (lambda _, entry=item: open_aggregation(entry))
+                                        if resource == "aggregations"
+                                        else (lambda _, entry=item: show_record_details(entry))
+                                    )
+                                    with ui.row().classes(
+                                        "recent-card cursor-pointer w-full items-center no-wrap px-3 py-2 gap-3"
+                                    ).on("click", handler):
+                                        ui.icon(icon).classes("text-primary")
+                                        with ui.column().classes("gap-0 grow min-w-0"):
+                                            ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
+                                            number = item.get("aggregation_number") or item.get("record_number")
+                                            ui.label(number).classes("text-xs text-slate-400")
+                                        ui.label(format_timestamp(item.get("date_created"))).classes("text-xs text-slate-400")
+                                        ui.icon("chevron_right").classes("text-slate-300")
+                for resource, count in counts.items():
+                    navigation_badges[resource].text = str(count)
+                    navigation_badges[resource].update()
+                set_connection_status(True)
+
+        await load_dashboard()
+
+    async def select_audit_trail() -> None:
+        state.update(resource="audit-trail", rows=[], searched=True, aggregation_detail=None)
+        title.text = "Audit trail"
+        subtitle.text = "Immutable history of changes across the system"
+        add_button.set_visibility(False)
+        search_bar.set_visibility(False)
+        guidance.text = ""
+        table_container.clear()
+        with table_container:
+            with ui.column().classes("w-full p-5 gap-4"):
+                with ui.card().classes("w-full shadow-none border border-slate-200 p-4"):
+                    ui.label("Filter events").classes("font-semibold")
+                    with ui.grid(columns=4).classes("w-full gap-3"):
+                        type_filter = ui.select(
+                            {
+                                "aggregation": "Aggregation", "record": "Record",
+                                "digital_component": "Digital component", "org_unit": "Organization unit",
+                                "user": "User", "role": "Role", "user_role_assignment": "Role assignment",
+                            }, label="Entity type", clearable=True,
+                        ).props("outlined dense").classes("w-full")
+                        operation_filter = ui.select(
+                            ["CREATE", "UPDATE", "DELETE", "CONTENT_UPLOADED", "CONTENT_REPLACED", "CONTENT_DELETED", "CONTENT_DOWNLOADED"],
+                            label="Operation", clearable=True,
+                        ).props("outlined dense use-input").classes("w-full")
+                        source_filter = ui.input("Source").props("outlined dense clearable").classes("w-full")
+                        actor_filter = ui.input("Actor type").props("outlined dense clearable").classes("w-full")
+                        from_filter = ui.input("From").props("outlined dense type=datetime-local").classes("w-full")
+                        until_filter = ui.input("Until").props("outlined dense type=datetime-local").classes("w-full")
+                        entity_id_filter = ui.number("Entity ID", min=1, format="%.0f").props("outlined dense clearable").classes("w-full")
+                        correlation_filter = ui.input("Correlation ID").props("outlined dense clearable").classes("w-full")
+                    with ui.row().classes("w-full justify-end"):
+                        refresh_button = ui.button("Apply filters", icon="filter_alt").props("unelevated no-caps")
+                result_summary = ui.label().classes("text-sm text-slate-500")
+                results_container = ui.column().classes("w-full gap-2")
+
+        async def load_audit_events() -> None:
+            refresh_button.props("loading disable")
+            conditions: list[dict[str, Any]] = []
+            for field, operator, value in (
+                ("entity_type", "eq", type_filter.value),
+                ("operation", "eq", operation_filter.value),
+                ("source", "eq", (source_filter.value or "").strip()),
+                ("actor_type", "eq", (actor_filter.value or "").strip()),
+                ("entity_id", "eq", int(entity_id_filter.value) if entity_id_filter.value else None),
+                ("correlation_id", "eq", (correlation_filter.value or "").strip()),
+                ("occurred_at", "gte", from_filter.value),
+                ("occurred_at", "lte", until_filter.value),
+            ):
+                if value not in (None, ""):
+                    conditions.append({"field": field, "operator": operator, "value": value})
+            payload: dict[str, Any] = {
+                "sort": [{"field": "occurred_at", "direction": "desc"}, {"field": "id", "direction": "desc"}],
+                "limit": 200, "offset": 0,
+            }
+            if conditions:
+                payload["where"] = conditions[0] if len(conditions) == 1 else {"and": conditions}
+            try:
+                response = await api.search_request("event-history", payload)
+                events_list = response["items"]
+                await enrich_audit_events(events_list)
+                result_summary.text = f"Showing {len(events_list)} of {response['total']} matching events"
+                render_event_timeline(events_list, results_container)
+                set_connection_status(True)
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+            finally:
+                refresh_button.props(remove="loading disable")
+
+        refresh_button.on("click", load_audit_events)
+        await load_audit_events()
 
     async def load_rows(*, repeat_search: bool = False) -> None:
         spec = ENTITIES[state["resource"]]
@@ -1053,12 +1505,10 @@ def index() -> None:
                 rows = await api.list(spec.key)
                 state["rows"] = await decorate_for_spec(spec, rows)
                 state["searched"] = True
-            connection_badge.text = "API ready"
-            connection_badge.props("color=positive")
+            set_connection_status(True)
             render_table(spec)
         except ApiError as error:
-            connection_badge.text = "API unavailable"
-            connection_badge.props("color=negative")
+            set_connection_status(False)
             ui.notify(error_message(error), color="negative", close_button=True)
 
     async def select_entity(key: str) -> None:
@@ -1068,6 +1518,7 @@ def index() -> None:
         subtitle.text = "Search required before loading results" if spec.search_first else "Manage current system entries"
         search_bar.set_visibility(spec.search_first)
         guidance.text = "Large collections are search-first to avoid loading unbounded result sets." if spec.search_first else ""
+        add_button.set_visibility(True)
         search_input.value = ""
         try:
             if spec.search_first:
@@ -1075,16 +1526,17 @@ def index() -> None:
             render_table(spec)
             await load_rows()
         except ApiError as error:
-            connection_badge.text = "API unavailable"
-            connection_badge.props("color=negative")
+            set_connection_status(False)
             ui.notify(error_message(error), color="negative", close_button=True)
 
     for key, button in navigation.items():
         button.on("click", lambda _, entity_key=key: select_entity(entity_key))
+    dashboard_navigation.on("click", select_dashboard)
+    audit_navigation.on("click", select_audit_trail)
     add_button.on("click", lambda: open_editor())
     search_button.on("click", lambda: load_rows())
     search_input.on("keydown.enter", lambda: load_rows())
-    ui.timer(0.05, lambda: select_entity("org-units"), once=True)
+    ui.timer(0.05, select_dashboard, once=True)
 
 
 def run() -> None:

@@ -54,8 +54,17 @@ class ErmsApiClient:
     async def get(self, resource: str, entity_id: int) -> dict[str, Any]:
         return await self.request("GET", f"/api/v1/{resource}/{entity_id}")
 
+    async def history(self, resource: str, entity_id: int, *, limit: int = 200) -> list[dict[str, Any]]:
+        return await self.request(
+            "GET", f"/api/v1/{resource}/{entity_id}/history", params={"limit": limit}
+        )
+
     async def search_request(self, resource: str, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.request("POST", f"/api/v1/{resource}/search", json=payload)
+
+    async def count(self, resource: str) -> int:
+        result = await self.search_request(resource, {"limit": 1, "offset": 0})
+        return int(result["total"])
 
     async def search(self, resource: str, query: str, fields: tuple[str, ...]) -> list[dict[str, Any]]:
         term = query.strip()

@@ -117,3 +117,49 @@ def test_recently_created_uses_date_sort():
 
     assert asyncio.run(exercise()) == [{"id": 9}]
     assert captured["sort"] == [{"field": "date_created", "direction": "desc"}]
+
+
+def test_count_uses_search_total_without_loading_all_rows():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"items": [{"id": 1}], "total": 417})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.count("records")
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise()) == 417
+    assert captured == {
+        "path": "/api/v1/records/search",
+        "body": {"limit": 1, "offset": 0},
+    }
+
+
+def test_entity_history_uses_read_only_timeline_route():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        captured["limit"] = request.url.params["limit"]
+        return httpx.Response(200, json=[{"id": 1, "operation": "CREATE"}])
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.history("records", 42)
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise())[0]["operation"] == "CREATE"
+    assert captured == {
+        "method": "GET",
+        "path": "/api/v1/records/42/history",
+        "limit": "200",
+    }
