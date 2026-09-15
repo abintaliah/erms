@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpx
@@ -45,8 +46,16 @@ class ErmsApiClient:
         content_type = response.headers.get("content-type", "")
         return response.json() if "json" in content_type else response.content
 
-    async def list(self, resource: str) -> list[dict[str, Any]]:
-        return await self.request("GET", f"/api/v1/{resource}")
+    async def list(self, resource: str, *, limit: int = 500, **filters: Any) -> list[dict[str, Any]]:
+        return await self.request(
+            "GET", f"/api/v1/{resource}", params={"limit": limit, **filters}
+        )
+
+    async def get(self, resource: str, entity_id: int) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/{resource}/{entity_id}")
+
+    async def search_request(self, resource: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/{resource}/search", json=payload)
 
     async def search(self, resource: str, query: str, fields: tuple[str, ...]) -> list[dict[str, Any]]:
         term = query.strip()
@@ -62,6 +71,35 @@ class ErmsApiClient:
             json={"where": {"or": conditions}, "limit": 100, "offset": 0},
         )
         return result["items"]
+
+    async def recently_created(self, resource: str, *, limit: int = 6) -> list[dict[str, Any]]:
+        result = await self.search_request(resource, {
+            "sort": [{"field": "date_created", "direction": "desc"}],
+            "limit": limit,
+        })
+        return result["items"]
+
+    async def recently_updated(self, resource: str, *, limit: int = 6) -> list[dict[str, Any]]:
+        entity_type = {"aggregations": "aggregation", "records": "record"}[resource]
+        events = await self.search_request("event-history", {
+            "where": {"and": [
+                {"field": "entity_type", "operator": "eq", "value": entity_type},
+                {"field": "operation", "operator": "eq", "value": "UPDATE"},
+            ]},
+            "sort": [{"field": "occurred_at", "direction": "desc"}],
+            "limit": 50,
+        })
+        entity_ids = []
+        for event in events["items"]:
+            if event["entity_id"] not in entity_ids:
+                entity_ids.append(event["entity_id"])
+            if len(entity_ids) == limit:
+                break
+        results = await asyncio.gather(
+            *(self.get(resource, entity_id) for entity_id in entity_ids),
+            return_exceptions=True,
+        )
+        return [result for result in results if isinstance(result, dict)]
 
     async def create(self, resource: str, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.request("POST", f"/api/v1/{resource}", json=payload)
@@ -85,4 +123,51 @@ class ErmsApiClient:
     async def components(self, record_id: int) -> list[dict[str, Any]]:
         return await self.request(
             "GET", "/api/v1/digital-components", params={"record_id": record_id}
+        )
+
+    async def reorder_components(self, record_id: int, components: list[dict[str, int]]) -> None:
+        await self.request("PUT", f"/api/v1/records/{record_id}/digital-components/order", json={"components": components})
+
+    async def delete_component(self, component_id: int, version: int) -> None:
+        await self.request("DELETE", f"/api/v1/digital-components/{component_id}", headers={"If-Match": str(version)})
+
+    async def create_record_draft(self) -> dict[str, Any]:
+        return await self.request("POST", "/api/v1/record-drafts", json={})
+
+    async def update_record_draft(self, draft_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("PATCH", f"/api/v1/record-drafts/{draft_id}", json=payload)
+
+    async def draft_components(self, draft_id: int) -> list[dict[str, Any]]:
+        return await self.request("GET", f"/api/v1/record-drafts/{draft_id}/components")
+
+    async def upload_draft_component(self, draft_id: int, component_order: int, name: str, content: bytes, mime_type: str) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/record-drafts/{draft_id}/components",
+            data={"component_order": str(component_order)},
+            files={"file": (name, content, mime_type or "application/octet-stream")},
+        )
+
+    async def reorder_draft_components(self, draft_id: int, components: list[dict[str, int]]) -> None:
+        await self.request("PUT", f"/api/v1/record-drafts/{draft_id}/components/order", json={"components": components})
+
+    async def delete_draft_component(self, draft_id: int, component_id: int) -> None:
+        await self.request("DELETE", f"/api/v1/record-drafts/{draft_id}/components/{component_id}")
+
+    async def commit_record_draft(self, draft_id: int) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/record-drafts/{draft_id}/commit")
+
+    async def discard_record_draft(self, draft_id: int) -> None:
+        await self.request("DELETE", f"/api/v1/record-drafts/{draft_id}")
+
+    async def user_roles(self, user_id: int) -> list[dict[str, Any]]:
+        return await self.request("GET", f"/api/v1/users/{user_id}/roles")
+
+    async def role_users(self, role_id: int) -> list[dict[str, Any]]:
+        return await self.request("GET", f"/api/v1/roles/{role_id}/users")
+
+    async def delete_assignment(self, assignment_id: int, version: int) -> None:
+        await self.request(
+            "DELETE",
+            f"/api/v1/user-role-assignments/{assignment_id}",
+            headers={"If-Match": str(version)},
         )

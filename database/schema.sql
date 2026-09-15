@@ -539,6 +539,56 @@ INSERT INTO schema_migrations (version)
 VALUES ('002_add_user_management')
 ON CONFLICT (version) DO NOTHING;
 
+-- Open record drafts stage metadata and binary content until the user commits
+-- the complete record package. The equivalent upgrade is migration 004.
+CREATE TABLE IF NOT EXISTS record_drafts (
+    id bigserial PRIMARY KEY,
+    owner_user_id bigint REFERENCES users (id) ON DELETE RESTRICT,
+    aggregation_id bigint REFERENCES aggregations (id) ON DELETE RESTRICT,
+    record_number text,
+    title text,
+    description text,
+    date_originated timestamptz,
+    date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    date_updated timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at timestamptz NOT NULL DEFAULT (CURRENT_TIMESTAMP + interval '7 days'),
+    status text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'committed')),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0)
+);
+CREATE INDEX IF NOT EXISTS record_drafts_owner_user_id_idx ON record_drafts (owner_user_id);
+CREATE INDEX IF NOT EXISTS record_drafts_expires_at_idx ON record_drafts (expires_at);
+
+CREATE TABLE IF NOT EXISTS record_draft_components (
+    id bigserial PRIMARY KEY,
+    draft_id bigint NOT NULL REFERENCES record_drafts (id) ON DELETE CASCADE,
+    component_order integer NOT NULL CHECK (component_order > 0),
+    file_name text NOT NULL CHECK (btrim(file_name) <> ''),
+    date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    date_originated timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    mime_type text NOT NULL,
+    size_in_bytes bigint NOT NULL CHECK (size_in_bytes >= 0),
+    checksum_algo text NOT NULL,
+    checksum_value text NOT NULL,
+    content bytea NOT NULL,
+    CONSTRAINT record_draft_components_draft_order_unique
+        UNIQUE (draft_id, component_order) DEFERRABLE INITIALLY IMMEDIATE
+);
+CREATE INDEX IF NOT EXISTS record_draft_components_draft_id_idx ON record_draft_components (draft_id);
+
+CREATE OR REPLACE FUNCTION touch_record_draft() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    NEW.date_updated := CURRENT_TIMESTAMP;
+    NEW.version := OLD.version + 1;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS record_drafts_touch ON record_drafts;
+CREATE TRIGGER record_drafts_touch BEFORE UPDATE ON record_drafts
+FOR EACH ROW EXECUTE FUNCTION touch_record_draft();
+
+INSERT INTO schema_migrations (version) VALUES ('004_add_record_drafts')
+ON CONFLICT (version) DO NOTHING;
+
 -- Binary content storage and optimistic concurrency. The equivalent upgrade
 -- for existing databases is migration 003.
 ALTER TABLE aggregations ADD COLUMN IF NOT EXISTS version bigint NOT NULL DEFAULT 1;

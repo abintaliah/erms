@@ -1,5 +1,7 @@
 -- Test-only fixture: turn the freshly bootstrapped database into the state that
 -- existed immediately before migration 001.
+DROP TABLE IF EXISTS record_draft_components;
+DROP TABLE IF EXISTS record_drafts;
 DROP TABLE IF EXISTS digital_component_blobs;
 DROP TRIGGER IF EXISTS aggregations_bump_version ON aggregations;
 DROP TRIGGER IF EXISTS records_bump_version ON records;

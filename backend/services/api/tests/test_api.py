@@ -611,3 +611,85 @@ def test_upload_size_limit(client: TestClient, record: dict, monkeypatch):
         files={"file": ("too-large.bin", b"12345", "application/octet-stream")},
     )
     assert response.status_code == 413
+def test_record_draft_commits_metadata_and_ordered_content_atomically(client, aggregation):
+    draft_response = client.post("/api/v1/record-drafts", json={})
+    assert draft_response.status_code == 201
+    draft = draft_response.json()
+
+    assert client.get("/api/v1/records").json() == []
+    first = client.post(
+        f"/api/v1/record-drafts/{draft['id']}/components",
+        data={"component_order": "1"}, files={"file": ("first.txt", b"first", "text/plain")},
+    )
+    second = client.post(
+        f"/api/v1/record-drafts/{draft['id']}/components",
+        data={"component_order": "2"}, files={"file": ("second.pdf", b"second", "application/pdf")},
+    )
+    assert first.status_code == second.status_code == 201
+
+    reordered = client.put(
+        f"/api/v1/record-drafts/{draft['id']}/components/order",
+        json={"components": [
+            {"id": first.json()["id"], "component_order": 2},
+            {"id": second.json()["id"], "component_order": 1},
+        ]},
+    )
+    assert reordered.status_code == 204
+    staged = client.get(f"/api/v1/record-drafts/{draft['id']}/components").json()
+    assert [item["file_name"] for item in staged] == ["second.pdf", "first.txt"]
+    assert all(item["content_status"] == "staged" for item in staged)
+
+    updated = client.patch(f"/api/v1/record-drafts/{draft['id']}", json={
+        "aggregation_id": aggregation["id"], "record_number": "REC-DRAFT-1",
+        "title": "Created as a package", "description": "Metadata and files commit together",
+    })
+    assert updated.status_code == 200
+    committed = client.post(f"/api/v1/record-drafts/{draft['id']}/commit")
+    assert committed.status_code == 201
+    record = committed.json()
+    components = client.get("/api/v1/digital-components", params={"record_id": record["id"]}).json()
+    assert [item["file_name"] for item in components] == ["second.pdf", "first.txt"]
+    assert client.get(f"/api/v1/digital-components/{components[0]['id']}/content").content == b"second"
+    assert client.get(f"/api/v1/record-drafts/{draft['id']}").status_code == 404
+
+
+def test_record_draft_component_can_be_removed_and_incomplete_commit_rolls_back(client):
+    draft = client.post("/api/v1/record-drafts", json={}).json()
+    component = client.post(
+        f"/api/v1/record-drafts/{draft['id']}/components",
+        data={"component_order": "1"}, files={"file": ("remove.txt", b"remove", "text/plain")},
+    ).json()
+    removed = client.delete(f"/api/v1/record-drafts/{draft['id']}/components/{component['id']}")
+    assert removed.status_code == 204
+    assert client.get(f"/api/v1/record-drafts/{draft['id']}/components").json() == []
+    failed = client.post(f"/api/v1/record-drafts/{draft['id']}/commit")
+    assert failed.status_code == 422
+    assert client.get("/api/v1/records").json() == []
+
+
+def test_committed_components_can_be_reordered_and_removed_without_order_gaps(client, record):
+    components = []
+    for position, name in enumerate(("one.txt", "two.txt", "three.txt"), 1):
+        response = client.post(
+            f"/api/v1/records/{record['id']}/digital-components/upload",
+            data={"component_order": str(position)}, files={"file": (name, name.encode(), "text/plain")},
+        )
+        assert response.status_code == 201
+        components.append(response.json())
+    response = client.put(
+        f"/api/v1/records/{record['id']}/digital-components/order",
+        json={"components": [
+            {"id": components[2]["id"], "component_order": 1},
+            {"id": components[0]["id"], "component_order": 2},
+            {"id": components[1]["id"], "component_order": 3},
+        ]},
+    )
+    assert response.status_code == 204
+    reordered = client.get("/api/v1/digital-components", params={"record_id": record["id"]}).json()
+    assert [item["file_name"] for item in reordered] == ["three.txt", "one.txt", "two.txt"]
+    assert client.delete(
+        f"/api/v1/digital-components/{reordered[1]['id']}",
+        headers={"If-Match": str(reordered[1]["version"])},
+    ).status_code == 204
+    remaining = client.get("/api/v1/digital-components", params={"record_id": record["id"]}).json()
+    assert [item["component_order"] for item in remaining] == [1, 2]

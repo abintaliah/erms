@@ -20,6 +20,8 @@ def clean_database(client: TestClient):
         connection.execute(
             """
             TRUNCATE
+                record_draft_components,
+                record_drafts,
                 user_role_assignments,
                 roles,
                 users,

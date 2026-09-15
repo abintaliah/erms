@@ -73,3 +73,47 @@ def test_api_error_preserves_conflict_details():
 
     assert caught.value.status_code == 412
     assert caught.value.detail["current_version"] == 9
+
+
+def test_membership_navigation_and_delete_use_expected_routes():
+    requests = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path, request.headers.get("if-match")))
+        if request.method == "DELETE":
+            return httpx.Response(204)
+        return httpx.Response(200, json=[])
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.user_roles(4)
+            await client.role_users(8)
+            await client.delete_assignment(12, 3)
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert requests == [
+        ("GET", "/api/v1/users/4/roles", None),
+        ("GET", "/api/v1/roles/8/users", None),
+        ("DELETE", "/api/v1/user-role-assignments/12", "3"),
+    ]
+
+
+def test_recently_created_uses_date_sort():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={"items": [{"id": 9}], "total": 1})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.recently_created("aggregations")
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise()) == [{"id": 9}]
+    assert captured["sort"] == [{"field": "date_created", "direction": "desc"}]

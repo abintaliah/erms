@@ -79,6 +79,57 @@ class RecordRead(ApiModel):
     version: int
 
 
+class RecordDraftCreate(ApiModel):
+    aggregation_id: int | None = None
+    record_number: NonBlankString | None = None
+    title: NonBlankString | None = None
+    description: str | None = None
+    date_originated: datetime | None = None
+
+
+class RecordDraftUpdate(RecordDraftCreate):
+    pass
+
+
+class RecordDraftRead(ApiModel):
+    id: int
+    owner_user_id: int | None
+    aggregation_id: int | None
+    record_number: str | None
+    title: str | None
+    description: str | None
+    date_originated: datetime | None
+    date_created: datetime
+    date_updated: datetime
+    expires_at: datetime
+    status: Literal["open", "committed"]
+    version: int
+
+
+class RecordDraftComponentRead(ApiModel):
+    id: int
+    draft_id: int
+    component_order: int
+    file_name: str
+    date_created: datetime
+    date_originated: datetime
+    mime_type: str
+    size_in_bytes: int
+    checksum_algo: str
+    checksum_value: str
+    content_status: Literal["staged"] = "staged"
+    storage_backend: Literal["temporary"] = "temporary"
+
+
+class ComponentOrderItem(ApiModel):
+    id: int
+    component_order: int = Field(gt=0)
+
+
+class ComponentReorderRequest(ApiModel):
+    components: list[ComponentOrderItem]
+
+
 class DigitalComponentCreate(ApiModel):
     record_id: int
     component_order: int = Field(gt=0)
