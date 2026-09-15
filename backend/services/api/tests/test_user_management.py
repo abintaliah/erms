@@ -63,6 +63,7 @@ def test_org_unit_crud_hierarchy_and_global_uniqueness(
     cycle = client.patch(
         f"/api/v1/org-units/{org_unit['id']}",
         json={"parent_org_unit_id": child["id"]},
+        headers={"If-Match": str(org_unit["version"])},
     )
     assert cycle.status_code == 409
 
@@ -72,7 +73,7 @@ def test_org_unit_crud_hierarchy_and_global_uniqueness(
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()] == [child["id"]]
 
-    assert client.delete(f"/api/v1/org-units/{child['id']}").status_code == 204
+    assert client.delete(f"/api/v1/org-units/{child['id']}", headers={"If-Match": str(child["version"])}).status_code == 204
     assert client.get(f"/api/v1/org-units/{child['id']}").json()["status"] == "inactive"
 
 
@@ -81,7 +82,8 @@ def test_user_crud_neutral_name_and_soft_deactivation(client: TestClient, user: 
     assert user["status"] == "active"
 
     response = client.patch(
-        f"/api/v1/users/{user['id']}", json={"status": "suspended"}
+        f"/api/v1/users/{user['id']}", json={"status": "suspended"},
+        headers={"If-Match": str(user["version"])},
     )
     assert response.status_code == 200
     assert response.json()["status"] == "suspended"
@@ -92,7 +94,7 @@ def test_user_crud_neutral_name_and_soft_deactivation(client: TestClient, user: 
     )
     assert duplicate_email.status_code == 409
 
-    assert client.delete(f"/api/v1/users/{user['id']}").status_code == 204
+    assert client.delete(f"/api/v1/users/{user['id']}", headers={"If-Match": str(response.json()["version"])}).status_code == 204
     deactivated = client.get(f"/api/v1/users/{user['id']}").json()
     assert deactivated["status"] == "inactive"
     assert deactivated["date_deactivated"] is not None
@@ -120,6 +122,7 @@ def test_role_cross_unit_supervision_and_cycle_prevention(
     cycle = client.patch(
         f"/api/v1/roles/{role['id']}",
         json={"supervisor_role_id": subordinate["id"]},
+        headers={"If-Match": str(role["version"])},
     )
     assert cycle.status_code == 409
 
@@ -157,11 +160,13 @@ def test_temporal_role_assignment_and_navigation(
     invalid_period = client.patch(
         f"/api/v1/user-role-assignments/{assignment['id']}",
         json={"valid_until": "2000-01-01T00:00:00Z"},
+        headers={"If-Match": str(assignment["version"])},
     )
     assert invalid_period.status_code == 422
 
     assert client.delete(
-        f"/api/v1/user-role-assignments/{assignment['id']}"
+        f"/api/v1/user-role-assignments/{assignment['id']}",
+        headers={"If-Match": str(assignment["version"])},
     ).status_code == 204
     history = client.get(
         f"/api/v1/user-role-assignments/{assignment['id']}/history"

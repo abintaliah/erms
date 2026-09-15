@@ -211,6 +211,25 @@ Snapshot and metadata JSON are intentionally not generally searchable yet.
 Targeted operators and indexes should be introduced only for demonstrated audit
 or reporting requirements.
 
+## Frontend UI
+
+The NiceGUI application exposes event history in two read-only views:
+
+- **Audit trail** in the left navigation shows the system-wide timeline. It can
+  be filtered by entity type and ID, operation, source, actor type, date range,
+  and correlation ID.
+- **Event history** actions on entity rows and detail views open a timeline for
+  that particular aggregation, record, digital component, organizational unit,
+  role, or user.
+
+Select an event to inspect its before and after values, changed fields, actor,
+source, reason, request and correlation identifiers, transaction identifier,
+and metadata. The UI deliberately provides no edit or delete controls because
+the event history is immutable. Timeline entries identify entities using their
+business identifier and name or title, and provide navigation to an entity that
+still exists. A **Correlation group** heading groups events created by the same
+request or coordinated operation.
+
 ## Adding future audited entities
 
 PostgreSQL has no global row trigger covering every table. Each future entity

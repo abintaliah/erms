@@ -49,6 +49,7 @@ class AggregationRead(ApiModel):
     date_created: datetime
     date_opened: datetime
     date_closed: datetime | None
+    version: int
 
 
 class RecordCreate(ApiModel):
@@ -75,6 +76,58 @@ class RecordRead(ApiModel):
     description: str | None
     date_created: datetime
     date_originated: datetime
+    version: int
+
+
+class RecordDraftCreate(ApiModel):
+    aggregation_id: int | None = None
+    record_number: NonBlankString | None = None
+    title: NonBlankString | None = None
+    description: str | None = None
+    date_originated: datetime | None = None
+
+
+class RecordDraftUpdate(RecordDraftCreate):
+    pass
+
+
+class RecordDraftRead(ApiModel):
+    id: int
+    owner_user_id: int | None
+    aggregation_id: int | None
+    record_number: str | None
+    title: str | None
+    description: str | None
+    date_originated: datetime | None
+    date_created: datetime
+    date_updated: datetime
+    expires_at: datetime
+    status: Literal["open", "committed"]
+    version: int
+
+
+class RecordDraftComponentRead(ApiModel):
+    id: int
+    draft_id: int
+    component_order: int
+    file_name: str
+    date_created: datetime
+    date_originated: datetime
+    mime_type: str
+    size_in_bytes: int
+    checksum_algo: str
+    checksum_value: str
+    content_status: Literal["staged"] = "staged"
+    storage_backend: Literal["temporary"] = "temporary"
+
+
+class ComponentOrderItem(ApiModel):
+    id: int
+    component_order: int = Field(gt=0)
+
+
+class ComponentReorderRequest(ApiModel):
+    components: list[ComponentOrderItem]
 
 
 class DigitalComponentCreate(ApiModel):
@@ -110,6 +163,10 @@ class DigitalComponentRead(ApiModel):
     size_in_bytes: int
     checksum_algo: str
     checksum_value: str
+    storage_backend: Literal["postgresql", "s3"]
+    storage_key: str | None
+    content_status: Literal["pending", "available", "failed", "quarantined", "deleted"]
+    version: int
 
 
 class EventHistoryRead(ApiModel):
@@ -156,6 +213,7 @@ class OrgUnitRead(ApiModel):
     status: Literal["active", "inactive"]
     date_created: datetime
     date_closed: datetime | None
+    version: int
 
 
 class UserCreate(ApiModel):
@@ -180,6 +238,7 @@ class UserRead(ApiModel):
     status: Literal["active", "inactive", "suspended"]
     date_created: datetime
     date_deactivated: datetime | None
+    version: int
 
 
 class RoleCreate(ApiModel):
@@ -210,6 +269,7 @@ class RoleRead(ApiModel):
     status: Literal["active", "inactive"]
     date_created: datetime
     date_deactivated: datetime | None
+    version: int
 
 
 class UserRoleAssignmentCreate(ApiModel):
@@ -246,6 +306,7 @@ class UserRoleAssignmentRead(ApiModel):
     date_assigned: datetime
     valid_from: datetime
     valid_until: datetime | None
+    version: int
 
 
 SearchOperator = Literal[

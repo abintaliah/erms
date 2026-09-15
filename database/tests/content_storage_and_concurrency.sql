@@ -1,0 +1,47 @@
+BEGIN;
+
+INSERT INTO aggregations (aggregation_number, title)
+VALUES ('VERSION-TEST', 'Before')
+RETURNING id, version \gset version_aggregation_
+
+SELECT 1 / CASE WHEN :'version_aggregation_version'::bigint = 1 THEN 1 ELSE 0 END;
+
+UPDATE aggregations SET title = 'After' WHERE id = :'version_aggregation_id';
+
+SELECT 1 / CASE WHEN (SELECT version FROM aggregations
+    WHERE id = :'version_aggregation_id') = 2 THEN 1 ELSE 0 END;
+
+INSERT INTO records (aggregation_id, record_number, title)
+VALUES (:'version_aggregation_id', 'BLOB-RECORD', 'Blob record')
+RETURNING id \gset version_record_
+
+INSERT INTO digital_components (
+    record_id, component_order, file_name, mime_type,
+    size_in_bytes, checksum_algo, checksum_value, content_status
+)
+VALUES (:'version_record_id', 1, 'hello.txt', 'text/plain', 5, 'sha256', 'test', 'available')
+RETURNING id \gset version_component_
+
+INSERT INTO digital_component_blobs (digital_component_id, content)
+VALUES (:'version_component_id', convert_to('hello', 'UTF8'));
+
+SELECT 1 / CASE WHEN (SELECT convert_from(content, 'UTF8')
+    FROM digital_component_blobs
+    WHERE digital_component_id = :'version_component_id') = 'hello' THEN 1 ELSE 0 END;
+
+SELECT append_domain_event(
+    'digital_component', :'version_component_id', 'CONTENT_UPLOADED',
+    '{"size_in_bytes": 5}'::jsonb
+);
+
+SELECT 1 / CASE WHEN EXISTS (
+        SELECT 1 FROM event_history
+        WHERE entity_type = 'digital_component'
+          AND entity_id = :'version_component_id'
+          AND operation = 'CONTENT_UPLOADED'
+          AND before_state IS NULL
+          AND after_state IS NULL
+          AND metadata = '{"size_in_bytes": 5}'::jsonb
+    ) THEN 1 ELSE 0 END;
+
+ROLLBACK;

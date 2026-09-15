@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from psycopg import Connection
 
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
+from .concurrency import expected_version
 from .database import get_connection
 from .schemas import (
     EventHistoryRead,
@@ -76,20 +77,22 @@ def get_org_unit(org_unit_id: int, connection: Connection = Depends(get_connecti
 def update_org_unit(
     org_unit_id: int,
     payload: OrgUnitUpdate,
+    version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection),
 ):
     return update_row(
-        connection, "org_units", org_unit_id, payload.model_dump(exclude_unset=True)
+        connection, "org_units", org_unit_id, payload.model_dump(exclude_unset=True), version
     )
 
 
 @router.delete("/org-units/{org_unit_id}", status_code=204, tags=["org units"])
-def deactivate_org_unit(org_unit_id: int, connection: Connection = Depends(get_connection)):
+def deactivate_org_unit(org_unit_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
     update_row(
         connection,
         "org_units",
         org_unit_id,
         {"status": "inactive", "date_closed": datetime.now(timezone.utc)},
+        version,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -138,18 +141,20 @@ def get_user(user_id: int, connection: Connection = Depends(get_connection)):
 def update_user(
     user_id: int,
     payload: UserUpdate,
+    version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection),
 ):
-    return update_row(connection, "users", user_id, payload.model_dump(exclude_unset=True))
+    return update_row(connection, "users", user_id, payload.model_dump(exclude_unset=True), version)
 
 
 @router.delete("/users/{user_id}", status_code=204, tags=["users"])
-def deactivate_user(user_id: int, connection: Connection = Depends(get_connection)):
+def deactivate_user(user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
     update_row(
         connection,
         "users",
         user_id,
         {"status": "inactive", "date_deactivated": datetime.now(timezone.utc)},
+        version,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -204,18 +209,20 @@ def get_role(role_id: int, connection: Connection = Depends(get_connection)):
 def update_role(
     role_id: int,
     payload: RoleUpdate,
+    version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection),
 ):
-    return update_row(connection, "roles", role_id, payload.model_dump(exclude_unset=True))
+    return update_row(connection, "roles", role_id, payload.model_dump(exclude_unset=True), version)
 
 
 @router.delete("/roles/{role_id}", status_code=204, tags=["roles"])
-def deactivate_role(role_id: int, connection: Connection = Depends(get_connection)):
+def deactivate_role(role_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
     update_row(
         connection,
         "roles",
         role_id,
         {"status": "inactive", "date_deactivated": datetime.now(timezone.utc)},
+        version,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -292,6 +299,7 @@ def get_assignment(assignment_id: int, connection: Connection = Depends(get_conn
 def update_assignment(
     assignment_id: int,
     payload: UserRoleAssignmentUpdate,
+    version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection),
 ):
     return update_row(
@@ -299,6 +307,7 @@ def update_assignment(
         "user_role_assignments",
         assignment_id,
         payload.model_dump(exclude_unset=True),
+        version,
     )
 
 
@@ -307,8 +316,8 @@ def update_assignment(
     status_code=204,
     tags=["user role assignments"],
 )
-def delete_assignment(assignment_id: int, connection: Connection = Depends(get_connection)):
-    delete_row(connection, "user_role_assignments", assignment_id)
+def delete_assignment(assignment_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection)):
+    delete_row(connection, "user_role_assignments", assignment_id, version)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

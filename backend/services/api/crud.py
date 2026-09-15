@@ -57,26 +57,55 @@ def update_row(
     table: str,
     entity_id: int,
     values: dict[str, Any],
+    expected_version: int,
 ) -> dict[str, Any]:
     if not values:
-        return get_or_404(connection, table, entity_id)
+        row = get_or_404(connection, table, entity_id)
+        if row["version"] != expected_version:
+            raise HTTPException(status_code=412, detail="entity has changed")
+        return row
 
     assignments = [
         sql.SQL("{} = %s").format(sql.Identifier(column)) for column in values
     ]
-    query = sql.SQL("UPDATE {} SET {} WHERE id = %s RETURNING *").format(
+    query = sql.SQL(
+        "UPDATE {} SET {} WHERE id = %s AND version = %s RETURNING *"
+    ).format(
         sql.Identifier(table),
         sql.SQL(", ").join(assignments),
     )
-    row = connection.execute(query, [*values.values(), entity_id]).fetchone()
+    row = connection.execute(
+        query, [*values.values(), entity_id, expected_version]
+    ).fetchone()
     if row is None:
-        raise HTTPException(status_code=404, detail=f"{table.rstrip('s')} not found")
+        current = get_or_404(connection, table, entity_id)
+        raise HTTPException(
+            status_code=412,
+            detail={
+                "message": "entity has changed",
+                "current_version": current["version"],
+            },
+        )
     return row
 
 
-def delete_row(connection: Connection, table: str, entity_id: int) -> None:
-    query = sql.SQL("DELETE FROM {} WHERE id = %s RETURNING id").format(
+def delete_row(
+    connection: Connection,
+    table: str,
+    entity_id: int,
+    expected_version: int,
+) -> None:
+    query = sql.SQL(
+        "DELETE FROM {} WHERE id = %s AND version = %s RETURNING id"
+    ).format(
         sql.Identifier(table)
     )
-    if connection.execute(query, (entity_id,)).fetchone() is None:
-        raise HTTPException(status_code=404, detail=f"{table.rstrip('s')} not found")
+    if connection.execute(query, (entity_id, expected_version)).fetchone() is None:
+        current = get_or_404(connection, table, entity_id)
+        raise HTTPException(
+            status_code=412,
+            detail={
+                "message": "entity has changed",
+                "current_version": current["version"],
+            },
+        )
