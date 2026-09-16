@@ -3066,6 +3066,27 @@ def index() -> None:
                 pass
             return "Published", "positive"
 
+        def metadata_value(
+            label: str, value: Any, *, timestamp: bool = False,
+        ) -> None:
+            with ui.column().classes("gap-0 min-w-0"):
+                ui.label(label.upper()).classes("component-meta-label")
+                rendered = format_timestamp(value) if timestamp else display_value(value)
+                ui.label(rendered).classes("text-sm text-slate-700 whitespace-pre-wrap")
+
+        def render_rule_details(rule: dict[str, Any] | None) -> None:
+            if rule is None:
+                ui.label("No retention rule is defined here.").classes("text-sm text-slate-400")
+                return
+            with ui.grid(columns=3).classes("w-full gap-4"):
+                metadata_value("Current period", f"{rule['current_period_years']} years")
+                metadata_value("Intermediate period", f"{rule['intermediate_period_years']} years")
+                metadata_value(
+                    "Final disposition",
+                    rule["final_disposition"].replace("_", " ").title(),
+                )
+            metadata_value("Instructions", rule.get("instructions"))
+
         async def load_scheme_counts(schemes: list[dict[str, Any]]) -> None:
             async def counts_for(scheme: dict[str, Any]) -> tuple[int, int]:
                 base = {"field": "classification_scheme_id", "operator": "eq", "value": scheme["id"]}
@@ -3349,6 +3370,20 @@ def index() -> None:
                     ).props("flat dense no-caps")
                     ui.button("Add root", icon="add", on_click=lambda: create_classification()).props("unelevated dense no-caps")
 
+                with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-3"):
+                    ui.label("Scheme information").classes("font-semibold")
+                    with ui.grid(columns=3).classes("w-full gap-4"):
+                        metadata_value("Code", scheme.get("code"))
+                        metadata_value("Lifecycle", status_label)
+                        metadata_value("Edition", scheme.get("edition"))
+                        metadata_value("Authority", scheme.get("authority"))
+                        metadata_value("Published", scheme.get("date_published"), timestamp=True)
+                        metadata_value("Deactivated", scheme.get("date_deactivated"), timestamp=True)
+                        metadata_value("Created", scheme.get("date_created"), timestamp=True)
+                        metadata_value("Last updated", scheme.get("date_updated"), timestamp=True)
+                    metadata_value("Description", scheme.get("description"))
+                    metadata_value("Scope note", scheme.get("scope_note"))
+
                 with ui.row().classes("w-full items-end gap-2"):
                     classification_search = ui.input(
                         "Search this scheme", value=workspace["query"],
@@ -3399,25 +3434,61 @@ def index() -> None:
                                 ui.label(selected["description"]).classes("text-sm text-slate-600")
                             path = await api.classification_path(selected["id"])
                             ui.label(" › ".join(item["code"] for item in path)).classes("text-xs text-slate-400")
-                            try:
-                                effective_rule = await api.classification_effective_rule(selected["id"])
-                            except ApiError as error:
-                                if error.status_code != 404:
-                                    raise
-                                effective_rule = None
+                            direct_result, effective_result = await asyncio.gather(
+                                api.classification_retention_rule(selected["id"]),
+                                api.classification_effective_rule(selected["id"]),
+                                return_exceptions=True,
+                            )
+                            for result in (direct_result, effective_result):
+                                if isinstance(result, ApiError) and result.status_code != 404:
+                                    raise result
+                                if isinstance(result, Exception) and not isinstance(result, ApiError):
+                                    raise result
+                            direct_rule = direct_result if isinstance(direct_result, dict) else None
+                            effective_rule = effective_result if isinstance(effective_result, dict) else None
+
+                            ui.separator()
+                            ui.label("Classification information").classes("font-semibold")
+                            parent = path[-2] if len(path) > 1 else None
+                            with ui.grid(columns=2).classes("w-full gap-4"):
+                                metadata_value("Authority", selected.get("authority"))
+                                metadata_value("Keywords", selected.get("keywords"))
+                                metadata_value(
+                                    "Parent classification",
+                                    f"{parent['code']} — {parent['title']}" if parent else "Root classification",
+                                )
+                                metadata_value("Created", selected.get("date_created"), timestamp=True)
+                                metadata_value("Last updated", selected.get("date_updated"), timestamp=True)
+                            metadata_value("Description", selected.get("description"))
+                            metadata_value("Scope note", selected.get("scope_note"))
+
                             ui.separator()
                             ui.label("Effective retention rule").classes("font-semibold")
                             if effective_rule:
                                 inherited = effective_rule["defined_by_classification_id"] != selected["id"]
-                                ui.badge("Inherited" if inherited else "Direct", color="indigo").props("outline")
-                                ui.label(
-                                    f"Current {effective_rule['current_period_years']} years · Intermediate {effective_rule['intermediate_period_years']} years"
-                                ).classes("text-sm")
-                                ui.label(effective_rule["final_disposition"].replace("_", " ").title()).classes("text-sm font-medium")
-                                if effective_rule.get("instructions"):
-                                    ui.label(effective_rule["instructions"]).classes("text-sm text-slate-500")
+                                source = next(
+                                    (
+                                        item for item in path
+                                        if item["id"] == effective_rule["defined_by_classification_id"]
+                                    ),
+                                    None,
+                                )
+                                provenance = "Defined on this classification"
+                                if inherited:
+                                    provenance = (
+                                        f"Inherited from {source['code']} — {source['title']}"
+                                        if source else "Inherited from an ancestor classification"
+                                    )
+                                with ui.row().classes("items-center gap-2"):
+                                    ui.badge("Inherited" if inherited else "Direct", color="indigo").props("outline")
+                                    ui.label(provenance).classes("text-sm text-slate-500")
+                                render_rule_details(effective_rule)
                             else:
                                 ui.label("No direct or inherited rule").classes("text-sm text-slate-400")
+                            if effective_rule and effective_rule.get("defined_by_classification_id") != selected["id"]:
+                                ui.separator()
+                                ui.label("Direct retention rule").classes("font-semibold")
+                                render_rule_details(direct_rule)
                             with ui.row().classes("w-full justify-end gap-2"):
                                 ui.button(
                                     "Event history", icon="history",

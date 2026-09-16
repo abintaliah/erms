@@ -77,6 +77,16 @@ both the scheme and parent locked by context. A terminal cannot expose an
 add-child action. Scheme lifecycle actions, scheme and classification editing,
 tree refresh, and classification search all remain in the same workspace.
 
+Viewing metadata does not require entering an edit workflow. Selecting a scheme
+shows its authority, scope note, edition, publication and lifecycle dates, and
+audit timestamps in a read-only information panel. Selecting a classification
+shows its authority, scope note, keywords, parent and full path, timestamps, and
+complete effective retention rule including disposition instructions and the
+classification from which an inherited rule originates. When an inherited rule
+applies, the view also states whether the selected classification has its own
+direct rule. Edit controls are separate and may later be hidden by authorization
+without hiding information the user is allowed to view.
+
 The workspace also shows recently created and recently updated classifications
 for the signed-in user in a full-width panel above both the scheme list and the
 classification detail area. These lists use immutable audit-event attribution

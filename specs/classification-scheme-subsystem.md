@@ -534,6 +534,10 @@ The workspace uses a master-detail layout:
   terminals cannot expose this action.
 - Selecting a classification presents its path, metadata, effective retention
   rule, provenance, and contextual actions.
+- Complete scheme and classification metadata is presented read-only without
+  opening an edit dialog. Retention instructions and inheritance provenance are
+  part of this view; future update authorization may remove Edit without
+  removing permitted read access.
 - Search results can focus their scheme and expand their ancestor path.
 - Current-user recently created and recently updated classifications are shown
   in a full-width panel above both master and detail columns, using event-history
