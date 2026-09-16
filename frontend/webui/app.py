@@ -25,6 +25,8 @@ from .entities import ENTITIES, EntitySpec, FieldSpec
 
 app.add_static_files("/static/pdfjs", Path(__file__).with_name("static") / "pdfjs")
 
+CLASSIFICATION_WORKSPACE_SEARCH_FIELDS = ("code", "title", "description", "keywords")
+
 
 def display_value(value: Any) -> str:
     if value is None:
@@ -3293,7 +3295,7 @@ def index() -> None:
                         {"field": "classification_scheme_id", "operator": "eq", "value": scheme_id},
                         {"or": [
                             {"field": field, "operator": "contains_ci", "value": term}
-                            for field in ("code", "title", "description")
+                            for field in CLASSIFICATION_WORKSPACE_SEARCH_FIELDS
                         ]},
                     ]},
                     "sort": [{"field": "code", "direction": "asc"}],

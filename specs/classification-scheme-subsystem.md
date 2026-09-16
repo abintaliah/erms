@@ -547,6 +547,8 @@ The workspace uses two coordinated master-detail rows:
   empty (`—`), not the misleading text “Root classification”. Tree nodes reserve
   a consistent expander column so their type icons align by hierarchy depth.
 - Search results can focus their scheme and expand their ancestor path.
+- The within-scheme administrative search ORs case-insensitive literal
+  containment across code, title, description, and keywords.
 
 Scheme administration provides:
 

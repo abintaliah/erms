@@ -98,9 +98,11 @@ icons remain aligned at each hierarchy depth.
 
 ## Search
 
-Classification code, title, and description support safe case-insensitive
-partial search. The NiceGUI selector uses `contains_ci`, so entering `finance`
-automatically finds values containing that text without requiring wildcards.
+Classification code, title, description, and keywords support safe
+case-insensitive partial search in the scheme administration workspace. The
+NiceGUI aggregation selector searches code, title, and description. Both use
+`contains_ci`, so entering `finance` automatically finds values containing that
+text without requiring wildcards.
 The controlled API grammar retains `matches_ci` for advanced future clients;
 there, `*` means zero or more characters and `?` means exactly one character.
 SQL `%` and `_` remain literal rather than becoming caller-controlled patterns.
