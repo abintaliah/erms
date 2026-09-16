@@ -1442,7 +1442,11 @@ def index() -> None:
         retention_rule: dict[str, Any] | None = None
         try:
             if row and spec.key == "classifications":
-                retention_rule = await api.classification_retention_rule(row["id"])
+                try:
+                    retention_rule = await api.classification_retention_rule(row["id"])
+                except ApiError as error:
+                    if error.status_code != 404:
+                        raise
             for field in spec.fields:
                 if not field.lookup_resource:
                     continue
@@ -3029,7 +3033,9 @@ def index() -> None:
                         ui.label("Schemes").classes("text-lg font-semibold")
                         ui.space()
                         add_scheme_button = ui.button(icon="add").props("flat round dense color=primary").tooltip("Add classification scheme")
-                    scheme_filter = ui.input("Filter schemes", leading_icon="search").props("outlined dense clearable").classes("w-full")
+                    scheme_filter = ui.input("Filter schemes").props(
+                        "outlined dense clearable prepend-icon=search"
+                    ).classes("w-full")
                     scheme_list = ui.column().classes("w-full gap-2 overflow-y-auto")
                 workspace_right = ui.column().classes("grow min-w-0 p-5 gap-4")
 
@@ -3330,8 +3336,7 @@ def index() -> None:
                 with ui.row().classes("w-full items-end gap-2"):
                     classification_search = ui.input(
                         "Search this scheme", value=workspace["query"],
-                        leading_icon="search",
-                    ).props("outlined dense clearable").classes("grow")
+                    ).props("outlined dense clearable prepend-icon=search").classes("grow")
                     ui.button("Search", icon="search", on_click=lambda: search_within_scheme(classification_search)).props("unelevated dense no-caps")
                     if workspace["query"]:
                         ui.button("Clear", on_click=lambda: clear_classification_search()).props("flat dense no-caps")
