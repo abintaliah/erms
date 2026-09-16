@@ -54,6 +54,35 @@ def test_classification_search_uses_literal_case_insensitive_containment():
     }
 
 
+def test_personal_classification_recent_activity_uses_audit_events():
+    requests = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content) if request.content else None
+        requests.append((request.method, request.url.path, body))
+        if request.url.path == "/api/v1/event-history/search":
+            return httpx.Response(200, json={
+                "items": [{"entity_id": 9, "occurred_at": "2026-09-16T10:00:00Z"}],
+                "total": 1,
+            })
+        return httpx.Response(200, json={"id": 9, "code": "FIN", "title": "Finance"})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.recently_created(
+                "classifications", actor_user_id=4, limit=4,
+            )
+        finally:
+            await client.close()
+
+    rows = asyncio.run(exercise())
+    assert rows[0]["id"] == 9
+    event_request = requests[0][2]
+    assert {"field": "entity_type", "operator": "eq", "value": "classification"} in event_request["where"]["and"]
+    assert {"field": "actor_user_id", "operator": "eq", "value": 4} in event_request["where"]["and"]
+
+
 def test_update_sends_if_match_version():
     captured = {}
 

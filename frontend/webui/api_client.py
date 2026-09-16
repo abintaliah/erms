@@ -154,7 +154,11 @@ class ErmsApiClient:
         limit: int,
         since: datetime | str | None = None,
     ) -> list[dict[str, Any]]:
-        entity_type = {"aggregations": "aggregation", "records": "record"}[resource]
+        entity_type = {
+            "aggregations": "aggregation",
+            "records": "record",
+            "classifications": "classification",
+        }[resource]
         conditions: list[dict[str, Any]] = [
             {"field": "entity_type", "operator": "eq", "value": entity_type},
             {"field": "operation", "operator": "eq", "value": operation},

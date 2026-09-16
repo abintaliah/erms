@@ -56,6 +56,34 @@ description. Its searchable hierarchy-aware list places the current user's
 recent selections first. The number retained in this list is configured by
 `CLASSIFICATION_RECENT_SELECTION_LIMIT`, which defaults to `4`.
 
+## Administration workspace
+
+Classification schemes and their classifications are administered together in
+one workspace. The left panel lists and filters schemes. Selecting a scheme
+loads its classification hierarchy in the right panel, so the current scheme
+is always explicit and does not need to be selected again when creating a
+classification.
+
+The hierarchy is lazy-loaded: root classifications are fetched when a scheme is
+selected and a branch's direct children are fetched only when that branch is
+expanded. Branch classifications use the `account_tree` icon; terminal
+classifications use the `label` icon. Selecting a node shows its complete path,
+metadata, and effective retention rule, including whether that rule is direct
+or inherited.
+
+Creation is contextual. **Add root** creates a root classification in the
+selected scheme, while **Add child** creates beneath the selected branch with
+both the scheme and parent locked by context. A terminal cannot expose an
+add-child action. Scheme lifecycle actions, scheme and classification editing,
+tree refresh, and classification search all remain in the same workspace.
+
+The workspace also shows recently created and recently updated classifications
+for the signed-in user. These lists use immutable audit-event attribution and
+the same `DASHBOARD_RECENT_ITEM_LIMIT` and `DASHBOARD_RECENT_DAYS` settings as
+the Dashboard. They do not represent system-wide activity. Selecting a recent
+or search result switches to its scheme, expands its ancestor path, and focuses
+the classification in the tree.
+
 ## Search
 
 Classification code, title, and description support safe case-insensitive

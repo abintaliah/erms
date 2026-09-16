@@ -505,7 +505,7 @@ def index() -> None:
         navigation_badges: dict[str, Any] = {}
         dashboard_navigation = ui.button("Dashboard", icon="dashboard").props("flat align=left no-caps").classes("w-full justify-start px-4 mt-4")
         for heading, entries in (
-            ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"), ("classifications", "label"))),
+            ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
             ("ORGANIZATION STRUCTURE", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
         ):
             ui.label(heading).classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
@@ -563,7 +563,7 @@ def index() -> None:
     }
 
     async def refresh_navigation_counts() -> None:
-        resources = ["aggregations", "records", "classification-schemes", "classifications", "org-units", "roles", "users", "event-history"]
+        resources = ["aggregations", "records", "classification-schemes", "org-units", "roles", "users", "event-history"]
         try:
             counts = await asyncio.gather(*(api.count(resource) for resource in resources))
             for resource, count in zip(resources, counts):
@@ -681,11 +681,16 @@ def index() -> None:
                     await show_components(record)
             except ApiError as error:
                 ui.notify(error_message(error), color="negative", close_button=True)
-        elif entity_type in {"org_unit", "user", "role", "classification_scheme", "classification"}:
+        elif entity_type == "classification_scheme":
+            await select_classification_workspace(initial_scheme_id=entity["id"])
+        elif entity_type == "classification":
+            await select_classification_workspace(
+                initial_scheme_id=entity["classification_scheme_id"],
+                initial_classification_id=entity["id"],
+            )
+        elif entity_type in {"org_unit", "user", "role"}:
             resource = {
                 "org_unit": "org-units", "user": "users", "role": "roles",
-                "classification_scheme": "classification-schemes",
-                "classification": "classifications",
             }[entity_type]
             await select_entity(resource)
             with table_container:
@@ -2856,6 +2861,10 @@ def index() -> None:
                                 "aggregation": "Aggregation", "record": "Record",
                                 "digital_component": "Digital component", "org_unit": "Organization unit",
                                 "user": "User", "role": "Role", "user_role_assignment": "Role assignment",
+                                "classification_scheme": "Classification scheme",
+                                "classification": "Classification",
+                                "classification_retention_rule": "Classification retention rule",
+                                "aggregation_retention_rule": "Aggregation retention rule",
                             }, label="Entity type", clearable=True,
                         ).props("outlined dense").classes("w-full")
                         operation_filter = ui.select(
@@ -2989,8 +2998,507 @@ def index() -> None:
             set_connection_status(error.status_code != 503)
             ui.notify(error_message(error), color="negative", close_button=True)
 
+    async def select_classification_workspace(
+        initial_scheme_id: int | None = None,
+        initial_classification_id: int | None = None,
+    ) -> None:
+        show_authenticated_view()
+        state.update(
+            resource="classification-workspace", rows=[], searched=True,
+            aggregation_detail=None,
+        )
+        title.text = "Classification schemes"
+        subtitle.text = "Build and govern classification hierarchies in context"
+        search_bar.set_visibility(False)
+        add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
+        guidance.text = ""
+        table_container.clear()
+
+        workspace: dict[str, Any] = {
+            "schemes": [], "scheme": None, "selected": None,
+            "children": {}, "expanded": set(), "counts": {},
+            "recent_created": [], "recent_updated": [],
+            "query": "", "search_results": [],
+        }
+
+        with table_container:
+            with ui.row().classes("w-full min-h-[680px] items-stretch no-wrap"):
+                with ui.column().classes("w-[330px] shrink-0 border-r border-slate-200 p-4 gap-3"):
+                    with ui.row().classes("w-full items-center"):
+                        ui.label("Schemes").classes("text-lg font-semibold")
+                        ui.space()
+                        add_scheme_button = ui.button(icon="add").props("flat round dense color=primary").tooltip("Add classification scheme")
+                    scheme_filter = ui.input("Filter schemes", leading_icon="search").props("outlined dense clearable").classes("w-full")
+                    scheme_list = ui.column().classes("w-full gap-2 overflow-y-auto")
+                workspace_right = ui.column().classes("grow min-w-0 p-5 gap-4")
+
+        def scheme_lifecycle(scheme: dict[str, Any]) -> tuple[str, str]:
+            if scheme.get("date_deactivated"):
+                return "Inactive", "grey-7"
+            published = scheme.get("date_published")
+            if not published:
+                return "Draft", "blue-grey"
+            try:
+                publication = datetime.fromisoformat(str(published).replace("Z", "+00:00"))
+                now = datetime.now(publication.tzinfo or timezone.utc)
+                if publication > now:
+                    return "Scheduled", "orange"
+            except (TypeError, ValueError):
+                pass
+            return "Published", "positive"
+
+        async def load_scheme_counts(schemes: list[dict[str, Any]]) -> None:
+            async def counts_for(scheme: dict[str, Any]) -> tuple[int, int]:
+                base = {"field": "classification_scheme_id", "operator": "eq", "value": scheme["id"]}
+                total, terminals = await asyncio.gather(
+                    api.search_request("classifications", {"where": base, "limit": 1}),
+                    api.search_request("classifications", {
+                        "where": {"and": [
+                            base,
+                            {"field": "is_terminal", "operator": "eq", "value": True},
+                        ]},
+                        "limit": 1,
+                    }),
+                )
+                return int(total["total"]) - int(terminals["total"]), int(terminals["total"])
+
+            values = await asyncio.gather(*(counts_for(scheme) for scheme in schemes))
+            workspace["counts"] = {
+                scheme["id"]: value for scheme, value in zip(schemes, values)
+            }
+
+        def render_scheme_list() -> None:
+            scheme_list.clear()
+            term = (scheme_filter.value or "").strip().casefold()
+            schemes = [
+                scheme for scheme in workspace["schemes"]
+                if not term or term in " ".join(filter(None, (
+                    scheme.get("code"), scheme.get("title"), scheme.get("description"),
+                ))).casefold()
+            ]
+            with scheme_list:
+                if not schemes:
+                    ui.label("No matching schemes").classes("text-sm text-slate-400 py-5 self-center")
+                for scheme in schemes:
+                    selected = workspace["scheme"] and workspace["scheme"]["id"] == scheme["id"]
+                    status_label, status_color = scheme_lifecycle(scheme)
+                    branches, terminals = workspace["counts"].get(scheme["id"], (0, 0))
+                    classes = "w-full cursor-pointer shadow-none border p-3"
+                    classes += " border-blue-300 bg-blue-50" if selected else " border-slate-200"
+                    with ui.card().classes(classes).on(
+                        "click", lambda _, item=scheme: select_scheme(item)
+                    ):
+                        with ui.row().classes("w-full items-start gap-3 no-wrap"):
+                            ui.avatar(icon="account_tree", color="blue-1", text_color="primary", size="38px")
+                            with ui.column().classes("grow min-w-0 gap-1"):
+                                ui.label(scheme["title"]).classes("font-semibold line-clamp-2")
+                                with ui.row().classes("items-center gap-2"):
+                                    ui.badge(scheme["code"], color="primary").props("outline")
+                                    ui.badge(status_label, color=status_color).props("outline")
+                                ui.label(f"{branches} branches · {terminals} terminals").classes("text-xs text-slate-400")
+
+        async def load_personal_recent() -> None:
+            principal = auth_state.get("principal") or {}
+            user = principal.get("user") or {}
+            user_id = user.get("id")
+            if not user_id:
+                workspace["recent_created"], workspace["recent_updated"] = [], []
+                return
+            since = datetime.now(timezone.utc) - timedelta(days=dashboard_recent_days())
+            created, updated = await asyncio.gather(
+                api.recently_created(
+                    "classifications", limit=dashboard_recent_item_limit(),
+                    actor_user_id=user_id, since=since,
+                ),
+                api.recently_updated(
+                    "classifications", limit=dashboard_recent_item_limit(),
+                    actor_user_id=user_id, since=since,
+                ),
+            )
+            workspace["recent_created"], workspace["recent_updated"] = created, updated
+
+        async def load_children(parent_id: int | None) -> list[dict[str, Any]]:
+            scheme = workspace["scheme"]
+            if scheme is None:
+                return []
+            rows = await api.list(
+                "classifications",
+                classification_scheme_id=scheme["id"],
+                **({"roots_only": True} if parent_id is None else {"parent_classification_id": parent_id}),
+            )
+            workspace["children"][parent_id] = rows
+            return rows
+
+        async def focus_classification(item: dict[str, Any]) -> None:
+            scheme = next(
+                (entry for entry in workspace["schemes"] if entry["id"] == item["classification_scheme_id"]),
+                None,
+            )
+            if scheme is None:
+                return
+            if workspace["scheme"] is None or workspace["scheme"]["id"] != scheme["id"]:
+                workspace.update(scheme=scheme, selected=None, children={}, expanded=set(), query="", search_results=[])
+                await load_children(None)
+                render_scheme_list()
+            path = await api.classification_path(item["id"])
+            parent_id = None
+            for node in path[:-1]:
+                if parent_id not in workspace["children"]:
+                    await load_children(parent_id)
+                workspace["expanded"].add(node["id"])
+                if node["id"] not in workspace["children"]:
+                    await load_children(node["id"])
+                parent_id = node["id"]
+            workspace["selected"] = item
+            await render_workspace_right()
+
+        def render_recent_activity() -> None:
+            if not workspace["recent_created"] and not workspace["recent_updated"]:
+                return
+            with ui.card().classes("w-full shadow-none border border-slate-200 p-4"):
+                with ui.row().classes("w-full items-center"):
+                    ui.label("Your recent classification activity").classes("font-semibold")
+                    ui.space()
+                    ui.label(f"Last {dashboard_recent_days()} days").classes("text-xs text-slate-400")
+                with ui.grid(columns=2).classes("w-full gap-4"):
+                    for heading, items, icon in (
+                        ("Recently created", workspace["recent_created"], "add_circle"),
+                        ("Recently updated", workspace["recent_updated"], "history"),
+                    ):
+                        with ui.column().classes("gap-1 min-w-0"):
+                            with ui.row().classes("items-center gap-2"):
+                                ui.icon(icon, color="primary", size="18px")
+                                ui.label(heading).classes("text-sm font-semibold")
+                            if not items:
+                                ui.label("Nothing here yet").classes("text-xs text-slate-400 py-2")
+                            for item in items:
+                                with ui.row().classes("recent-card w-full cursor-pointer items-center no-wrap px-3 py-2 gap-2").on(
+                                    "click", lambda _, entry=item: focus_classification(entry)
+                                ):
+                                    ui.icon("label" if item.get("is_terminal") else "account_tree", color="primary", size="18px")
+                                    with ui.column().classes("grow min-w-0 gap-0"):
+                                        ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
+                                        ui.label(item["code"]).classes("text-xs text-slate-400")
+                                    ui.label(format_timestamp(item.get("_activity_at"))).classes("text-xs text-slate-400")
+
+        async def toggle_branch(item: dict[str, Any]) -> None:
+            if item["id"] in workspace["expanded"]:
+                workspace["expanded"].remove(item["id"])
+            else:
+                if item["id"] not in workspace["children"]:
+                    await load_children(item["id"])
+                workspace["expanded"].add(item["id"])
+            await render_workspace_right()
+
+        def render_tree_level(parent_id: int | None, depth: int = 0) -> None:
+            rows = workspace["children"].get(parent_id, [])
+            for item in rows:
+                selected = workspace["selected"] and workspace["selected"]["id"] == item["id"]
+                with ui.row().classes(
+                    "w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50 "
+                    + ("bg-blue-50" if selected else "")
+                ).style(f"padding-left: {depth * 20 + 4}px"):
+                    if item["is_terminal"]:
+                        ui.icon("label", color="primary", size="20px").classes("mx-2")
+                    else:
+                        ui.button(
+                            icon="expand_more" if item["id"] in workspace["expanded"] else "chevron_right",
+                            on_click=lambda _, node=item: toggle_branch(node),
+                        ).props("flat round dense color=blue-grey")
+                    with ui.column().classes("grow min-w-0 gap-0 cursor-pointer py-1").on(
+                        "click", lambda _, node=item: focus_classification(node)
+                    ):
+                        ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
+                        ui.label(item["code"]).classes("text-xs text-slate-400")
+                    ui.badge("Terminal" if item["is_terminal"] else "Branch", color="primary").props("outline")
+                if not item["is_terminal"] and item["id"] in workspace["expanded"]:
+                    children = workspace["children"].get(item["id"], [])
+                    if children:
+                        render_tree_level(item["id"], depth + 1)
+                    else:
+                        ui.label("No child classifications").classes("text-xs text-slate-400 py-1").style(
+                            f"padding-left: {(depth + 1) * 20 + 36}px"
+                        )
+
+        async def create_classification(parent: dict[str, Any] | None = None) -> None:
+            scheme = workspace["scheme"]
+            if scheme is None:
+                return
+            if parent and parent.get("is_terminal"):
+                ui.notify("Terminal classifications cannot contain children", color="warning")
+                return
+
+            async def saved(item: dict[str, Any]) -> None:
+                await load_children(parent["id"] if parent else None)
+                if parent:
+                    workspace["expanded"].add(parent["id"])
+                await load_personal_recent()
+                await load_scheme_counts(workspace["schemes"])
+                render_scheme_list()
+                await focus_classification(item)
+
+            await open_editor(
+                initial_values={
+                    "classification_scheme_id": scheme["id"],
+                    "parent_classification_id": parent["id"] if parent else None,
+                },
+                locked_fields={"classification_scheme_id", "parent_classification_id"},
+                on_saved=saved,
+                resource_key="classifications",
+            )
+
+        async def edit_selected() -> None:
+            selected = workspace["selected"]
+            if selected is None:
+                return
+
+            async def saved(item: dict[str, Any]) -> None:
+                parent_id = item.get("parent_classification_id")
+                await load_children(parent_id)
+                await load_personal_recent()
+                await load_scheme_counts(workspace["schemes"])
+                render_scheme_list()
+                await focus_classification(item)
+
+            await open_editor(selected, on_saved=saved, resource_key="classifications")
+
+        async def search_within_scheme(query_control: Any) -> None:
+            term = (query_control.value or "").strip()
+            workspace["query"] = term
+            if not term:
+                workspace["search_results"] = []
+            else:
+                scheme_id = workspace["scheme"]["id"]
+                result = await api.search_request("classifications", {
+                    "where": {"and": [
+                        {"field": "classification_scheme_id", "operator": "eq", "value": scheme_id},
+                        {"or": [
+                            {"field": field, "operator": "contains_ci", "value": term}
+                            for field in ("code", "title", "description")
+                        ]},
+                    ]},
+                    "sort": [{"field": "code", "direction": "asc"}],
+                    "limit": 100,
+                })
+                workspace["search_results"] = result["items"]
+            await render_workspace_right()
+
+        async def render_workspace_right() -> None:
+            workspace_right.clear()
+            with workspace_right:
+                render_recent_activity()
+                scheme = workspace["scheme"]
+                if scheme is None:
+                    with ui.column().classes("w-full grow items-center justify-center gap-3 py-16 text-slate-500"):
+                        ui.icon("account_tree", size="54px").classes("text-primary")
+                        ui.label("Select a classification scheme").classes("text-xl font-semibold text-slate-700")
+                        ui.label("Its classification hierarchy will appear here.").classes("text-sm")
+                    return
+
+                status_label, status_color = scheme_lifecycle(scheme)
+                with ui.row().classes("w-full items-start gap-3"):
+                    ui.avatar(icon="account_tree", color="blue-1", text_color="primary")
+                    with ui.column().classes("grow gap-0"):
+                        with ui.row().classes("items-center gap-2"):
+                            ui.label(scheme["title"]).classes("text-xl font-semibold")
+                            ui.badge(status_label, color=status_color).props("outline")
+                        ui.label(scheme["code"]).classes("text-sm text-primary font-medium")
+                        if scheme.get("description"):
+                            ui.label(scheme["description"]).classes("text-sm text-slate-500")
+                    ui.button("Edit scheme", icon="edit", on_click=lambda: open_editor(
+                        scheme, on_saved=lambda _: reload_workspace(scheme["id"]),
+                        resource_key="classification-schemes",
+                    )).props("flat dense no-caps")
+                    ui.button(
+                        "Event history", icon="history",
+                        on_click=lambda: show_entity_history("classification-schemes", scheme),
+                    ).props("flat dense no-caps")
+                    if not scheme.get("date_published"):
+                        ui.button(
+                            "Publish", icon="publish",
+                            on_click=lambda: publish_workspace_scheme(scheme),
+                        ).props("flat dense no-caps color=primary")
+                    ui.button(
+                        "Reactivate" if scheme.get("date_deactivated") else "Deactivate",
+                        icon="toggle_on" if scheme.get("date_deactivated") else "toggle_off",
+                        color="positive" if scheme.get("date_deactivated") else "negative",
+                        on_click=lambda: change_workspace_scheme_lifecycle(scheme),
+                    ).props("flat dense no-caps")
+                    ui.button("Add root", icon="add", on_click=lambda: create_classification()).props("unelevated dense no-caps")
+
+                with ui.row().classes("w-full items-end gap-2"):
+                    classification_search = ui.input(
+                        "Search this scheme", value=workspace["query"],
+                        leading_icon="search",
+                    ).props("outlined dense clearable").classes("grow")
+                    ui.button("Search", icon="search", on_click=lambda: search_within_scheme(classification_search)).props("unelevated dense no-caps")
+                    if workspace["query"]:
+                        ui.button("Clear", on_click=lambda: clear_classification_search()).props("flat dense no-caps")
+                    classification_search.on("keydown.enter", lambda: search_within_scheme(classification_search))
+
+                if workspace["query"]:
+                    with ui.card().classes("w-full shadow-none border border-blue-100 bg-blue-50 p-3 gap-2"):
+                        ui.label(f"{len(workspace['search_results'])} matching classifications").classes("font-semibold")
+                        if not workspace["search_results"]:
+                            ui.label("No classifications match this search.").classes("text-sm text-slate-500")
+                        for result in workspace["search_results"]:
+                            with ui.row().classes("w-full items-center gap-2 cursor-pointer rounded p-2 hover:bg-white").on(
+                                "click", lambda _, item=result: focus_classification(item)
+                            ):
+                                ui.icon("label" if result["is_terminal"] else "account_tree", color="primary")
+                                with ui.column().classes("grow gap-0"):
+                                    ui.label(result["title"]).classes("font-semibold")
+                                    ui.label(" — ".join(filter(None, (result["code"], result.get("description"))))).classes("text-xs text-slate-500")
+
+                selected = workspace["selected"]
+                with ui.grid(columns=2).classes("w-full gap-4 items-start"):
+                    with ui.card().classes("w-full shadow-none border border-slate-200 p-3 gap-1"):
+                        with ui.row().classes("w-full items-center"):
+                            ui.label("Classification tree").classes("font-semibold")
+                            ui.space()
+                            ui.button(icon="refresh", on_click=lambda: refresh_tree()).props("flat round dense").tooltip("Refresh tree")
+                        roots = workspace["children"].get(None, [])
+                        if roots:
+                            render_tree_level(None)
+                        else:
+                            ui.label("This scheme has no classifications yet.").classes("text-sm text-slate-400 py-8 self-center")
+                    with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-3"):
+                        if selected is None:
+                            ui.label("Select a classification").classes("font-semibold")
+                            ui.label("Its metadata and effective retention rule will appear here.").classes("text-sm text-slate-500")
+                        else:
+                            with ui.row().classes("w-full items-start gap-3"):
+                                ui.avatar(icon="label" if selected["is_terminal"] else "account_tree", color="blue-1", text_color="primary")
+                                with ui.column().classes("grow gap-0"):
+                                    ui.label(selected["title"]).classes("text-lg font-semibold")
+                                    ui.label(selected["code"]).classes("text-sm text-primary")
+                                ui.badge("Terminal" if selected["is_terminal"] else "Branch", color="primary").props("outline")
+                            if selected.get("description"):
+                                ui.label(selected["description"]).classes("text-sm text-slate-600")
+                            path = await api.classification_path(selected["id"])
+                            ui.label(" › ".join(item["code"] for item in path)).classes("text-xs text-slate-400")
+                            try:
+                                effective_rule = await api.classification_effective_rule(selected["id"])
+                            except ApiError as error:
+                                if error.status_code != 404:
+                                    raise
+                                effective_rule = None
+                            ui.separator()
+                            ui.label("Effective retention rule").classes("font-semibold")
+                            if effective_rule:
+                                inherited = effective_rule["defined_by_classification_id"] != selected["id"]
+                                ui.badge("Inherited" if inherited else "Direct", color="indigo").props("outline")
+                                ui.label(
+                                    f"Current {effective_rule['current_period_years']} years · Intermediate {effective_rule['intermediate_period_years']} years"
+                                ).classes("text-sm")
+                                ui.label(effective_rule["final_disposition"].replace("_", " ").title()).classes("text-sm font-medium")
+                                if effective_rule.get("instructions"):
+                                    ui.label(effective_rule["instructions"]).classes("text-sm text-slate-500")
+                            else:
+                                ui.label("No direct or inherited rule").classes("text-sm text-slate-400")
+                            with ui.row().classes("w-full justify-end gap-2"):
+                                ui.button(
+                                    "Event history", icon="history",
+                                    on_click=lambda: show_entity_history("classifications", selected),
+                                ).props("flat dense no-caps")
+                                ui.button("Edit", icon="edit", on_click=edit_selected).props("flat dense no-caps")
+                                if not selected["is_terminal"]:
+                                    ui.button("Add child", icon="add", on_click=lambda: create_classification(selected)).props("unelevated dense no-caps")
+                                else:
+                                    ui.button("Add child", icon="add").props("flat dense no-caps disable").tooltip("Terminal classifications cannot contain children")
+
+        async def clear_classification_search() -> None:
+            workspace["query"], workspace["search_results"] = "", []
+            await render_workspace_right()
+
+        async def publish_workspace_scheme(scheme: dict[str, Any]) -> None:
+            try:
+                await api.request(
+                    "POST", f"/api/v1/classification-schemes/{scheme['id']}/publish",
+                    headers={"If-Match": str(scheme["version"])},
+                )
+                ui.notify("Classification scheme published", color="positive")
+                await reload_workspace(scheme["id"])
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        async def change_workspace_scheme_lifecycle(scheme: dict[str, Any]) -> None:
+            action = "reactivate" if scheme.get("date_deactivated") else "deactivate"
+            try:
+                await api.request(
+                    "POST", f"/api/v1/classification-schemes/{scheme['id']}/{action}",
+                    headers={
+                        "If-Match": str(scheme["version"]),
+                        "X-Change-Reason": f"{action.title()} from classification administration",
+                    },
+                )
+                ui.notify(f"Classification scheme {action}d", color="positive")
+                await reload_workspace(scheme["id"])
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        async def refresh_tree() -> None:
+            scheme = workspace["scheme"]
+            selected = workspace["selected"]
+            if scheme is None:
+                return
+            workspace["children"] = {}
+            await load_children(None)
+            if selected:
+                await focus_classification(selected)
+            else:
+                await render_workspace_right()
+
+        async def select_scheme(scheme: dict[str, Any]) -> None:
+            workspace.update(
+                scheme=scheme, selected=None, children={}, expanded=set(),
+                query="", search_results=[],
+            )
+            await load_children(None)
+            render_scheme_list()
+            await render_workspace_right()
+
+        async def reload_workspace(
+            scheme_id: int | None = None, classification_id: int | None = None,
+        ) -> None:
+            try:
+                schemes = await api.list("classification-schemes")
+                workspace["schemes"] = schemes
+                await asyncio.gather(load_scheme_counts(schemes), load_personal_recent())
+                render_scheme_list()
+                target_scheme = next((item for item in schemes if item["id"] == scheme_id), None)
+                if target_scheme:
+                    await select_scheme(target_scheme)
+                else:
+                    workspace.update(scheme=None, selected=None, children={}, expanded=set())
+                    await render_workspace_right()
+                if classification_id is not None:
+                    try:
+                        item = await api.get("classifications", classification_id)
+                        await focus_classification(item)
+                    except ApiError as error:
+                        if error.status_code != 404:
+                            raise
+                set_connection_status(True)
+            except ApiError as error:
+                set_connection_status(error.status_code != 503)
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        async def create_scheme() -> None:
+            async def saved(scheme: dict[str, Any]) -> None:
+                await reload_workspace(scheme["id"])
+            await open_editor(on_saved=saved, resource_key="classification-schemes")
+
+        scheme_filter.on_value_change(lambda: render_scheme_list())
+        add_scheme_button.on("click", create_scheme)
+        await reload_workspace(initial_scheme_id, initial_classification_id)
+
     for key, button in navigation.items():
-        button.on("click", lambda _, entity_key=key: select_entity(entity_key))
+        if key == "classification-schemes":
+            button.on("click", select_classification_workspace)
+        else:
+            button.on("click", lambda _, entity_key=key: select_entity(entity_key))
     dashboard_navigation.on("click", select_dashboard)
     audit_navigation.on("click", select_audit_trail)
     sessions_navigation.on("click", select_login_sessions)

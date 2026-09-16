@@ -518,9 +518,26 @@ not require wording changes.
 
 ## 14. NiceGUI administration UI
 
-Add **Classification Schemes** under **Records Management** using the
-classification-scheme icon previously reserved when aggregation icons were
-changed to folders.
+Add one **Classification Schemes** workspace under **Records Management** using
+the classification-scheme icon previously reserved when aggregation icons were
+changed to folders. Classifications do not have a second top-level navigation
+entry: they are administered in the context of their scheme.
+
+The workspace uses a master-detail layout:
+
+- A left panel lists and filters schemes and provides scheme creation.
+- Selecting a scheme loads its classification hierarchy in the right panel.
+- Root classifications load with scheme selection; direct children load only
+  when a branch is expanded.
+- **Add root** fixes the selected scheme as context.
+- **Add child** fixes both the selected scheme and selected branch as context;
+  terminals cannot expose this action.
+- Selecting a classification presents its path, metadata, effective retention
+  rule, provenance, and contextual actions.
+- Search results can focus their scheme and expand their ancestor path.
+- Current-user recently created and recently updated classifications are shown
+  using event-history attribution and the Dashboard recent-limit/time-window
+  settings.
 
 Scheme administration provides:
 
@@ -535,6 +552,7 @@ Scheme administration provides:
 - Effective-rule and inheritance presentation.
 - Warnings for incomplete branches and terminal validation failures.
 - Search/filter view.
+- Current-user recently created and updated classification lists.
 - Event-history actions.
 
 ## 15. Aggregation selector UI
