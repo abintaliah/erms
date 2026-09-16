@@ -536,8 +536,9 @@ The workspace uses two coordinated master-detail rows:
   when a branch is expanded.
 - The Classification tree header's add action sits beside Refresh and creates a
   root classification with the selected scheme fixed as context.
-- **Add child** fixes both the selected scheme and selected branch as context;
-  terminals cannot expose this action.
+- The adjacent child-classification action is enabled only while a branch is
+  selected. It fixes both the selected scheme and branch as context and remains
+  disabled when nothing or a terminal classification is selected.
 - Selecting a classification presents its path, metadata, effective retention
   rule, provenance, and contextual actions.
 - Complete scheme and classification metadata is presented read-only without

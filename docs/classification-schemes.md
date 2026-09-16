@@ -78,10 +78,11 @@ rule, including whether that rule is direct or inherited.
 
 Creation is contextual. The add icon in the Classification tree header creates
 a root classification in the selected scheme and sits beside the tree-refresh
-action, while **Add child** creates beneath the selected branch with both the
-scheme and parent locked by context. A terminal cannot expose an add-child
-action. Scheme lifecycle actions, scheme and classification editing, tree
-refresh, and classification search all remain in the same workspace.
+action. The adjacent child-classification icon creates beneath the selected
+branch with both the scheme and parent locked by context. It is disabled until
+a branch is selected and remains disabled for terminal classifications. Scheme
+lifecycle actions, scheme and classification editing, tree refresh, and
+classification search all remain in the same workspace.
 
 Viewing metadata does not require entering an edit workflow. Selecting a scheme
 shows its authority, scope note, edition, publication and lifecycle dates, and

@@ -3411,6 +3411,24 @@ def index() -> None:
                             ).props("flat round dense color=primary").tooltip(
                                 "Add root classification"
                             )
+                            child_button = ui.button(
+                                icon="subdirectory_arrow_right",
+                                on_click=lambda: create_classification(selected)
+                                if selected is not None and not selected["is_terminal"]
+                                else None,
+                            ).props("flat round dense color=primary")
+                            if selected is None:
+                                child_button.props("disable").tooltip(
+                                    "Select a branch classification before adding a child"
+                                )
+                            elif selected["is_terminal"]:
+                                child_button.props("disable").tooltip(
+                                    "Terminal classifications cannot contain children"
+                                )
+                            else:
+                                child_button.tooltip(
+                                    f"Add child classification beneath {selected['title']}"
+                                )
                             ui.button(icon="refresh", on_click=lambda: refresh_tree()).props("flat round dense").tooltip("Refresh tree")
                         roots = workspace["children"].get(None, [])
                         if roots:
@@ -3496,10 +3514,6 @@ def index() -> None:
                                     on_click=lambda: show_entity_history("classifications", selected),
                                 ).props("flat dense no-caps")
                                 ui.button("Edit", icon="edit", on_click=edit_selected).props("flat dense no-caps")
-                                if not selected["is_terminal"]:
-                                    ui.button("Add child", icon="add", on_click=lambda: create_classification(selected)).props("unelevated dense no-caps")
-                                else:
-                                    ui.button("Add child", icon="add").props("flat dense no-caps disable").tooltip("Terminal classifications cannot contain children")
 
         async def clear_classification_search() -> None:
             workspace["query"], workspace["search_results"] = "", []
