@@ -76,11 +76,12 @@ distinct `schema` icon, and terminal classifications use the `label` icon.
 Selecting a node shows its complete path, metadata, and effective retention
 rule, including whether that rule is direct or inherited.
 
-Creation is contextual. **Add root** creates a root classification in the
-selected scheme, while **Add child** creates beneath the selected branch with
-both the scheme and parent locked by context. A terminal cannot expose an
-add-child action. Scheme lifecycle actions, scheme and classification editing,
-tree refresh, and classification search all remain in the same workspace.
+Creation is contextual. The add icon in the Classification tree header creates
+a root classification in the selected scheme and sits beside the tree-refresh
+action, while **Add child** creates beneath the selected branch with both the
+scheme and parent locked by context. A terminal cannot expose an add-child
+action. Scheme lifecycle actions, scheme and classification editing, tree
+refresh, and classification search all remain in the same workspace.
 
 Viewing metadata does not require entering an edit workflow. Selecting a scheme
 shows its authority, scope note, edition, publication and lifecycle dates, and

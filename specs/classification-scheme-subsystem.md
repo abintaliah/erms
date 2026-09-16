@@ -534,7 +534,8 @@ The workspace uses two coordinated master-detail rows:
   side-by-side classification tree and classification-information panes.
 - Root classifications load with scheme selection; direct children load only
   when a branch is expanded.
-- **Add root** fixes the selected scheme as context.
+- The Classification tree header's add action sits beside Refresh and creates a
+  root classification with the selected scheme fixed as context.
 - **Add child** fixes both the selected scheme and selected branch as context;
   terminals cannot expose this action.
 - Selecting a classification presents its path, metadata, effective retention

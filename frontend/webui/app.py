@@ -3355,10 +3355,6 @@ def index() -> None:
                             color="positive" if scheme.get("date_deactivated") else "negative",
                             on_click=lambda: change_workspace_scheme_lifecycle(scheme),
                         ).props("flat dense no-caps")
-                        ui.button(
-                            "Add root", icon="add", on_click=lambda: create_classification()
-                        ).props("unelevated dense no-caps")
-
                     ui.label("Scheme information").classes("font-semibold")
                     with ui.grid(columns=3).classes("w-full gap-4"):
                         metadata_value("Code", scheme.get("code"))
@@ -3410,6 +3406,11 @@ def index() -> None:
                         with ui.row().classes("w-full items-center"):
                             ui.label("Classification tree").classes("font-semibold")
                             ui.space()
+                            ui.button(
+                                icon="add", on_click=lambda: create_classification()
+                            ).props("flat round dense color=primary").tooltip(
+                                "Add root classification"
+                            )
                             ui.button(icon="refresh", on_click=lambda: refresh_tree()).props("flat round dense").tooltip("Refresh tree")
                         roots = workspace["children"].get(None, [])
                         if roots:
