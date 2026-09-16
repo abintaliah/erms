@@ -86,3 +86,18 @@ def test_system_administrator_can_list_and_revoke_sessions(client: TestClient):
     response = client.delete(f"/api/v1/auth/sessions/{current['id']}")
     assert response.status_code == 204
     assert client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_deactivating_user_revokes_sessions_and_prevents_authentication(client: TestClient):
+    current = client.get("/api/v1/users/1").json()
+    response = client.post(
+        "/api/v1/users/1/deactivate",
+        headers={"If-Match": str(current["version"])},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "inactive"
+    assert client.get("/api/v1/auth/me").status_code == 401
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        assert connection.execute(
+            "SELECT bool_and(revoked_at IS NOT NULL) FROM login_sessions WHERE user_id=1"
+        ).fetchone()[0] is True

@@ -67,6 +67,7 @@ def _roles(connection: Connection, user_id: int) -> list[dict[str, Any]]:
         JOIN roles r ON r.id = ura.role_id AND r.status = 'active'
         JOIN org_units ou ON ou.id = r.org_unit_id
         WHERE ura.user_id = %s
+          AND org_unit_effectively_active(ou.id)
           AND ura.valid_from <= CURRENT_TIMESTAMP
           AND (ura.valid_until IS NULL OR ura.valid_until > CURRENT_TIMESTAMP)
         ORDER BY r.name, r.id

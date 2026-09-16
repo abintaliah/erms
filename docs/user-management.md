@@ -53,7 +53,7 @@ an email address or login name into the person's permanent identity.
 | `description` | Optional description |
 | `status` | `active` or `inactive` |
 | `date_created` | Automatically assigned creation timestamp |
-| `date_closed` | Optional closure timestamp |
+| `date_deactivated` | Timestamp at which the organizational unit was deactivated |
 
 The parent relationship supports an organizational hierarchy. PostgreSQL
 rejects direct self-parenting and longer cycles.
@@ -110,11 +110,84 @@ deactivation:
 
 - Users become `inactive` and receive `date_deactivated`.
 - Roles become `inactive` and receive `date_deactivated`.
-- Organizational units become `inactive` and receive `date_closed`.
+- Organizational units become `inactive` and receive `date_deactivated`.
 
 Rows remain available for historical references. Deleting a role assignment
 removes the assignment itself, while its immutable before-state remains in
 event history.
+
+The REST `DELETE` operations are retained as compatibility aliases for
+deactivation. New clients use the explicit `POST .../{id}/deactivate` and
+`POST .../{id}/activate` lifecycle operations.
+
+### Users
+
+- An inactive user cannot authenticate and any existing login sessions are
+  revoked in the same transaction as deactivation.
+- The user's role assignments remain stored for history, but cannot contribute
+  authorization while the user is inactive.
+- Reactivation clears `date_deactivated`; retained assignments can become
+  effective again when their dates, roles, and organization hierarchy permit.
+- A suspended user is also unable to authenticate, but suspension is distinct
+  from deactivation and does not set `date_deactivated`.
+
+### Roles
+
+- Deactivation does not deactivate assigned users and does not delete or end
+  their assignments.
+- An inactive role contributes no privileges or ACL permissions. Authentication
+  principals omit it from their effective roles.
+- Reactivation clears `date_deactivated` and allows otherwise valid retained
+  assignments to become effective again.
+
+### Organizational units and inherited effectiveness
+
+- Deactivating an organizational unit does not rewrite its roles, users,
+  assignments, child units, or descendant roles.
+- It does **not** deactivate any user account and does **not** revoke or otherwise
+  end any user's active login sessions. Session revocation occurs only when the
+  user is deactivated or a session is explicitly revoked.
+- A role is **effectively active** only when the role itself is active and its
+  owning organizational unit and every ancestor unit are active.
+- Consequently, deactivating a unit makes roles in that unit and every
+  descendant unit ineffective. Users remain active and roles assigned through
+  other active branches remain available.
+- Reactivating the unit clears `date_deactivated` and restores descendant role
+  effectiveness except where a role or another unit in its ancestry is
+  independently inactive.
+- Supervisory and historical relationships remain visible even while a role is
+  ineffective.
+
+### Assignment safeguards
+
+New or reassigned role assignments require an active user and an effectively
+active role. Existing assignments are retained across lifecycle transitions.
+The database enforces these requirements so alternate clients cannot bypass
+the UI.
+
+Lifecycle timestamps are database-normalized and constrained: inactive users
+and roles have `date_deactivated`, as do inactive organizational units. Active
+or suspended entities have no deactivation timestamp. Future lifecycle
+timestamps are rejected.
+
+### Administrative UI behavior
+
+The organization-unit, role, and user lists expose explicit Activate and
+Deactivate actions with a confirmation that explains the consequences. Their
+status column and status filter use **effective status**: a role whose own row
+is active is nevertheless shown as inactive when its organizational unit or an
+ancestor unit is inactive. A tooltip identifies whether the cause is direct or
+inherited.
+
+Assignment dialogs keep existing assignments visible for historical clarity,
+but do not offer inactive users or effectively inactive roles as new assignment
+targets. Each retained assignment displays the current effective status of its
+role or user. An inactive role is marked as such even if the assignment itself
+is still retained, and its tooltip distinguishes a directly inactive role from
+one made ineffective by an inactive organizational unit or ancestor. The
+assignment controls are disabled when the selected subject is not effective.
+If the signed-in administrator deactivates their own user, the UI is immediately
+cleared and returns to the login screen after the server revokes the session.
 
 ## Event history
 
@@ -131,6 +204,12 @@ Their creation, update, deactivation, assignment changes, and assignment
 deletion use the same transactional immutable event history as records
 management entities.
 
+Migration 011 normalized legacy organizational-unit audit payloads from
+`date_closed` to `date_deactivated`. This was a one-time schema terminology
+correction: it changed no event identity, timestamp, actor, operation, or field
+value. The event-history mutation guard is removed only inside that migration's
+transaction and is restored before it commits.
+
 ## REST API
 
 Each primary resource supports create, list, retrieve, partial update, soft
@@ -141,6 +220,9 @@ deactivation, advanced search, and history:
 /api/v1/org-units
 /api/v1/roles
 ```
+
+Explicit lifecycle operations append `/activate` or `/deactivate` to an entity
+URL and require the current version through `If-Match`.
 
 Role assignments support ordinary CRUD, search, and history:
 

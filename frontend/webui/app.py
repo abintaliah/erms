@@ -108,6 +108,20 @@ def effective_closure(
     return None
 
 
+def inactive_org_unit_source(
+    org_unit: dict[str, Any] | None,
+    org_units_by_id: dict[int, dict[str, Any]],
+) -> dict[str, Any] | None:
+    current = org_unit
+    seen: set[int] = set()
+    while current and current.get("id") not in seen:
+        seen.add(current["id"])
+        if current.get("status") == "inactive":
+            return current
+        current = org_units_by_id.get(current.get("parent_org_unit_id"))
+    return None
+
+
 def buffer_upload_batch(event: events.MultiUploadEventArguments) -> list[tuple[bytes, str, str]]:
     """Copy NiceGUI temporary uploads before any awaited API operation can release them."""
     return [
@@ -381,11 +395,13 @@ def index() -> None:
     # A client per page prevents one browser's token leaking into another and
     # keeps it available when dashboard calls run in child asyncio tasks.
     api = ErmsApiClient(api_url())
-    context.client.on_disconnect(api.close)
+    page_client = context.client
+    page_client.on_disconnect(api.close)
     auth_state: dict[str, Any] = {"principal": None}
     state: dict[str, Any] = {
         "resource": "dashboard", "rows": [], "searched": False,
         "recent_created": [], "recent_updated": [], "aggregation_detail": None,
+        "lifecycle_filter": "all",
     }
 
     ui.add_css("""
@@ -1097,9 +1113,46 @@ def index() -> None:
                 for item in rows
             ]
         if spec.key == "org-units":
-            return decorate_relationship_rows(spec.key, rows)
+            all_units = await api.list("org-units")
+            by_id = {item["id"]: item for item in all_units}
+            decorated = decorate_relationship_rows(spec.key, rows, all_units)
+            result = []
+            for item in decorated:
+                source = inactive_org_unit_source(by_id.get(item["id"], item), by_id)
+                result.append({
+                    **item,
+                    "effective_status": "inactive" if source else "active",
+                    "_inactive_reason": (
+                        "Directly inactive" if source and source["id"] == item["id"]
+                        else f"Inherited from {source['code']} — {source['name']}" if source
+                        else "Active"
+                    ),
+                })
+            return result
         if spec.key == "roles":
-            return decorate_relationship_rows(spec.key, rows, await api.list("org-units"))
+            units = await api.list("org-units")
+            by_id = {item["id"]: item for item in units}
+            decorated = decorate_relationship_rows(spec.key, rows, units)
+            result = []
+            for item in decorated:
+                source = inactive_org_unit_source(by_id.get(item.get("org_unit_id")), by_id)
+                effective = item.get("status") == "active" and source is None
+                result.append({
+                    **item,
+                    "effective_status": "active" if effective else "inactive",
+                    "_inactive_reason": (
+                        "Role is directly inactive" if item.get("status") == "inactive"
+                        else f"Organization inactive: {source['code']} — {source['name']}" if source
+                        else "Active"
+                    ),
+                })
+            return result
+        if spec.key == "users":
+            return [{
+                **item,
+                "effective_status": item.get("status"),
+                "_inactive_reason": item.get("status", "active").title(),
+            } for item in rows]
         if spec.key == "records":
             aggregations = await api.list("aggregations")
             by_id = {item["id"]: item for item in aggregations}
@@ -1382,6 +1435,9 @@ def index() -> None:
         entity_kind = "user" if for_user else "role"
         counterpart_resource = "roles" if for_user else "users"
         counterpart_label = "role" if for_user else "user"
+        assignment_allowed = (
+            entity.get("effective_status", entity.get("status", "active")) == "active"
+        )
         assignments_area: Any = None
         selection_holder: dict[str, Any] = {}
 
@@ -1391,8 +1447,24 @@ def index() -> None:
                     await api.user_roles(entity["id"])
                     if for_user else await api.role_users(entity["id"])
                 )
-                counterparts = await api.list(counterpart_resource)
-                counterpart_by_id = {item["id"]: item for item in counterparts}
+                all_counterparts = await api.list(counterpart_resource)
+                counterparts = all_counterparts
+                units_by_id: dict[int, dict[str, Any]] = {}
+                if for_user:
+                    units = await api.list("org-units")
+                    units_by_id = {item["id"]: item for item in units}
+                    counterparts = [
+                        item for item in counterparts
+                        if item.get("status") == "active"
+                        and inactive_org_unit_source(
+                            units_by_id.get(item.get("org_unit_id")), units_by_id
+                        ) is None
+                    ]
+                else:
+                    counterparts = [
+                        item for item in counterparts if item.get("status") == "active"
+                    ]
+                counterpart_by_id = {item["id"]: item for item in all_counterparts}
                 assigned_ids = {
                     item["role_id" if for_user else "user_id"] for item in assignments
                 }
@@ -1412,16 +1484,46 @@ def index() -> None:
                         for assignment in assignments:
                             counterpart_id = assignment["role_id" if for_user else "user_id"]
                             counterpart = counterpart_by_id.get(counterpart_id, {})
+                            inactive_reason = ""
+                            effective_status = counterpart.get("status", "inactive")
+                            if for_user:
+                                if counterpart.get("status") != "active":
+                                    effective_status = "inactive"
+                                    inactive_reason = "This role is directly inactive."
+                                else:
+                                    inactive_unit = inactive_org_unit_source(
+                                        units_by_id.get(counterpart.get("org_unit_id")),
+                                        units_by_id,
+                                    )
+                                    if inactive_unit:
+                                        effective_status = "inactive"
+                                        inactive_reason = (
+                                            "Ineffective because organizational unit "
+                                            f"{inactive_unit.get('code', '')} — "
+                                            f"{inactive_unit.get('name', inactive_unit['id'])} is inactive."
+                                        )
+                                    else:
+                                        effective_status = "active"
+                                        inactive_reason = "This role is effective."
+                            elif effective_status == "active":
+                                inactive_reason = "This user is active."
+                            elif effective_status == "suspended":
+                                inactive_reason = "This user is suspended."
+                            else:
+                                inactive_reason = "This user is inactive."
                             rows.append({
                                 **assignment,
                                 "counterpart": (
                                     f"{counterpart.get('code', '')} — {counterpart.get('name', counterpart_id)}"
                                     if for_user else counterpart.get("name", counterpart_id)
                                 ),
+                                "counterpart_status": effective_status,
+                                "counterpart_status_reason": inactive_reason,
                             })
                         membership_table = ui.table(
                             columns=[
                                 {"name": "counterpart", "label": counterpart_label.capitalize(), "field": "counterpart", "align": "left"},
+                                {"name": "counterpart_status", "label": "Status", "field": "counterpart_status", "align": "left"},
                                 {"name": "valid_from", "label": "Valid from", "field": "valid_from", "align": "left"},
                                 {"name": "valid_until", "label": "Valid until", "field": "valid_until", "align": "left"},
                                 {"name": "actions", "label": "", "field": "actions", "align": "right"},
@@ -1430,6 +1532,17 @@ def index() -> None:
                             row_key="id",
                         ).props("flat bordered dense").classes("w-full")
                         add_timestamp_slots(membership_table, ["valid_from", "valid_until"])
+                        membership_table.add_slot(
+                            "body-cell-counterpart_status",
+                            '''
+                            <q-td :props="props">
+                              <q-badge
+                                :color="props.value === 'active' ? 'positive' : (props.value === 'suspended' ? 'warning' : 'grey-7')"
+                                :label="props.value === 'active' ? 'Active' : (props.value === 'suspended' ? 'Suspended' : 'Inactive')"
+                              ><q-tooltip>{{ props.row.counterpart_status_reason }}</q-tooltip></q-badge>
+                            </q-td>
+                            ''',
+                        )
                         membership_table.add_slot(
                             "body-cell-actions",
                             '<q-td :props="props"><q-btn flat round dense icon="person_remove" color="negative" @click="$parent.$emit(\'remove\', props.row)"><q-tooltip>Remove assignment</q-tooltip></q-btn></q-td>',
@@ -1467,12 +1580,21 @@ def index() -> None:
         with dialog, ui.card().classes("w-[820px] max-w-full"):
             heading = entity.get("name") or entity.get("code") or entity["id"]
             ui.label(f"{counterpart_label.capitalize()} assignments — {heading}").classes("text-xl font-semibold")
+            if not assignment_allowed:
+                with ui.row().classes("w-full items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg"):
+                    ui.icon("block", color="amber-8")
+                    ui.label(
+                        "New assignments are unavailable while this user or role is ineffective. Existing assignments remain visible."
+                    ).classes("text-sm text-amber-900")
             assignments_area = ui.column().classes("w-full")
             with ui.row().classes("w-full items-end gap-2"):
                 selection_holder["control"] = relationship_select(
                     f"Select {counterpart_label}", {}
                 ).classes("grow")
-                ui.button("Assign", on_click=assign, icon="person_add").props("unelevated")
+                assign_button = ui.button("Assign", on_click=assign, icon="person_add").props("unelevated")
+                if not assignment_allowed:
+                    selection_holder["control"].disable()
+                    assign_button.disable()
             with ui.row().classes("w-full justify-end"):
                 ui.button("Close", on_click=dialog.close).props("flat")
         dialog.open()
@@ -1725,12 +1847,45 @@ def index() -> None:
             if spec.search_first and not state["searched"]:
                 render_recent_section(spec)
                 return
+            lifecycle_filter = None
+            visible_rows = state["rows"]
+            if spec.key in {"org-units", "roles", "users"}:
+                status_options = {
+                    "all": "All statuses",
+                    "active": "Active",
+                    "inactive": "Inactive",
+                }
+                if spec.key == "users":
+                    status_options["suspended"] = "Suspended"
+                with ui.row().classes("w-full items-center justify-end mb-2"):
+                    lifecycle_filter = ui.select(
+                        status_options,
+                        value=state.get("lifecycle_filter", "all"),
+                        label="Status",
+                    ).props("outlined dense options-dense").classes("w-48")
+                selected_status = lifecycle_filter.value
+                if selected_status != "all":
+                    visible_rows = [
+                        row for row in state["rows"]
+                        if row.get("effective_status", row.get("status")) == selected_status
+                    ]
             columns = [
                 {"name": key, "label": label, "field": key, "align": "left"}
                 for key, label in spec.columns
             ]
             columns.append({"name": "actions", "label": "", "field": "actions", "align": "right"})
-            table = ui.table(columns=columns, rows=state["rows"], row_key="id", pagination=25).props("flat bordered separator=horizontal").classes("w-full")
+            table = ui.table(columns=columns, rows=visible_rows, row_key="id", pagination=25).props("flat bordered separator=horizontal").classes("w-full")
+            if lifecycle_filter is not None:
+                def apply_lifecycle_filter() -> None:
+                    state["lifecycle_filter"] = lifecycle_filter.value
+                    selected = lifecycle_filter.value
+                    table.rows = state["rows"] if selected == "all" else [
+                        row for row in state["rows"]
+                        if row.get("effective_status", row.get("status")) == selected
+                    ]
+                    table.update()
+
+                lifecycle_filter.on_value_change(apply_lifecycle_filter)
             add_timestamp_slots(
                 table, [key for key, _ in spec.columns if key.startswith("date_")]
             )
@@ -1749,6 +1904,15 @@ def index() -> None:
                       <span v-else class="text-grey-5">—</span>
                     </q-td>
                 """)
+            if any(key == "effective_status" for key, _ in spec.columns):
+                table.add_slot("body-cell-effective_status", '''
+                    <q-td :props="props">
+                      <q-badge
+                        :color="props.value === 'active' ? 'positive' : (props.value === 'suspended' ? 'warning' : 'grey-7')"
+                        :label="props.value"
+                      ><q-tooltip>{{ props.row._inactive_reason }}</q-tooltip></q-badge>
+                    </q-td>
+                ''')
             if spec.key in {"records", "aggregations"}:
                 closed_label = f"Closed {spec.singular} metadata cannot be changed"
                 buttons = f'<q-btn flat round dense icon="edit" color="primary" :disable="props.row._effectively_closed" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>{{{{ props.row._effectively_closed ? \'{closed_label}\' : \'Edit\' }}}}</q-tooltip></q-btn>'
@@ -1764,6 +1928,8 @@ def index() -> None:
                 buttons += '<q-btn flat round dense icon="group" color="secondary" @click="$parent.$emit(\'memberships\', props.row)"><q-tooltip>Role assignments</q-tooltip></q-btn>'
             if spec.key == "users":
                 buttons += '<q-btn flat round dense icon="password" color="orange" @click="$parent.$emit(\'temporary_password\', props.row)"><q-tooltip>Issue temporary password</q-tooltip></q-btn>'
+            if spec.key in {"org-units", "roles", "users"}:
+                buttons += '<q-btn flat round dense :icon="props.row.status === \'inactive\' ? \'toggle_on\' : \'toggle_off\'" :color="props.row.status === \'inactive\' ? \'positive\' : \'negative\'" @click="$parent.$emit(\'lifecycle\', props.row)"><q-tooltip>{{ props.row.status === \'inactive\' ? \'Activate\' : \'Deactivate\' }}</q-tooltip></q-btn>'
             table.add_slot("body-cell-actions", f'<q-td :props="props">{buttons}</q-td>')
             table.on("edit", lambda event: open_editor(event.args))
             table.on("history", lambda event, resource=spec.key: show_entity_history(resource, event.args))
@@ -1810,6 +1976,68 @@ def index() -> None:
                             ui.button("I have copied it", on_click=dialog.close).props("unelevated no-caps")
                     dialog.open()
                 table.on("temporary_password", issue_password)
+            if spec.key in {"org-units", "roles", "users"}:
+                async def confirm_lifecycle(event) -> None:
+                    row = event.args
+                    activating = row.get("status") == "inactive"
+                    action = "Activate" if activating else "Deactivate"
+                    dialog = ui.dialog()
+                    with dialog, ui.card().classes("w-[520px] max-w-full"):
+                        ui.label(f"{action} {spec.singular}?").classes("text-xl font-semibold")
+                        ui.label(row.get("name") or row.get("code") or f"#{row['id']}").classes("font-medium")
+                        if spec.key == "org-units":
+                            message = (
+                                "Its roles and descendant-unit roles become effective again unless independently inactive."
+                                if activating else
+                                "Roles in this unit and every descendant unit will become ineffective; users and assignments remain unchanged."
+                            )
+                        elif spec.key == "roles":
+                            message = (
+                                "Existing assignments can contribute authorization again when otherwise valid."
+                                if activating else
+                                "Existing users and assignments remain unchanged, but this role contributes no authorization."
+                            )
+                        else:
+                            message = (
+                                "The user can authenticate again; existing role assignments are retained."
+                                if activating else
+                                "All active login sessions will be revoked. Role assignments are retained but ineffective."
+                            )
+                        ui.label(message).classes("text-sm text-slate-600")
+
+                        async def proceed() -> None:
+                            try:
+                                saved = await api.set_active(
+                                    spec.key, row["id"], row["version"], active=activating,
+                                )
+                                dialog.close()
+                                if (
+                                    spec.key == "users" and not activating
+                                    and row["id"] == auth_state["principal"]["user"]["id"]
+                                ):
+                                    app.storage.user.pop("session_token", None)
+                                    api.set_session_token(None)
+                                    auth_state["principal"] = None
+                                    clear_authenticated_view()
+                                    login_dialog.open()
+                                    return
+                                state["rows"] = [
+                                    saved if item["id"] == saved["id"] else item
+                                    for item in state["rows"]
+                                ]
+                                state["rows"] = await decorate_for_spec(spec, state["rows"])
+                                render_table(spec)
+                                ui.notify(f"{spec.singular.capitalize()} {action.lower()}d", color="positive")
+                            except ApiError as error:
+                                ui.notify(error_message(error), color="negative", close_button=True)
+
+                        with ui.row().classes("w-full justify-end gap-2"):
+                            ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                            ui.button(action, on_click=proceed, icon="toggle_on" if activating else "toggle_off").props(
+                                f"unelevated no-caps color={'positive' if activating else 'negative'}"
+                            )
+                    dialog.open()
+                table.on("lifecycle", confirm_lifecycle)
 
     def populate_user_menu(principal: dict[str, Any]) -> None:
         auth_state["principal"] = principal
@@ -2077,15 +2305,17 @@ def index() -> None:
 
             try:
                 count_resources = ["aggregations", "records", "org-units", "roles", "users", "event-history"]
-                results = await asyncio.gather(
+                count_results = await asyncio.gather(
                     *(api.count(resource) for resource in count_resources),
+                )
+                recent_results = await asyncio.gather(
                     api.recently_created("aggregations"), api.recently_updated("aggregations"),
                     api.recently_created("records"), api.recently_updated("records"),
                 )
-                counts = dict(zip(count_resources, results[:6]))
+                counts = dict(zip(count_resources, count_results))
                 recent = {
-                    "aggregations": (results[6], results[7]),
-                    "records": (results[8], results[9]),
+                    "aggregations": (recent_results[0], recent_results[1]),
+                    "records": (recent_results[2], recent_results[3]),
                 }
                 recent = {
                     resource: (
@@ -2094,7 +2324,11 @@ def index() -> None:
                     )
                     for resource, (created, updated) in recent.items()
                 }
+                sessions = await api.login_sessions()
+                active_session_count = sum(row["status"] == "active" for row in sessions)
             except ApiError as error:
+                if getattr(page_client, "_deleted", False):
+                    return
                 if error.status_code == 401:
                     set_connection_status(True)
                     return
@@ -2104,6 +2338,8 @@ def index() -> None:
                 set_connection_status(False)
                 return
 
+            if getattr(page_client, "_deleted", False):
+                return
             dashboard_content.clear()
             with dashboard_content:
                 with ui.row().classes("w-full items-center"):
@@ -2163,8 +2399,7 @@ def index() -> None:
                 for resource, count in counts.items():
                     navigation_badges[resource].text = str(count)
                     navigation_badges[resource].update()
-                sessions = await api.login_sessions()
-                navigation_badges["login-sessions"].text = str(sum(row["status"] == "active" for row in sessions))
+                navigation_badges["login-sessions"].text = str(active_session_count)
                 navigation_badges["login-sessions"].update()
                 set_connection_status(True)
 
@@ -2300,7 +2535,10 @@ def index() -> None:
 
     async def select_entity(key: str) -> None:
         show_authenticated_view()
-        state.update(resource=key, rows=[], searched=False, aggregation_detail=None)
+        state.update(
+            resource=key, rows=[], searched=False, aggregation_detail=None,
+            lifecycle_filter="all",
+        )
         spec = ENTITIES[key]
         title.text = spec.label
         subtitle.text = "Search required before loading results" if spec.search_first else "Manage current system entries"

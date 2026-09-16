@@ -214,7 +214,7 @@ class OrgUnitUpdate(ApiModel):
     name: NonBlankString | None = None
     description: str | None = None
     status: Literal["active", "inactive"] | None = None
-    date_closed: datetime | None = None
+    date_deactivated: datetime | None = None
 
 
 class OrgUnitRead(ApiModel):
@@ -225,7 +225,7 @@ class OrgUnitRead(ApiModel):
     description: str | None
     status: Literal["active", "inactive"]
     date_created: datetime
-    date_closed: datetime | None
+    date_deactivated: datetime | None
     version: int
 
 
