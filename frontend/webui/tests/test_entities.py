@@ -15,7 +15,11 @@ from frontend.webui.app import (
 )
 from frontend.webui.app import native_preview_kind
 from frontend.webui.entities import ENTITIES
-from frontend.webui.config import dashboard_recent_days, dashboard_recent_item_limit
+from frontend.webui.config import (
+    classification_recent_selection_limit,
+    dashboard_recent_days,
+    dashboard_recent_item_limit,
+)
 
 
 def test_native_preview_kind_uses_safe_browser_renderers():
@@ -32,7 +36,10 @@ class Control:
 
 
 def test_first_class_navigation_excludes_digital_components():
-    assert tuple(ENTITIES) == ("aggregations", "records", "org-units", "users", "roles")
+    assert tuple(ENTITIES) == (
+        "aggregations", "records", "classification-schemes", "classifications",
+        "org-units", "users", "roles",
+    )
     assert ENTITIES["aggregations"].search_first
     assert ENTITIES["records"].search_first
     assert ENTITIES["org-units"].fields[0].lookup_resource == "org-units"
@@ -100,6 +107,11 @@ def test_dashboard_recent_configuration(monkeypatch):
     monkeypatch.setenv("DASHBOARD_RECENT_DAYS", "14")
     assert dashboard_recent_item_limit() == 7
     assert dashboard_recent_days() == 14
+
+
+def test_classification_recent_selection_configuration(monkeypatch):
+    monkeypatch.setenv("CLASSIFICATION_RECENT_SELECTION_LIMIT", "6")
+    assert classification_recent_selection_limit() == 6
 
 
 def test_dashboard_recent_configuration_rejects_non_positive_values(monkeypatch):

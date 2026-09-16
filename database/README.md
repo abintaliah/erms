@@ -89,6 +89,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/018_rename_system_actor_to_automated_process.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/019_add_classification_schemes.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -139,6 +142,14 @@ Migration 018 separately renames audit actor type `system` to the clearer
 `automated_process`, backfills existing events with migration provenance, and
 constrains future event actor types to `user`, `anonymous`, or
 `automated_process`.
+Migration 019 adds classification schemes, unlimited-depth branch and terminal
+classifications, inheritable classification retention rules, root-aggregation
+classification assignments, root-only local retention overrides, effective-rule
+resolution, recent per-user selections, database enforcement, and audit history.
+Existing unclassified root aggregations remain readable; the root-classification
+check is deliberately installed `NOT VALID` so administrators can classify them
+without fabricated defaults. New and changed roots are enforced immediately.
+See [`../docs/classification-schemes.md`](../docs/classification-schemes.md).
 
 ## Tests
 

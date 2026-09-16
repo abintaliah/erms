@@ -78,6 +78,7 @@ Supported operators:
 | `is_null` | Has no value | No `value` property |
 | `is_not_null` | Has a value | No `value` property |
 | `contains_ci` | Contains literal text, ignoring case | One string |
+| `matches_ci` | Matches a case-insensitive controlled wildcard pattern (`*` = any characters, `?` = one character) | One string |
 | `starts_with_ci` | Starts with literal text, ignoring case | One string |
 | `ends_with_ci` | Ends with literal text, ignoring case | One string |
 

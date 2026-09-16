@@ -21,6 +21,7 @@ class FieldType(str, Enum):
     TEXT = "text"
     DATETIME = "datetime"
     UUID = "uuid"
+    BOOLEAN = "boolean"
 
 
 @dataclass(frozen=True)
@@ -36,12 +37,14 @@ NULLABLE_TEXT = SearchField(FieldType.TEXT, nullable=True)
 DATETIME = SearchField(FieldType.DATETIME)
 NULLABLE_DATETIME = SearchField(FieldType.DATETIME, nullable=True)
 NULLABLE_UUID = SearchField(FieldType.UUID, nullable=True)
+BOOLEAN = SearchField(FieldType.BOOLEAN)
 
 SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
     "aggregations": {
         "id": INTEGER,
         "version": INTEGER,
         "parent_aggregation_id": NULLABLE_INTEGER,
+        "classification_id": NULLABLE_INTEGER,
         "aggregation_number": TEXT,
         "title": TEXT,
         "description": NULLABLE_TEXT,
@@ -135,10 +138,24 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "valid_from": DATETIME,
         "valid_until": NULLABLE_DATETIME,
     },
+    "classification_schemes": {
+        "id": INTEGER, "version": INTEGER, "code": TEXT, "title": TEXT,
+        "description": NULLABLE_TEXT, "authority": NULLABLE_TEXT,
+        "scope_note": NULLABLE_TEXT, "edition": NULLABLE_TEXT,
+        "date_created": DATETIME, "date_updated": DATETIME,
+        "date_published": NULLABLE_DATETIME, "date_deactivated": NULLABLE_DATETIME,
+    },
+    "classifications": {
+        "id": INTEGER, "version": INTEGER, "classification_scheme_id": INTEGER,
+        "parent_classification_id": NULLABLE_INTEGER, "code": TEXT, "title": TEXT,
+        "description": NULLABLE_TEXT, "authority": NULLABLE_TEXT,
+        "scope_note": NULLABLE_TEXT, "keywords": NULLABLE_TEXT,
+        "is_terminal": BOOLEAN, "date_created": DATETIME, "date_updated": DATETIME,
+    },
 }
 
 SET_OPERATORS = {"in", "not_in"}
-TEXT_OPERATORS = {"contains_ci", "starts_with_ci", "ends_with_ci"}
+TEXT_OPERATORS = {"contains_ci", "starts_with_ci", "ends_with_ci", "matches_ci"}
 SIMPLE_SQL_OPERATORS = {
     "eq": "=",
     "ne": "<>",
@@ -165,6 +182,8 @@ def _coerce_value(field_name: str, field: SearchField, value: Any) -> Any:
             return value
         if field.type is FieldType.UUID:
             return TypeAdapter(UUID).validate_python(value)
+        if field.type is FieldType.BOOLEAN:
+            return TypeAdapter(bool).validate_python(value)
         parsed = TypeAdapter(datetime).validate_python(value)
         if parsed.tzinfo is None:
             raise ValueError
@@ -175,6 +194,11 @@ def _coerce_value(field_name: str, field: SearchField, value: Any) -> Any:
 
 def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _wildcard_like(value: str) -> str:
+    escaped = _escape_like(value)
+    return escaped.replace("*", "%").replace("?", "_")
 
 
 def _compile_comparison(
@@ -216,12 +240,13 @@ def _compile_comparison(
         return sql.SQL("{} BETWEEN %s AND %s").format(identifier), values
 
     if operator in TEXT_OPERATORS:
-        value = _escape_like(_coerce_value(field_name, field, expression.value))
+        raw_value = _coerce_value(field_name, field, expression.value)
+        value = _wildcard_like(raw_value) if operator == "matches_ci" else _escape_like(raw_value)
         if operator == "contains_ci":
             value = f"%{value}%"
         elif operator == "starts_with_ci":
             value = f"{value}%"
-        else:
+        elif operator == "ends_with_ci":
             value = f"%{value}"
         return sql.SQL("{} ILIKE %s ESCAPE '\\'").format(identifier), [value]
 

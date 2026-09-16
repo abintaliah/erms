@@ -40,6 +40,9 @@ defaults:
   shown in each personal recent-activity category
 - `DASHBOARD_RECENT_DAYS` defaults to `30` and excludes activity older than that
   rolling number of days
+- `CLASSIFICATION_RECENT_SELECTION_LIMIT` defaults to `4` and controls how many
+  of the signed-in user's recently selected classifications are promoted in the
+  aggregation classification selector.
 
 Dashboard recent activity is attributed through the immutable audit event's
 `actor_user_id`. Created and updated cards display the matching event's

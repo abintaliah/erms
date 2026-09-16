@@ -1,5 +1,27 @@
 -- Test-only fixture: turn the freshly bootstrapped database into the state that
 -- existed immediately before migration 001.
+DROP TRIGGER IF EXISTS aggregations_record_classification_selection ON aggregations;
+DROP TRIGGER IF EXISTS aggregations_validate_local_rule_root ON aggregations;
+DROP TRIGGER IF EXISTS aggregations_validate_classification ON aggregations;
+DROP TABLE IF EXISTS user_classification_selections;
+DROP TABLE IF EXISTS aggregation_retention_rules;
+DROP TABLE IF EXISTS classification_retention_rules;
+ALTER TABLE aggregations
+    DROP CONSTRAINT IF EXISTS aggregations_root_classification_consistent,
+    DROP COLUMN IF EXISTS classification_id;
+DROP TABLE IF EXISTS classifications;
+DROP TABLE IF EXISTS classification_schemes;
+DROP FUNCTION IF EXISTS record_classification_selection();
+DROP FUNCTION IF EXISTS aggregation_effective_retention_rule(bigint);
+DROP FUNCTION IF EXISTS validate_root_aggregation_retention_rules();
+DROP FUNCTION IF EXISTS validate_aggregation_classification();
+DROP FUNCTION IF EXISTS validate_terminal_classification_rules();
+DROP FUNCTION IF EXISTS effective_classification_retention_rule(bigint);
+DROP FUNCTION IF EXISTS validate_classification_structure();
+DROP FUNCTION IF EXISTS classification_scheme_is_eligible(bigint);
+DROP FUNCTION IF EXISTS validate_classification_scheme_dates();
+DROP FUNCTION IF EXISTS touch_classification_date_updated();
+DELETE FROM schema_migrations WHERE version = '019_add_classification_schemes';
 DROP TRIGGER IF EXISTS digital_component_blobs_protect_closed_aggregation ON digital_component_blobs;
 DROP TRIGGER IF EXISTS digital_components_protect_closed_aggregation ON digital_components;
 DROP TRIGGER IF EXISTS records_protect_closed_aggregation ON records;

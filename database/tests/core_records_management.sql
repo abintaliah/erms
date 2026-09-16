@@ -2,8 +2,18 @@
 
 BEGIN;
 
-INSERT INTO aggregations (aggregation_number, title, description, date_opened)
-VALUES ('AGG-001', 'Root aggregation', 'Top-level test aggregation', NULL)
+INSERT INTO classification_schemes (code, title, date_published)
+VALUES ('CORE-TEST', 'Core test scheme', CURRENT_TIMESTAMP)
+RETURNING id AS test_scheme_id \gset
+INSERT INTO classifications (classification_scheme_id, code, title, is_terminal)
+VALUES (:test_scheme_id, 'CORE-01', 'Core test classification', true)
+RETURNING id AS test_classification_id \gset
+INSERT INTO classification_retention_rules
+    (classification_id, current_period_years, intermediate_period_years, final_disposition)
+VALUES (:test_classification_id, 5, 0, 'destruction');
+
+INSERT INTO aggregations (aggregation_number, title, description, date_opened, classification_id)
+VALUES ('AGG-001', 'Root aggregation', 'Top-level test aggregation', NULL, :test_classification_id)
 RETURNING id AS root_aggregation_id \gset
 
 INSERT INTO aggregations (
@@ -52,6 +62,11 @@ VALUES (
     'SHA-256',
     repeat('a', 64)
 );
+
+SELECT 1 / CASE WHEN (
+    SELECT governing_root_aggregation_id = :root_aggregation_id
+    FROM aggregation_effective_retention_rule(:child_aggregation_id)
+) THEN 1 ELSE 0 END;
 
 INSERT INTO digital_components (
     record_id,

@@ -19,6 +19,7 @@ class ApiModel(BaseModel):
 
 class AggregationCreate(ApiModel):
     parent_aggregation_id: int | None = None
+    classification_id: int | None = None
     aggregation_number: NonBlankString
     title: NonBlankString
     description: str | None = None
@@ -40,6 +41,7 @@ class AggregationCreate(ApiModel):
 
 class AggregationUpdate(ApiModel):
     parent_aggregation_id: int | None = None
+    classification_id: int | None = None
     aggregation_number: NonBlankString | None = None
     title: NonBlankString | None = None
     description: str | None = None
@@ -56,6 +58,7 @@ class AggregationUpdate(ApiModel):
 class AggregationRead(ApiModel):
     id: int
     parent_aggregation_id: int | None
+    classification_id: int | None
     aggregation_number: str
     title: str
     description: str | None
@@ -63,6 +66,124 @@ class AggregationRead(ApiModel):
     date_opened: datetime
     date_closed: datetime | None
     version: int
+
+
+DispositionAction = Literal[
+    "destruction",
+    "transfer_to_external_archive",
+    "selective_preservation",
+    "retain_as_local_archives",
+]
+
+
+class ClassificationSchemeCreate(ApiModel):
+    code: NonBlankString
+    title: NonBlankString
+    description: str | None = None
+    authority: str | None = None
+    scope_note: str | None = None
+    edition: str | None = None
+    date_published: datetime | None = None
+
+
+class ClassificationSchemeUpdate(ApiModel):
+    code: NonBlankString | None = None
+    title: NonBlankString | None = None
+    description: str | None = None
+    authority: str | None = None
+    scope_note: str | None = None
+    edition: str | None = None
+    date_published: datetime | None = None
+    date_deactivated: datetime | None = None
+
+
+class ClassificationSchemeRead(ClassificationSchemeCreate):
+    id: int
+    date_created: datetime
+    date_updated: datetime
+    date_deactivated: datetime | None
+    version: int
+
+
+class RetentionRuleInput(ApiModel):
+    current_period_years: int = Field(ge=0)
+    intermediate_period_years: int = Field(ge=0)
+    final_disposition: DispositionAction
+    instructions: str | None = None
+
+
+class ClassificationRetentionRuleRead(RetentionRuleInput):
+    id: int
+    classification_id: int
+    date_created: datetime
+    date_updated: datetime
+    version: int
+
+
+class ClassificationCreate(ApiModel):
+    classification_scheme_id: int
+    parent_classification_id: int | None = None
+    code: NonBlankString
+    title: NonBlankString
+    description: str | None = None
+    authority: str | None = None
+    scope_note: str | None = None
+    keywords: str | None = None
+    is_terminal: bool = False
+    retention_rule: RetentionRuleInput | None = None
+
+
+class ClassificationUpdate(ApiModel):
+    parent_classification_id: int | None = None
+    code: NonBlankString | None = None
+    title: NonBlankString | None = None
+    description: str | None = None
+    authority: str | None = None
+    scope_note: str | None = None
+    keywords: str | None = None
+    is_terminal: bool | None = None
+
+
+class ClassificationRead(ApiModel):
+    id: int
+    classification_scheme_id: int
+    parent_classification_id: int | None
+    code: str
+    title: str
+    description: str | None
+    authority: str | None
+    scope_note: str | None
+    keywords: str | None
+    is_terminal: bool
+    date_created: datetime
+    date_updated: datetime
+    version: int
+
+
+class AggregationRetentionRuleCreate(RetentionRuleInput):
+    justification: NonBlankString
+
+
+class AggregationRetentionRuleRead(AggregationRetentionRuleCreate):
+    id: int
+    aggregation_id: int
+    date_created: datetime
+    date_updated: datetime
+    version: int
+
+
+class EffectiveRetentionRuleRead(ApiModel):
+    governing_root_aggregation_id: int | None = None
+    classification_id: int | None = None
+    rule_source: Literal["aggregation", "classification"] | None = None
+    rule_id: int
+    defined_by_classification_id: int | None = None
+    inheritance_depth: int
+    current_period_years: int
+    intermediate_period_years: int
+    final_disposition: DispositionAction
+    instructions: str | None = None
+    justification: str | None = None
 
 
 class RecordCreate(ApiModel):
@@ -394,6 +515,7 @@ SearchOperator = Literal[
     "contains_ci",
     "starts_with_ci",
     "ends_with_ci",
+    "matches_ci",
 ]
 
 

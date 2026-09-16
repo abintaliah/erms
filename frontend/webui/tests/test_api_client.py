@@ -34,6 +34,26 @@ def test_search_builds_controlled_or_grammar():
     }
 
 
+def test_classification_search_uses_controlled_wildcards():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"items": [], "total": 0})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.search("classifications", "finance", ("code", "title"))
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured["body"]["where"]["or"][0] == {
+        "field": "code", "operator": "matches_ci", "value": "*finance*",
+    }
+
+
 def test_update_sends_if_match_version():
     captured = {}
 

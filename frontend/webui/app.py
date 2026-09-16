@@ -14,6 +14,7 @@ from .config import (
     api_url,
     dashboard_recent_days,
     dashboard_recent_item_limit,
+    classification_recent_selection_limit,
     host,
     port,
     reload_enabled,
@@ -366,11 +367,23 @@ def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | N
             {"human": "Human user", "service": "Service account"},
             label=field.label, value=value or "human",
         ).props("outlined").classes("w-full")
+    if field.kind == "classification_type":
+        return ui.select(
+            {False: "Branch — may contain children", True: "Terminal — assignable to root aggregations"},
+            label=field.label, value=False if value is None else value,
+        ).props("outlined").classes("w-full")
+    if field.kind == "disposition":
+        return ui.select({
+            "destruction": "Destruction",
+            "transfer_to_external_archive": "Permanent preservation — external archive",
+            "selective_preservation": "Selective preservation",
+            "retain_as_local_archives": "Retain as local archives",
+        }, label=field.label, value=value, clearable=True).props("outlined").classes("w-full")
     if field.kind == "textarea":
         return ui.textarea(field.label, value=value or "").props("outlined autogrow").classes("w-full")
     if field.kind == "int":
         return ui.number(field.label, value=value, format="%.0f").props("outlined").classes("w-full")
-    if field.kind == "lookup":
+    if field.kind in {"lookup", "classification"}:
         return relationship_select(
             field.label, options or {}, value=value, required=field.required
         )
@@ -384,7 +397,7 @@ def form_payload(spec: EntitySpec, controls: dict[str, Any], *, creating: bool) 
     payload: dict[str, Any] = {}
     for field in spec.fields:
         value = controls[field.name].value
-        if field.kind in {"int", "lookup"} and value not in (None, ""):
+        if field.kind in {"int", "lookup", "classification"} and value not in (None, ""):
             value = int(value)
         if field.kind == "datetime" and value:
             value = datetime.fromisoformat(value).isoformat()
@@ -492,7 +505,7 @@ def index() -> None:
         navigation_badges: dict[str, Any] = {}
         dashboard_navigation = ui.button("Dashboard", icon="dashboard").props("flat align=left no-caps").classes("w-full justify-start px-4 mt-4")
         for heading, entries in (
-            ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"))),
+            ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"), ("classifications", "label"))),
             ("ORGANIZATION STRUCTURE", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
         ):
             ui.label(heading).classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
@@ -545,10 +558,12 @@ def index() -> None:
         "aggregations": "aggregation", "records": "record",
         "digital-components": "digital_component", "org-units": "org_unit",
         "users": "user", "roles": "role",
+        "classification-schemes": "classification_scheme",
+        "classifications": "classification",
     }
 
     async def refresh_navigation_counts() -> None:
-        resources = ["aggregations", "records", "org-units", "roles", "users", "event-history"]
+        resources = ["aggregations", "records", "classification-schemes", "classifications", "org-units", "roles", "users", "event-history"]
         try:
             counts = await asyncio.gather(*(api.count(resource) for resource in resources))
             for resource, count in zip(resources, counts):
@@ -595,6 +610,8 @@ def index() -> None:
             "org_unit": (value("code"), value("name")),
             "user": (value("name"), value("email")),
             "role": (value("code"), value("name")),
+            "classification_scheme": (value("code"), value("title")),
+            "classification": (value("code"), value("title")),
         }
         primary, secondary = identities.get(entity_type, (None, None))
         identity = " — ".join(str(value) for value in (primary, secondary) if value)
@@ -631,6 +648,8 @@ def index() -> None:
                 "aggregation": "aggregations", "record": "records",
                 "digital_component": "digital-components", "org_unit": "org-units",
                 "user": "users", "role": "roles",
+                "classification_scheme": "classification-schemes",
+                "classification": "classifications",
             }
             resource = resources.get(event["entity_type"])
             if not resource:
@@ -662,8 +681,12 @@ def index() -> None:
                     await show_components(record)
             except ApiError as error:
                 ui.notify(error_message(error), color="negative", close_button=True)
-        elif entity_type in {"org_unit", "user", "role"}:
-            resource = {"org_unit": "org-units", "user": "users", "role": "roles"}[entity_type]
+        elif entity_type in {"org_unit", "user", "role", "classification_scheme", "classification"}:
+            resource = {
+                "org_unit": "org-units", "user": "users", "role": "roles",
+                "classification_scheme": "classification-schemes",
+                "classification": "classifications",
+            }[entity_type]
             await select_entity(resource)
             with table_container:
                 await open_editor(entity)
@@ -1135,6 +1158,19 @@ def index() -> None:
     async def decorate_for_spec(
         spec: EntitySpec, rows: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
+        if spec.key == "classifications":
+            schemes = await api.list("classification-schemes")
+            schemes_by_id = {item["id"]: item for item in schemes}
+            return [{
+                **item,
+                "type_display": {
+                    "name": "Terminal" if item.get("is_terminal") else "Branch",
+                    "code": "Assignable" if item.get("is_terminal") else "Hierarchy",
+                },
+                "scheme_display": relationship_cell(
+                    schemes_by_id.get(item.get("classification_scheme_id"))
+                ),
+            } for item in rows]
         if spec.key == "aggregations":
             all_aggregations = await api.list("aggregations")
             by_id = {item["id"]: item for item in all_aggregations}
@@ -1206,6 +1242,10 @@ def index() -> None:
 
     async def load_recent(spec: EntitySpec) -> None:
         if not spec.search_first:
+            state["recent_created"] = []
+            state["recent_updated"] = []
+            return
+        if spec.key == "classifications":
             state["recent_created"] = []
             state["recent_updated"] = []
             return
@@ -1394,40 +1434,206 @@ def index() -> None:
             await open_record_draft_editor()
             return
         lookup_options: dict[str, dict[int, str]] = {}
+        retention_rule: dict[str, Any] | None = None
         try:
+            if row and spec.key == "classifications":
+                retention_rule = await api.classification_retention_rule(row["id"])
             for field in spec.fields:
                 if not field.lookup_resource:
                     continue
-                lookup_rows = await api.list(field.lookup_resource)
+                lookup_rows = await api.list(
+                    field.lookup_resource,
+                    **({"eligible": True} if field.kind == "classification" else {}),
+                )
                 if row and field.lookup_resource == spec.key:
                     lookup_rows = [item for item in lookup_rows if item["id"] != row["id"]]
-                lookup_options[field.name] = relationship_options(
-                    lookup_rows, field.lookup_label_fields
-                )
+                if field.kind == "classification":
+                    hierarchy_rows = await api.list("classifications")
+                    recent = await api.recent_classifications(
+                        classification_recent_selection_limit()
+                    )
+                    recent_ids = {item["id"] for item in recent}
+                    by_id = {item["id"]: item for item in hierarchy_rows}
+                    def classification_depth(item: dict[str, Any]) -> int:
+                        depth, parent_id, seen = 0, item.get("parent_classification_id"), set()
+                        while parent_id in by_id and parent_id not in seen:
+                            seen.add(parent_id); depth += 1
+                            parent_id = by_id[parent_id].get("parent_classification_id")
+                        return depth
+                    lookup_rows.sort(key=lambda item: (
+                        item["id"] not in recent_ids,
+                        classification_depth(item), item.get("code", ""),
+                    ))
+                    lookup_options[field.name] = {
+                        item["id"]: (
+                            ("★ Recent · " if item["id"] in recent_ids else "")
+                            + ("› " * classification_depth(item))
+                            + " · ".join(filter(None, (
+                                item.get("code"), item.get("title"), item.get("description"),
+                            )))
+                        ) for item in lookup_rows
+                    }
+                else:
+                    lookup_options[field.name] = relationship_options(
+                        lookup_rows, field.lookup_label_fields
+                    )
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
             return
+
+        async def browse_classification_tree(target_control: Any) -> None:
+            browser = ui.dialog()
+            content: Any = None
+
+            async def show_schemes() -> None:
+                try:
+                    schemes = await api.list("classification-schemes", eligible=True)
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+                    return
+                content.clear()
+                with content:
+                    ui.label("Published classification schemes").classes("text-lg font-semibold")
+                    ui.label("Choose a scheme to browse its classification hierarchy.").classes("text-sm text-slate-500")
+                    if not schemes:
+                        ui.label("No active published classification schemes are available.").classes("py-8 text-slate-400")
+                    for scheme in schemes:
+                        with ui.card().classes("w-full shadow-none border border-slate-200 cursor-pointer").on(
+                            "click", lambda _, selected=scheme: show_level(selected, None, [])
+                        ):
+                            with ui.row().classes("w-full items-center gap-3"):
+                                ui.avatar(icon="account_tree", color="blue-1", text_color="primary")
+                                with ui.column().classes("gap-0 grow"):
+                                    ui.label(scheme["title"]).classes("font-semibold")
+                                    ui.label(scheme["code"]).classes("text-xs text-primary")
+                                    if scheme.get("description"):
+                                        ui.label(scheme["description"]).classes("text-xs text-slate-500 line-clamp-2")
+                                ui.icon("chevron_right").classes("text-slate-400")
+
+            async def show_level(
+                scheme: dict[str, Any], parent: dict[str, Any] | None,
+                path: list[dict[str, Any]],
+            ) -> None:
+                try:
+                    rows = await api.list(
+                        "classifications",
+                        classification_scheme_id=scheme["id"],
+                        **({"roots_only": True} if parent is None else {"parent_classification_id": parent["id"]}),
+                    )
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+                    return
+                content.clear()
+                with content:
+                    with ui.row().classes("w-full items-center gap-1"):
+                        ui.button(icon="arrow_back", on_click=show_schemes if not path else lambda: show_level(scheme, path[-1] if path else None, path[:-1])).props("flat round dense").tooltip("Back")
+                        ui.label(scheme["title"]).classes("font-semibold")
+                        for ancestor in path:
+                            ui.icon("chevron_right", size="16px").classes("text-slate-400")
+                            ui.label(ancestor["code"]).classes("text-xs text-slate-500")
+                        if parent:
+                            ui.icon("chevron_right", size="16px").classes("text-slate-400")
+                            ui.label(parent["code"]).classes("text-xs font-semibold text-primary")
+                    if not rows:
+                        ui.label("This branch has no child classifications yet.").classes("py-8 text-slate-400")
+                    for classification in rows:
+                        async def choose(item=classification) -> None:
+                            if item["is_terminal"]:
+                                target_control.value = item["id"]
+                                target_control.update()
+                                browser.close()
+                            else:
+                                await show_level(
+                                    scheme, item,
+                                    [*path, parent] if parent else path,
+                                )
+                        with ui.card().classes("w-full shadow-none border border-slate-200 cursor-pointer").on("click", choose):
+                            with ui.row().classes("w-full items-center gap-3"):
+                                ui.avatar(
+                                    icon="label" if classification["is_terminal"] else "account_tree",
+                                    color="blue-1", text_color="primary",
+                                )
+                                with ui.column().classes("gap-0 grow"):
+                                    with ui.row().classes("items-center gap-2"):
+                                        ui.label(classification["title"]).classes("font-semibold")
+                                        ui.badge(
+                                            "Terminal" if classification["is_terminal"] else "Branch",
+                                            color="primary",
+                                        ).props("outline")
+                                    ui.label(classification["code"]).classes("text-xs text-primary")
+                                    if classification.get("description"):
+                                        ui.label(classification["description"]).classes("text-xs text-slate-500 line-clamp-2")
+                                ui.icon("check_circle" if classification["is_terminal"] else "chevron_right", color="primary")
+
+            with browser, ui.card().classes("w-[760px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)]"):
+                with ui.row().classes("w-full items-center"):
+                    ui.label("Browse classifications").classes("text-xl font-semibold")
+                    ui.space()
+                    ui.button(icon="close", on_click=browser.close).props("flat round")
+                content = ui.column().classes("w-full gap-2 overflow-y-auto max-h-[calc(100vh-150px)]")
+            browser.open()
+            await show_schemes()
+
         dialog = ui.dialog()
         controls: dict[str, Any] = {}
         with dialog, ui.card().classes("w-[620px] max-w-full"):
             ui.label(f"{'Add' if creating else 'Edit'} {spec.singular}").classes("text-xl font-semibold")
             with ui.column().classes("w-full gap-3"):
                 for field in spec.fields:
+                    source = retention_rule if field.name in {
+                        "current_period_years", "intermediate_period_years",
+                        "final_disposition", "instructions",
+                    } else row
                     controls[field.name] = field_input(
                         field,
-                        (initial_values or {}).get(field.name) if creating else row.get(field.name),
+                        (initial_values or {}).get(field.name) if creating else source.get(field.name) if source else None,
                         lookup_options.get(field.name),
                     )
                     if field.name in (locked_fields or set()):
                         controls[field.name].disable()
+                    if spec.key == "aggregations" and field.name == "classification_id":
+                        parent_id = (initial_values or {}).get("parent_aggregation_id") if creating else row.get("parent_aggregation_id")
+                        if parent_id is not None:
+                            controls[field.name].value = None
+                            controls[field.name].disable()
+                        else:
+                            ui.button(
+                                "Browse classification tree", icon="account_tree",
+                                on_click=lambda control=controls[field.name]: browse_classification_tree(control),
+                            ).props("outline dense no-caps color=primary").classes("self-start")
 
             async def save() -> None:
                 try:
                     payload = form_payload(spec, controls, creating=creating)
+                    if spec.key == "aggregations":
+                        if payload.get("parent_aggregation_id") is None and payload.get("classification_id") is None:
+                            raise ValueError("A root aggregation must have a terminal classification")
+                    rule_payload = None
+                    if spec.key == "classifications":
+                        rule_values = {
+                            key: payload.pop(key, None) for key in (
+                                "current_period_years", "intermediate_period_years",
+                                "final_disposition", "instructions",
+                            )
+                        }
+                        if any(value not in (None, "") for value in rule_values.values()):
+                            required = ("current_period_years", "intermediate_period_years", "final_disposition")
+                            if any(rule_values[key] in (None, "") for key in required):
+                                raise ValueError("A direct retention rule requires both periods and a final disposition")
+                            rule_payload = rule_values
+                            if creating:
+                                payload["retention_rule"] = rule_payload
+                        if not creating:
+                            payload.pop("classification_scheme_id", None)
                     if creating:
                         saved = await api.create(spec.key, payload)
                     else:
                         saved = await api.update(spec.key, row["id"], row["version"], payload)
+                        if spec.key == "classifications" and rule_payload is not None:
+                            await api.put_classification_retention_rule(
+                                row["id"], rule_payload,
+                                retention_rule.get("version") if retention_rule else None,
+                            )
                     dialog.close()
                     ui.notify(f"{spec.singular.capitalize()} saved", color="positive")
                     if creating:
@@ -1656,6 +1862,20 @@ def index() -> None:
                 if item.get("parent_aggregation_id") == current["id"]
             ]
             records = await api.list("records", aggregation_id=current["id"])
+            effective_rule = None
+            local_retention_rule = None
+            classification_path = []
+            try:
+                effective_rule = await api.effective_retention_rule(current["id"])
+                if current.get("parent_aggregation_id") is None:
+                    local_retention_rule = await api.aggregation_retention_rule(current["id"])
+                if effective_rule.get("classification_id"):
+                    classification_path = await api.classification_path(
+                        effective_rule["classification_id"]
+                    )
+            except ApiError as error:
+                if error.status_code != 404:
+                    raise
             for record in records:
                 record["_effectively_closed"] = closure is not None
             state["aggregation_detail"] = current
@@ -1685,6 +1905,80 @@ def index() -> None:
                         await open_aggregation(reopened)
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True)
+
+                async def manage_local_retention_rule() -> None:
+                    dialog = ui.dialog()
+                    existing = local_retention_rule or {}
+                    with dialog, ui.card().classes("w-[680px] max-w-full"):
+                        ui.label("Local retention override").classes("text-xl font-semibold")
+                        ui.label(
+                            "This root-only rule overrides the classification rule for the complete aggregation hierarchy."
+                        ).classes("text-sm text-slate-500")
+                        with ui.grid(columns=2).classes("w-full gap-3"):
+                            current_years = ui.number(
+                                "Current retention (years)", value=existing.get("current_period_years"),
+                                min=0, format="%.0f",
+                            ).props("outlined").classes("w-full")
+                            intermediate_years = ui.number(
+                                "Intermediate retention (years)", value=existing.get("intermediate_period_years"),
+                                min=0, format="%.0f",
+                            ).props("outlined").classes("w-full")
+                        disposition = ui.select({
+                            "destruction": "Destruction",
+                            "transfer_to_external_archive": "Permanent preservation — external archive",
+                            "selective_preservation": "Selective preservation",
+                            "retain_as_local_archives": "Retain as local archives",
+                        }, label="Final disposition", value=existing.get("final_disposition")).props("outlined").classes("w-full")
+                        instructions = ui.textarea(
+                            "Retention and disposal instructions", value=existing.get("instructions") or "",
+                        ).props("outlined autogrow").classes("w-full")
+                        justification = ui.textarea(
+                            "Justification", value=existing.get("justification") or "",
+                        ).props("outlined autogrow").classes("w-full")
+
+                        async def save_rule() -> None:
+                            if current_years.value is None or intermediate_years.value is None or not disposition.value:
+                                ui.notify("Both periods and a final disposition are required", color="warning")
+                                return
+                            if not (justification.value or "").strip():
+                                ui.notify("A justification is required", color="warning")
+                                return
+                            payload = {
+                                "current_period_years": int(current_years.value),
+                                "intermediate_period_years": int(intermediate_years.value),
+                                "final_disposition": disposition.value,
+                                "instructions": (instructions.value or "").strip() or None,
+                                "justification": justification.value.strip(),
+                            }
+                            try:
+                                await api.put_aggregation_retention_rule(
+                                    current["id"], payload, existing.get("version"),
+                                )
+                                dialog.close()
+                                ui.notify("Local retention override saved", color="positive")
+                                await open_aggregation(current)
+                            except ApiError as error:
+                                ui.notify(error_message(error), color="negative", close_button=True)
+
+                        async def remove_rule() -> None:
+                            reason = (justification.value or "").strip()
+                            if not reason:
+                                ui.notify("Enter a justification for removing the override", color="warning")
+                                return
+                            try:
+                                await api.delete_aggregation_retention_rule(current["id"], existing["version"], reason)
+                                dialog.close()
+                                ui.notify("Local retention override removed", color="positive")
+                                await open_aggregation(current)
+                            except ApiError as error:
+                                ui.notify(error_message(error), color="negative", close_button=True)
+
+                        with ui.row().classes("w-full justify-end gap-2"):
+                            if existing:
+                                ui.button("Remove override", icon="delete_outline", color="negative", on_click=remove_rule).props("flat no-caps")
+                            ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                            ui.button("Save override", icon="save", on_click=save_rule).props("unelevated no-caps")
+                    dialog.open()
 
                 async def confirm_delete_current() -> None:
                     confirmation = ui.dialog()
@@ -1788,6 +2082,38 @@ def index() -> None:
                         ui.label(str(len(records))).classes("text-2xl font-bold text-primary")
                         ui.label("Records").classes("text-xs text-slate-500")
 
+                if effective_rule:
+                    with ui.card().classes("mx-5 mb-5 shadow-none border border-indigo-100 bg-indigo-50"):
+                        with ui.row().classes("w-full items-center gap-3"):
+                            ui.avatar(icon="schedule", color="indigo-1", text_color="indigo")
+                            with ui.column().classes("gap-0 grow"):
+                                ui.label("Effective retention rule").classes("font-semibold text-indigo-950")
+                                if effective_rule["rule_source"] == "aggregation":
+                                    source_text = "Specified locally for the governing root aggregation"
+                                elif effective_rule.get("inheritance_depth", 0) == 0:
+                                    source_text = "Specified by its classification"
+                                else:
+                                    source_text = "Inherited from an ancestor classification"
+                                if current.get("parent_aggregation_id") is not None:
+                                    source_text += f" · governed by root aggregation #{effective_rule['governing_root_aggregation_id']}"
+                                ui.label(source_text).classes("text-xs text-indigo-700")
+                            ui.badge(effective_rule["final_disposition"].replace("_", " ").title(), color="indigo").props("outline")
+                        with ui.row().classes("w-full gap-8 text-sm"):
+                            ui.label(f"Current: {effective_rule['current_period_years']} years")
+                            ui.label(f"Intermediate: {effective_rule['intermediate_period_years']} years")
+                            if classification_path:
+                                ui.label("Classification: " + " › ".join(
+                                    f"{item['code']} — {item['title']}" for item in classification_path
+                                )).classes("text-slate-600")
+                        if effective_rule.get("instructions"):
+                            ui.label(effective_rule["instructions"]).classes("text-sm text-slate-600")
+                        if current.get("parent_aggregation_id") is None and closure is None:
+                            with ui.row().classes("w-full justify-end"):
+                                ui.button(
+                                    "Edit local override" if local_retention_rule else "Set local override",
+                                    icon="tune", on_click=manage_local_retention_rule,
+                                ).props("flat dense no-caps color=primary")
+
                 if children:
                     ui.label("Contained aggregations").classes("px-5 text-base font-semibold")
                     with ui.grid(columns=3).classes("w-full px-5 pb-4 gap-3"):
@@ -1881,6 +2207,12 @@ def index() -> None:
         table_container.clear()
         with table_container:
             if spec.search_first and not state["searched"]:
+                if spec.key == "classifications":
+                    with ui.column().classes("w-full items-center py-12 gap-2 text-slate-500"):
+                        ui.icon("manage_search", size="42px").classes("text-primary")
+                        ui.label("Search classifications by code, title, or description.").classes("font-medium")
+                        ui.label("Use * for any number of characters and ? for one character.").classes("text-xs")
+                    return
                 render_recent_section(spec)
                 return
             lifecycle_filter = None
@@ -1928,6 +2260,16 @@ def index() -> None:
             for key, _ in spec.columns:
                 if not key.endswith("_display"):
                     continue
+                if key == "type_display":
+                    table.add_slot("body-cell-type_display", """
+                        <q-td :props="props">
+                          <div class="row items-center no-wrap q-gutter-sm">
+                            <q-avatar size="30px" color="blue-1" text-color="primary" :icon="props.row.is_terminal ? 'label' : 'account_tree'" />
+                            <span class="text-weight-medium">{{ props.row.is_terminal ? 'Terminal' : 'Branch' }}</span>
+                          </div>
+                        </q-td>
+                    """)
+                    continue
                 table.add_slot(f"body-cell-{key}", """
                     <q-td :props="props">
                       <div v-if="props.value" class="row items-center no-wrap q-gutter-sm">
@@ -1966,6 +2308,9 @@ def index() -> None:
                 buttons += '<q-btn flat round dense icon="password" color="orange" @click="$parent.$emit(\'temporary_password\', props.row)"><q-tooltip>Issue temporary password</q-tooltip></q-btn>'
             if spec.key in {"org-units", "roles", "users"}:
                 buttons += '<q-btn flat round dense :icon="props.row.status === \'inactive\' ? \'toggle_on\' : \'toggle_off\'" :color="props.row.status === \'inactive\' ? \'positive\' : \'negative\'" @click="$parent.$emit(\'lifecycle\', props.row)"><q-tooltip>{{ props.row.status === \'inactive\' ? \'Activate\' : \'Deactivate\' }}</q-tooltip></q-btn>'
+            if spec.key == "classification-schemes":
+                buttons += '<q-btn v-if="!props.row.date_published" flat round dense icon="publish" color="primary" @click="$parent.$emit(\'publish_scheme\', props.row)"><q-tooltip>Publish now</q-tooltip></q-btn>'
+                buttons += '<q-btn flat round dense :icon="props.row.date_deactivated ? \'toggle_on\' : \'toggle_off\'" :color="props.row.date_deactivated ? \'positive\' : \'negative\'" @click="$parent.$emit(\'scheme_lifecycle\', props.row)"><q-tooltip>{{ props.row.date_deactivated ? \'Reactivate\' : \'Deactivate\' }}</q-tooltip></q-btn>'
             table.add_slot("body-cell-actions", f'<q-td :props="props">{buttons}</q-td>')
             table.on("edit", lambda event: open_editor(event.args))
             table.on("history", lambda event, resource=spec.key: show_entity_history(resource, event.args))
@@ -1988,6 +2333,35 @@ def index() -> None:
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True)
                 table.on("reopen", reopen_from_table)
+            if spec.key == "classification-schemes":
+                async def publish_scheme(event) -> None:
+                    row = event.args
+                    try:
+                        await api.request(
+                            "POST", f"/api/v1/classification-schemes/{row['id']}/publish",
+                            headers={"If-Match": str(row["version"])},
+                        )
+                        ui.notify("Classification scheme published", color="positive")
+                        await load_rows(repeat_search=True)
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+                async def change_scheme_lifecycle(event) -> None:
+                    row = event.args
+                    action = "reactivate" if row.get("date_deactivated") else "deactivate"
+                    try:
+                        await api.request(
+                            "POST", f"/api/v1/classification-schemes/{row['id']}/{action}",
+                            headers={
+                                "If-Match": str(row["version"]),
+                                "X-Change-Reason": f"{action.title()} from classification administration",
+                            },
+                        )
+                        ui.notify(f"Classification scheme {action}d", color="positive")
+                        await load_rows(repeat_search=True)
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+                table.on("publish_scheme", publish_scheme)
+                table.on("scheme_lifecycle", change_scheme_lifecycle)
             if spec.key in {"users", "roles"}:
                 table.on(
                     "memberships",

@@ -1,7 +1,17 @@
 BEGIN;
 
-INSERT INTO aggregations (aggregation_number, title)
-VALUES ('VERSION-TEST', 'Before')
+INSERT INTO classification_schemes (code, title, date_published)
+VALUES ('CONTENT-TEST', 'Content test scheme', CURRENT_TIMESTAMP)
+RETURNING id AS content_scheme_id \gset
+INSERT INTO classifications (classification_scheme_id, code, title, is_terminal)
+VALUES (:content_scheme_id, 'CONTENT-01', 'Content test classification', true)
+RETURNING id AS content_classification_id \gset
+INSERT INTO classification_retention_rules
+    (classification_id, current_period_years, intermediate_period_years, final_disposition)
+VALUES (:content_classification_id, 5, 0, 'destruction');
+
+INSERT INTO aggregations (aggregation_number, title, classification_id)
+VALUES ('VERSION-TEST', 'Before', :content_classification_id)
 RETURNING id, version \gset version_aggregation_
 
 SELECT 1 / CASE WHEN :'version_aggregation_version'::bigint = 1 THEN 1 ELSE 0 END;

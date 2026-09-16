@@ -136,7 +136,11 @@ class ErmsApiClient:
         if not term:
             return []
         conditions = [
-            {"field": field, "operator": "contains_ci", "value": term}
+            {
+                "field": field,
+                "operator": "matches_ci" if resource == "classifications" else "contains_ci",
+                "value": term if resource != "classifications" or any(mark in term for mark in "*?") else f"*{term}*",
+            }
             for field in fields
         ]
         result = await self.request(
@@ -293,6 +297,49 @@ class ErmsApiClient:
 
     async def discard_record_draft(self, draft_id: int) -> None:
         await self.request("DELETE", f"/api/v1/record-drafts/{draft_id}")
+
+    async def recent_classifications(self, limit: int = 4) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/classifications/recent", params={"limit": limit})
+
+    async def classification_path(self, classification_id: int) -> list[dict[str, Any]]:
+        return await self.request("GET", f"/api/v1/classifications/{classification_id}/path")
+
+    async def effective_retention_rule(self, aggregation_id: int) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/aggregations/{aggregation_id}/effective-retention-rule")
+
+    async def aggregation_retention_rule(self, aggregation_id: int) -> dict[str, Any] | None:
+        return await self.request("GET", f"/api/v1/aggregations/{aggregation_id}/retention-rule")
+
+    async def put_aggregation_retention_rule(
+        self, aggregation_id: int, payload: dict[str, Any], version: int | None = None,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "PUT", f"/api/v1/aggregations/{aggregation_id}/retention-rule",
+            params={"version": version} if version else {}, json=payload,
+            headers={"X-Change-Reason": payload["justification"]},
+        )
+
+    async def delete_aggregation_retention_rule(
+        self, aggregation_id: int, version: int, reason: str,
+    ) -> None:
+        await self.request(
+            "DELETE", f"/api/v1/aggregations/{aggregation_id}/retention-rule",
+            headers={"If-Match": str(version), "X-Change-Reason": reason},
+        )
+
+    async def classification_effective_rule(self, classification_id: int) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/classifications/{classification_id}/effective-retention-rule")
+
+    async def classification_retention_rule(self, classification_id: int) -> dict[str, Any] | None:
+        return await self.request("GET", f"/api/v1/classifications/{classification_id}/retention-rule")
+
+    async def put_classification_retention_rule(
+        self, classification_id: int, payload: dict[str, Any], version: int | None = None,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "PUT", f"/api/v1/classifications/{classification_id}/retention-rule",
+            params={"version": version} if version else {}, json=payload,
+        )
 
     async def user_roles(self, user_id: int) -> list[dict[str, Any]]:
         return await self.request("GET", f"/api/v1/users/{user_id}/roles")
