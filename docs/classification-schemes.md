@@ -59,6 +59,14 @@ reason, and structured metadata identifying the migration, authorization basis,
 scheme, and classification. The migration then validates the deferred
 root-classification invariant.
 
+Migration 021 provides a realistic demonstration scheme for an electricity and
+water utility. `EWA-FCS — Electricity and Water Authority Functional
+Classification Scheme` contains 52 classifications arranged as four roots,
+twelve branches and thirty-six assignable terminals. Every terminal has its own
+documented retention rule, with periods and final actions tailored to the
+business function. The seed is development-only, idempotent, and fully audited
+as an automated migration.
+
 The NiceGUI aggregation form presents eligible terminals with code, title, and
 description. Its searchable hierarchy-aware list places the current user's
 recent selections first. The number retained in this list is configured by

@@ -95,6 +95,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/020_backfill_legacy_root_classification.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/021_seed_ewa_functional_classification_scheme.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -161,6 +164,12 @@ unclassified root aggregation, records migration provenance in event history,
 and validates the previously deferred root-classification constraint. It fails
 rather than guessing when the named scheme or classification is absent or
 ambiguous.
+Migration 021 is an idempotent greenfield development seed. It creates and
+publishes `EWA-FCS — Electricity and Water Authority Functional Classification
+Scheme` with four functional roots, twelve branches, thirty-six terminals and
+one realistic retention rule for every terminal. All seed events carry
+`migration` source and structured provenance. It refuses to overwrite an
+existing scheme with the same code or title.
 
 ## Tests
 
