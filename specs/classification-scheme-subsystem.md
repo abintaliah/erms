@@ -541,6 +541,11 @@ The workspace uses a vertically stacked master-detail layout:
   opening an edit dialog. Retention instructions and inheritance provenance are
   part of this view; future update authorization may remove Edit without
   removing permitted read access.
+- Codes must be displayed in full. Description and scope-note values span the
+  full detail-card width in multi-line, vertically scrollable regions.
+- A root classification has no parent, so its Parent classification value is
+  empty (`—`), not the misleading text “Root classification”. Tree nodes reserve
+  a consistent expander column so their type icons align by hierarchy depth.
 - Search results can focus their scheme and expand their ancestor path.
 
 Scheme administration provides:

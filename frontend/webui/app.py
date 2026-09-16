@@ -29,8 +29,6 @@ app.add_static_files("/static/pdfjs", Path(__file__).with_name("static") / "pdfj
 def display_value(value: Any) -> str:
     if value is None:
         return "—"
-    if isinstance(value, str) and "T" in value:
-        return value.replace("T", " ").replace("+00:00", "Z")[:19]
     return str(value)
 
 
@@ -3073,10 +3071,21 @@ def index() -> None:
         def metadata_value(
             label: str, value: Any, *, timestamp: bool = False,
         ) -> None:
-            with ui.column().classes("gap-0 min-w-0"):
+            with ui.column().classes("gap-0 min-w-0 w-full"):
                 ui.label(label.upper()).classes("component-meta-label")
                 rendered = format_timestamp(value) if timestamp else display_value(value)
-                ui.label(rendered).classes("text-sm text-slate-700 whitespace-pre-wrap")
+                ui.label(rendered).classes(
+                    "w-full text-sm text-slate-700 whitespace-pre-wrap break-words select-text"
+                )
+
+        def long_metadata_value(label: str, value: Any) -> None:
+            with ui.column().classes("w-full gap-1 min-w-0"):
+                ui.label(label.upper()).classes("component-meta-label")
+                ui.label(display_value(value)).classes(
+                    "w-full min-h-[4.75rem] max-h-32 overflow-y-auto rounded-lg "
+                    "border border-slate-200 bg-slate-50 px-3 py-2 text-sm "
+                    "leading-6 text-slate-700 whitespace-pre-wrap break-words select-text"
+                )
 
         def render_rule_details(rule: dict[str, Any] | None) -> None:
             if rule is None:
@@ -3197,14 +3206,19 @@ def index() -> None:
                     "w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50 "
                     + ("bg-blue-50" if selected else "")
                 ).style(f"padding-left: {depth * 20 + 4}px"):
-                    if item["is_terminal"]:
-                        ui.icon("label", color="primary", size="20px").classes("mx-2")
-                    else:
-                        ui.button(
-                            icon="expand_more" if item["id"] in workspace["expanded"] else "chevron_right",
-                            on_click=lambda _, node=item: toggle_branch(node),
-                        ).props("flat round dense color=blue-grey")
-                        ui.icon("schema", color="primary", size="20px").classes("mr-2")
+                    with ui.element("div").classes(
+                        "w-8 h-8 shrink-0 flex items-center justify-center"
+                    ):
+                        if not item["is_terminal"]:
+                            ui.button(
+                                icon="expand_more" if item["id"] in workspace["expanded"] else "chevron_right",
+                                on_click=lambda _, node=item: toggle_branch(node),
+                            ).props("flat round dense size=sm color=blue-grey")
+                    ui.icon(
+                        "label" if item["is_terminal"] else "schema",
+                        color="primary",
+                        size="20px",
+                    ).classes("w-6 shrink-0 mr-2")
                     with ui.column().classes("grow min-w-0 gap-0 cursor-pointer py-1").on(
                         "click", lambda _, node=item: focus_classification(node)
                     ):
@@ -3299,7 +3313,9 @@ def index() -> None:
                         with ui.row().classes("items-center gap-2"):
                             ui.label(scheme["title"]).classes("text-xl font-semibold")
                             ui.badge(status_label, color=status_color).props("outline")
-                        ui.label(scheme["code"]).classes("text-sm text-primary font-medium")
+                        ui.label(scheme["code"]).classes(
+                            "w-full text-sm text-primary font-medium whitespace-normal break-all select-text"
+                        )
                         if scheme.get("description"):
                             ui.label(scheme["description"]).classes("text-sm text-slate-500")
                     ui.button("Edit scheme", icon="edit", on_click=lambda: open_editor(
@@ -3334,8 +3350,8 @@ def index() -> None:
                         metadata_value("Deactivated", scheme.get("date_deactivated"), timestamp=True)
                         metadata_value("Created", scheme.get("date_created"), timestamp=True)
                         metadata_value("Last updated", scheme.get("date_updated"), timestamp=True)
-                    metadata_value("Description", scheme.get("description"))
-                    metadata_value("Scope note", scheme.get("scope_note"))
+                    long_metadata_value("Description", scheme.get("description"))
+                    long_metadata_value("Scope note", scheme.get("scope_note"))
 
                 with ui.row().classes("w-full items-end gap-2"):
                     classification_search = ui.input(
@@ -3381,7 +3397,9 @@ def index() -> None:
                                 ui.avatar(icon="label" if selected["is_terminal"] else "schema", color="blue-1", text_color="primary")
                                 with ui.column().classes("grow gap-0"):
                                     ui.label(selected["title"]).classes("text-lg font-semibold")
-                                    ui.label(selected["code"]).classes("text-sm text-primary")
+                                    ui.label(selected["code"]).classes(
+                                        "w-full text-sm text-primary whitespace-normal break-all select-text"
+                                    )
                                 ui.badge("Terminal" if selected["is_terminal"] else "Branch", color="primary").props("outline")
                             if selected.get("description"):
                                 ui.label(selected["description"]).classes("text-sm text-slate-600")
@@ -3404,16 +3422,17 @@ def index() -> None:
                             ui.label("Classification information").classes("font-semibold")
                             parent = path[-2] if len(path) > 1 else None
                             with ui.grid(columns=2).classes("w-full gap-4"):
+                                metadata_value("Code", selected.get("code"))
                                 metadata_value("Authority", selected.get("authority"))
                                 metadata_value("Keywords", selected.get("keywords"))
                                 metadata_value(
                                     "Parent classification",
-                                    f"{parent['code']} — {parent['title']}" if parent else "Root classification",
+                                    f"{parent['code']} — {parent['title']}" if parent else None,
                                 )
                                 metadata_value("Created", selected.get("date_created"), timestamp=True)
                                 metadata_value("Last updated", selected.get("date_updated"), timestamp=True)
-                            metadata_value("Description", selected.get("description"))
-                            metadata_value("Scope note", selected.get("scope_note"))
+                            long_metadata_value("Description", selected.get("description"))
+                            long_metadata_value("Scope note", selected.get("scope_note"))
 
                             ui.separator()
                             ui.label("Effective retention rule").classes("font-semibold")

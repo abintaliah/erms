@@ -8,6 +8,7 @@ from frontend.webui.app import (
     component_uploader,
     component_file_icon,
     decorate_relationship_rows,
+    display_value,
     format_file_size,
     form_payload,
     format_timestamp,
@@ -100,6 +101,14 @@ def test_timestamp_formatter_is_human_readable():
     assert "2026" in formatted
     assert "T08:05:00" not in formatted
     assert format_timestamp(None) == "—"
+
+
+def test_plain_metadata_containing_uppercase_t_is_not_treated_as_a_timestamp():
+    code = "CORPORATE-RECORDS-MANAGEMENT-SCHEME-2026"
+    description = "This description must remain complete."
+    assert display_value(code) == code
+    assert display_value(description) == description
+    assert display_value(None) == "—"
 
 
 def test_dashboard_recent_configuration(monkeypatch):

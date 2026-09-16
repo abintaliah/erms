@@ -82,13 +82,20 @@ tree refresh, and classification search all remain in the same workspace.
 
 Viewing metadata does not require entering an edit workflow. Selecting a scheme
 shows its authority, scope note, edition, publication and lifecycle dates, and
-audit timestamps in a read-only information panel. Selecting a classification
-shows its authority, scope note, keywords, parent and full path, timestamps, and
+audit timestamps in a read-only information panel. Codes are shown in full;
+description and scope-note fields use full-width, multi-line scroll regions.
+Selecting a classification shows its authority, scope note, keywords, parent
+and full path, timestamps, and
 complete effective retention rule including disposition instructions and the
 classification from which an inherited rule originates. When an inherited rule
 applies, the view also states whether the selected classification has its own
 direct rule. Edit controls are separate and may later be hidden by authorization
 without hiding information the user is allowed to view.
+
+For a root classification, **Parent classification** displays an empty value
+(`—`); “Root classification” is not presented as though it were a parent.
+Tree rows reserve the same expander space for every node so branch and terminal
+icons remain aligned at each hierarchy depth.
 
 ## Search
 
