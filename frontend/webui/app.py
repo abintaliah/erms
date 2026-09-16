@@ -3032,24 +3032,28 @@ def index() -> None:
         workspace: dict[str, Any] = {
             "schemes": [], "scheme": None, "selected": None,
             "children": {}, "expanded": set(), "counts": {},
-            "recent_created": [], "recent_updated": [],
             "query": "", "search_results": [],
         }
 
         with table_container:
             with ui.column().classes("w-full gap-0"):
-                recent_activity = ui.column().classes("w-full px-5 pt-5 gap-0")
-                with ui.row().classes("w-full min-h-[680px] items-stretch no-wrap"):
-                    with ui.column().classes("w-[330px] shrink-0 border-r border-slate-200 p-4 gap-3"):
-                        with ui.row().classes("w-full items-center"):
-                            ui.label("Schemes").classes("text-lg font-semibold")
-                            ui.space()
-                            add_scheme_button = ui.button(icon="add").props("flat round dense color=primary").tooltip("Add classification scheme")
+                with ui.column().classes(
+                    "w-full h-[280px] shrink-0 border-b border-slate-200 p-4 gap-3"
+                ):
+                    with ui.row().classes("w-full items-center gap-3"):
+                        ui.label("Classification schemes").classes("text-lg font-semibold")
                         scheme_filter = ui.input("Filter schemes").props(
                             "outlined dense clearable prepend-icon=search"
-                        ).classes("w-full")
-                        scheme_list = ui.column().classes("w-full gap-2 overflow-y-auto")
-                    workspace_right = ui.column().classes("grow min-w-0 p-5 gap-4")
+                        ).classes("w-80 ml-auto")
+                        add_scheme_button = ui.button(
+                            "Add scheme", icon="add"
+                        ).props("unelevated dense no-caps color=primary")
+                    scheme_list = ui.column().classes(
+                        "w-full grow min-h-0 gap-2 overflow-y-auto pr-1"
+                    )
+                workspace_right = ui.column().classes(
+                    "w-full min-w-0 min-h-[520px] p-5 gap-4"
+                )
 
         def scheme_lifecycle(scheme: dict[str, Any]) -> tuple[str, str]:
             if scheme.get("date_deactivated"):
@@ -3128,34 +3132,18 @@ def index() -> None:
                     with ui.card().classes(classes).on(
                         "click", lambda _, item=scheme: select_scheme(item)
                     ):
-                        with ui.row().classes("w-full items-start gap-3 no-wrap"):
+                        with ui.row().classes("w-full items-center gap-4 no-wrap"):
                             ui.avatar(icon="account_tree", color="blue-1", text_color="primary", size="38px")
-                            with ui.column().classes("grow min-w-0 gap-1"):
+                            with ui.column().classes("w-64 min-w-0 gap-0"):
                                 ui.label(scheme["title"]).classes("font-semibold line-clamp-2")
-                                with ui.row().classes("items-center gap-2"):
-                                    ui.badge(scheme["code"], color="primary").props("outline")
-                                    ui.badge(status_label, color=status_color).props("outline")
-                                ui.label(f"{branches} branches · {terminals} terminals").classes("text-xs text-slate-400")
-
-        async def load_personal_recent() -> None:
-            principal = auth_state.get("principal") or {}
-            user = principal.get("user") or {}
-            user_id = user.get("id")
-            if not user_id:
-                workspace["recent_created"], workspace["recent_updated"] = [], []
-                return
-            since = datetime.now(timezone.utc) - timedelta(days=dashboard_recent_days())
-            created, updated = await asyncio.gather(
-                api.recently_created(
-                    "classifications", limit=dashboard_recent_item_limit(),
-                    actor_user_id=user_id, since=since,
-                ),
-                api.recently_updated(
-                    "classifications", limit=dashboard_recent_item_limit(),
-                    actor_user_id=user_id, since=since,
-                ),
-            )
-            workspace["recent_created"], workspace["recent_updated"] = created, updated
+                                ui.label(scheme["code"]).classes("text-xs font-medium text-primary")
+                            ui.label(scheme.get("description") or "No description").classes(
+                                "grow min-w-0 text-sm text-slate-500 line-clamp-2"
+                            )
+                            ui.badge(status_label, color=status_color).props("outline")
+                            with ui.column().classes("w-40 shrink-0 gap-0 text-right"):
+                                ui.label(f"{branches} branches").classes("text-xs text-slate-500")
+                                ui.label(f"{terminals} terminals").classes("text-xs text-slate-500")
 
         async def load_children(parent_id: int | None) -> list[dict[str, Any]]:
             scheme = workspace["scheme"]
@@ -3191,37 +3179,6 @@ def index() -> None:
                 parent_id = node["id"]
             workspace["selected"] = item
             await render_workspace_right()
-
-        def render_recent_activity() -> None:
-            recent_activity.clear()
-            with recent_activity:
-                if not workspace["recent_created"] and not workspace["recent_updated"]:
-                    return
-                with ui.card().classes("w-full shadow-none border border-slate-200 p-4"):
-                    with ui.row().classes("w-full items-center"):
-                        ui.label("Your recent classification activity").classes("font-semibold")
-                        ui.space()
-                        ui.label(f"Last {dashboard_recent_days()} days").classes("text-xs text-slate-400")
-                    with ui.grid(columns=2).classes("w-full gap-4"):
-                        for heading, items, icon in (
-                            ("Recently created", workspace["recent_created"], "add_circle"),
-                            ("Recently updated", workspace["recent_updated"], "history"),
-                        ):
-                            with ui.column().classes("gap-1 min-w-0"):
-                                with ui.row().classes("items-center gap-2"):
-                                    ui.icon(icon, color="primary", size="18px")
-                                    ui.label(heading).classes("text-sm font-semibold")
-                                if not items:
-                                    ui.label("Nothing here yet").classes("text-xs text-slate-400 py-2")
-                                for item in items:
-                                    with ui.row().classes("recent-card w-full cursor-pointer items-center no-wrap px-3 py-2 gap-2").on(
-                                        "click", lambda _, entry=item: focus_classification(entry)
-                                    ):
-                                        ui.icon("label" if item.get("is_terminal") else "schema", color="primary", size="18px")
-                                        with ui.column().classes("grow min-w-0 gap-0"):
-                                            ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
-                                            ui.label(item["code"]).classes("text-xs text-slate-400")
-                                        ui.label(format_timestamp(item.get("_activity_at"))).classes("text-xs text-slate-400")
 
         async def toggle_branch(item: dict[str, Any]) -> None:
             if item["id"] in workspace["expanded"]:
@@ -3275,8 +3232,6 @@ def index() -> None:
                 await load_children(parent["id"] if parent else None)
                 if parent:
                     workspace["expanded"].add(parent["id"])
-                await load_personal_recent()
-                render_recent_activity()
                 await load_scheme_counts(workspace["schemes"])
                 render_scheme_list()
                 await focus_classification(item)
@@ -3299,8 +3254,6 @@ def index() -> None:
             async def saved(item: dict[str, Any]) -> None:
                 parent_id = item.get("parent_classification_id")
                 await load_children(parent_id)
-                await load_personal_recent()
-                render_recent_activity()
                 await load_scheme_counts(workspace["schemes"])
                 render_scheme_list()
                 await focus_classification(item)
@@ -3557,8 +3510,7 @@ def index() -> None:
             try:
                 schemes = await api.list("classification-schemes")
                 workspace["schemes"] = schemes
-                await asyncio.gather(load_scheme_counts(schemes), load_personal_recent())
-                render_recent_activity()
+                await load_scheme_counts(schemes)
                 render_scheme_list()
                 target_scheme = next((item for item in schemes if item["id"] == scheme_id), None)
                 if target_scheme:

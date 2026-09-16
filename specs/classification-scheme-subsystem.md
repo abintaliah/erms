@@ -523,10 +523,13 @@ the classification-scheme icon previously reserved when aggregation icons were
 changed to folders. Classifications do not have a second top-level navigation
 entry: they are administered in the context of their scheme.
 
-The workspace uses a master-detail layout:
+The workspace uses a vertically stacked master-detail layout:
 
-- A left panel lists and filters schemes and provides scheme creation.
-- Selecting a scheme loads its classification hierarchy in the right panel.
+- A fixed-height top panel lists and filters schemes, provides scheme creation,
+  and scrolls vertically when required. Scheme cards lay their information out
+  horizontally to use the available width.
+- Selecting a scheme loads its classification hierarchy and details in the
+  full-width panel below.
 - Root classifications load with scheme selection; direct children load only
   when a branch is expanded.
 - **Add root** fixes the selected scheme as context.
@@ -539,11 +542,6 @@ The workspace uses a master-detail layout:
   part of this view; future update authorization may remove Edit without
   removing permitted read access.
 - Search results can focus their scheme and expand their ancestor path.
-- Current-user recently created and recently updated classifications are shown
-  in a full-width panel above both master and detail columns, using event-history
-  attribution and the Dashboard recent-limit/time-window settings. Selecting an
-  item selects its scheme, expands its ancestor path, and selects the
-  classification.
 
 Scheme administration provides:
 
@@ -558,7 +556,6 @@ Scheme administration provides:
 - Effective-rule and inheritance presentation.
 - Warnings for incomplete branches and terminal validation failures.
 - Search/filter view.
-- Current-user recently created and updated classification lists.
 - Event-history actions.
 
 ## 15. Aggregation selector UI

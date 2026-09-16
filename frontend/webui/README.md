@@ -59,10 +59,10 @@ The interface provides the shared application shell, local authentication,
 login-session administration, role-aware user menu, list views, search-first
 aggregation and record views, add/edit dialogs, optimistic concurrency
 handling, and record-scoped digital-component upload/listing. Classification
-schemes and classifications share a master-detail administration workspace with
-a filterable scheme list, lazy-loaded hierarchy, contextual root/child creation,
-classification search, effective-rule provenance, and current-user recent
-activity. See [`../../docs/classification-schemes.md`](../../docs/classification-schemes.md)
+schemes and classifications share a vertically stacked administration workspace
+with a fixed-height scrollable scheme browser, lazy-loaded hierarchy,
+contextual root/child creation, classification search, and effective-rule
+provenance. See [`../../docs/classification-schemes.md`](../../docs/classification-schemes.md)
 for its behavior. See
 [`../../docs/authentication.md`](../../docs/authentication.md) for authentication
 operations and security behavior. Digital components can be downloaded in their
