@@ -66,10 +66,10 @@ classification.
 
 The hierarchy is lazy-loaded: root classifications are fetched when a scheme is
 selected and a branch's direct children are fetched only when that branch is
-expanded. Branch classifications use the `account_tree` icon; terminal
-classifications use the `label` icon. Selecting a node shows its complete path,
-metadata, and effective retention rule, including whether that rule is direct
-or inherited.
+expanded. Schemes use the `account_tree` icon, branch classifications use the
+distinct `schema` icon, and terminal classifications use the `label` icon.
+Selecting a node shows its complete path, metadata, and effective retention
+rule, including whether that rule is direct or inherited.
 
 Creation is contextual. **Add root** creates a root classification in the
 selected scheme, while **Add child** creates beneath the selected branch with
@@ -78,11 +78,12 @@ add-child action. Scheme lifecycle actions, scheme and classification editing,
 tree refresh, and classification search all remain in the same workspace.
 
 The workspace also shows recently created and recently updated classifications
-for the signed-in user. These lists use immutable audit-event attribution and
-the same `DASHBOARD_RECENT_ITEM_LIMIT` and `DASHBOARD_RECENT_DAYS` settings as
-the Dashboard. They do not represent system-wide activity. Selecting a recent
-or search result switches to its scheme, expands its ancestor path, and focuses
-the classification in the tree.
+for the signed-in user in a full-width panel above both the scheme list and the
+classification detail area. These lists use immutable audit-event attribution
+and the same `DASHBOARD_RECENT_ITEM_LIMIT` and `DASHBOARD_RECENT_DAYS` settings
+as the Dashboard. They do not represent system-wide activity. Selecting a
+recent or search result switches to its scheme, expands its ancestor path, and
+focuses the classification in the tree.
 
 ## Search
 

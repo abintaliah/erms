@@ -1559,7 +1559,7 @@ def index() -> None:
                         with ui.card().classes("w-full shadow-none border border-slate-200 cursor-pointer").on("click", choose):
                             with ui.row().classes("w-full items-center gap-3"):
                                 ui.avatar(
-                                    icon="label" if classification["is_terminal"] else "account_tree",
+                                    icon="label" if classification["is_terminal"] else "schema",
                                     color="blue-1", text_color="primary",
                                 )
                                 with ui.column().classes("gap-0 grow"):
@@ -2273,16 +2273,22 @@ def index() -> None:
                     table.add_slot("body-cell-type_display", """
                         <q-td :props="props">
                           <div class="row items-center no-wrap q-gutter-sm">
-                            <q-avatar size="30px" color="blue-1" text-color="primary" :icon="props.row.is_terminal ? 'label' : 'account_tree'" />
+                            <q-avatar size="30px" color="blue-1" text-color="primary" :icon="props.row.is_terminal ? 'label' : 'schema'" />
                             <span class="text-weight-medium">{{ props.row.is_terminal ? 'Terminal' : 'Branch' }}</span>
                           </div>
                         </q-td>
                     """)
                     continue
-                table.add_slot(f"body-cell-{key}", """
+                relationship_icon = {
+                    "parent_org_unit_display": "corporate_fare",
+                    "org_unit_display": "corporate_fare",
+                    "aggregation_display": "folder",
+                    "scheme_display": "account_tree",
+                }.get(key, "link")
+                relationship_template = """
                     <q-td :props="props">
                       <div v-if="props.value" class="row items-center no-wrap q-gutter-sm">
-                        <q-avatar size="30px" color="blue-1" text-color="primary" icon="account_tree" />
+                        <q-avatar size="30px" color="blue-1" text-color="primary" icon="__ICON__" />
                         <div class="column">
                           <span class="text-weight-medium relationship-cell-name">{{ props.value.name }}</span>
                           <q-badge v-if="props.value.code" outline color="primary" :label="props.value.code" class="self-start" />
@@ -2290,7 +2296,8 @@ def index() -> None:
                       </div>
                       <span v-else class="text-grey-5">—</span>
                     </q-td>
-                """)
+                """.replace("__ICON__", relationship_icon)
+                table.add_slot(f"body-cell-{key}", relationship_template)
             if any(key == "effective_status" for key, _ in spec.columns):
                 table.add_slot("body-cell-effective_status", '''
                     <q-td :props="props">
@@ -2723,7 +2730,10 @@ def index() -> None:
                     ui.label("Loading dashboard…").classes("text-slate-500")
 
             try:
-                count_resources = ["aggregations", "records", "org-units", "roles", "users", "event-history"]
+                count_resources = [
+                    "aggregations", "records", "classification-schemes",
+                    "org-units", "roles", "users", "event-history",
+                ]
                 count_results = await asyncio.gather(
                     *(api.count(resource) for resource in count_resources),
                 )
@@ -3027,17 +3037,19 @@ def index() -> None:
         }
 
         with table_container:
-            with ui.row().classes("w-full min-h-[680px] items-stretch no-wrap"):
-                with ui.column().classes("w-[330px] shrink-0 border-r border-slate-200 p-4 gap-3"):
-                    with ui.row().classes("w-full items-center"):
-                        ui.label("Schemes").classes("text-lg font-semibold")
-                        ui.space()
-                        add_scheme_button = ui.button(icon="add").props("flat round dense color=primary").tooltip("Add classification scheme")
-                    scheme_filter = ui.input("Filter schemes").props(
-                        "outlined dense clearable prepend-icon=search"
-                    ).classes("w-full")
-                    scheme_list = ui.column().classes("w-full gap-2 overflow-y-auto")
-                workspace_right = ui.column().classes("grow min-w-0 p-5 gap-4")
+            with ui.column().classes("w-full gap-0"):
+                recent_activity = ui.column().classes("w-full px-5 pt-5 gap-0")
+                with ui.row().classes("w-full min-h-[680px] items-stretch no-wrap"):
+                    with ui.column().classes("w-[330px] shrink-0 border-r border-slate-200 p-4 gap-3"):
+                        with ui.row().classes("w-full items-center"):
+                            ui.label("Schemes").classes("text-lg font-semibold")
+                            ui.space()
+                            add_scheme_button = ui.button(icon="add").props("flat round dense color=primary").tooltip("Add classification scheme")
+                        scheme_filter = ui.input("Filter schemes").props(
+                            "outlined dense clearable prepend-icon=search"
+                        ).classes("w-full")
+                        scheme_list = ui.column().classes("w-full gap-2 overflow-y-auto")
+                    workspace_right = ui.column().classes("grow min-w-0 p-5 gap-4")
 
         def scheme_lifecycle(scheme: dict[str, Any]) -> tuple[str, str]:
             if scheme.get("date_deactivated"):
@@ -3160,33 +3172,35 @@ def index() -> None:
             await render_workspace_right()
 
         def render_recent_activity() -> None:
-            if not workspace["recent_created"] and not workspace["recent_updated"]:
-                return
-            with ui.card().classes("w-full shadow-none border border-slate-200 p-4"):
-                with ui.row().classes("w-full items-center"):
-                    ui.label("Your recent classification activity").classes("font-semibold")
-                    ui.space()
-                    ui.label(f"Last {dashboard_recent_days()} days").classes("text-xs text-slate-400")
-                with ui.grid(columns=2).classes("w-full gap-4"):
-                    for heading, items, icon in (
-                        ("Recently created", workspace["recent_created"], "add_circle"),
-                        ("Recently updated", workspace["recent_updated"], "history"),
-                    ):
-                        with ui.column().classes("gap-1 min-w-0"):
-                            with ui.row().classes("items-center gap-2"):
-                                ui.icon(icon, color="primary", size="18px")
-                                ui.label(heading).classes("text-sm font-semibold")
-                            if not items:
-                                ui.label("Nothing here yet").classes("text-xs text-slate-400 py-2")
-                            for item in items:
-                                with ui.row().classes("recent-card w-full cursor-pointer items-center no-wrap px-3 py-2 gap-2").on(
-                                    "click", lambda _, entry=item: focus_classification(entry)
-                                ):
-                                    ui.icon("label" if item.get("is_terminal") else "account_tree", color="primary", size="18px")
-                                    with ui.column().classes("grow min-w-0 gap-0"):
-                                        ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
-                                        ui.label(item["code"]).classes("text-xs text-slate-400")
-                                    ui.label(format_timestamp(item.get("_activity_at"))).classes("text-xs text-slate-400")
+            recent_activity.clear()
+            with recent_activity:
+                if not workspace["recent_created"] and not workspace["recent_updated"]:
+                    return
+                with ui.card().classes("w-full shadow-none border border-slate-200 p-4"):
+                    with ui.row().classes("w-full items-center"):
+                        ui.label("Your recent classification activity").classes("font-semibold")
+                        ui.space()
+                        ui.label(f"Last {dashboard_recent_days()} days").classes("text-xs text-slate-400")
+                    with ui.grid(columns=2).classes("w-full gap-4"):
+                        for heading, items, icon in (
+                            ("Recently created", workspace["recent_created"], "add_circle"),
+                            ("Recently updated", workspace["recent_updated"], "history"),
+                        ):
+                            with ui.column().classes("gap-1 min-w-0"):
+                                with ui.row().classes("items-center gap-2"):
+                                    ui.icon(icon, color="primary", size="18px")
+                                    ui.label(heading).classes("text-sm font-semibold")
+                                if not items:
+                                    ui.label("Nothing here yet").classes("text-xs text-slate-400 py-2")
+                                for item in items:
+                                    with ui.row().classes("recent-card w-full cursor-pointer items-center no-wrap px-3 py-2 gap-2").on(
+                                        "click", lambda _, entry=item: focus_classification(entry)
+                                    ):
+                                        ui.icon("label" if item.get("is_terminal") else "schema", color="primary", size="18px")
+                                        with ui.column().classes("grow min-w-0 gap-0"):
+                                            ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
+                                            ui.label(item["code"]).classes("text-xs text-slate-400")
+                                        ui.label(format_timestamp(item.get("_activity_at"))).classes("text-xs text-slate-400")
 
         async def toggle_branch(item: dict[str, Any]) -> None:
             if item["id"] in workspace["expanded"]:
@@ -3212,6 +3226,7 @@ def index() -> None:
                             icon="expand_more" if item["id"] in workspace["expanded"] else "chevron_right",
                             on_click=lambda _, node=item: toggle_branch(node),
                         ).props("flat round dense color=blue-grey")
+                        ui.icon("schema", color="primary", size="20px").classes("mr-2")
                     with ui.column().classes("grow min-w-0 gap-0 cursor-pointer py-1").on(
                         "click", lambda _, node=item: focus_classification(node)
                     ):
@@ -3240,6 +3255,7 @@ def index() -> None:
                 if parent:
                     workspace["expanded"].add(parent["id"])
                 await load_personal_recent()
+                render_recent_activity()
                 await load_scheme_counts(workspace["schemes"])
                 render_scheme_list()
                 await focus_classification(item)
@@ -3263,6 +3279,7 @@ def index() -> None:
                 parent_id = item.get("parent_classification_id")
                 await load_children(parent_id)
                 await load_personal_recent()
+                render_recent_activity()
                 await load_scheme_counts(workspace["schemes"])
                 render_scheme_list()
                 await focus_classification(item)
@@ -3293,7 +3310,6 @@ def index() -> None:
         async def render_workspace_right() -> None:
             workspace_right.clear()
             with workspace_right:
-                render_recent_activity()
                 scheme = workspace["scheme"]
                 if scheme is None:
                     with ui.column().classes("w-full grow items-center justify-center gap-3 py-16 text-slate-500"):
@@ -3351,7 +3367,7 @@ def index() -> None:
                             with ui.row().classes("w-full items-center gap-2 cursor-pointer rounded p-2 hover:bg-white").on(
                                 "click", lambda _, item=result: focus_classification(item)
                             ):
-                                ui.icon("label" if result["is_terminal"] else "account_tree", color="primary")
+                                ui.icon("label" if result["is_terminal"] else "schema", color="primary")
                                 with ui.column().classes("grow gap-0"):
                                     ui.label(result["title"]).classes("font-semibold")
                                     ui.label(" — ".join(filter(None, (result["code"], result.get("description"))))).classes("text-xs text-slate-500")
@@ -3374,7 +3390,7 @@ def index() -> None:
                             ui.label("Its metadata and effective retention rule will appear here.").classes("text-sm text-slate-500")
                         else:
                             with ui.row().classes("w-full items-start gap-3"):
-                                ui.avatar(icon="label" if selected["is_terminal"] else "account_tree", color="blue-1", text_color="primary")
+                                ui.avatar(icon="label" if selected["is_terminal"] else "schema", color="blue-1", text_color="primary")
                                 with ui.column().classes("grow gap-0"):
                                     ui.label(selected["title"]).classes("text-lg font-semibold")
                                     ui.label(selected["code"]).classes("text-sm text-primary")
@@ -3471,6 +3487,7 @@ def index() -> None:
                 schemes = await api.list("classification-schemes")
                 workspace["schemes"] = schemes
                 await asyncio.gather(load_scheme_counts(schemes), load_personal_recent())
+                render_recent_activity()
                 render_scheme_list()
                 target_scheme = next((item for item in schemes if item["id"] == scheme_id), None)
                 if target_scheme:

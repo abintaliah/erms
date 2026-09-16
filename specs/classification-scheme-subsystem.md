@@ -536,8 +536,10 @@ The workspace uses a master-detail layout:
   rule, provenance, and contextual actions.
 - Search results can focus their scheme and expand their ancestor path.
 - Current-user recently created and recently updated classifications are shown
-  using event-history attribution and the Dashboard recent-limit/time-window
-  settings.
+  in a full-width panel above both master and detail columns, using event-history
+  attribution and the Dashboard recent-limit/time-window settings. Selecting an
+  item selects its scheme, expands its ancestor path, and selects the
+  classification.
 
 Scheme administration provides:
 
