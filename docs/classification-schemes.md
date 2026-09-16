@@ -51,6 +51,14 @@ eligible terminal classification. Child aggregations must have
 are intentionally not assigned invented classifications; the database check is
 staged as `NOT VALID`, while triggers enforce all new changes immediately.
 
+For the greenfield development database, migration 020 explicitly remediates
+those legacy roots to `100-10 — General` in `TESTCS — Test Classification
+Scheme`. Every affected aggregation receives a normal immutable UPDATE event
+with source `migration`, actor type `automated_process`, an explicit backfill
+reason, and structured metadata identifying the migration, authorization basis,
+scheme, and classification. The migration then validates the deferred
+root-classification invariant.
+
 The NiceGUI aggregation form presents eligible terminals with code, title, and
 description. Its searchable hierarchy-aware list places the current user's
 recent selections first. The number retained in this list is configured by

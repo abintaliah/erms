@@ -92,6 +92,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/019_add_classification_schemes.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/020_backfill_legacy_root_classification.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -150,6 +153,14 @@ Existing unclassified root aggregations remain readable; the root-classification
 check is deliberately installed `NOT VALID` so administrators can classify them
 without fabricated defaults. New and changed roots are enforced immediately.
 See [`../docs/classification-schemes.md`](../docs/classification-schemes.md).
+Migration 020 is a development-data remediation authorized while the system is
+still greenfield. It resolves the existing terminal `General` classification
+inside `Test Classification Scheme`, verifies that the scheme is eligible and
+the classification has an effective retention rule, assigns it to every legacy
+unclassified root aggregation, records migration provenance in event history,
+and validates the previously deferred root-classification constraint. It fails
+rather than guessing when the named scheme or classification is absent or
+ambiguous.
 
 ## Tests
 
