@@ -37,17 +37,17 @@ ENTITIES = {
     ),
     "org-units": EntitySpec(
         "org-units", "Organization units", "organization unit",
-        (("code", "Code"), ("name", "Name"), ("status", "Status"), ("parent_org_unit_display", "Parent")),
+        (("code", "Code"), ("name", "Name"), ("effective_status", "Status"), ("parent_org_unit_display", "Parent")),
         (FieldSpec("parent_org_unit_id", "Parent organization unit", "lookup", lookup_resource="org-units", lookup_label_fields=("code", "name")), FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea")),
     ),
     "users": EntitySpec(
         "users", "Users", "user",
-        (("name", "Name"), ("email", "Email"), ("account_type", "Account type"), ("status", "Status")),
+        (("name", "Name"), ("email", "Email"), ("account_type", "Account type"), ("effective_status", "Status")),
         (FieldSpec("name", "Name", required=True), FieldSpec("email", "Email"), FieldSpec("external_id", "External ID"), FieldSpec("account_type", "Account type", "account_type", True)),
     ),
     "roles": EntitySpec(
         "roles", "Roles", "role",
-        (("code", "Code"), ("name", "Name"), ("org_unit_display", "Organization unit"), ("status", "Status")),
+        (("code", "Code"), ("name", "Name"), ("org_unit_display", "Organization unit"), ("effective_status", "Status")),
         (FieldSpec("org_unit_id", "Organization unit", "lookup", True, "org-units", ("code", "name")), FieldSpec("supervisor_role_id", "Supervising role", "lookup", False, "roles", ("code", "name")), FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea")),
     ),
 }

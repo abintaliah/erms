@@ -85,6 +85,12 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
     --file "${DATABASE_DIR}/migrations/007_freeze_closed_aggregation_metadata.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
     --file "${DATABASE_DIR}/migrations/008_cascade_record_digital_components.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/009_user_management_lifecycle.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/010_rename_org_unit_deactivation_date.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/011_normalize_org_unit_event_history.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/user_management.sql"

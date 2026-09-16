@@ -49,6 +49,10 @@ class ErmsApiClient:
             kwargs["headers"] = headers
         try:
             response = await self._client.request(method, path, **kwargs)
+        except RuntimeError as error:
+            if self._client.is_closed:
+                raise ApiError(503, "The browser session disconnected from the ERMS API") from error
+            raise
         except httpx.HTTPError as error:
             raise ApiError(503, "Cannot connect to the ERMS API") from error
         if response.is_error:
@@ -181,6 +185,15 @@ class ErmsApiClient:
         await self.request(
             "DELETE",
             f"/api/v1/{resource}/{entity_id}",
+            headers={"If-Match": str(version)},
+        )
+
+    async def set_active(
+        self, resource: str, entity_id: int, version: int, *, active: bool,
+    ) -> dict[str, Any]:
+        action = "activate" if active else "deactivate"
+        return await self.request(
+            "POST", f"/api/v1/{resource}/{entity_id}/{action}",
             headers={"If-Match": str(version)},
         )
 

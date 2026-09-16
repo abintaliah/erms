@@ -98,7 +98,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "description": NULLABLE_TEXT,
         "status": TEXT,
         "date_created": DATETIME,
-        "date_closed": NULLABLE_DATETIME,
+        "date_deactivated": NULLABLE_DATETIME,
     },
     "users": {
         "id": INTEGER,

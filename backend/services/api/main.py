@@ -9,6 +9,7 @@ import psycopg
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from psycopg import Connection
+from psycopg_pool import PoolTimeout
 from psycopg.types.json import Jsonb
 
 from .audit_context import (
@@ -104,8 +105,16 @@ async def audit_request_context(request: Request, call_next):
     bearer_token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else None
     session_token = bearer_token or cookie_token
     if session_token:
-        with pool.connection() as authentication_connection:
-            principal = resolve_principal(authentication_connection, session_token)
+        try:
+            with pool.connection() as authentication_connection:
+                principal = resolve_principal(authentication_connection, session_token)
+        except PoolTimeout:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"detail": "database connection pool is busy; retry shortly"},
+                headers={"Retry-After": "1", "X-Request-ID": request_id,
+                         "X-Correlation-ID": correlation_id},
+            )
     public_path = (
         request.url.path == "/health"
         or request.url.path == "/api/v1/auth/login"
@@ -143,7 +152,10 @@ async def audit_request_context(request: Request, call_next):
 @app.exception_handler(psycopg.Error)
 async def database_error_handler(_, exception: psycopg.Error):
     sqlstate = exception.sqlstate
-    if sqlstate in {"23503", "23505", "P0001"}:
+    if isinstance(exception, PoolTimeout):
+        status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        detail = "database connection pool is busy; retry shortly"
+    elif sqlstate in {"23503", "23505", "P0001"}:
         status_code = status.HTTP_409_CONFLICT
         detail = exception.diag.message_primary or "database constraint violated"
     elif isinstance(exception, (psycopg.IntegrityError, psycopg.DataError)):

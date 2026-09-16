@@ -43,6 +43,15 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/008_cascade_record_digital_components.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/009_user_management_lifecycle.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/010_rename_org_unit_deactivation_date.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/011_normalize_org_unit_event_history.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -63,6 +72,14 @@ a directly closed aggregation's closure date.
 Migration 008 makes digital components lifecycle-dependent on their record:
 deleting a record atomically cascades to its component metadata and stored
 content.
+Migration 009 enforces user, role, and organizational-unit lifecycle state,
+inherited organizational effectiveness, assignment eligibility, and the
+status/timestamp invariants described in the user-management documentation.
+Migration 010 renames the organizational-unit lifecycle timestamp from
+`date_closed` to the consistent `date_deactivated` without changing its data.
+Migration 011 performs the corresponding one-time terminology normalization in
+existing `org_unit` audit payloads and restores the audit immutability trigger
+within the same transaction.
 
 ## Tests
 

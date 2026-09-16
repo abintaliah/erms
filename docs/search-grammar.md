@@ -210,7 +210,7 @@ records with “draft” in the title:
 ### Organizational units
 
 `id`, `parent_org_unit_id`, `code`, `name`, `description`, `status`,
-`date_created`, `date_closed`
+`date_created`, `date_deactivated`
 
 ### Roles
 

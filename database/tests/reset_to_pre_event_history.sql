@@ -14,8 +14,18 @@ DROP FUNCTION IF EXISTS validate_aggregation_closure_date();
 DROP FUNCTION IF EXISTS assert_aggregation_effectively_open(bigint);
 DELETE FROM schema_migrations WHERE version IN (
     '006_enforce_closed_aggregations', '007_freeze_closed_aggregation_metadata',
-    '008_cascade_record_digital_components'
+    '008_cascade_record_digital_components', '009_user_management_lifecycle',
+    '010_rename_org_unit_deactivation_date',
+    '011_normalize_org_unit_event_history'
 );
+DROP TRIGGER IF EXISTS user_role_assignments_validate_active ON user_role_assignments;
+DROP TRIGGER IF EXISTS roles_normalize_lifecycle ON roles;
+DROP TRIGGER IF EXISTS users_normalize_lifecycle ON users;
+DROP TRIGGER IF EXISTS org_units_normalize_lifecycle ON org_units;
+DROP FUNCTION IF EXISTS validate_active_role_assignment();
+DROP FUNCTION IF EXISTS role_effectively_active(bigint);
+DROP FUNCTION IF EXISTS org_unit_effectively_active(bigint);
+DROP FUNCTION IF EXISTS normalize_user_management_lifecycle();
 ALTER TABLE digital_components
     DROP CONSTRAINT IF EXISTS digital_components_record_id_fkey,
     ADD CONSTRAINT digital_components_record_id_fkey

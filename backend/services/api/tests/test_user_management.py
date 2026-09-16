@@ -215,3 +215,51 @@ def test_user_management_changes_are_audited(
         assert response.status_code == 200
         assert response.json()[0]["entity_type"] == entity_type
         assert response.json()[0]["operation"] == "CREATE"
+
+
+def test_org_unit_and_role_lifecycle_controls_effective_assignments(
+    client: TestClient, org_unit: dict, user: dict, role: dict,
+):
+    child = client.post("/api/v1/org-units", json={
+        "parent_org_unit_id": org_unit["id"], "code": "LEGAL-CHILD", "name": "Legal Child",
+    }).json()
+    child_role = client.post("/api/v1/roles", json={
+        "org_unit_id": child["id"], "code": "LEGAL-CHILD-ROLE", "name": "Legal Child Role",
+    }).json()
+
+    inactive_unit = client.post(
+        f"/api/v1/org-units/{org_unit['id']}/deactivate",
+        headers={"If-Match": str(org_unit["version"])},
+    )
+    assert inactive_unit.status_code == 200, inactive_unit.text
+    assert inactive_unit.json()["date_deactivated"] is not None
+    blocked = client.post("/api/v1/user-role-assignments", json={
+        "user_id": user["id"], "role_id": child_role["id"],
+    })
+    assert blocked.status_code == 409
+
+    active_unit = client.post(
+        f"/api/v1/org-units/{org_unit['id']}/activate",
+        headers={"If-Match": str(inactive_unit.json()["version"])},
+    )
+    assert active_unit.status_code == 200
+    assert active_unit.json()["date_deactivated"] is None
+    assignment = client.post("/api/v1/user-role-assignments", json={
+        "user_id": user["id"], "role_id": child_role["id"],
+    })
+    assert assignment.status_code == 201
+
+    inactive_role = client.post(
+        f"/api/v1/roles/{child_role['id']}/deactivate",
+        headers={"If-Match": str(child_role["version"])},
+    )
+    assert inactive_role.status_code == 200
+    assert client.get(f"/api/v1/users/{user['id']}").json()["status"] == "active"
+    assert client.get(f"/api/v1/users/{user['id']}/roles").json()[0]["id"] == assignment.json()["id"]
+
+    reactivated_role = client.post(
+        f"/api/v1/roles/{child_role['id']}/activate",
+        headers={"If-Match": str(inactive_role.json()["version"])},
+    )
+    assert reactivated_role.status_code == 200
+    assert reactivated_role.json()["date_deactivated"] is None
