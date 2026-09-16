@@ -3145,22 +3145,28 @@ def index() -> None:
                     selected = workspace["scheme"] and workspace["scheme"]["id"] == scheme["id"]
                     status_label, status_color = scheme_lifecycle(scheme)
                     branches, terminals = workspace["counts"].get(scheme["id"], (0, 0))
-                    classes = "w-full cursor-pointer shadow-none border p-3"
+                    classes = "w-full cursor-pointer shadow-none border p-2"
                     classes += " border-blue-300 bg-blue-50" if selected else " border-slate-200"
                     with ui.card().classes(classes).on(
                         "click", lambda _, item=scheme: select_scheme(item)
                     ):
-                        with ui.row().classes("w-full items-start gap-3 no-wrap"):
-                            ui.avatar(icon="account_tree", color="blue-1", text_color="primary", size="38px")
+                        with ui.row().classes("w-full items-start gap-2 no-wrap"):
+                            ui.avatar(icon="account_tree", color="blue-1", text_color="primary", size="32px")
                             with ui.column().classes("grow min-w-0 gap-0"):
-                                ui.label(scheme["title"]).classes("font-semibold line-clamp-2")
-                                ui.label(scheme["code"]).classes("text-xs font-medium text-primary")
-                                ui.label(scheme.get("description") or "No description").classes(
-                                    "w-full text-xs text-slate-500 line-clamp-2 mt-1"
+                                ui.label(scheme["title"]).classes("w-full font-semibold truncate")
+                                with ui.row().classes("w-full items-center gap-2 no-wrap"):
+                                    ui.label(scheme["code"]).classes(
+                                        "min-w-0 grow text-xs font-medium text-primary truncate"
+                                    )
+                                    ui.label(
+                                        f"{branches} branches · {terminals} terminals"
+                                    ).classes("shrink-0 text-xs text-slate-400")
+                                description = scheme.get("description") or "No description"
+                                description_label = ui.label(description).classes(
+                                    "w-full text-xs text-slate-500 truncate"
                                 )
-                                with ui.row().classes("w-full items-center gap-3 mt-1"):
-                                    ui.label(f"{branches} branches").classes("text-xs text-slate-400")
-                                    ui.label(f"{terminals} terminals").classes("text-xs text-slate-400")
+                                if scheme.get("description"):
+                                    description_label.tooltip(description)
                             ui.badge(status_label, color=status_color).props("outline")
 
         async def load_children(parent_id: int | None) -> list[dict[str, Any]]:

@@ -65,6 +65,9 @@ updates that adjacent read-only information pane. The full-width lower area
 retains the classification search and side-by-side classification tree and
 classification-information panes, so the current scheme remains explicit and
 does not need to be selected again when creating a classification.
+Scheme list cards are deliberately compact. Their descriptions occupy one line,
+truncate with an ellipsis when necessary, and expose the complete description
+in a hover tooltip.
 
 The hierarchy is lazy-loaded: root classifications are fetched when a scheme is
 selected and a branch's direct children are fetched only when that branch is

@@ -528,6 +528,8 @@ The workspace uses two coordinated master-detail rows:
 - The fixed-height upper row places the vertically scrollable scheme list and
   scheme-creation controls on the left and the selected scheme's read-only
   information and actions on the right.
+- Scheme list cards use a compact layout. Descriptions are limited to one line
+  with an ellipsis and provide the complete value in a hover tooltip.
 - The full-width lower row retains classification search followed by the
   side-by-side classification tree and classification-information panes.
 - Root classifications load with scheme selection; direct children load only
