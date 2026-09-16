@@ -54,6 +54,24 @@ def test_update_sends_if_match_version():
     assert result["version"] == 4
 
 
+def test_webui_requests_identify_their_event_source():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["source"] = request.headers.get("x-event-source")
+        return httpx.Response(200, json={"items": [], "total": 0})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.count("records")
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured["source"] == "web_ui"
+
+
 def test_delete_sends_if_match_version():
     captured = {}
 
@@ -135,6 +153,55 @@ def test_recently_created_uses_date_sort():
 
     assert asyncio.run(exercise()) == [{"id": 9}]
     assert captured["sort"] == [{"field": "date_created", "direction": "desc"}]
+
+
+@pytest.mark.parametrize(
+    ("method_name", "operation"),
+    (("recently_created", "CREATE"), ("recently_updated", "UPDATE")),
+)
+def test_personal_recent_activity_filters_audit_events_by_current_user(
+    method_name, operation,
+):
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/event-history/search":
+            captured.update(json.loads(request.content))
+            return httpx.Response(
+                200,
+                json={
+                    "items": [{"entity_id": 9, "occurred_at": "2026-09-16T01:02:03Z"}],
+                    "total": 1,
+                },
+            )
+        assert request.url.path == "/api/v1/records/9"
+        return httpx.Response(200, json={"id": 9, "title": "Mine"})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            method = getattr(client, method_name)
+            return await method(
+                "records", actor_user_id=42, since="2026-08-17T00:00:00+00:00"
+            )
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise()) == [{
+        "id": 9,
+        "title": "Mine",
+        "_activity_at": "2026-09-16T01:02:03Z",
+    }]
+    assert captured["where"]["and"] == [
+        {"field": "entity_type", "operator": "eq", "value": "record"},
+        {"field": "operation", "operator": "eq", "value": operation},
+        {"field": "actor_user_id", "operator": "eq", "value": 42},
+        {
+            "field": "occurred_at",
+            "operator": "gte",
+            "value": "2026-08-17T00:00:00+00:00",
+        },
+    ]
 
 
 def test_count_uses_search_total_without_loading_all_rows():

@@ -560,6 +560,8 @@ def test_api_change_creates_correlated_history(client: TestClient):
     assert event["entity_id"] == aggregation["id"]
     assert event["operation"] == "CREATE"
     assert event["actor_user_id"] == 1
+    assert event["actor_name"] == "Test Administrator"
+    assert event["actor_email"] == "admin@test.invalid"
     assert event["actor_type"] == "user"
     assert event["source"] == "api"
     assert event["request_id"] == request_id
@@ -569,6 +571,26 @@ def test_api_change_creates_correlated_history(client: TestClient):
     assert event["after_state"]["title"] == "Audited item"
     assert "title" in event["changed_fields"]
     assert event["metadata"] == {}
+
+
+def test_event_source_is_controlled(client: TestClient):
+    rejected = client.post(
+        "/api/v1/aggregations",
+        headers={"X-Event-Source": "made-up-client"},
+        json={"aggregation_number": "SOURCE-INVALID", "title": "Invalid source"},
+    )
+    assert rejected.status_code == 400
+
+    created = client.post(
+        "/api/v1/aggregations",
+        headers={"X-Event-Source": "web_ui"},
+        json={"aggregation_number": "SOURCE-WEB", "title": "Web source"},
+    )
+    assert created.status_code == 201
+    history = client.get(
+        f"/api/v1/aggregations/{created.json()['id']}/history"
+    ).json()
+    assert history[0]["source"] == "web_ui"
 
 
 def test_update_and_delete_snapshots_remain_available(

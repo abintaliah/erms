@@ -83,6 +83,8 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "entity_id": INTEGER,
         "operation": TEXT,
         "actor_user_id": NULLABLE_INTEGER,
+        "actor_name": NULLABLE_TEXT,
+        "actor_email": NULLABLE_TEXT,
         "actor_type": TEXT,
         "source": TEXT,
         "request_id": NULLABLE_UUID,

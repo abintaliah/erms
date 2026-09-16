@@ -13,6 +13,8 @@ from psycopg_pool import PoolTimeout
 from psycopg.types.json import Jsonb
 
 from .audit_context import (
+    actor_email_context,
+    actor_name_context,
     actor_user_id_context,
     actor_type_context,
     change_reason_context,
@@ -67,6 +69,12 @@ app = FastAPI(
 app.include_router(user_management_router)
 app.include_router(authentication_router)
 
+EVENT_SOURCES = {
+    "api", "web_ui", "bulk_import", "background_worker", "scheduled_job",
+    "integration", "migration", "administrative_tool", "cli", "oidc_sync",
+    "directory_sync",
+}
+
 
 def _request_uuid(value: str | None, header_name: str) -> str:
     if value is None:
@@ -95,6 +103,13 @@ async def audit_request_context(request: Request, call_next):
         return JSONResponse(
             status_code=400,
             content={"detail": "X-Change-Reason cannot exceed 2000 characters"},
+        )
+
+    event_source = request.headers.get("X-Event-Source", "api").strip().lower()
+    if event_source not in EVENT_SOURCES:
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "X-Event-Source is not an approved event source"},
         )
 
     request_token = request_id_context.set(request_id)
@@ -133,7 +148,9 @@ async def audit_request_context(request: Request, call_next):
     request.state.principal = principal
     actor_token = actor_type_context.set("user" if principal else "anonymous")
     actor_user_token = actor_user_id_context.set(str(principal.user_id) if principal else "")
-    source_token = event_source_context.set("api")
+    actor_name_token = actor_name_context.set(principal.name if principal else "")
+    actor_email_token = actor_email_context.set(principal.email if principal else "")
+    source_token = event_source_context.set(event_source)
     reason_token = change_reason_context.set(change_reason)
     try:
         response = await call_next(request)
@@ -143,6 +160,8 @@ async def audit_request_context(request: Request, call_next):
     finally:
         change_reason_context.reset(reason_token)
         event_source_context.reset(source_token)
+        actor_email_context.reset(actor_email_token)
+        actor_name_context.reset(actor_name_token)
         actor_user_id_context.reset(actor_user_token)
         actor_type_context.reset(actor_token)
         correlation_id_context.reset(correlation_token)

@@ -22,7 +22,7 @@ BEGIN
     IF create_event.before_state IS NOT NULL
        OR create_event.after_state ->> 'title' <> 'Audited aggregation'
        OR create_event.source <> 'database'
-       OR create_event.actor_type <> 'system' THEN
+       OR create_event.actor_type <> 'automated_process' THEN
         RAISE EXCEPTION 'CREATE history event is incorrect';
     END IF;
 

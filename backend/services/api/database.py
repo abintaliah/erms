@@ -5,6 +5,8 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from .audit_context import (
+    actor_email_context,
+    actor_name_context,
     actor_type_context,
     actor_user_id_context,
     change_reason_context,
@@ -47,6 +49,8 @@ def get_connection() -> Generator[Connection, None, None]:
             """
             SELECT
                 set_config('app.user_id', %s, true),
+                set_config('app.actor_name', %s, true),
+                set_config('app.actor_email', %s, true),
                 set_config('app.actor_type', %s, true),
                 set_config('app.event_source', %s, true),
                 set_config('app.request_id', %s, true),
@@ -56,6 +60,8 @@ def get_connection() -> Generator[Connection, None, None]:
             """,
             (
                 actor_user_id_context.get(),
+                actor_name_context.get(),
+                actor_email_context.get(),
                 actor_type_context.get(),
                 event_source_context.get(),
                 request_id_context.get(),

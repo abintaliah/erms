@@ -172,6 +172,18 @@ def test_temporal_role_assignment_and_navigation(
         f"/api/v1/user-role-assignments/{assignment['id']}/history"
     ).json()
     assert [event["operation"] for event in history] == ["DELETE", "CREATE"]
+    for event in history:
+        parties = event["metadata"]["assignment_parties"]
+        assert parties["user"] == {
+            "id": user["id"],
+            "name": "محمد علي",
+            "email": "person@example.test",
+        }
+        assert parties["role"] == {
+            "id": role["id"],
+            "code": "LEGAL-MANAGER",
+            "name": "Legal Affairs Manager",
+        }
 
 
 def test_user_management_search(client: TestClient, org_unit: dict, user: dict, role: dict):

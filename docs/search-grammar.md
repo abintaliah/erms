@@ -200,7 +200,8 @@ records with “draft” in the title:
 ### Event history
 
 `id`, `occurred_at`, `transaction_id`, `entity_type`, `entity_id`, `operation`,
-`actor_user_id`, `actor_type`, `source`, `request_id`, `correlation_id`, `reason`
+`actor_user_id`, `actor_name`, `actor_email`, `actor_type`, `source`,
+`request_id`, `correlation_id`, `reason`
 
 ### Users
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -43,10 +44,11 @@ class ErmsApiClient:
         await self._client.aclose()
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        headers = dict(kwargs.pop("headers", {}))
+        headers.setdefault("X-Event-Source", "web_ui")
         if self._session_token:
-            headers = dict(kwargs.pop("headers", {}))
             headers.setdefault("Authorization", f"Bearer {self._session_token}")
-            kwargs["headers"] = headers
+        kwargs["headers"] = headers
         try:
             response = await self._client.request(method, path, **kwargs)
         except RuntimeError as error:
@@ -76,7 +78,10 @@ class ErmsApiClient:
         ) as client:
             response = await client.post(
                 "/api/v1/auth/login", json={"email": email, "password": password},
-                headers={"User-Agent": user_agent} if user_agent else None,
+                headers={
+                    "X-Event-Source": "web_ui",
+                    **({"User-Agent": user_agent} if user_agent else {}),
+                },
             )
         if response.is_error:
             raise ApiError(response.status_code, response.json().get("detail", "login failed"))
@@ -141,34 +146,73 @@ class ErmsApiClient:
         )
         return result["items"]
 
-    async def recently_created(self, resource: str, *, limit: int = 6) -> list[dict[str, Any]]:
-        result = await self.search_request(resource, {
-            "sort": [{"field": "date_created", "direction": "desc"}],
-            "limit": limit,
-        })
-        return result["items"]
-
-    async def recently_updated(self, resource: str, *, limit: int = 6) -> list[dict[str, Any]]:
+    async def _recent_entities_from_events(
+        self,
+        resource: str,
+        operation: str,
+        actor_user_id: int | None,
+        limit: int,
+        since: datetime | str | None = None,
+    ) -> list[dict[str, Any]]:
         entity_type = {"aggregations": "aggregation", "records": "record"}[resource]
+        conditions: list[dict[str, Any]] = [
+            {"field": "entity_type", "operator": "eq", "value": entity_type},
+            {"field": "operation", "operator": "eq", "value": operation},
+        ]
+        if actor_user_id is not None:
+            conditions.append(
+                {"field": "actor_user_id", "operator": "eq", "value": actor_user_id}
+            )
+        if since is not None:
+            conditions.append({
+                "field": "occurred_at",
+                "operator": "gte",
+                "value": since.isoformat() if isinstance(since, datetime) else since,
+            })
         events = await self.search_request("event-history", {
-            "where": {"and": [
-                {"field": "entity_type", "operator": "eq", "value": entity_type},
-                {"field": "operation", "operator": "eq", "value": "UPDATE"},
-            ]},
+            "where": {"and": conditions},
             "sort": [{"field": "occurred_at", "direction": "desc"}],
-            "limit": 50,
+            "limit": 200,
         })
         entity_ids = []
+        activity_times: dict[int, str] = {}
         for event in events["items"]:
             if event["entity_id"] not in entity_ids:
                 entity_ids.append(event["entity_id"])
+                activity_times[event["entity_id"]] = event["occurred_at"]
             if len(entity_ids) == limit:
                 break
         results = await asyncio.gather(
             *(self.get(resource, entity_id) for entity_id in entity_ids),
             return_exceptions=True,
         )
-        return [result for result in results if isinstance(result, dict)]
+        return [
+            {**result, "_activity_at": activity_times[entity_id]}
+            for entity_id, result in zip(entity_ids, results)
+            if isinstance(result, dict)
+        ]
+
+    async def recently_created(
+        self, resource: str, *, limit: int = 6, actor_user_id: int | None = None,
+        since: datetime | str | None = None,
+    ) -> list[dict[str, Any]]:
+        if actor_user_id is not None:
+            return await self._recent_entities_from_events(
+                resource, "CREATE", actor_user_id, limit, since,
+            )
+        result = await self.search_request(resource, {
+            "sort": [{"field": "date_created", "direction": "desc"}],
+            "limit": limit,
+        })
+        return result["items"]
+
+    async def recently_updated(
+        self, resource: str, *, limit: int = 6, actor_user_id: int | None = None,
+        since: datetime | str | None = None,
+    ) -> list[dict[str, Any]]:
+        return await self._recent_entities_from_events(
+            resource, "UPDATE", actor_user_id, limit, since,
+        )
 
     async def create(self, resource: str, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.request("POST", f"/api/v1/{resource}", json=payload)

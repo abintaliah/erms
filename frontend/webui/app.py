@@ -3,14 +3,22 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from nicegui import app, background_tasks, context, events, ui
 
 from .api_client import ApiError, ErmsApiClient
-from .config import api_url, host, port, reload_enabled, storage_secret
+from .config import (
+    api_url,
+    dashboard_recent_days,
+    dashboard_recent_item_limit,
+    host,
+    port,
+    reload_enabled,
+    storage_secret,
+)
 from .entities import ENTITIES, EntitySpec, FieldSpec
 
 
@@ -355,7 +363,7 @@ def relationship_select(
 def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | None = None):
     if field.kind == "account_type":
         return ui.select(
-            {"human": "Human user", "system": "System account"},
+            {"human": "Human user", "service": "Service account"},
             label=field.label, value=value or "human",
         ).props("outlined").classes("w-full")
     if field.kind == "textarea":
@@ -565,6 +573,20 @@ def index() -> None:
         entity_type = event["entity_type"]
         snapshot = event.get("after_state") or event.get("before_state") or {}
         current = event.get("_current_entity") or event.get("_historical_entity") or {}
+
+        if entity_type == "user_role_assignment":
+            parties = (event.get("metadata") or {}).get("assignment_parties") or {}
+            assigned_user = parties.get("user") or {}
+            assigned_role = parties.get("role") or {}
+            user_identity = assigned_user.get("name") or "Unknown user"
+            if assigned_user.get("email"):
+                user_identity += f" ({assigned_user['email']})"
+            role_identity = " — ".join(
+                str(part) for part in (assigned_role.get("code"), assigned_role.get("name"))
+                if part
+            ) or "Unknown role"
+            return "Role assignment", f"{user_identity} → {role_identity}"
+
         value = lambda field: snapshot.get(field) or current.get(field)
         identities = {
             "aggregation": (value("aggregation_number"), value("title")),
@@ -573,10 +595,6 @@ def index() -> None:
             "org_unit": (value("code"), value("name")),
             "user": (value("name"), value("email")),
             "role": (value("code"), value("name")),
-            "user_role_assignment": (
-                f"User #{snapshot.get('user_id')}" if snapshot.get("user_id") else None,
-                f"Role #{snapshot.get('role_id')}" if snapshot.get("role_id") else None,
-            ),
         }
         primary, secondary = identities.get(entity_type, (None, None))
         identity = " — ".join(str(value) for value in (primary, secondary) if value)
@@ -592,6 +610,19 @@ def index() -> None:
                 identities[(event["entity_type"], event["entity_id"])] = snapshot
         for event in events_list:
             event["_historical_entity"] = identities.get((event["entity_type"], event["entity_id"]))
+
+    def event_actor_identity(event: dict[str, Any]) -> tuple[str, str | None]:
+        if event.get("actor_name"):
+            return event["actor_name"], event.get("actor_email") or "No email address"
+        actor_type = event.get("actor_type") or "unknown"
+        if event.get("actor_user_id"):
+            return "User identity was not captured", None
+        labels = {
+            "anonymous": "Anonymous actor",
+            "automated_process": "Automated process",
+            "user": "Application user",
+        }
+        return labels.get(actor_type, actor_type.replace("_", " ").title()), None
 
     async def navigate_to_event_entity(event: dict[str, Any]) -> None:
         entity = event.get("_current_entity")
@@ -643,9 +674,7 @@ def index() -> None:
         before = event.get("before_state") or {}
         after = event.get("after_state") or {}
         changed = event.get("changed_fields") or sorted(set(before) | set(after))
-        actor = event.get("actor_type") or "unknown"
-        if event.get("actor_user_id"):
-            actor += f" #{event['actor_user_id']}"
+        actor_name, actor_email = event_actor_identity(event)
 
         async def open_entity() -> None:
             dialog.close()
@@ -668,14 +697,17 @@ def index() -> None:
                 ui.button(icon="close", on_click=dialog.close).props("flat round")
             with ui.column().classes("w-full px-5 pb-4 gap-4 overflow-y-auto"):
                 with ui.row().classes("w-full gap-5 text-sm"):
-                    for label, value in (
-                        ("Occurred", format_timestamp(event.get("occurred_at"))),
-                        ("Actor", actor),
-                        ("Source", event.get("source") or "—"),
-                    ):
-                        with ui.column().classes("gap-0"):
-                            ui.label(label).classes("component-meta-label")
-                            ui.label(value).classes("text-sm text-slate-700")
+                    with ui.column().classes("gap-0"):
+                        ui.label("Occurred").classes("component-meta-label")
+                        ui.label(format_timestamp(event.get("occurred_at"))).classes("text-sm text-slate-700")
+                    with ui.column().classes("gap-0 min-w-[220px]"):
+                        ui.label("Actor").classes("component-meta-label")
+                        ui.label(actor_name).classes("text-sm font-medium text-slate-700")
+                        if actor_email:
+                            ui.label(actor_email).classes("text-xs text-slate-500")
+                    with ui.column().classes("gap-0"):
+                        ui.label("Source").classes("component-meta-label")
+                        ui.label(event.get("source") or "—").classes("text-sm text-slate-700")
                 if event.get("reason"):
                     with ui.card().classes("w-full bg-blue-50 shadow-none border border-blue-100"):
                         ui.label("Change reason").classes("component-meta-label")
@@ -720,6 +752,7 @@ def index() -> None:
                 return
             previous_correlation = None
             for event in events_list:
+                actor_name, actor_email = event_actor_identity(event)
                 correlation = event.get("correlation_id")
                 if correlation and correlation != previous_correlation:
                     ui.label(f"Correlation group · {str(correlation)[:8]}").classes(
@@ -740,7 +773,10 @@ def index() -> None:
                                 ui.label(", ".join(field.replace("_", " ") for field in event["changed_fields"])).classes("text-xs text-slate-400 line-clamp-1")
                         with ui.column().classes("items-end gap-0"):
                             ui.label(format_timestamp(event["occurred_at"])).classes("text-xs font-medium text-slate-600")
-                            ui.label(f"{event.get('actor_type', 'unknown')} · {event.get('source', 'unknown')}").classes("text-xs text-slate-400")
+                            ui.label(actor_name).classes("text-xs font-medium text-slate-600")
+                            if actor_email:
+                                ui.label(actor_email).classes("text-xs text-slate-400")
+                            ui.label(event.get("source", "unknown")).classes("text-xs text-slate-400")
                         if event["entity_type"] in {"aggregation", "record", "digital_component", "org_unit", "user", "role"}:
                             ui.button(
                                 icon="open_in_new",
@@ -2308,9 +2344,27 @@ def index() -> None:
                 count_results = await asyncio.gather(
                     *(api.count(resource) for resource in count_resources),
                 )
+                current_user_id = auth_state["principal"]["user"]["id"]
+                recent_limit = dashboard_recent_item_limit()
+                recent_days = dashboard_recent_days()
+                recent_since = datetime.now(timezone.utc) - timedelta(days=recent_days)
                 recent_results = await asyncio.gather(
-                    api.recently_created("aggregations"), api.recently_updated("aggregations"),
-                    api.recently_created("records"), api.recently_updated("records"),
+                    api.recently_created(
+                        "aggregations", limit=recent_limit,
+                        actor_user_id=current_user_id, since=recent_since,
+                    ),
+                    api.recently_updated(
+                        "aggregations", limit=recent_limit,
+                        actor_user_id=current_user_id, since=recent_since,
+                    ),
+                    api.recently_created(
+                        "records", limit=recent_limit,
+                        actor_user_id=current_user_id, since=recent_since,
+                    ),
+                    api.recently_updated(
+                        "records", limit=recent_limit,
+                        actor_user_id=current_user_id, since=recent_since,
+                    ),
                 )
                 counts = dict(zip(count_resources, count_results))
                 recent = {
@@ -2363,7 +2417,10 @@ def index() -> None:
                                     ui.label(str(counts[resource])).classes("text-2xl font-bold text-slate-800")
                                     ui.label(label).classes("text-xs text-slate-500")
 
-                ui.label("Recent records activity").classes("text-lg font-semibold mt-2")
+                ui.label("Your recent records activity").classes("text-lg font-semibold mt-2")
+                ui.label(
+                    f"Created or updated by you during the last {recent_days} days"
+                ).classes("text-sm text-slate-500 -mt-4")
                 with ui.grid(columns=2).classes("w-full gap-5"):
                     for resource, singular, icon in (
                         ("aggregations", "aggregation", "folder"),
@@ -2374,13 +2431,13 @@ def index() -> None:
                                 ui.icon(icon, color="primary")
                                 ui.label(ENTITIES[resource].label).classes("font-semibold text-slate-800")
                             for heading, items, activity_icon in (
-                                ("Recently created", recent[resource][0], "add_circle"),
-                                ("Recently updated", recent[resource][1], "history"),
+                                ("Recently created by you", recent[resource][0], "add_circle"),
+                                ("Recently updated by you", recent[resource][1], "history"),
                             ):
                                 ui.label(heading).classes("component-meta-label mt-1")
                                 if not items:
                                     ui.label("Nothing here yet").classes("text-sm text-slate-400")
-                                for item in items[:4]:
+                                for item in items:
                                     handler = (
                                         (lambda _, entry=item: open_aggregation(entry))
                                         if resource == "aggregations"
@@ -2394,7 +2451,7 @@ def index() -> None:
                                             ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
                                             number = item.get("aggregation_number") or item.get("record_number")
                                             ui.label(number).classes("text-xs text-slate-400")
-                                        ui.label(format_timestamp(item.get("date_created"))).classes("text-xs text-slate-400")
+                                        ui.label(format_timestamp(item.get("_activity_at"))).classes("text-xs text-slate-400")
                                         ui.icon("chevron_right").classes("text-slate-300")
                 for resource, count in counts.items():
                     navigation_badges[resource].text = str(count)

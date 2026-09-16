@@ -91,6 +91,20 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
     --file "${DATABASE_DIR}/migrations/010_rename_org_unit_deactivation_date.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
     --file "${DATABASE_DIR}/migrations/011_normalize_org_unit_event_history.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/012_backfill_anonymous_event_actor.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/013_snapshot_event_actor_identity.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/014_backfill_webui_event_source.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/015_reclassify_lifecycle_normalization_events.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/016_snapshot_role_assignment_parties.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/017_rename_system_accounts_to_service.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --single-transaction \
+    --file "${DATABASE_DIR}/migrations/018_rename_system_actor_to_automated_process.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/user_management.sql"

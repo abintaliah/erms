@@ -177,7 +177,9 @@ CREATE TABLE event_history (
     entity_id       bigint NOT NULL,
     operation       text NOT NULL,
     actor_user_id   bigint,
-    actor_type      text NOT NULL DEFAULT 'system',
+    actor_name      text,
+    actor_email     text,
+    actor_type      text NOT NULL DEFAULT 'automated_process',
     source          text NOT NULL DEFAULT 'database',
     request_id      uuid,
     correlation_id  uuid,
@@ -193,6 +195,8 @@ CREATE TABLE event_history (
         CHECK (btrim(operation) <> ''),
     CONSTRAINT event_history_actor_type_not_blank
         CHECK (btrim(actor_type) <> ''),
+    CONSTRAINT event_history_actor_type_valid
+        CHECK (actor_type IN ('user', 'anonymous', 'automated_process')),
     CONSTRAINT event_history_source_not_blank
         CHECK (btrim(source) <> ''),
     CONSTRAINT event_history_metadata_is_object
@@ -223,6 +227,78 @@ CREATE INDEX event_history_correlation_id_idx
 
 CREATE INDEX event_history_occurred_at_idx
     ON event_history (occurred_at DESC);
+
+CREATE FUNCTION populate_event_actor_snapshot()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    stored_name  text;
+    stored_email text;
+BEGIN
+    IF NEW.actor_user_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    IF NEW.actor_name IS NULL OR NEW.actor_email IS NULL THEN
+        SELECT name, email INTO stored_name, stored_email
+        FROM users
+        WHERE id = NEW.actor_user_id;
+    END IF;
+
+    NEW.actor_name := COALESCE(
+        NEW.actor_name,
+        NULLIF(current_setting('app.actor_name', true), ''),
+        stored_name
+    );
+    NEW.actor_email := COALESCE(
+        NEW.actor_email,
+        NULLIF(current_setting('app.actor_email', true), ''),
+        stored_email
+    );
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER event_history_populate_actor_snapshot
+BEFORE INSERT ON event_history
+FOR EACH ROW EXECUTE FUNCTION populate_event_actor_snapshot();
+
+CREATE FUNCTION populate_event_relationship_snapshot()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    assignment_state jsonb;
+    user_snapshot     jsonb;
+    role_snapshot     jsonb;
+BEGIN
+    IF NEW.entity_type <> 'user_role_assignment' THEN
+        RETURN NEW;
+    END IF;
+
+    assignment_state := COALESCE(NEW.after_state, NEW.before_state);
+    SELECT jsonb_build_object('id', id, 'name', name, 'email', email)
+    INTO user_snapshot
+    FROM users
+    WHERE id = (assignment_state ->> 'user_id')::bigint;
+
+    SELECT jsonb_build_object('id', id, 'code', code, 'name', name)
+    INTO role_snapshot
+    FROM roles
+    WHERE id = (assignment_state ->> 'role_id')::bigint;
+
+    NEW.metadata := NEW.metadata || jsonb_build_object(
+        'assignment_parties',
+        jsonb_build_object('user', user_snapshot, 'role', role_snapshot)
+    );
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER event_history_populate_relationship_snapshot
+BEFORE INSERT ON event_history
+FOR EACH ROW EXECUTE FUNCTION populate_event_relationship_snapshot();
 
 CREATE FUNCTION record_entity_history()
 RETURNS trigger
@@ -271,7 +347,7 @@ BEGIN
         entity_key,
         CASE TG_OP WHEN 'INSERT' THEN 'CREATE' ELSE TG_OP END,
         context_user_id::bigint,
-        COALESCE(NULLIF(current_setting('app.actor_type', true), ''), 'system'),
+        COALESCE(NULLIF(current_setting('app.actor_type', true), ''), 'automated_process'),
         COALESCE(NULLIF(current_setting('app.event_source', true), ''), 'database'),
         NULLIF(current_setting('app.request_id', true), '')::uuid,
         NULLIF(current_setting('app.correlation_id', true), '')::uuid,
@@ -362,7 +438,7 @@ CREATE TABLE users (
     CONSTRAINT users_external_id_not_blank
         CHECK (external_id IS NULL OR btrim(external_id) <> ''),
     CONSTRAINT users_account_type_valid
-        CHECK (account_type IN ('human', 'system')),
+        CHECK (account_type IN ('human', 'service')),
     CONSTRAINT users_status_valid
         CHECK (status IN ('active', 'inactive', 'suspended')),
     CONSTRAINT users_dates_in_order
@@ -781,7 +857,7 @@ BEGIN
         event_entity_id,
         event_operation,
         context_user_id::bigint,
-        COALESCE(NULLIF(current_setting('app.actor_type', true), ''), 'system'),
+        COALESCE(NULLIF(current_setting('app.actor_type', true), ''), 'automated_process'),
         COALESCE(NULLIF(current_setting('app.event_source', true), ''), 'database'),
         NULLIF(current_setting('app.request_id', true), '')::uuid,
         NULLIF(current_setting('app.correlation_id', true), '')::uuid,
@@ -1227,6 +1303,34 @@ ON CONFLICT(version) DO NOTHING;
 
 INSERT INTO schema_migrations(version)
 VALUES ('011_normalize_org_unit_event_history')
+ON CONFLICT(version) DO NOTHING;
+
+INSERT INTO schema_migrations(version)
+VALUES ('012_backfill_anonymous_event_actor')
+ON CONFLICT(version) DO NOTHING;
+
+INSERT INTO schema_migrations(version)
+VALUES ('013_snapshot_event_actor_identity')
+ON CONFLICT(version) DO NOTHING;
+
+INSERT INTO schema_migrations(version)
+VALUES ('014_backfill_webui_event_source')
+ON CONFLICT(version) DO NOTHING;
+
+INSERT INTO schema_migrations(version)
+VALUES ('015_reclassify_lifecycle_normalization_events')
+ON CONFLICT(version) DO NOTHING;
+
+INSERT INTO schema_migrations(version)
+VALUES ('016_snapshot_role_assignment_parties')
+ON CONFLICT(version) DO NOTHING;
+
+INSERT INTO schema_migrations(version)
+VALUES ('017_rename_system_accounts_to_service')
+ON CONFLICT(version) DO NOTHING;
+
+INSERT INTO schema_migrations(version)
+VALUES ('018_rename_system_actor_to_automated_process')
 ON CONFLICT(version) DO NOTHING;
 
 

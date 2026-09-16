@@ -16,8 +16,19 @@ DELETE FROM schema_migrations WHERE version IN (
     '006_enforce_closed_aggregations', '007_freeze_closed_aggregation_metadata',
     '008_cascade_record_digital_components', '009_user_management_lifecycle',
     '010_rename_org_unit_deactivation_date',
-    '011_normalize_org_unit_event_history'
+    '011_normalize_org_unit_event_history',
+    '012_backfill_anonymous_event_actor',
+    '013_snapshot_event_actor_identity',
+    '014_backfill_webui_event_source',
+    '015_reclassify_lifecycle_normalization_events',
+    '016_snapshot_role_assignment_parties',
+    '017_rename_system_accounts_to_service',
+    '018_rename_system_actor_to_automated_process'
 );
+DROP TRIGGER IF EXISTS event_history_populate_relationship_snapshot ON event_history;
+DROP FUNCTION IF EXISTS populate_event_relationship_snapshot();
+DROP TRIGGER IF EXISTS event_history_populate_actor_snapshot ON event_history;
+DROP FUNCTION IF EXISTS populate_event_actor_snapshot();
 DROP TRIGGER IF EXISTS user_role_assignments_validate_active ON user_role_assignments;
 DROP TRIGGER IF EXISTS roles_normalize_lifecycle ON roles;
 DROP TRIGGER IF EXISTS users_normalize_lifecycle ON users;

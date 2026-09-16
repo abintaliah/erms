@@ -15,6 +15,7 @@ from frontend.webui.app import (
 )
 from frontend.webui.app import native_preview_kind
 from frontend.webui.entities import ENTITIES
+from frontend.webui.config import dashboard_recent_days, dashboard_recent_item_limit
 
 
 def test_native_preview_kind_uses_safe_browser_renderers():
@@ -92,6 +93,19 @@ def test_timestamp_formatter_is_human_readable():
     assert "2026" in formatted
     assert "T08:05:00" not in formatted
     assert format_timestamp(None) == "—"
+
+
+def test_dashboard_recent_configuration(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_RECENT_ITEM_LIMIT", "7")
+    monkeypatch.setenv("DASHBOARD_RECENT_DAYS", "14")
+    assert dashboard_recent_item_limit() == 7
+    assert dashboard_recent_days() == 14
+
+
+def test_dashboard_recent_configuration_rejects_non_positive_values(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_RECENT_ITEM_LIMIT", "0")
+    with pytest.raises(RuntimeError, match="must be at least 1"):
+        dashboard_recent_item_limit()
 
 
 def test_component_display_helpers_prioritize_readable_file_information():

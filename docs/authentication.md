@@ -4,7 +4,7 @@
 
 ERMS currently supports local, database-backed authentication. Authentication
 establishes identity; authorization remains a separate subsystem. Users have an
-`account_type` of `human` or `system`. System accounts represent software and
+`account_type` of `human` or `service`. Service accounts represent software and
 cannot use interactive password login. Administrative authority is assigned by
 the reserved `system-administrator` role, never by a superuser flag on a user.
 
@@ -60,24 +60,110 @@ force logout all sessions for a user. Destructive actions require confirmation.
 - `POST /api/v1/auth/users/{user_id}/temporary-password`
 
 All `/api/v1` endpoints except login require an active session. Health and API
-documentation remain public. Suspended/inactive users and system accounts
+documentation remain public. Suspended/inactive users and service accounts
 cannot authenticate interactively.
 
-## Bootstrap and recovery
+## Initial bootstrap administrator
 
-Create the initial user and organization unit, then run:
+After loading `database/schema.sql` into a genuinely empty database, provision
+the first administrator with the API service's own Python environment:
 
 ```bash
 backend/services/api/.venv/bin/python -m backend.services.api.manage_auth \
-  administrator@example.org \
+  bootstrap \
+  --name "Bootstrap Administrator" \
+  --email bootstrap@erms.local
+```
+
+`DATABASE_URL` selects the target database. As elsewhere in the application, a
+real process environment variable takes precedence over the local `.env` file.
+The command performs one transaction and creates:
+
+- the reserved `SYSTEM — Platform Administration` organizational unit;
+- the reserved `system-administrator — SYSTEM — System Administrator` role;
+- one active human user, defaulting to `Bootstrap Administrator
+  <bootstrap@erms.local>`;
+- the user's active role assignment; and
+- an Argon2id credential containing a newly generated temporary password.
+
+The password is printed exactly once, expires after 24 hours, and has
+`must_change_password = true`. The user may authenticate immediately but can
+only change the password, inspect their principal, or sign out until the
+password has been changed. The plaintext password is never placed in SQL,
+source control, `.env`, API responses, or event history.
+
+The bootstrap login has `account_type = human`, despite its administrative
+name. In this model, `service` accounts are non-interactive identities for
+software and cannot log in with passwords. The bootstrap user's administrative
+authority is derived from the normal reserved role; its email address or
+external ID is not a hidden authorization bypass. A user never belongs directly
+to an organizational unit, while every role—including this reserved platform
+role—must belong to exactly one.
+
+### Bootstrap safeguards
+
+Bootstrap succeeds only while the `users` table is empty. It refuses without
+changing anything when either:
+
+- an active, effective `system-administrator` already exists; or
+- any user row already exists, even if there is currently no administrator.
+
+These rules prevent the provisioning utility from becoming a second path for
+privilege escalation in an established database. A failed command is rolled
+back as a whole. Re-running it cannot reset the existing bootstrap user's
+password or reveal a replacement password.
+
+For this check, an **active system administrator** means an active human user
+with a currently valid assignment to the role whose stable code is
+`system-administrator`. The role itself must be active and its owning
+organizational unit and all ancestor units must be active. The command evaluates
+those same effective-role rules used when resolving a logged-in principal; it
+does not infer authority from the user's name, email, external ID, or database
+primary key.
+
+The four entity events created for the organizational unit, user, role, and
+assignment are grouped by one correlation ID and recorded with actor type
+`automated_process`, source `administrative_tool`, reason `Initial system
+bootstrap`, and secret-free bootstrap metadata. The actor is an automated
+process because the utility runs before the new bootstrap user has authenticated;
+it does not impersonate that user.
+
+Do not confuse this with `users.account_type = service`. Account type classifies
+a stored identity (`human` or `service`), while event actor type classifies how
+an event was caused (`user`, `anonymous`, or `automated_process`). An
+authenticated service identity will be recorded as actor type `user` with its
+own `actor_user_id`. See the actor taxonomy in
+[`event-history.md`](event-history.md#actor-type-versus-account-type).
+
+After signing in, change the temporary password, create the real organizational
+structure and named administrators, and verify that at least one other active
+user has the effective `system-administrator` role. The original bootstrap
+account can then be deactivated; deactivation revokes all of its active login
+sessions. Do not deactivate the reserved role or `SYSTEM` organizational unit
+while any required administrator still depends on them.
+
+## Password recovery and promotion
+
+For an existing human user, issue a new temporary password with:
+
+```bash
+backend/services/api/.venv/bin/python -m backend.services.api.manage_auth \
+  reset-password administrator@example.org
+```
+
+To create or assign the reserved administrator role during deliberate recovery,
+identify the existing organizational unit that will own it:
+
+```bash
+backend/services/api/.venv/bin/python -m backend.services.api.manage_auth \
+  reset-password administrator@example.org \
   --make-system-administrator \
   --org-unit-code ROOT
 ```
 
-The command creates the reserved administrator role if necessary, assigns it,
-revokes old sessions, and prints a single-use temporary password exactly once.
-Running it without `--make-system-administrator` resets an existing human
-user's local password.
+The original command form without the explicit `reset-password` word remains
+accepted for compatibility. Password recovery revokes the target user's old
+sessions and prints a new single-use temporary password exactly once.
 
 ## Audit history
 

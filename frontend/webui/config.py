@@ -26,3 +26,22 @@ def reload_enabled() -> bool:
 
 def storage_secret() -> str:
     return os.getenv("WEBUI_STORAGE_SECRET", "local-development-change-me")
+
+
+def _positive_integer(name: str, default: int) -> int:
+    raw_value = os.getenv(name, str(default))
+    try:
+        value = int(raw_value)
+    except ValueError as error:
+        raise RuntimeError(f"{name} must be an integer") from error
+    if value < 1:
+        raise RuntimeError(f"{name} must be at least 1")
+    return value
+
+
+def dashboard_recent_item_limit() -> int:
+    return _positive_integer("DASHBOARD_RECENT_ITEM_LIMIT", 4)
+
+
+def dashboard_recent_days() -> int:
+    return _positive_integer("DASHBOARD_RECENT_DAYS", 30)
