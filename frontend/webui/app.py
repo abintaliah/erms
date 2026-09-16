@@ -26,6 +26,7 @@ from .entities import ENTITIES, EntitySpec, FieldSpec
 app.add_static_files("/static/pdfjs", Path(__file__).with_name("static") / "pdfjs")
 
 CLASSIFICATION_WORKSPACE_SEARCH_FIELDS = ("code", "title", "description", "keywords")
+CLASSIFICATION_SELECTOR_SEARCH_FIELDS = ("code", "title", "description", "keywords")
 
 
 def display_value(value: Any) -> str:
@@ -1478,7 +1479,8 @@ def index() -> None:
                             ("★ Recent · " if item["id"] in recent_ids else "")
                             + ("› " * classification_depth(item))
                             + " · ".join(filter(None, (
-                                item.get("code"), item.get("title"), item.get("description"),
+                                item.get(field_name)
+                                for field_name in CLASSIFICATION_SELECTOR_SEARCH_FIELDS
                             )))
                         ) for item in lookup_rows
                     }
@@ -2219,7 +2221,9 @@ def index() -> None:
                 if spec.key == "classifications":
                     with ui.column().classes("w-full items-center py-12 gap-2 text-slate-500"):
                         ui.icon("manage_search", size="42px").classes("text-primary")
-                        ui.label("Search classifications by code, title, or description.").classes("font-medium")
+                        ui.label(
+                            "Search classifications by code, title, description, or keywords."
+                        ).classes("font-medium")
                         ui.label("Partial matching is automatic; wildcard characters are not required.").classes("text-xs")
                     return
                 render_recent_section(spec)

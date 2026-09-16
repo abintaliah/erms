@@ -105,7 +105,7 @@ icons remain aligned at each hierarchy depth.
 
 Classification code, title, description, and keywords support safe
 case-insensitive partial search in the scheme administration workspace. The
-NiceGUI aggregation selector searches code, title, and description. Both use
+NiceGUI aggregation selector searches the same four fields. Both use
 `contains_ci`, so entering `finance` automatically finds values containing that
 text without requiring wildcards.
 The controlled API grammar retains `matches_ci` for advanced future clients;

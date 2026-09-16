@@ -5,6 +5,7 @@ import pytest
 
 from frontend.webui.app import (
     CLASSIFICATION_WORKSPACE_SEARCH_FIELDS,
+    CLASSIFICATION_SELECTOR_SEARCH_FIELDS,
     buffer_upload_batch,
     component_uploader,
     component_file_icon,
@@ -126,6 +127,12 @@ def test_classification_recent_selection_configuration(monkeypatch):
 
 def test_classification_workspace_search_includes_keywords():
     assert CLASSIFICATION_WORKSPACE_SEARCH_FIELDS == (
+        "code", "title", "description", "keywords",
+    )
+    assert CLASSIFICATION_SELECTOR_SEARCH_FIELDS == (
+        "code", "title", "description", "keywords",
+    )
+    assert ENTITIES["classifications"].search_fields == (
         "code", "title", "description", "keywords",
     )
 

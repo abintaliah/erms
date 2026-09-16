@@ -584,7 +584,7 @@ a generic numeric lookup. It has three modes.
 
 ### 15.2 Search
 
-- Searches code, title, and description.
+- Searches code, title, description, and keywords.
 - Uses automatic literal partial matching without requiring wildcard syntax.
 - Shows scheme, hierarchy path, type, code, title, description, and effective
   retention provenance.

@@ -56,7 +56,7 @@ ENTITIES = {
             FieldSpec("final_disposition", "Final disposition", "disposition"),
             FieldSpec("instructions", "Retention and disposal instructions", "textarea"),
         ),
-        True, ("code", "title", "description"),
+        True, ("code", "title", "description", "keywords"),
     ),
     "org-units": EntitySpec(
         "org-units", "Organization units", "organization unit",
