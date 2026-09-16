@@ -34,7 +34,7 @@ def test_search_builds_controlled_or_grammar():
     }
 
 
-def test_classification_search_uses_controlled_wildcards():
+def test_classification_search_uses_literal_case_insensitive_containment():
     captured = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -50,7 +50,7 @@ def test_classification_search_uses_controlled_wildcards():
 
     asyncio.run(exercise())
     assert captured["body"]["where"]["or"][0] == {
-        "field": "code", "operator": "matches_ci", "value": "*finance*",
+        "field": "code", "operator": "contains_ci", "value": "finance",
     }
 
 

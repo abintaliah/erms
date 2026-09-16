@@ -136,11 +136,7 @@ class ErmsApiClient:
         if not term:
             return []
         conditions = [
-            {
-                "field": field,
-                "operator": "matches_ci" if resource == "classifications" else "contains_ci",
-                "value": term if resource != "classifications" or any(mark in term for mark in "*?") else f"*{term}*",
-            }
+            {"field": field, "operator": "contains_ci", "value": term}
             for field in fields
         ]
         result = await self.request(

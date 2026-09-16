@@ -482,8 +482,8 @@ the controlled search registry. Classification searchable fields include:
 - creation/update dates
 
 The existing `contains_ci`, `starts_with_ci`, and `ends_with_ci` operators remain
-literal and safe. A new controlled text operator `matches_ci` shall support UI
-wildcards:
+literal and safe. A new controlled text operator `matches_ci` remains available
+in the API search grammar for advanced and future clients:
 
 - `*` — zero or more characters.
 - `?` — exactly one character.
@@ -492,9 +492,10 @@ The compiler must escape SQL `%`, `_`, and backslash before translating `*` and
 `?`, use parameters rather than SQL interpolation, and retain the grammar’s
 depth, condition-count, and value-length limits.
 
-The selector’s simple search applies an OR across code, title, and description.
-If no wildcard is supplied, it performs case-insensitive literal containment.
-If `*` or `?` is supplied, it uses `matches_ci`.
+The selector’s simple search always applies case-insensitive literal containment
+with `contains_ci`, ORed across code, title, and description. Users do not need
+to enter wildcard characters. The selector does not automatically switch to
+`matches_ci`; advanced clients may select that operator explicitly.
 
 ## 13. Configurable recent selections
 
@@ -552,7 +553,7 @@ a generic numeric lookup. It has three modes.
 ### 15.2 Search
 
 - Searches code, title, and description.
-- Supports literal partial matching and the controlled `*`/`?` wildcard syntax.
+- Uses automatic literal partial matching without requiring wildcard syntax.
 - Shows scheme, hierarchy path, type, code, title, description, and effective
   retention provenance.
 - Returns only eligible terminals.

@@ -2211,7 +2211,7 @@ def index() -> None:
                     with ui.column().classes("w-full items-center py-12 gap-2 text-slate-500"):
                         ui.icon("manage_search", size="42px").classes("text-primary")
                         ui.label("Search classifications by code, title, or description.").classes("font-medium")
-                        ui.label("Use * for any number of characters and ? for one character.").classes("text-xs")
+                        ui.label("Partial matching is automatic; wildcard characters are not required.").classes("text-xs")
                     return
                 render_recent_section(spec)
                 return
