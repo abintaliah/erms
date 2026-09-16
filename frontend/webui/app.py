@@ -3035,21 +3035,28 @@ def index() -> None:
 
         with table_container:
             with ui.column().classes("w-full gap-0"):
-                with ui.column().classes(
-                    "w-full h-[280px] shrink-0 border-b border-slate-200 p-4 gap-3"
+                with ui.row().classes(
+                    "w-full h-[420px] shrink-0 items-stretch gap-0 no-wrap "
+                    "overflow-hidden border-b border-slate-200"
                 ):
-                    with ui.row().classes("w-full items-center gap-3"):
-                        ui.label("Classification schemes").classes("text-lg font-semibold")
+                    with ui.column().classes(
+                        "w-[42%] min-w-[340px] h-full border-r border-slate-200 p-4 gap-3"
+                    ):
+                        with ui.row().classes("w-full items-center gap-2"):
+                            ui.label("Classification schemes").classes("text-lg font-semibold")
+                            add_scheme_button = ui.button(
+                                "Add scheme", icon="add"
+                            ).props("unelevated dense no-caps color=primary").classes("ml-auto")
                         scheme_filter = ui.input("Filter schemes").props(
                             "outlined dense clearable prepend-icon=search"
-                        ).classes("w-80 ml-auto")
-                        add_scheme_button = ui.button(
-                            "Add scheme", icon="add"
-                        ).props("unelevated dense no-caps color=primary")
-                    scheme_list = ui.column().classes(
-                        "w-full grow min-h-0 gap-2 overflow-y-auto pr-1"
+                        ).classes("w-full")
+                        scheme_list = ui.column().classes(
+                            "w-full grow min-h-0 gap-2 overflow-y-auto pr-1"
+                        )
+                    scheme_information_panel = ui.column().classes(
+                        "grow min-w-0 h-full overflow-y-auto p-5 gap-4"
                     )
-                workspace_right = ui.column().classes(
+                classification_workspace = ui.column().classes(
                     "w-full min-w-0 min-h-[520px] p-5 gap-4"
                 )
 
@@ -3141,18 +3148,18 @@ def index() -> None:
                     with ui.card().classes(classes).on(
                         "click", lambda _, item=scheme: select_scheme(item)
                     ):
-                        with ui.row().classes("w-full items-center gap-4 no-wrap"):
+                        with ui.row().classes("w-full items-start gap-3 no-wrap"):
                             ui.avatar(icon="account_tree", color="blue-1", text_color="primary", size="38px")
-                            with ui.column().classes("w-64 min-w-0 gap-0"):
+                            with ui.column().classes("grow min-w-0 gap-0"):
                                 ui.label(scheme["title"]).classes("font-semibold line-clamp-2")
                                 ui.label(scheme["code"]).classes("text-xs font-medium text-primary")
-                            ui.label(scheme.get("description") or "No description").classes(
-                                "grow min-w-0 text-sm text-slate-500 line-clamp-2"
-                            )
+                                ui.label(scheme.get("description") or "No description").classes(
+                                    "w-full text-xs text-slate-500 line-clamp-2 mt-1"
+                                )
+                                with ui.row().classes("w-full items-center gap-3 mt-1"):
+                                    ui.label(f"{branches} branches").classes("text-xs text-slate-400")
+                                    ui.label(f"{terminals} terminals").classes("text-xs text-slate-400")
                             ui.badge(status_label, color=status_color).props("outline")
-                            with ui.column().classes("w-40 shrink-0 gap-0 text-right"):
-                                ui.label(f"{branches} branches").classes("text-xs text-slate-500")
-                                ui.label(f"{terminals} terminals").classes("text-xs text-slate-500")
 
         async def load_children(parent_id: int | None) -> list[dict[str, Any]]:
             scheme = workspace["scheme"]
@@ -3296,50 +3303,54 @@ def index() -> None:
             await render_workspace_right()
 
         async def render_workspace_right() -> None:
-            workspace_right.clear()
-            with workspace_right:
-                scheme = workspace["scheme"]
+            scheme_information_panel.clear()
+            classification_workspace.clear()
+            scheme = workspace["scheme"]
+            with scheme_information_panel:
                 if scheme is None:
-                    with ui.column().classes("w-full grow items-center justify-center gap-3 py-16 text-slate-500"):
+                    with ui.column().classes(
+                        "w-full h-full items-center justify-center gap-3 text-slate-500"
+                    ):
                         ui.icon("account_tree", size="54px").classes("text-primary")
-                        ui.label("Select a classification scheme").classes("text-xl font-semibold text-slate-700")
-                        ui.label("Its classification hierarchy will appear here.").classes("text-sm")
-                    return
-
-                status_label, status_color = scheme_lifecycle(scheme)
-                with ui.row().classes("w-full items-start gap-3"):
-                    ui.avatar(icon="account_tree", color="blue-1", text_color="primary")
-                    with ui.column().classes("grow gap-0"):
-                        with ui.row().classes("items-center gap-2"):
-                            ui.label(scheme["title"]).classes("text-xl font-semibold")
-                            ui.badge(status_label, color=status_color).props("outline")
-                        ui.label(scheme["code"]).classes(
-                            "w-full text-sm text-primary font-medium whitespace-normal break-all select-text"
+                        ui.label("Select a classification scheme").classes(
+                            "text-xl font-semibold text-slate-700"
                         )
-                        if scheme.get("description"):
-                            ui.label(scheme["description"]).classes("text-sm text-slate-500")
-                    ui.button("Edit scheme", icon="edit", on_click=lambda: open_editor(
-                        scheme, on_saved=lambda _: reload_workspace(scheme["id"]),
-                        resource_key="classification-schemes",
-                    )).props("flat dense no-caps")
-                    ui.button(
-                        "Event history", icon="history",
-                        on_click=lambda: show_entity_history("classification-schemes", scheme),
-                    ).props("flat dense no-caps")
-                    if not scheme.get("date_published"):
+                        ui.label("Its information will appear here.").classes("text-sm")
+                else:
+                    status_label, status_color = scheme_lifecycle(scheme)
+                    with ui.row().classes("w-full items-start gap-3"):
+                        ui.avatar(icon="account_tree", color="blue-1", text_color="primary")
+                        with ui.column().classes("grow min-w-0 gap-0"):
+                            with ui.row().classes("items-center gap-2"):
+                                ui.label(scheme["title"]).classes("text-xl font-semibold")
+                                ui.badge(status_label, color=status_color).props("outline")
+                            ui.label(scheme["code"]).classes(
+                                "w-full text-sm text-primary font-medium whitespace-normal break-all select-text"
+                            )
+                    with ui.row().classes("w-full items-center gap-1 flex-wrap"):
+                        ui.button("Edit scheme", icon="edit", on_click=lambda: open_editor(
+                            scheme, on_saved=lambda _: reload_workspace(scheme["id"]),
+                            resource_key="classification-schemes",
+                        )).props("flat dense no-caps")
                         ui.button(
-                            "Publish", icon="publish",
-                            on_click=lambda: publish_workspace_scheme(scheme),
-                        ).props("flat dense no-caps color=primary")
-                    ui.button(
-                        "Reactivate" if scheme.get("date_deactivated") else "Deactivate",
-                        icon="toggle_on" if scheme.get("date_deactivated") else "toggle_off",
-                        color="positive" if scheme.get("date_deactivated") else "negative",
-                        on_click=lambda: change_workspace_scheme_lifecycle(scheme),
-                    ).props("flat dense no-caps")
-                    ui.button("Add root", icon="add", on_click=lambda: create_classification()).props("unelevated dense no-caps")
+                            "Event history", icon="history",
+                            on_click=lambda: show_entity_history("classification-schemes", scheme),
+                        ).props("flat dense no-caps")
+                        if not scheme.get("date_published"):
+                            ui.button(
+                                "Publish", icon="publish",
+                                on_click=lambda: publish_workspace_scheme(scheme),
+                            ).props("flat dense no-caps color=primary")
+                        ui.button(
+                            "Reactivate" if scheme.get("date_deactivated") else "Deactivate",
+                            icon="toggle_on" if scheme.get("date_deactivated") else "toggle_off",
+                            color="positive" if scheme.get("date_deactivated") else "negative",
+                            on_click=lambda: change_workspace_scheme_lifecycle(scheme),
+                        ).props("flat dense no-caps")
+                        ui.button(
+                            "Add root", icon="add", on_click=lambda: create_classification()
+                        ).props("unelevated dense no-caps")
 
-                with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-3"):
                     ui.label("Scheme information").classes("font-semibold")
                     with ui.grid(columns=3).classes("w-full gap-4"):
                         metadata_value("Code", scheme.get("code"))
@@ -3353,6 +3364,15 @@ def index() -> None:
                     long_metadata_value("Description", scheme.get("description"))
                     long_metadata_value("Scope note", scheme.get("scope_note"))
 
+            with classification_workspace:
+                if scheme is None:
+                    with ui.column().classes(
+                        "w-full items-center justify-center gap-2 py-16 text-slate-500"
+                    ):
+                        ui.icon("schema", size="44px").classes("text-primary")
+                        ui.label("Select a scheme to browse its classifications.").classes("text-sm")
+                    return
+                status_label, status_color = scheme_lifecycle(scheme)
                 with ui.row().classes("w-full items-end gap-2"):
                     classification_search = ui.input(
                         "Search this scheme", value=workspace["query"],

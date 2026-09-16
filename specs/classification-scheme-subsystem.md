@@ -523,13 +523,13 @@ the classification-scheme icon previously reserved when aggregation icons were
 changed to folders. Classifications do not have a second top-level navigation
 entry: they are administered in the context of their scheme.
 
-The workspace uses a vertically stacked master-detail layout:
+The workspace uses two coordinated master-detail rows:
 
-- A fixed-height top panel lists and filters schemes, provides scheme creation,
-  and scrolls vertically when required. Scheme cards lay their information out
-  horizontally to use the available width.
-- Selecting a scheme loads its classification hierarchy and details in the
-  full-width panel below.
+- The fixed-height upper row places the vertically scrollable scheme list and
+  scheme-creation controls on the left and the selected scheme's read-only
+  information and actions on the right.
+- The full-width lower row retains classification search followed by the
+  side-by-side classification tree and classification-information panes.
 - Root classifications load with scheme selection; direct children load only
   when a branch is expanded.
 - **Add root** fixes the selected scheme as context.

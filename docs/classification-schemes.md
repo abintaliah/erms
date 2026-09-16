@@ -59,13 +59,12 @@ recent selections first. The number retained in this list is configured by
 ## Administration workspace
 
 Classification schemes and their classifications are administered together in
-one workspace. A fixed-height pane at the top lists and filters schemes, with a
-vertical scrollbar when the list exceeds the available height. Scheme cards use
-the pane's full width to present their title, code, description, lifecycle, and
-classification counts horizontally. Selecting a scheme loads its classification
-hierarchy and details into the full-width pane below, so the current scheme is
-always explicit and does not need to be selected again when creating a
-classification.
+one workspace. Its fixed-height upper row places the scrollable scheme list on
+the left and the selected scheme's information on the right. Selecting a scheme
+updates that adjacent read-only information pane. The full-width lower area
+retains the classification search and side-by-side classification tree and
+classification-information panes, so the current scheme remains explicit and
+does not need to be selected again when creating a classification.
 
 The hierarchy is lazy-loaded: root classifications are fetched when a scheme is
 selected and a branch's direct children are fetched only when that branch is
