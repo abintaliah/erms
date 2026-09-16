@@ -1290,13 +1290,10 @@ def index() -> None:
                 current_rows.clear()
                 current_rows.extend(rows)
                 component_area.clear()
+                component_list.set_visibility(bool(rows))
                 with component_area:
                     if rows:
                         render_component_cards(rows, move_draft_component, remove_draft_component)
-                    else:
-                        with ui.column().classes("w-full items-center py-8 gap-2 text-slate-400"):
-                            ui.icon("upload_file").classes("text-4xl")
-                            ui.label("Add one or more files before creating the record.")
             except ApiError as error:
                 with component_area:
                     ui.notify(error_message(error), color="negative")
@@ -1413,8 +1410,9 @@ def index() -> None:
                         ui.label("Digital components").classes("text-base font-semibold")
                         ui.label("Files remain staged until you create the record.").classes("text-xs text-slate-500")
                 uploader_control["uploader"] = component_uploader(upload_to_draft)
-                with ui.element("div").classes("component-list w-full mt-3"):
+                with ui.element("div").classes("component-list w-full mt-3") as component_list:
                     component_area = ui.element("div").classes("component-grid w-full")
+                component_list.set_visibility(False)
             ui.separator()
             with ui.row().classes("w-full justify-end gap-2 px-6 py-4"):
                 ui.button("Cancel draft", on_click=discard).props("flat color=grey-7")
