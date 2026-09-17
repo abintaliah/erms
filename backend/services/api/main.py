@@ -25,7 +25,8 @@ from .audit_context import (
 from .authentication import CSRF_COOKIE, SESSION_COOKIE, hash_secret, resolve_principal, router as authentication_router
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .concurrency import expected_version
-from .content_storage import configured_storage, read_upload
+from .config import integer_environment
+from .content_storage import configured_storage, inspect_upload
 from .database import close_pool, get_connection, open_pool, pool
 from .document_conversion import ConversionUnavailable, UnsupportedPreview, pdf_rendition
 from .schemas import (
@@ -386,19 +387,25 @@ def upload_record_draft_component(
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     _open_draft(connection, draft_id, lock=True)
-    uploaded = read_upload(file)
+    inspected = inspect_upload(file)
     component = connection.execute(
         """INSERT INTO record_draft_components
                (draft_id, component_order, file_name, date_originated, mime_type,
-                size_in_bytes, checksum_algo, checksum_value, content)
-           VALUES (%s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP), %s, %s, 'sha256', %s, %s)
-           RETURNING id, draft_id, component_order, file_name, date_created,
-                     date_originated, mime_type, size_in_bytes, checksum_algo,
-                     checksum_value, 'staged' AS content_status,
-                     'temporary' AS storage_backend""",
+                size_in_bytes, checksum_algo, checksum_value, content_status)
+           VALUES (%s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP), %s, %s, 'sha256', %s, 'uploading')
+           RETURNING id""",
         (draft_id, component_order, file.filename or "unnamed", date_originated,
-         file.content_type or "application/octet-stream", uploaded.size_in_bytes,
-         uploaded.checksum_value, uploaded.content),
+         file.content_type or "application/octet-stream", inspected.size_in_bytes,
+         inspected.checksum_value),
+    ).fetchone()
+    configured_storage().store_draft_upload(connection, component["id"], file)
+    component = connection.execute(
+        """SELECT id, draft_id, component_order, file_name, date_created,
+                  date_originated, mime_type, size_in_bytes, checksum_algo,
+                  checksum_value, 'staged' AS content_status,
+                  'temporary' AS storage_backend
+           FROM record_draft_components WHERE id = %s""",
+        (component["id"],),
     ).fetchone()
     connection.execute("UPDATE record_drafts SET date_updated = CURRENT_TIMESTAMP WHERE id = %s", (draft_id,))
     return component
@@ -463,6 +470,9 @@ def commit_record_draft(draft_id: int, connection: Connection = Depends(get_conn
     components = connection.execute(
         "SELECT * FROM record_draft_components WHERE draft_id = %s ORDER BY component_order FOR UPDATE", (draft_id,)
     ).fetchall()
+    incomplete = [item["file_name"] for item in components if item["content_status"] != "available"]
+    if incomplete:
+        raise HTTPException(status_code=409, detail="all draft component uploads must be complete")
     for staged in components:
         component = create_row(connection, "digital_components", {
             "record_id": record["id"], "component_order": staged["component_order"],
@@ -471,7 +481,7 @@ def commit_record_draft(draft_id: int, connection: Connection = Depends(get_conn
             "checksum_algo": staged["checksum_algo"], "checksum_value": staged["checksum_value"],
             "storage_backend": "postgresql", "content_status": "available",
         })
-        configured_storage().store(connection, component["id"], bytes(staged["content"]))
+        configured_storage().promote_draft(connection, staged["id"], component["id"])
         _append_content_event(connection, component["id"], "CONTENT_UPLOADED", {
             "file_name": component["file_name"], "mime_type": component["mime_type"],
             "size_in_bytes": component["size_in_bytes"], "checksum_algo": component["checksum_algo"],
@@ -608,6 +618,37 @@ def _append_content_event(
     )
 
 
+def _content_range(value: str | None, total: int) -> tuple[int, int, int]:
+    """Return an inclusive-exclusive byte interval and HTTP response status."""
+    if value is None:
+        return 0, total, 200
+    if not value.startswith("bytes=") or "," in value:
+        raise HTTPException(
+            status_code=416, detail="invalid or multiple byte ranges are not supported",
+            headers={"Content-Range": f"bytes */{total}"},
+        )
+    specification = value[6:].strip()
+    try:
+        first, last = specification.split("-", 1)
+        if not first:
+            suffix = int(last)
+            if suffix <= 0 or total == 0:
+                raise ValueError
+            start = max(0, total - suffix)
+            end = total
+        else:
+            start = int(first)
+            end = total if not last else min(total, int(last) + 1)
+            if start < 0 or start >= total or end <= start:
+                raise ValueError
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=416, detail="requested byte range is not satisfiable",
+            headers={"Content-Range": f"bytes */{total}"},
+        )
+    return start, end, 206
+
+
 @app.post(
     "/api/v1/records/{record_id}/digital-components/upload",
     response_model=DigitalComponentRead,
@@ -622,7 +663,7 @@ def upload_digital_component(
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     get_or_404(connection, "records", record_id)
-    uploaded = read_upload(file)
+    inspected = inspect_upload(file)
     mime_type = file.content_type or "application/octet-stream"
     component = create_row(
         connection,
@@ -633,14 +674,15 @@ def upload_digital_component(
             "file_name": file.filename or "unnamed",
             "date_originated": date_originated,
             "mime_type": mime_type,
-            "size_in_bytes": uploaded.size_in_bytes,
+            "size_in_bytes": inspected.size_in_bytes,
             "checksum_algo": "sha256",
-            "checksum_value": uploaded.checksum_value,
+            "checksum_value": inspected.checksum_value,
             "storage_backend": "postgresql",
             "content_status": "available",
         },
     )
-    configured_storage().store(connection, component["id"], uploaded.content)
+    uploaded = configured_storage().store_upload(connection, component["id"], file)
+    component = get_or_404(connection, "digital_components", component["id"])
     _append_content_event(
         connection,
         component["id"],
@@ -652,17 +694,20 @@ def upload_digital_component(
     return component
 
 
-@app.get(
+@app.api_route(
     "/api/v1/digital-components/{component_id}/content",
+    methods=["GET", "HEAD"],
     tags=["digital component content"],
 )
 def download_digital_component_content(
     component_id: int,
+    request: Request,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     component = get_or_404(connection, "digital_components", component_id)
-    content = configured_storage().read(connection, component_id)
-    if content is None or component["content_status"] != "available":
+    storage = configured_storage()
+    location = storage.location(connection, component_id)
+    if location is None:
         raise HTTPException(status_code=404, detail="digital component content not found")
     _append_content_event(connection, component_id, "CONTENT_DOWNLOADED", {
         "size_in_bytes": component["size_in_bytes"],
@@ -670,24 +715,40 @@ def download_digital_component_content(
         "checksum_value": component["checksum_value"],
     })
     encoded_name = quote(component["file_name"], safe="")
+    start, end, response_status = _content_range(request.headers.get("range"), location.size_in_bytes)
+    length = end - start
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}",
+        "Content-Length": str(length),
+        "Accept-Ranges": "bytes",
+        "ETag": f'"sha256-{component["checksum_value"]}"',
+    }
+    if response_status == 206:
+        headers["Content-Range"] = f"bytes {start}-{end - 1}/{location.size_in_bytes}"
+    if request.method == "HEAD":
+        return Response(status_code=response_status, media_type=component["mime_type"], headers=headers)
     return StreamingResponse(
-        BytesIO(content),
+        storage.iter_content(location, start, end),
+        status_code=response_status,
         media_type=component["mime_type"],
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"},
+        headers=headers,
     )
 
 
-@app.get(
+@app.api_route(
     "/api/v1/digital-components/{component_id}/rendition",
+    methods=["GET", "HEAD"],
     tags=["digital component content"],
 )
 def view_digital_component_rendition(
     component_id: int,
+    request: Request,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     component = get_or_404(connection, "digital_components", component_id)
-    content = configured_storage().read(connection, component_id)
-    if content is None or component["content_status"] != "available":
+    storage = configured_storage()
+    location = storage.location(connection, component_id)
+    if location is None:
         raise HTTPException(status_code=404, detail="digital component content not found")
     mime_type = component["mime_type"].lower()
     native_preview = (
@@ -697,21 +758,37 @@ def view_digital_component_rendition(
         or mime_type.startswith("audio/")
         or mime_type.startswith("video/")
     )
-    if native_preview:
+    if native_preview or mime_type == "application/pdf":
+        rendered_mime = mime_type if native_preview else "application/pdf"
         _append_content_event(connection, component_id, "CONTENT_VIEWED", {
-            "rendition_mime_type": mime_type, "rendering_method": "browser-native",
+            "rendition_mime_type": rendered_mime,
+            "rendering_method": "browser-native" if native_preview else "original",
             "original_checksum": component["checksum_value"],
         })
         encoded_name = quote(component["file_name"], safe="")
+        start, end, response_status = _content_range(request.headers.get("range"), location.size_in_bytes)
+        headers = {
+            "Content-Disposition": f"inline; filename*=UTF-8''{encoded_name}",
+            "Content-Length": str(end - start),
+            "Accept-Ranges": "bytes",
+            "ETag": f'"sha256-{component["checksum_value"]}"',
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "sandbox",
+        }
+        if response_status == 206:
+            headers["Content-Range"] = f"bytes {start}-{end - 1}/{location.size_in_bytes}"
+        if request.method == "HEAD":
+            return Response(status_code=response_status, media_type=rendered_mime, headers=headers)
         return StreamingResponse(
-            BytesIO(content),
-            media_type=mime_type,
-            headers={
-                "Content-Disposition": f"inline; filename*=UTF-8''{encoded_name}",
-                "X-Content-Type-Options": "nosniff",
-                "Content-Security-Policy": "sandbox",
-            },
+            storage.iter_content(location, start, end), status_code=response_status,
+            media_type=rendered_mime, headers=headers,
         )
+    maximum_source = integer_environment("MAX_RENDITION_SIZE_BYTES", 100 * 1024 * 1024, minimum=1)
+    if location.size_in_bytes > maximum_source:
+        raise HTTPException(status_code=413, detail="source document exceeds the configured rendition size limit")
+    content = storage.read(connection, component_id)
+    if content is None:
+        raise HTTPException(status_code=404, detail="digital component content not found")
     try:
         rendition, method = pdf_rendition(content, component["file_name"], mime_type)
     except UnsupportedPreview as error:
@@ -745,19 +822,22 @@ def replace_digital_component_content(
     version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    uploaded = read_upload(file)
     mime_type = file.content_type or "application/octet-stream"
+    inspected = inspect_upload(file)
+    current = get_or_404(connection, "digital_components", component_id)
+    if current["version"] != version:
+        return update_row(connection, "digital_components", component_id, {}, version)
+    uploaded = configured_storage().store_upload(connection, component_id, file)
     component = update_row(connection, "digital_components", component_id, {
         "file_name": file.filename or "unnamed",
         "mime_type": mime_type,
-        "size_in_bytes": uploaded.size_in_bytes,
+        "size_in_bytes": inspected.size_in_bytes,
         "checksum_algo": "sha256",
-        "checksum_value": uploaded.checksum_value,
+        "checksum_value": inspected.checksum_value,
         "storage_backend": "postgresql",
         "storage_key": None,
         "content_status": "available",
     }, version)
-    configured_storage().store(connection, component_id, uploaded.content)
     _append_content_event(connection, component_id, "CONTENT_REPLACED", {
         "file_name": component["file_name"], "mime_type": mime_type,
         "size_in_bytes": uploaded.size_in_bytes, "checksum_algo": "sha256",

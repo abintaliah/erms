@@ -1,8 +1,12 @@
+import hashlib
 import os
 
 import psycopg
 import pytest
+from psycopg.rows import dict_row
 from fastapi.testclient import TestClient
+
+from backend.services.api.content_cleanup import cleanup_content
 
 from backend.services.api.config import load_environment
 
@@ -230,8 +234,11 @@ def test_closed_aggregation_makes_its_entire_subtree_immutable(client: TestClien
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
         with pytest.raises(psycopg.errors.RaiseException):
             connection.execute(
-                "UPDATE digital_component_blobs SET content = %s WHERE digital_component_id = %s",
-                (b"bypass", component["id"]),
+                """UPDATE digital_component_blobs SET content = %s, segment_size = %s
+                   WHERE content_set_id = (
+                       SELECT active_content_set_id FROM digital_components WHERE id = %s
+                   )""",
+                (b"bypass", len(b"bypass"), component["id"]),
             )
         connection.rollback()
     assert client.post("/api/v1/records", json={
@@ -746,6 +753,124 @@ def test_upload_download_replace_and_delete_content(client: TestClient, record: 
     assert all(event["after_state"] is None for event in domain_events)
 
 
+def test_segmented_content_and_byte_ranges(client: TestClient, record: dict, monkeypatch):
+    monkeypatch.setenv("CONTENT_SEGMENT_SIZE_BYTES", "4")
+    payload = b"0123456789ABC"
+    uploaded = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": "1"},
+        files={"file": ("segmented.bin", payload, "application/octet-stream")},
+    )
+    assert uploaded.status_code == 201
+    component = uploaded.json()
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        segments = connection.execute(
+            """SELECT segment_no, segment_size
+               FROM digital_component_blobs
+               WHERE content_set_id = %s ORDER BY segment_no""",
+            (component["active_content_set_id"],),
+        ).fetchall()
+    assert segments == [(0, 4), (1, 4), (2, 4), (3, 1)]
+
+    across_boundary = client.get(
+        f"/api/v1/digital-components/{component['id']}/content",
+        headers={"Range": "bytes=3-9"},
+    )
+    assert across_boundary.status_code == 206
+    assert across_boundary.content == payload[3:10]
+    assert across_boundary.headers["content-range"] == f"bytes 3-9/{len(payload)}"
+    assert across_boundary.headers["accept-ranges"] == "bytes"
+
+    head = client.head(f"/api/v1/digital-components/{component['id']}/content")
+    assert head.status_code == 200
+    assert head.content == b""
+    assert head.headers["content-length"] == str(len(payload))
+    assert head.headers["accept-ranges"] == "bytes"
+
+    suffix = client.get(
+        f"/api/v1/digital-components/{component['id']}/content",
+        headers={"Range": "bytes=-4"},
+    )
+    assert suffix.status_code == 206
+    assert suffix.content == payload[-4:]
+
+    unsatisfiable = client.get(
+        f"/api/v1/digital-components/{component['id']}/content",
+        headers={"Range": "bytes=999-1000"},
+    )
+    assert unsatisfiable.status_code == 416
+    assert unsatisfiable.headers["content-range"] == f"bytes */{len(payload)}"
+
+
+def test_200_mib_upload_is_segmented_and_reconstructs_exactly(
+    client: TestClient, record: dict, monkeypatch, tmp_path,
+):
+    """Exercise a genuinely large upload against the disposable PostgreSQL instance."""
+    file_size = 200 * 1024 * 1024
+    segment_size = 16 * 1024 * 1024
+    source_path = tmp_path / "generated-200-mib.bin"
+    source_digest = hashlib.sha256()
+    write_block = bytes(range(256)) * 4096  # 1 MiB deterministic block
+
+    monkeypatch.setenv("MAX_UPLOAD_SIZE_BYTES", str(file_size))
+    monkeypatch.setenv("CONTENT_SEGMENT_SIZE_BYTES", str(segment_size))
+
+    try:
+        with source_path.open("wb") as source:
+            for _ in range(file_size // len(write_block)):
+                source.write(write_block)
+                source_digest.update(write_block)
+
+        with source_path.open("rb") as source:
+            uploaded = client.post(
+                f"/api/v1/records/{record['id']}/digital-components/upload",
+                data={"component_order": "1"},
+                files={"file": (source_path.name, source, "application/octet-stream")},
+            )
+
+        assert uploaded.status_code == 201, uploaded.text
+        component = uploaded.json()
+        assert component["size_in_bytes"] == file_size
+        assert component["checksum_value"] == source_digest.hexdigest()
+
+        reconstructed_digest = hashlib.sha256()
+        reconstructed_size = 0
+        observed_sizes = []
+        with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+            with connection.cursor(name="large_file_segments") as cursor:
+                cursor.execute(
+                    """SELECT segment_no, segment_size, content
+                       FROM digital_component_blobs
+                       WHERE content_set_id = %s
+                       ORDER BY segment_no""",
+                    (component["active_content_set_id"],),
+                )
+                for expected_segment_no, row in enumerate(cursor):
+                    segment_no, stored_size, content = row
+                    assert segment_no == expected_segment_no
+                    assert stored_size == len(content)
+                    observed_sizes.append(stored_size)
+                    reconstructed_size += len(content)
+                    reconstructed_digest.update(content)
+
+        assert observed_sizes == [segment_size] * 12 + [8 * 1024 * 1024]
+        assert reconstructed_size == file_size
+        assert reconstructed_digest.hexdigest() == source_digest.hexdigest()
+
+        boundary_start = segment_size - 8
+        ranged = client.get(
+            f"/api/v1/digital-components/{component['id']}/content",
+            headers={"Range": f"bytes={boundary_start}-{boundary_start + 15}"},
+        )
+        assert ranged.status_code == 206
+        assert ranged.content == write_block[-8:] + write_block[:8]
+        assert ranged.headers["content-range"] == (
+            f"bytes {boundary_start}-{boundary_start + 15}/{file_size}"
+        )
+    finally:
+        source_path.unlink(missing_ok=True)
+
+
 def test_pdf_rendition_is_inline_and_audited(client: TestClient, record: dict):
     pdf = b"%PDF-1.4\n% minimal test fixture\n%%EOF"
     uploaded = client.post(
@@ -851,6 +976,36 @@ def test_record_draft_component_can_be_removed_and_incomplete_commit_rolls_back(
     failed = client.post(f"/api/v1/record-drafts/{draft['id']}/commit")
     assert failed.status_code == 422
     assert client.get("/api/v1/records").json() == []
+
+
+def test_expired_draft_cleanup_removes_staged_segments(client):
+    draft = client.post("/api/v1/record-drafts", json={}).json()
+    staged = client.post(
+        f"/api/v1/record-drafts/{draft['id']}/components",
+        data={"component_order": "1"},
+        files={"file": ("temporary.bin", b"temporary-content", "application/octet-stream")},
+    )
+    assert staged.status_code == 201
+    with psycopg.connect(os.environ["DATABASE_URL"], row_factory=dict_row) as connection:
+        connection.execute(
+            "UPDATE record_drafts SET expires_at = CURRENT_TIMESTAMP - interval '1 minute' WHERE id = %s",
+            (draft["id"],),
+        )
+        dry_run = cleanup_content(connection, dry_run=True)
+        assert dry_run.removed_drafts == 1
+        assert connection.execute(
+            "SELECT count(*) AS count FROM record_draft_component_blobs"
+        ).fetchone()["count"] > 0
+    with psycopg.connect(os.environ["DATABASE_URL"], row_factory=dict_row) as connection:
+        result = cleanup_content(connection)
+        assert result.removed_drafts == 1
+        assert result.reclaimed_bytes == len(b"temporary-content")
+        assert connection.execute(
+            "SELECT count(*) AS count FROM record_draft_component_blobs"
+        ).fetchone()["count"] == 0
+        assert connection.execute(
+            "SELECT count(*) AS count FROM record_drafts WHERE id = %s", (draft["id"],)
+        ).fetchone()["count"] == 0
 
 
 def test_committed_components_can_be_reordered_and_removed_without_order_gaps(client, record):

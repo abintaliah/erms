@@ -692,11 +692,30 @@ CREATE TABLE IF NOT EXISTS record_draft_components (
     size_in_bytes bigint NOT NULL CHECK (size_in_bytes >= 0),
     checksum_algo text NOT NULL,
     checksum_value text NOT NULL,
-    content bytea NOT NULL,
+    content_status text NOT NULL DEFAULT 'uploading'
+        CHECK (content_status IN ('uploading', 'interrupted', 'finalizing', 'available', 'failed', 'cancelled', 'expired')),
+    segment_count integer CHECK (segment_count IS NULL OR segment_count >= 0),
+    upload_completed_at timestamptz,
     CONSTRAINT record_draft_components_draft_order_unique
         UNIQUE (draft_id, component_order) DEFERRABLE INITIALLY IMMEDIATE
 );
 CREATE INDEX IF NOT EXISTS record_draft_components_draft_id_idx ON record_draft_components (draft_id);
+
+CREATE TABLE IF NOT EXISTS record_draft_component_blobs (
+    id bigserial PRIMARY KEY,
+    record_draft_component_id bigint NOT NULL
+        REFERENCES record_draft_components (id) ON DELETE CASCADE,
+    segment_no integer NOT NULL CHECK (segment_no >= 0),
+    segment_size integer NOT NULL CHECK (segment_size > 0),
+    segment_checksum_algo text,
+    segment_checksum_value text,
+    content bytea NOT NULL,
+    date_stored timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (record_draft_component_id, segment_no),
+    CHECK (segment_size = octet_length(content))
+);
+CREATE INDEX IF NOT EXISTS record_draft_component_blobs_component_order_idx
+    ON record_draft_component_blobs (record_draft_component_id, segment_no);
 
 CREATE OR REPLACE FUNCTION touch_record_draft() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -740,14 +759,16 @@ ALTER TABLE user_role_assignments ADD CONSTRAINT user_role_assignments_version_p
 ALTER TABLE digital_components
     ADD COLUMN IF NOT EXISTS storage_backend text NOT NULL DEFAULT 'postgresql',
     ADD COLUMN IF NOT EXISTS storage_key text,
-    ADD COLUMN IF NOT EXISTS content_status text NOT NULL DEFAULT 'pending';
+    ADD COLUMN IF NOT EXISTS content_status text NOT NULL DEFAULT 'pending',
+    ADD COLUMN IF NOT EXISTS active_content_set_id bigint,
+    ADD COLUMN IF NOT EXISTS upload_completed_at timestamptz;
 
 ALTER TABLE digital_components DROP CONSTRAINT IF EXISTS digital_components_storage_backend_valid;
 ALTER TABLE digital_components ADD CONSTRAINT digital_components_storage_backend_valid
     CHECK (storage_backend IN ('postgresql', 's3'));
 ALTER TABLE digital_components DROP CONSTRAINT IF EXISTS digital_components_content_status_valid;
 ALTER TABLE digital_components ADD CONSTRAINT digital_components_content_status_valid
-    CHECK (content_status IN ('pending', 'available', 'failed', 'quarantined', 'deleted'));
+    CHECK (content_status IN ('pending', 'uploading', 'available', 'failed', 'quarantined', 'deleted'));
 ALTER TABLE digital_components DROP CONSTRAINT IF EXISTS digital_components_storage_location_valid;
 ALTER TABLE digital_components ADD CONSTRAINT digital_components_storage_location_valid
     CHECK (
@@ -755,12 +776,68 @@ ALTER TABLE digital_components ADD CONSTRAINT digital_components_storage_locatio
         OR (storage_backend = 's3' AND storage_key IS NOT NULL AND btrim(storage_key) <> '')
     );
 
-CREATE TABLE IF NOT EXISTS digital_component_blobs (
-    digital_component_id bigint PRIMARY KEY
-        REFERENCES digital_components (id) ON DELETE CASCADE,
-    content              bytea NOT NULL,
-    date_stored          timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS digital_component_content_sets (
+    id bigserial PRIMARY KEY,
+    digital_component_id bigint NOT NULL REFERENCES digital_components (id) ON DELETE CASCADE,
+    status text NOT NULL CHECK (status IN ('staged', 'active', 'superseded', 'failed')),
+    size_in_bytes bigint CHECK (size_in_bytes IS NULL OR size_in_bytes >= 0),
+    segment_count integer CHECK (segment_count IS NULL OR segment_count >= 0),
+    checksum_algo text,
+    checksum_value text,
+    date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    date_completed timestamptz,
+    UNIQUE (digital_component_id, id)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS digital_component_one_active_content_set_idx
+    ON digital_component_content_sets (digital_component_id) WHERE status = 'active';
+
+ALTER TABLE digital_components DROP CONSTRAINT IF EXISTS digital_components_active_content_set_fk;
+ALTER TABLE digital_components ADD CONSTRAINT digital_components_active_content_set_fk
+    FOREIGN KEY (id, active_content_set_id)
+    REFERENCES digital_component_content_sets (digital_component_id, id)
+    DEFERRABLE INITIALLY DEFERRED;
+
+CREATE TABLE IF NOT EXISTS digital_component_blobs (
+    id bigserial PRIMARY KEY,
+    content_set_id bigint NOT NULL REFERENCES digital_component_content_sets (id) ON DELETE CASCADE,
+    segment_no integer NOT NULL CHECK (segment_no >= 0),
+    segment_size integer NOT NULL CHECK (segment_size > 0),
+    segment_checksum_algo text,
+    segment_checksum_value text,
+    content bytea NOT NULL,
+    date_stored timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (content_set_id, segment_no),
+    CHECK (segment_size = octet_length(content))
+);
+CREATE INDEX IF NOT EXISTS digital_component_blobs_content_set_order_idx
+    ON digital_component_blobs (content_set_id, segment_no);
+
+CREATE TABLE IF NOT EXISTS content_upload_sessions (
+    id bigserial PRIMARY KEY,
+    digital_component_id bigint REFERENCES digital_components (id) ON DELETE CASCADE,
+    draft_component_id bigint REFERENCES record_draft_components (id) ON DELETE CASCADE,
+    content_set_id bigint REFERENCES digital_component_content_sets (id) ON DELETE CASCADE,
+    status text NOT NULL DEFAULT 'uploading'
+        CHECK (status IN ('uploading', 'interrupted', 'finalizing', 'completed', 'failed', 'cancelled', 'expired')),
+    next_segment_no integer NOT NULL DEFAULT 0 CHECK (next_segment_no >= 0),
+    bytes_received bigint NOT NULL DEFAULT 0 CHECK (bytes_received >= 0),
+    expected_size bigint CHECK (expected_size IS NULL OR expected_size >= 0),
+    checksum_algo text NOT NULL DEFAULT 'sha256',
+    date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    date_updated timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at timestamptz NOT NULL DEFAULT (CURRENT_TIMESTAMP + interval '1 day'),
+    CHECK (((digital_component_id IS NOT NULL)::integer + (draft_component_id IS NOT NULL)::integer) = 1),
+    CHECK ((digital_component_id IS NOT NULL AND content_set_id IS NOT NULL)
+        OR (draft_component_id IS NOT NULL AND content_set_id IS NULL))
+);
+CREATE INDEX IF NOT EXISTS content_upload_sessions_cleanup_idx
+    ON content_upload_sessions (status, expires_at);
+CREATE UNIQUE INDEX IF NOT EXISTS content_upload_sessions_open_component_idx
+    ON content_upload_sessions (digital_component_id)
+    WHERE status IN ('uploading', 'interrupted', 'finalizing');
+CREATE UNIQUE INDEX IF NOT EXISTS content_upload_sessions_open_draft_component_idx
+    ON content_upload_sessions (draft_component_id)
+    WHERE status IN ('uploading', 'interrupted', 'finalizing');
 
 CREATE OR REPLACE FUNCTION bump_entity_version()
 RETURNS trigger
@@ -783,9 +860,22 @@ BEFORE UPDATE ON records
 FOR EACH ROW EXECUTE FUNCTION bump_entity_version();
 
 DROP TRIGGER IF EXISTS digital_components_bump_version ON digital_components;
+CREATE OR REPLACE FUNCTION bump_digital_component_version()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF (to_jsonb(NEW) - ARRAY['active_content_set_id', 'upload_completed_at'])
+       IS DISTINCT FROM
+       (to_jsonb(OLD) - ARRAY['active_content_set_id', 'upload_completed_at']) THEN
+        NEW.version := OLD.version + 1;
+    ELSE
+        NEW.version := OLD.version;
+    END IF;
+    RETURN NEW;
+END;
+$$;
 CREATE TRIGGER digital_components_bump_version
 BEFORE UPDATE ON digital_components
-FOR EACH ROW EXECUTE FUNCTION bump_entity_version();
+FOR EACH ROW EXECUTE FUNCTION bump_digital_component_version();
 
 DROP TRIGGER IF EXISTS org_units_bump_version ON org_units;
 CREATE TRIGGER org_units_bump_version
@@ -1047,28 +1137,32 @@ CREATE OR REPLACE FUNCTION protect_blob_in_closed_aggregation()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
+DECLARE
+    target_content_set_id bigint;
 BEGIN
-    IF TG_OP = 'INSERT' THEN
-        PERFORM assert_record_effectively_open(
-            (SELECT record_id FROM digital_components WHERE id = NEW.digital_component_id)
-        );
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        PERFORM assert_record_effectively_open(
-            (SELECT record_id FROM digital_components WHERE id = OLD.digital_component_id)
-        );
-        RETURN OLD;
-    END IF;
-
+    target_content_set_id := CASE WHEN TG_OP = 'DELETE'
+        THEN OLD.content_set_id ELSE NEW.content_set_id END;
     PERFORM assert_record_effectively_open(
-        (SELECT record_id FROM digital_components WHERE id = OLD.digital_component_id)
+        (SELECT dc.record_id
+           FROM digital_component_content_sets content_set
+           JOIN digital_components dc ON dc.id = content_set.digital_component_id
+          WHERE content_set.id = target_content_set_id)
     );
-    IF NEW.digital_component_id IS DISTINCT FROM OLD.digital_component_id THEN
-        PERFORM assert_record_effectively_open(
-            (SELECT record_id FROM digital_components WHERE id = NEW.digital_component_id)
-        );
-    END IF;
-    RETURN NEW;
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION protect_content_set_in_closed_aggregation()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    target_component_id bigint;
+BEGIN
+    target_component_id := CASE WHEN TG_OP = 'DELETE'
+        THEN OLD.digital_component_id ELSE NEW.digital_component_id END;
+    PERFORM assert_record_effectively_open(
+        (SELECT record_id FROM digital_components WHERE id = target_component_id)
+    );
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
 END;
 $$;
 
@@ -1096,6 +1190,11 @@ DROP TRIGGER IF EXISTS digital_component_blobs_protect_closed_aggregation ON dig
 CREATE TRIGGER digital_component_blobs_protect_closed_aggregation
 BEFORE INSERT OR UPDATE OR DELETE ON digital_component_blobs
 FOR EACH ROW EXECUTE FUNCTION protect_blob_in_closed_aggregation();
+
+DROP TRIGGER IF EXISTS digital_component_content_sets_protect_closed_aggregation ON digital_component_content_sets;
+CREATE TRIGGER digital_component_content_sets_protect_closed_aggregation
+BEFORE INSERT OR UPDATE OR DELETE ON digital_component_content_sets
+FOR EACH ROW EXECUTE FUNCTION protect_content_set_in_closed_aggregation();
 
 INSERT INTO schema_migrations (version)
 VALUES ('006_enforce_closed_aggregations')

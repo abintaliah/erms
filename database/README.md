@@ -110,6 +110,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/026_add_classification_browser_indexes.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/027_segment_postgresql_content.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -130,6 +133,12 @@ Migration 026 adds the compound relationship-and-business-identifier indexes
 used by the cursor-paginated classification, aggregation, and record browser.
 See
 [`../docs/aggregation-classification-browser.md`](../docs/aggregation-classification-browser.md).
+Migration 027 converts committed and draft binary content from one `bytea`
+value per file to ordered segments, creates active/staged content sets and
+upload sessions, and preserves existing content as segment zero. It is
+transactional but intentionally does not use the command-line `-1` wrapper
+because the migration contains its own transaction. See
+[`../docs/content-storage.md`](../docs/content-storage.md).
 Migration 004 adds transactional record drafts. Migration 005 adds local
 credentials, database-backed login sessions, and the original human/system
 account types.
