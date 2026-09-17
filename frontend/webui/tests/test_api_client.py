@@ -164,6 +164,34 @@ def test_delete_sends_if_match_version():
     assert captured == {"method": "DELETE", "path": "/api/v1/records/17", "version": "6"}
 
 
+def test_favourite_client_uses_expected_routes():
+    requests = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path))
+        if request.method == "GET":
+            return httpx.Response(200, json={"aggregations": [], "records": []})
+        return httpx.Response(204)
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.favourites()
+            await client.favourite("aggregations", 7)
+            await client.unfavourite("records", 8)
+            with pytest.raises(ValueError):
+                await client.favourite("users", 9)
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert requests == [
+        ("GET", "/api/v1/favourites"),
+        ("PUT", "/api/v1/favourites/aggregations/7"),
+        ("DELETE", "/api/v1/favourites/records/8"),
+    ]
+
+
 def test_api_error_preserves_conflict_details():
     async def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(

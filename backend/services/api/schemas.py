@@ -155,6 +155,29 @@ class BrowseRecordNode(ApiModel):
     digital_component_count: int
 
 
+class FavouriteAggregationRead(ApiModel):
+    id: int
+    aggregation_number: str
+    title: str
+    parent_aggregation_id: int | None
+    date_favourited: datetime
+
+
+class FavouriteRecordRead(ApiModel):
+    id: int
+    record_number: str
+    title: str
+    aggregation_id: int
+    aggregation_number: str
+    aggregation_title: str
+    date_favourited: datetime
+
+
+class FavouritesRead(ApiModel):
+    aggregations: list[FavouriteAggregationRead]
+    records: list[FavouriteRecordRead]
+
+
 BrowseNode = TypeVar("BrowseNode")
 
 

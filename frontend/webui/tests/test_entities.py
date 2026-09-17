@@ -4,10 +4,14 @@ from types import SimpleNamespace
 import pytest
 
 from frontend.webui.app import (
+    AGGREGATION_SUMMARY_LAYOUT_CLASSES,
     CHILD_AGGREGATION_CLASSIFICATION_HELP,
     CLASSIFICATION_WORKSPACE_SEARCH_FIELDS,
     CLASSIFICATION_SELECTOR_SEARCH_FIELDS,
     RECORD_UPLOAD_WAIT_MESSAGE,
+    RECORD_DETAIL_HEADER_CLASSES,
+    RECORD_DETAIL_TITLE_CLASSES,
+    STOP_PROPAGATION_CLICK_HANDLER,
     buffer_upload_batch,
     component_uploader,
     component_file_icon,
@@ -22,9 +26,11 @@ from frontend.webui.app import native_preview_kind
 from frontend.webui.entities import ENTITIES
 from frontend.webui.config import (
     classification_recent_selection_limit,
+    dashboard_favourite_item_limit,
     dashboard_recent_days,
     dashboard_recent_item_limit,
 )
+from frontend.webui.app import favourite_preview
 
 
 def test_native_preview_kind_uses_safe_browser_renderers():
@@ -122,6 +128,19 @@ def test_dashboard_recent_configuration(monkeypatch):
     assert dashboard_recent_days() == 14
 
 
+def test_dashboard_favourite_configuration_and_preview(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_FAVOURITE_ITEM_LIMIT", "2")
+    assert dashboard_favourite_item_limit() == 2
+    items = [{"id": 1}, {"id": 2}, {"id": 3}]
+    assert favourite_preview(items, 2) == (items[:2], True)
+    assert favourite_preview(items[:2], 2) == (items[:2], False)
+
+
+def test_dashboard_favourite_configuration_defaults_to_five(monkeypatch):
+    monkeypatch.delenv("DASHBOARD_FAVOURITE_ITEM_LIMIT", raising=False)
+    assert dashboard_favourite_item_limit() == 5
+
+
 def test_classification_recent_selection_configuration(monkeypatch):
     monkeypatch.setenv("CLASSIFICATION_RECENT_SELECTION_LIMIT", "6")
     assert classification_recent_selection_limit() == 6
@@ -145,10 +164,30 @@ def test_contextual_form_help_explains_disabled_controls():
     assert RECORD_UPLOAD_WAIT_MESSAGE == "Please wait until all files have finished uploading."
 
 
+def test_aggregation_summary_has_non_collapsing_flex_layout():
+    assert "flex-1" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
+    assert "min-w-[360px]" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
+
+
+def test_record_detail_header_keeps_controls_visible_beside_long_titles():
+    assert "no-wrap" in RECORD_DETAIL_HEADER_CLASSES
+    assert "grow" in RECORD_DETAIL_TITLE_CLASSES
+    assert "min-w-0" in RECORD_DETAIL_TITLE_CLASSES
+
+
+def test_favourite_click_handler_stops_propagation_inside_function():
+    assert STOP_PROPAGATION_CLICK_HANDLER.startswith("(event) =>")
+    assert "event.stopPropagation(); emit();" in STOP_PROPAGATION_CLICK_HANDLER
+
+
 def test_dashboard_recent_configuration_rejects_non_positive_values(monkeypatch):
     monkeypatch.setenv("DASHBOARD_RECENT_ITEM_LIMIT", "0")
     with pytest.raises(RuntimeError, match="must be at least 1"):
         dashboard_recent_item_limit()
+
+    monkeypatch.setenv("DASHBOARD_FAVOURITE_ITEM_LIMIT", "0")
+    with pytest.raises(RuntimeError, match="must be at least 1"):
+        dashboard_favourite_item_limit()
 
 
 def test_component_display_helpers_prioritize_readable_file_information():

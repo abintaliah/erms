@@ -12,6 +12,7 @@ from nicegui import app, background_tasks, context, events, ui
 from .api_client import ApiError, ErmsApiClient
 from .config import (
     api_url,
+    dashboard_favourite_item_limit,
     dashboard_recent_days,
     dashboard_recent_item_limit,
     classification_recent_selection_limit,
@@ -32,6 +33,17 @@ CHILD_AGGREGATION_CLASSIFICATION_HELP = (
     "and cannot have a classification assigned directly."
 )
 RECORD_UPLOAD_WAIT_MESSAGE = "Please wait until all files have finished uploading."
+AGGREGATION_SUMMARY_LAYOUT_CLASSES = (
+    "bg-blue-50 border border-blue-100 shadow-none flex-1 min-w-[360px]"
+)
+RECORD_DETAIL_HEADER_CLASSES = "w-full items-start gap-2 no-wrap"
+RECORD_DETAIL_TITLE_CLASSES = "gap-0 grow min-w-0"
+STOP_PROPAGATION_CLICK_HANDLER = "(event) => { event.stopPropagation(); emit(); }"
+
+
+def favourite_preview(items: list[dict[str, Any]], limit: int) -> tuple[list[dict[str, Any]], bool]:
+    """Return a bounded Dashboard preview and whether more entries exist."""
+    return items[:limit], len(items) > limit
 
 
 def display_value(value: Any) -> str:
@@ -429,6 +441,8 @@ def index() -> None:
         "resource": "dashboard", "rows": [], "searched": False,
         "recent_created": [], "recent_updated": [], "aggregation_detail": None,
         "lifecycle_filter": "all", "aggregation_mode": "search",
+        "favourites": {"aggregations": [], "records": []},
+        "favourite_ids": {"aggregations": set(), "records": set()},
     }
 
     ui.add_css("""
@@ -562,6 +576,8 @@ def index() -> None:
         """Remove protected data as soon as there is no authenticated principal."""
         state.update(resource="dashboard", rows=[], searched=False, aggregation_detail=None)
         state.pop("aggregation_browse", None)
+        state["favourites"] = {"aggregations": [], "records": []}
+        state["favourite_ids"] = {"aggregations": set(), "records": set()}
         title.text = ""
         subtitle.text = ""
         guidance.text = ""
@@ -586,6 +602,87 @@ def index() -> None:
 
     def show_authenticated_view() -> None:
         content_card.set_visibility(True)
+
+    async def reload_favourites() -> dict[str, list[dict[str, Any]]]:
+        favourites = await api.favourites()
+        state["favourites"] = favourites
+        state["favourite_ids"] = {
+            resource: {int(item["id"]) for item in favourites[resource]}
+            for resource in ("aggregations", "records")
+        }
+        return favourites
+
+    def favourite_state(resource: str, entity_id: int) -> bool:
+        return int(entity_id) in state["favourite_ids"][resource]
+
+    def apply_favourite_button(button: Any, tooltip: Any, selected: bool) -> None:
+        label = "Remove from favourites" if selected else "Add to favourites"
+        button.props(remove="icon color aria-label")
+        button.props(
+            f"icon={'favorite' if selected else 'favorite_border'} "
+            f"color={'red' if selected else 'primary'} aria-label='{label}'"
+        )
+        tooltip.text = label
+        button.update()
+        tooltip.update()
+
+    async def toggle_favourite(
+        resource: str, entity_id: int, *, button: Any | None = None,
+        tooltip: Any | None = None, on_changed: Any | None = None,
+    ) -> bool:
+        was_selected = favourite_state(resource, entity_id)
+        now_selected = not was_selected
+        if button is not None:
+            button.disable()
+            if tooltip is not None:
+                apply_favourite_button(button, tooltip, now_selected)
+        ids = state["favourite_ids"][resource]
+        (ids.add if now_selected else ids.discard)(int(entity_id))
+        try:
+            if now_selected:
+                await api.favourite(resource, entity_id)
+            else:
+                await api.unfavourite(resource, entity_id)
+            ui.notify(
+                "Added to favourites" if now_selected else "Removed from favourites",
+                color="positive",
+            )
+            if on_changed is not None:
+                result = on_changed(now_selected)
+                if asyncio.iscoroutine(result):
+                    await result
+            return now_selected
+        except ApiError as error:
+            (ids.add if was_selected else ids.discard)(int(entity_id))
+            if button is not None and tooltip is not None:
+                apply_favourite_button(button, tooltip, was_selected)
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return was_selected
+        finally:
+            if button is not None:
+                button.enable()
+
+    def favourite_button(resource: str, entity_id: int, *, on_changed: Any | None = None) -> Any:
+        selected = favourite_state(resource, entity_id)
+        button = ui.button(
+            icon="favorite" if selected else "favorite_border",
+        ).props(
+            f"flat round dense color={'red' if selected else 'primary'} "
+            f"aria-label='{'Remove from favourites' if selected else 'Add to favourites'}'"
+        )
+        with button:
+            tooltip = ui.tooltip(
+                "Remove from favourites" if selected else "Add to favourites"
+            )
+        button.on(
+            "click",
+            lambda: toggle_favourite(
+                resource, entity_id, button=button, tooltip=tooltip,
+                on_changed=on_changed,
+            ),
+            js_handler=STOP_PROPAGATION_CLICK_HANDLER,
+        )
+        return button
 
     entity_types = {
         "aggregations": "aggregation", "records": "record",
@@ -1150,11 +1247,12 @@ def index() -> None:
             confirmation.open()
 
         with dialog, ui.card().classes("w-[720px] max-w-full"):
-            with ui.row().classes("w-full items-start"):
+            with ui.row().classes(RECORD_DETAIL_HEADER_CLASSES):
                 ui.avatar(icon="description", color="blue-1", text_color="primary")
-                with ui.column().classes("gap-0 grow"):
-                    ui.label(record["title"]).classes("text-xl font-semibold")
+                with ui.column().classes(RECORD_DETAIL_TITLE_CLASSES):
+                    ui.label(record["title"]).classes("text-xl font-semibold break-words")
                     ui.label(record["record_number"]).classes("text-sm text-primary font-medium")
+                favourite_button("records", record["id"])
                 ui.button(icon="close", on_click=dialog.close).props("flat round")
             if record.get("_effectively_closed"):
                 with ui.row().classes("w-full items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg"):
@@ -2104,13 +2202,16 @@ def index() -> None:
                     ui.icon("chevron_right").classes("text-slate-400")
                     ui.label(current["title"]).classes("font-semibold text-slate-800")
 
-                with ui.row().classes("w-full p-5 gap-4"):
-                    with ui.card().classes("bg-blue-50 border border-blue-100 shadow-none grow"):
-                        with ui.row().classes("items-center gap-3"):
+                with ui.row().classes("w-full p-5 gap-4 flex-wrap items-stretch"):
+                    with ui.card().classes(
+                        AGGREGATION_SUMMARY_LAYOUT_CLASSES
+                    ):
+                        with ui.row().classes("w-full items-center gap-3 no-wrap"):
                             ui.avatar(icon="folder", color="primary", text_color="white")
-                            with ui.column().classes("gap-0"):
+                            with ui.column().classes("gap-0 grow min-w-0"):
                                 ui.label(current["aggregation_number"]).classes("text-xs text-primary font-semibold")
-                                ui.label(current["title"]).classes("text-lg font-semibold")
+                                ui.label(current["title"]).classes("text-lg font-semibold break-words")
+                            favourite_button("aggregations", current["id"])
                         if current.get("description"):
                             ui.label(current["description"]).classes("text-sm text-slate-600")
                         with ui.row().classes("w-full justify-end"):
@@ -2215,6 +2316,8 @@ def index() -> None:
                                     with ui.column().classes("gap-0"):
                                         ui.label(child["title"]).classes("font-semibold")
                                         ui.label(child["aggregation_number"]).classes("text-xs text-slate-500")
+                                    ui.space()
+                                    favourite_button("aggregations", child["id"])
                                     if child_closure:
                                         ui.badge("Closed", color="amber-8").props("outline")
 
@@ -2222,6 +2325,8 @@ def index() -> None:
                 if not records:
                     ui.label("This aggregation does not contain any records.").classes("px-5 pb-6 text-slate-500")
                 else:
+                    for row in records:
+                        row["_is_favourite"] = favourite_state("records", row["id"])
                     record_table = ui.table(
                         columns=[
                             {"name": "record_number", "label": "Number", "field": "record_number", "align": "left"},
@@ -2233,9 +2338,18 @@ def index() -> None:
                         row_key="id",
                     ).props("flat separator=horizontal").classes("w-full")
                     add_timestamp_slots(record_table, ["date_originated"])
-                    record_table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round icon="open_in_new" color="primary" @click="$parent.$emit(\'open_record\', props.row)"><q-tooltip>Open record</q-tooltip></q-btn><q-btn flat round icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn></q-td>')
+                    record_table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round :icon="props.row._is_favourite ? \'favorite\' : \'favorite_border\'" :color="props.row._is_favourite ? \'red\' : \'primary\'" :aria-label="props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\'" @click.stop="$parent.$emit(\'toggle_favourite\', props.row)"><q-tooltip>{{ props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\' }}</q-tooltip></q-btn><q-btn flat round icon="open_in_new" color="primary" @click="$parent.$emit(\'open_record\', props.row)"><q-tooltip>Open record</q-tooltip></q-btn><q-btn flat round icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn></q-td>')
                     record_table.on("open_record", lambda event: show_record_details(event.args))
                     record_table.on("history", lambda event: show_entity_history("records", event.args))
+                    async def toggle_contained_record(event) -> None:
+                        row = event.args
+                        selected = await toggle_favourite("records", row["id"])
+                        for table_row in record_table.rows:
+                            if table_row["id"] == row["id"]:
+                                table_row["_is_favourite"] = selected
+                                break
+                        record_table.update()
+                    record_table.on("toggle_favourite", toggle_contained_record)
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
 
@@ -2332,6 +2446,9 @@ def index() -> None:
                 for key, label in spec.columns
             ]
             columns.append({"name": "actions", "label": "", "field": "actions", "align": "right"})
+            if spec.key in {"aggregations", "records"}:
+                for row in visible_rows:
+                    row["_is_favourite"] = favourite_state(spec.key, row["id"])
             table = ui.table(columns=columns, rows=visible_rows, row_key="id", pagination=25).props("flat bordered separator=horizontal").classes("w-full")
             if lifecycle_filter is not None:
                 def apply_lifecycle_filter() -> None:
@@ -2390,7 +2507,8 @@ def index() -> None:
                 ''')
             if spec.key in {"records", "aggregations"}:
                 closed_label = f"Closed {spec.singular} metadata cannot be changed"
-                buttons = f'<q-btn flat round dense icon="edit" color="primary" :disable="props.row._effectively_closed" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>{{{{ props.row._effectively_closed ? \'{closed_label}\' : \'Edit\' }}}}</q-tooltip></q-btn>'
+                buttons = '<q-btn flat round dense :icon="props.row._is_favourite ? \'favorite\' : \'favorite_border\'" :color="props.row._is_favourite ? \'red\' : \'primary\'" :aria-label="props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\'" @click.stop="$parent.$emit(\'toggle_favourite\', props.row)"><q-tooltip>{{ props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\' }}</q-tooltip></q-btn>'
+                buttons += f'<q-btn flat round dense icon="edit" color="primary" :disable="props.row._effectively_closed" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>{{{{ props.row._effectively_closed ? \'{closed_label}\' : \'Edit\' }}}}</q-tooltip></q-btn>'
             else:
                 buttons = '<q-btn flat round dense icon="edit" color="primary" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>Edit</q-tooltip></q-btn>'
             buttons += '<q-btn flat round dense icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn>'
@@ -2411,6 +2529,16 @@ def index() -> None:
             table.add_slot("body-cell-actions", f'<q-td :props="props">{buttons}</q-td>')
             table.on("edit", lambda event: open_editor(event.args))
             table.on("history", lambda event, resource=spec.key: show_entity_history(resource, event.args))
+            if spec.key in {"aggregations", "records"}:
+                async def toggle_table_favourite(event) -> None:
+                    row = event.args
+                    selected = await toggle_favourite(spec.key, row["id"])
+                    for table_row in table.rows:
+                        if table_row["id"] == row["id"]:
+                            table_row["_is_favourite"] = selected
+                            break
+                    table.update()
+                table.on("toggle_favourite", toggle_table_favourite)
             if spec.key == "records":
                 table.on("components", lambda event: show_components(event.args))
             if spec.key == "aggregations":
@@ -2843,7 +2971,7 @@ def index() -> None:
                     "aggregations", "records", "classification-schemes",
                     "classifications", "org-units", "roles", "users", "event-history",
                 ]
-                count_results, scheme_rows, scheme_classification_counts, inactive_result, unclassified_result = await asyncio.gather(
+                count_results, scheme_rows, scheme_classification_counts, inactive_result, unclassified_result, favourites = await asyncio.gather(
                     asyncio.gather(*(api.count(resource) for resource in count_resources)),
                     api.list("classification-schemes"),
                     api.request("GET", "/api/v1/classification-schemes/classification-counts"),
@@ -2858,6 +2986,7 @@ def index() -> None:
                         ]},
                         "limit": 1,
                     }),
+                    reload_favourites(),
                 )
                 current_user_id = auth_state["principal"]["user"]["id"]
                 recent_limit = dashboard_recent_item_limit()
@@ -2929,6 +3058,7 @@ def index() -> None:
                 }
                 sessions = await api.login_sessions()
                 active_session_count = sum(row["status"] == "active" for row in sessions)
+                favourite_limit = dashboard_favourite_item_limit()
             except ApiError as error:
                 if getattr(page_client, "_deleted", False):
                     return
@@ -3009,6 +3139,136 @@ def index() -> None:
                                         ui.label(str(inactive_classification_count)).classes("text-xl font-bold text-amber-900")
                                         ui.label("Inactive classifications").classes("font-semibold")
                                         ui.label("Unavailable for new aggregation assignments.").classes("text-xs text-slate-500")
+
+                ui.label("Your favourites").classes("text-lg font-semibold mt-2")
+                favourites_area = ui.column().classes("w-full gap-3")
+
+                async def open_dashboard_favourite(resource: str, item: dict[str, Any]) -> None:
+                    try:
+                        entity = await api.get(resource, item["id"])
+                        if resource == "aggregations":
+                            await open_aggregation(entity)
+                        else:
+                            decorated = await decorate_for_spec(ENTITIES["records"], [entity])
+                            await show_record_details(decorated[0])
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+
+                def render_favourite_entry(
+                    resource: str, item: dict[str, Any], *, after_remove: Any,
+                ) -> None:
+                    icon = "folder" if resource == "aggregations" else "description"
+                    with ui.row().classes(
+                        "recent-card cursor-pointer w-full items-center no-wrap px-3 py-2 gap-3"
+                    ).on(
+                        "click",
+                        lambda _, selected=item, kind=resource: open_dashboard_favourite(kind, selected),
+                    ):
+                        ui.icon(icon).classes("text-primary")
+                        with ui.column().classes("gap-0 grow min-w-0"):
+                            ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
+                            number = item.get("aggregation_number") or item.get("record_number")
+                            ui.label(number).classes("text-xs text-slate-400")
+                            if resource == "records":
+                                ui.label(
+                                    f"{item['aggregation_number']} — {item['aggregation_title']}"
+                                ).classes("text-xs text-slate-400 line-clamp-1")
+                        remove_button = ui.button(
+                            icon="favorite", color="red",
+                        ).props("flat round dense aria-label='Remove from favourites'")
+                        remove_button.tooltip("Remove from favourites")
+                        remove_button.on(
+                            "click",
+                            lambda _, selected=item, kind=resource: after_remove(kind, selected),
+                            js_handler=STOP_PROPAGATION_CLICK_HANDLER,
+                        )
+                        ui.icon("chevron_right").classes("text-slate-300")
+
+                async def remove_dashboard_favourite(
+                    resource: str, item: dict[str, Any], *, dialog_refresh: Any | None = None,
+                ) -> None:
+                    try:
+                        await api.unfavourite(resource, item["id"])
+                        favourites[resource] = [
+                            entry for entry in favourites[resource]
+                            if entry["id"] != item["id"]
+                        ]
+                        state["favourites"] = favourites
+                        state["favourite_ids"][resource].discard(int(item["id"]))
+                        render_favourites_dashboard()
+                        if dialog_refresh is not None:
+                            dialog_refresh()
+                        ui.notify("Removed from favourites", color="positive")
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+
+                def show_all_favourites(resource: str) -> None:
+                    dialog = ui.dialog()
+                    with dialog, ui.card().classes("w-[760px] max-w-full max-h-[85vh]"):
+                        with ui.row().classes("w-full items-center"):
+                            ui.label(
+                                "Favourite aggregations" if resource == "aggregations" else "Favourite records"
+                            ).classes("text-xl font-semibold")
+                            ui.space()
+                            ui.button(icon="close", on_click=dialog.close).props("flat round")
+                        complete_list = ui.column().classes("w-full gap-2 max-h-[65vh] overflow-y-auto")
+
+                    def render_complete_list() -> None:
+                        complete_list.clear()
+                        with complete_list:
+                            if not favourites[resource]:
+                                ui.label(
+                                    "No favourite aggregations" if resource == "aggregations"
+                                    else "No favourite records"
+                                ).classes("text-sm text-slate-400 py-4")
+                            for item in favourites[resource]:
+                                render_favourite_entry(
+                                    resource, item,
+                                    after_remove=lambda kind, selected: remove_dashboard_favourite(
+                                        kind, selected, dialog_refresh=render_complete_list,
+                                    ),
+                                )
+
+                    render_complete_list()
+                    dialog.open()
+
+                def render_favourites_dashboard() -> None:
+                    favourites_area.clear()
+                    with favourites_area:
+                        if not favourites["aggregations"] and not favourites["records"]:
+                            with ui.card().classes("w-full shadow-none border border-slate-200 p-5"):
+                                ui.label(
+                                    "You haven't added any favourites yet. Select the heart on an aggregation or record for quick access here."
+                                ).classes("text-sm text-slate-500")
+                            return
+                        with ui.grid(columns=2).classes("w-full gap-5"):
+                            for resource, heading, icon, empty_label in (
+                                ("aggregations", "Favourite aggregations", "folder", "No favourite aggregations"),
+                                ("records", "Favourite records", "description", "No favourite records"),
+                            ):
+                                with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-3"):
+                                    with ui.row().classes("w-full items-center gap-2"):
+                                        ui.icon(icon, color="primary")
+                                        ui.label(heading).classes("font-semibold text-slate-800")
+                                        ui.space()
+                                        ui.badge(str(len(favourites[resource])), color="blue-grey").props("outline")
+                                    preview, has_more = favourite_preview(
+                                        favourites[resource], favourite_limit,
+                                    )
+                                    if not preview:
+                                        ui.label(empty_label).classes("text-sm text-slate-400 py-3")
+                                    for item in preview:
+                                        render_favourite_entry(
+                                            resource, item, after_remove=remove_dashboard_favourite,
+                                        )
+                                    if has_more:
+                                        ui.button(
+                                            f"View all ({len(favourites[resource])})",
+                                            icon="open_in_full",
+                                            on_click=lambda _, kind=resource: show_all_favourites(kind),
+                                        ).props("flat dense no-caps color=primary").classes("self-end")
+
+                render_favourites_dashboard()
 
                 ui.label("Your recent records activity").classes("text-lg font-semibold mt-2")
                 ui.label(
@@ -4818,6 +5078,7 @@ def index() -> None:
                 app.storage.user["session_token"] = token
                 api.set_session_token(token)
                 populate_user_menu(principal)
+                await reload_favourites()
                 login_password.value = ""
                 login_dialog.close()
                 if principal["must_change_password"]:
@@ -4857,6 +5118,7 @@ def index() -> None:
             try:
                 principal = await api.me()
                 populate_user_menu(principal)
+                await reload_favourites()
                 if principal["must_change_password"]:
                     with table_container:
                         await show_change_password()

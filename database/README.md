@@ -113,6 +113,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/027_segment_postgresql_content.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/028_add_user_favourites.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -139,6 +142,9 @@ upload sessions, and preserves existing content as segment zero. It is
 transactional but intentionally does not use the command-line `-1` wrapper
 because the migration contains its own transaction. See
 [`../docs/content-storage.md`](../docs/content-storage.md).
+Migration 028 adds private per-user aggregation and record favourites. The
+relationships use cascading foreign keys, so deleting a user or target entity
+cannot leave stale favourites.
 Migration 004 adds transactional record drafts. Migration 005 adds local
 credentials, database-backed login sessions, and the original human/system
 account types.
