@@ -2,8 +2,18 @@
 
 BEGIN;
 
-INSERT INTO aggregations (aggregation_number, title)
-VALUES ('AUDIT-AGG-001', 'Audited aggregation')
+INSERT INTO classification_schemes (code, title, date_published)
+VALUES ('AUDIT-TEST', 'Audit test scheme', CURRENT_TIMESTAMP)
+RETURNING id AS audit_scheme_id \gset
+INSERT INTO classifications (classification_scheme_id, code, title, is_terminal)
+VALUES (:audit_scheme_id, 'AUDIT-01', 'Audit test classification', true)
+RETURNING id AS audit_classification_id \gset
+INSERT INTO classification_retention_rules
+    (classification_id, current_period_years, intermediate_period_years, final_disposition)
+VALUES (:audit_classification_id, 5, 0, 'destruction');
+
+INSERT INTO aggregations (aggregation_number, title, classification_id)
+VALUES ('AUDIT-AGG-001', 'Audited aggregation', :audit_classification_id)
 RETURNING id AS audited_aggregation_id \gset
 
 UPDATE aggregations
@@ -39,8 +49,8 @@ END;
 $$;
 
 SAVEPOINT before_rolled_back_change;
-INSERT INTO aggregations (aggregation_number, title)
-VALUES ('AUDIT-ROLLBACK', 'This change will roll back');
+INSERT INTO aggregations (aggregation_number, title, classification_id)
+VALUES ('AUDIT-ROLLBACK', 'This change will roll back', :audit_classification_id);
 ROLLBACK TO SAVEPOINT before_rolled_back_change;
 
 DO $$

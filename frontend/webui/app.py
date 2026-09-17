@@ -14,6 +14,7 @@ from .config import (
     api_url,
     dashboard_recent_days,
     dashboard_recent_item_limit,
+    classification_recent_selection_limit,
     host,
     port,
     reload_enabled,
@@ -24,12 +25,18 @@ from .entities import ENTITIES, EntitySpec, FieldSpec
 
 app.add_static_files("/static/pdfjs", Path(__file__).with_name("static") / "pdfjs")
 
+CLASSIFICATION_WORKSPACE_SEARCH_FIELDS = ("code", "title", "description", "keywords")
+CLASSIFICATION_SELECTOR_SEARCH_FIELDS = ("code", "title", "description", "keywords")
+CHILD_AGGREGATION_CLASSIFICATION_HELP = (
+    "Child aggregations inherit classification governance from their root aggregation "
+    "and cannot have a classification assigned directly."
+)
+RECORD_UPLOAD_WAIT_MESSAGE = "Please wait until all files have finished uploading."
+
 
 def display_value(value: Any) -> str:
     if value is None:
         return "—"
-    if isinstance(value, str) and "T" in value:
-        return value.replace("T", " ").replace("+00:00", "Z")[:19]
     return str(value)
 
 
@@ -366,11 +373,23 @@ def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | N
             {"human": "Human user", "service": "Service account"},
             label=field.label, value=value or "human",
         ).props("outlined").classes("w-full")
+    if field.kind == "classification_type":
+        return ui.select(
+            {False: "Branch — may contain children", True: "Terminal — assignable to root aggregations"},
+            label=field.label, value=False if value is None else value,
+        ).props("outlined").classes("w-full")
+    if field.kind == "disposition":
+        return ui.select({
+            "destruction": "Destruction",
+            "transfer_to_external_archive": "Permanent preservation — external archive",
+            "selective_preservation": "Selective preservation",
+            "retain_as_local_archives": "Retain as local archives",
+        }, label=field.label, value=value, clearable=True).props("outlined").classes("w-full")
     if field.kind == "textarea":
         return ui.textarea(field.label, value=value or "").props("outlined autogrow").classes("w-full")
     if field.kind == "int":
         return ui.number(field.label, value=value, format="%.0f").props("outlined").classes("w-full")
-    if field.kind == "lookup":
+    if field.kind in {"lookup", "classification"}:
         return relationship_select(
             field.label, options or {}, value=value, required=field.required
         )
@@ -384,7 +403,7 @@ def form_payload(spec: EntitySpec, controls: dict[str, Any], *, creating: bool) 
     payload: dict[str, Any] = {}
     for field in spec.fields:
         value = controls[field.name].value
-        if field.kind in {"int", "lookup"} and value not in (None, ""):
+        if field.kind in {"int", "lookup", "classification"} and value not in (None, ""):
             value = int(value)
         if field.kind == "datetime" and value:
             value = datetime.fromisoformat(value).isoformat()
@@ -446,6 +465,13 @@ def index() -> None:
         .audit-event { border-left: 3px solid #bfdbfe; box-shadow: none; }
         .audit-event:hover { border-left-color: #3b82f6; background: #f8fbff; }
         .audit-value { max-width: 360px; overflow-wrap: anywhere; white-space: pre-wrap; }
+        .q-tooltip {
+            max-width: min(360px, calc(100vw - 32px)) !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere;
+            line-height: 1.35;
+            text-align: left;
+        }
         .dashboard-stat { border: 1px solid #e2e8f0; box-shadow: none; transition: all .16s ease; }
         .dashboard-stat:hover { border-color: #93b4e8; transform: translateY(-2px); box-shadow: 0 8px 22px rgba(37,99,235,.08); }
     """)
@@ -492,7 +518,7 @@ def index() -> None:
         navigation_badges: dict[str, Any] = {}
         dashboard_navigation = ui.button("Dashboard", icon="dashboard").props("flat align=left no-caps").classes("w-full justify-start px-4 mt-4")
         for heading, entries in (
-            ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"))),
+            ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
             ("ORGANIZATION STRUCTURE", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
         ):
             ui.label(heading).classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
@@ -538,6 +564,15 @@ def index() -> None:
             badge.text = "—"
             badge.update()
 
+    def clear_signed_in_identity() -> None:
+        """Remove account identity and overlays before presenting sign-in again."""
+        user_menu.close()
+        auth_state["principal"] = None
+        current_user_name.text = "Not signed in"
+        current_user_email.text = ""
+        current_user_roles.clear()
+        clear_authenticated_view()
+
     def show_authenticated_view() -> None:
         content_card.set_visibility(True)
 
@@ -545,10 +580,12 @@ def index() -> None:
         "aggregations": "aggregation", "records": "record",
         "digital-components": "digital_component", "org-units": "org_unit",
         "users": "user", "roles": "role",
+        "classification-schemes": "classification_scheme",
+        "classifications": "classification",
     }
 
     async def refresh_navigation_counts() -> None:
-        resources = ["aggregations", "records", "org-units", "roles", "users", "event-history"]
+        resources = ["aggregations", "records", "classification-schemes", "org-units", "roles", "users", "event-history"]
         try:
             counts = await asyncio.gather(*(api.count(resource) for resource in resources))
             for resource, count in zip(resources, counts):
@@ -595,6 +632,8 @@ def index() -> None:
             "org_unit": (value("code"), value("name")),
             "user": (value("name"), value("email")),
             "role": (value("code"), value("name")),
+            "classification_scheme": (value("code"), value("title")),
+            "classification": (value("code"), value("title")),
         }
         primary, secondary = identities.get(entity_type, (None, None))
         identity = " — ".join(str(value) for value in (primary, secondary) if value)
@@ -631,6 +670,8 @@ def index() -> None:
                 "aggregation": "aggregations", "record": "records",
                 "digital_component": "digital-components", "org_unit": "org-units",
                 "user": "users", "role": "roles",
+                "classification_scheme": "classification-schemes",
+                "classification": "classifications",
             }
             resource = resources.get(event["entity_type"])
             if not resource:
@@ -662,8 +703,17 @@ def index() -> None:
                     await show_components(record)
             except ApiError as error:
                 ui.notify(error_message(error), color="negative", close_button=True)
+        elif entity_type == "classification_scheme":
+            await select_classification_workspace(initial_scheme_id=entity["id"])
+        elif entity_type == "classification":
+            await select_classification_workspace(
+                initial_scheme_id=entity["classification_scheme_id"],
+                initial_classification_id=entity["id"],
+            )
         elif entity_type in {"org_unit", "user", "role"}:
-            resource = {"org_unit": "org-units", "user": "users", "role": "roles"}[entity_type]
+            resource = {
+                "org_unit": "org-units", "user": "users", "role": "roles",
+            }[entity_type]
             await select_entity(resource)
             with table_container:
                 await open_editor(entity)
@@ -1135,6 +1185,19 @@ def index() -> None:
     async def decorate_for_spec(
         spec: EntitySpec, rows: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
+        if spec.key == "classifications":
+            schemes = await api.list("classification-schemes")
+            schemes_by_id = {item["id"]: item for item in schemes}
+            return [{
+                **item,
+                "type_display": {
+                    "name": "Terminal" if item.get("is_terminal") else "Branch",
+                    "code": "Assignable" if item.get("is_terminal") else "Hierarchy",
+                },
+                "scheme_display": relationship_cell(
+                    schemes_by_id.get(item.get("classification_scheme_id"))
+                ),
+            } for item in rows]
         if spec.key == "aggregations":
             all_aggregations = await api.list("aggregations")
             by_id = {item["id"]: item for item in all_aggregations}
@@ -1209,6 +1272,10 @@ def index() -> None:
             state["recent_created"] = []
             state["recent_updated"] = []
             return
+        if spec.key == "classifications":
+            state["recent_created"] = []
+            state["recent_updated"] = []
+            return
         created, updated = await api.recently_created(spec.key), await api.recently_updated(spec.key)
         state["recent_created"] = await decorate_for_spec(spec, created)
         state["recent_updated"] = await decorate_for_spec(spec, updated)
@@ -1244,13 +1311,10 @@ def index() -> None:
                 current_rows.clear()
                 current_rows.extend(rows)
                 component_area.clear()
+                component_list.set_visibility(bool(rows))
                 with component_area:
                     if rows:
                         render_component_cards(rows, move_draft_component, remove_draft_component)
-                    else:
-                        with ui.column().classes("w-full items-center py-8 gap-2 text-slate-400"):
-                            ui.icon("upload_file").classes("text-4xl")
-                            ui.label("Add one or more files before creating the record.")
             except ApiError as error:
                 with component_area:
                     ui.notify(error_message(error), color="negative")
@@ -1287,6 +1351,7 @@ def index() -> None:
                 return
             upload_state["pending"] += 1
             action_controls["commit"].disable()
+            action_controls["upload_wait"].set_visibility(True)
 
             async def stage_buffered_files() -> None:
                 try:
@@ -1311,6 +1376,7 @@ def index() -> None:
                     upload_state["pending"] -= 1
                     if upload_state["pending"] == 0:
                         action_controls["commit"].enable()
+                        action_controls["upload_wait"].set_visibility(False)
 
             background_tasks.create(
                 stage_buffered_files(), name=f"stage components for draft {draft['id']}"
@@ -1367,10 +1433,18 @@ def index() -> None:
                         ui.label("Digital components").classes("text-base font-semibold")
                         ui.label("Files remain staged until you create the record.").classes("text-xs text-slate-500")
                 uploader_control["uploader"] = component_uploader(upload_to_draft)
-                with ui.element("div").classes("component-list w-full mt-3"):
+                with ui.element("div").classes("component-list w-full mt-3") as component_list:
                     component_area = ui.element("div").classes("component-grid w-full")
+                component_list.set_visibility(False)
             ui.separator()
             with ui.row().classes("w-full justify-end gap-2 px-6 py-4"):
+                with ui.row().classes(
+                    "items-center gap-1 text-sm text-slate-500 mr-2"
+                ) as upload_wait:
+                    ui.icon("hourglass_top", size="18px")
+                    ui.label(RECORD_UPLOAD_WAIT_MESSAGE)
+                upload_wait.set_visibility(False)
+                action_controls["upload_wait"] = upload_wait
                 ui.button("Cancel draft", on_click=discard).props("flat color=grey-7")
                 action_controls["commit"] = ui.button("Create record", icon="check", on_click=commit).props("unelevated")
         dialog.open()
@@ -1394,40 +1468,237 @@ def index() -> None:
             await open_record_draft_editor()
             return
         lookup_options: dict[str, dict[int, str]] = {}
+        retention_rule: dict[str, Any] | None = None
         try:
+            if row and spec.key == "classifications":
+                try:
+                    retention_rule = await api.classification_retention_rule(row["id"])
+                except ApiError as error:
+                    if error.status_code != 404:
+                        raise
             for field in spec.fields:
                 if not field.lookup_resource:
                     continue
-                lookup_rows = await api.list(field.lookup_resource)
+                lookup_rows = await api.list(
+                    field.lookup_resource,
+                    **({"eligible": True} if field.kind == "classification" else {}),
+                )
                 if row and field.lookup_resource == spec.key:
                     lookup_rows = [item for item in lookup_rows if item["id"] != row["id"]]
-                lookup_options[field.name] = relationship_options(
-                    lookup_rows, field.lookup_label_fields
-                )
+                if field.kind == "classification":
+                    hierarchy_rows = await api.list("classifications")
+                    recent = await api.recent_classifications(
+                        classification_recent_selection_limit()
+                    )
+                    recent_ids = {item["id"] for item in recent}
+                    by_id = {item["id"]: item for item in hierarchy_rows}
+                    def classification_depth(item: dict[str, Any]) -> int:
+                        depth, parent_id, seen = 0, item.get("parent_classification_id"), set()
+                        while parent_id in by_id and parent_id not in seen:
+                            seen.add(parent_id); depth += 1
+                            parent_id = by_id[parent_id].get("parent_classification_id")
+                        return depth
+                    lookup_rows.sort(key=lambda item: (
+                        item["id"] not in recent_ids,
+                        classification_depth(item), item.get("code", ""),
+                    ))
+                    lookup_options[field.name] = {
+                        item["id"]: (
+                            ("★ Recent · " if item["id"] in recent_ids else "")
+                            + ("› " * classification_depth(item))
+                            + " · ".join(filter(None, (
+                                item.get(field_name)
+                                for field_name in CLASSIFICATION_SELECTOR_SEARCH_FIELDS
+                            )))
+                        ) for item in lookup_rows
+                    }
+                else:
+                    lookup_options[field.name] = relationship_options(
+                        lookup_rows, field.lookup_label_fields
+                    )
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
             return
+
+        async def browse_classification_tree(target_control: Any) -> None:
+            browser = ui.dialog()
+            content: Any = None
+
+            async def show_schemes() -> None:
+                try:
+                    schemes = await api.list("classification-schemes", eligible=True)
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+                    return
+                content.clear()
+                with content:
+                    ui.label("Published classification schemes").classes("text-lg font-semibold")
+                    ui.label("Choose a scheme to browse its classification hierarchy.").classes("text-sm text-slate-500")
+                    if not schemes:
+                        ui.label("No active published classification schemes are available.").classes("py-8 text-slate-400")
+                    for scheme in schemes:
+                        with ui.card().classes("w-full shadow-none border border-slate-200 cursor-pointer").on(
+                            "click", lambda _, selected=scheme: show_level(selected, None, [])
+                        ):
+                            with ui.row().classes("w-full items-start gap-3 no-wrap"):
+                                ui.avatar(
+                                    icon="account_tree", color="blue-1", text_color="primary"
+                                ).classes("shrink-0")
+                                with ui.column().classes("gap-0 grow min-w-0"):
+                                    ui.label(scheme["title"]).classes(
+                                        "w-full font-semibold whitespace-normal break-words"
+                                    )
+                                    ui.label(scheme["code"]).classes(
+                                        "w-full text-xs text-primary truncate"
+                                    )
+                                    if scheme.get("description"):
+                                        ui.label(scheme["description"]).classes(
+                                            "w-full text-xs text-slate-500 line-clamp-2"
+                                        )
+                                ui.icon("chevron_right").classes(
+                                    "text-slate-400 shrink-0 self-center"
+                                )
+
+            async def show_level(
+                scheme: dict[str, Any], parent: dict[str, Any] | None,
+                path: list[dict[str, Any]],
+            ) -> None:
+                try:
+                    rows = await api.list(
+                        "classifications",
+                        classification_scheme_id=scheme["id"],
+                        **({"roots_only": True} if parent is None else {"parent_classification_id": parent["id"]}),
+                    )
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+                    return
+                content.clear()
+                with content:
+                    with ui.row().classes("w-full items-center gap-1"):
+                        ui.button(icon="arrow_back", on_click=show_schemes if not path else lambda: show_level(scheme, path[-1] if path else None, path[:-1])).props("flat round dense").tooltip("Back")
+                        ui.label(scheme["title"]).classes("font-semibold")
+                        for ancestor in path:
+                            ui.icon("chevron_right", size="16px").classes("text-slate-400")
+                            ui.label(ancestor["code"]).classes("text-xs text-slate-500")
+                        if parent:
+                            ui.icon("chevron_right", size="16px").classes("text-slate-400")
+                            ui.label(parent["code"]).classes("text-xs font-semibold text-primary")
+                    if not rows:
+                        ui.label("This branch has no child classifications yet.").classes("py-8 text-slate-400")
+                    for classification in rows:
+                        async def choose(item=classification) -> None:
+                            if item["is_terminal"]:
+                                target_control.value = item["id"]
+                                target_control.update()
+                                browser.close()
+                            else:
+                                await show_level(
+                                    scheme, item,
+                                    [*path, parent] if parent else path,
+                                )
+                        with ui.card().classes("w-full shadow-none border border-slate-200 cursor-pointer").on("click", choose):
+                            with ui.row().classes("w-full items-center gap-3"):
+                                ui.avatar(
+                                    icon="label" if classification["is_terminal"] else "schema",
+                                    color="blue-1", text_color="primary",
+                                )
+                                with ui.column().classes("gap-0 grow"):
+                                    with ui.row().classes("items-center gap-2"):
+                                        ui.label(classification["title"]).classes("font-semibold")
+                                        ui.badge(
+                                            "Terminal" if classification["is_terminal"] else "Branch",
+                                            color="primary",
+                                        ).props("outline")
+                                    ui.label(classification["code"]).classes("text-xs text-primary")
+                                    if classification.get("description"):
+                                        ui.label(classification["description"]).classes("text-xs text-slate-500 line-clamp-2")
+                                ui.icon("check_circle" if classification["is_terminal"] else "chevron_right", color="primary")
+
+            with browser, ui.card().classes("w-[760px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)]"):
+                with ui.row().classes("w-full items-center"):
+                    ui.label("Browse classifications").classes("text-xl font-semibold")
+                    ui.space()
+                    ui.button(icon="close", on_click=browser.close).props("flat round")
+                content = ui.column().classes("w-full gap-2 overflow-y-auto max-h-[calc(100vh-150px)]")
+            browser.open()
+            await show_schemes()
+
         dialog = ui.dialog()
         controls: dict[str, Any] = {}
         with dialog, ui.card().classes("w-[620px] max-w-full"):
             ui.label(f"{'Add' if creating else 'Edit'} {spec.singular}").classes("text-xl font-semibold")
             with ui.column().classes("w-full gap-3"):
                 for field in spec.fields:
+                    source = retention_rule if field.name in {
+                        "current_period_years", "intermediate_period_years",
+                        "final_disposition", "instructions",
+                    } else row
                     controls[field.name] = field_input(
                         field,
-                        (initial_values or {}).get(field.name) if creating else row.get(field.name),
+                        (initial_values or {}).get(field.name) if creating else source.get(field.name) if source else None,
                         lookup_options.get(field.name),
                     )
                     if field.name in (locked_fields or set()):
                         controls[field.name].disable()
+                    if (
+                        spec.key == "classification-schemes"
+                        and field.name == "date_published"
+                        and not creating
+                    ):
+                        controls[field.name].disable()
+                        ui.label(
+                            "Use the Publish or Unpublish action to change publication status."
+                        ).classes("text-xs text-slate-500 -mt-2")
+                    if spec.key == "aggregations" and field.name == "classification_id":
+                        parent_id = (initial_values or {}).get("parent_aggregation_id") if creating else row.get("parent_aggregation_id")
+                        if parent_id is not None:
+                            controls[field.name].value = None
+                            controls[field.name].disable()
+                            with ui.row().classes(
+                                "w-full items-start gap-1 text-xs text-slate-500 -mt-2"
+                            ):
+                                ui.icon("info", size="16px").classes("mt-px shrink-0")
+                                ui.label(CHILD_AGGREGATION_CLASSIFICATION_HELP).classes(
+                                    "leading-5"
+                                )
+                        else:
+                            ui.button(
+                                "Browse classification tree", icon="account_tree",
+                                on_click=lambda control=controls[field.name]: browse_classification_tree(control),
+                            ).props("outline dense no-caps color=primary").classes("self-start")
 
             async def save() -> None:
                 try:
                     payload = form_payload(spec, controls, creating=creating)
+                    if spec.key == "aggregations":
+                        if payload.get("parent_aggregation_id") is None and payload.get("classification_id") is None:
+                            raise ValueError("A root aggregation must have a terminal classification")
+                    rule_payload = None
+                    if spec.key == "classifications":
+                        rule_values = {
+                            key: payload.pop(key, None) for key in (
+                                "current_period_years", "intermediate_period_years",
+                                "final_disposition", "instructions",
+                            )
+                        }
+                        if any(value not in (None, "") for value in rule_values.values()):
+                            required = ("current_period_years", "intermediate_period_years", "final_disposition")
+                            if any(rule_values[key] in (None, "") for key in required):
+                                raise ValueError("A direct retention rule requires both periods and a final disposition")
+                            rule_payload = rule_values
+                            if creating:
+                                payload["retention_rule"] = rule_payload
+                        if not creating:
+                            payload.pop("classification_scheme_id", None)
                     if creating:
                         saved = await api.create(spec.key, payload)
                     else:
                         saved = await api.update(spec.key, row["id"], row["version"], payload)
+                        if spec.key == "classifications" and rule_payload is not None:
+                            await api.put_classification_retention_rule(
+                                row["id"], rule_payload,
+                                retention_rule.get("version") if retention_rule else None,
+                            )
                     dialog.close()
                     ui.notify(f"{spec.singular.capitalize()} saved", color="positive")
                     if creating:
@@ -1656,6 +1927,20 @@ def index() -> None:
                 if item.get("parent_aggregation_id") == current["id"]
             ]
             records = await api.list("records", aggregation_id=current["id"])
+            effective_rule = None
+            local_retention_rule = None
+            classification_path = []
+            try:
+                effective_rule = await api.effective_retention_rule(current["id"])
+                if current.get("parent_aggregation_id") is None:
+                    local_retention_rule = await api.aggregation_retention_rule(current["id"])
+                if effective_rule.get("classification_id"):
+                    classification_path = await api.classification_path(
+                        effective_rule["classification_id"]
+                    )
+            except ApiError as error:
+                if error.status_code != 404:
+                    raise
             for record in records:
                 record["_effectively_closed"] = closure is not None
             state["aggregation_detail"] = current
@@ -1685,6 +1970,80 @@ def index() -> None:
                         await open_aggregation(reopened)
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True)
+
+                async def manage_local_retention_rule() -> None:
+                    dialog = ui.dialog()
+                    existing = local_retention_rule or {}
+                    with dialog, ui.card().classes("w-[680px] max-w-full"):
+                        ui.label("Local retention override").classes("text-xl font-semibold")
+                        ui.label(
+                            "This root-only rule overrides the classification rule for the complete aggregation hierarchy."
+                        ).classes("text-sm text-slate-500")
+                        with ui.grid(columns=2).classes("w-full gap-3"):
+                            current_years = ui.number(
+                                "Current retention (years)", value=existing.get("current_period_years"),
+                                min=0, format="%.0f",
+                            ).props("outlined").classes("w-full")
+                            intermediate_years = ui.number(
+                                "Intermediate retention (years)", value=existing.get("intermediate_period_years"),
+                                min=0, format="%.0f",
+                            ).props("outlined").classes("w-full")
+                        disposition = ui.select({
+                            "destruction": "Destruction",
+                            "transfer_to_external_archive": "Permanent preservation — external archive",
+                            "selective_preservation": "Selective preservation",
+                            "retain_as_local_archives": "Retain as local archives",
+                        }, label="Final disposition", value=existing.get("final_disposition")).props("outlined").classes("w-full")
+                        instructions = ui.textarea(
+                            "Retention and disposal instructions", value=existing.get("instructions") or "",
+                        ).props("outlined autogrow").classes("w-full")
+                        justification = ui.textarea(
+                            "Justification", value=existing.get("justification") or "",
+                        ).props("outlined autogrow").classes("w-full")
+
+                        async def save_rule() -> None:
+                            if current_years.value is None or intermediate_years.value is None or not disposition.value:
+                                ui.notify("Both periods and a final disposition are required", color="warning")
+                                return
+                            if not (justification.value or "").strip():
+                                ui.notify("A justification is required", color="warning")
+                                return
+                            payload = {
+                                "current_period_years": int(current_years.value),
+                                "intermediate_period_years": int(intermediate_years.value),
+                                "final_disposition": disposition.value,
+                                "instructions": (instructions.value or "").strip() or None,
+                                "justification": justification.value.strip(),
+                            }
+                            try:
+                                await api.put_aggregation_retention_rule(
+                                    current["id"], payload, existing.get("version"),
+                                )
+                                dialog.close()
+                                ui.notify("Local retention override saved", color="positive")
+                                await open_aggregation(current)
+                            except ApiError as error:
+                                ui.notify(error_message(error), color="negative", close_button=True)
+
+                        async def remove_rule() -> None:
+                            reason = (justification.value or "").strip()
+                            if not reason:
+                                ui.notify("Enter a justification for removing the override", color="warning")
+                                return
+                            try:
+                                await api.delete_aggregation_retention_rule(current["id"], existing["version"], reason)
+                                dialog.close()
+                                ui.notify("Local retention override removed", color="positive")
+                                await open_aggregation(current)
+                            except ApiError as error:
+                                ui.notify(error_message(error), color="negative", close_button=True)
+
+                        with ui.row().classes("w-full justify-end gap-2"):
+                            if existing:
+                                ui.button("Remove override", icon="delete_outline", color="negative", on_click=remove_rule).props("flat no-caps")
+                            ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                            ui.button("Save override", icon="save", on_click=save_rule).props("unelevated no-caps")
+                    dialog.open()
 
                 async def confirm_delete_current() -> None:
                     confirmation = ui.dialog()
@@ -1788,6 +2147,49 @@ def index() -> None:
                         ui.label(str(len(records))).classes("text-2xl font-bold text-primary")
                         ui.label("Records").classes("text-xs text-slate-500")
 
+                if effective_rule:
+                    with ui.card().classes("mx-5 mb-5 shadow-none border border-indigo-100 bg-indigo-50"):
+                        with ui.row().classes("w-full items-center gap-3"):
+                            ui.avatar(icon="schedule", color="indigo-1", text_color="indigo")
+                            with ui.column().classes("gap-0 grow"):
+                                ui.label("Effective retention rule").classes("font-semibold text-indigo-950")
+                                if effective_rule["rule_source"] == "aggregation":
+                                    source_text = "Specified locally for the governing root aggregation"
+                                elif effective_rule.get("inheritance_depth", 0) == 0:
+                                    source_text = "Specified by its classification"
+                                else:
+                                    source_text = "Inherited from an ancestor classification"
+                                if current.get("parent_aggregation_id") is not None:
+                                    governing_root_id = effective_rule["governing_root_aggregation_id"]
+                                    governing_root = by_id.get(governing_root_id)
+                                    if governing_root:
+                                        root_reference = (
+                                            f"{governing_root['aggregation_number']} — "
+                                            f"{governing_root['title']}"
+                                        )
+                                    else:
+                                        root_reference = f"#{governing_root_id}"
+                                    source_text += (
+                                        f" · governed by root aggregation {root_reference}"
+                                    )
+                                ui.label(source_text).classes("text-xs text-indigo-700")
+                            ui.badge(effective_rule["final_disposition"].replace("_", " ").title(), color="indigo").props("outline")
+                        with ui.row().classes("w-full gap-8 text-sm"):
+                            ui.label(f"Current: {effective_rule['current_period_years']} years")
+                            ui.label(f"Intermediate: {effective_rule['intermediate_period_years']} years")
+                            if classification_path:
+                                ui.label("Classification: " + " › ".join(
+                                    f"{item['code']} — {item['title']}" for item in classification_path
+                                )).classes("text-slate-600")
+                        if effective_rule.get("instructions"):
+                            ui.label(effective_rule["instructions"]).classes("text-sm text-slate-600")
+                        if current.get("parent_aggregation_id") is None and closure is None:
+                            with ui.row().classes("w-full justify-end"):
+                                ui.button(
+                                    "Edit local override" if local_retention_rule else "Set local override",
+                                    icon="tune", on_click=manage_local_retention_rule,
+                                ).props("flat dense no-caps color=primary")
+
                 if children:
                     ui.label("Contained aggregations").classes("px-5 text-base font-semibold")
                     with ui.grid(columns=3).classes("w-full px-5 pb-4 gap-3"):
@@ -1881,6 +2283,14 @@ def index() -> None:
         table_container.clear()
         with table_container:
             if spec.search_first and not state["searched"]:
+                if spec.key == "classifications":
+                    with ui.column().classes("w-full items-center py-12 gap-2 text-slate-500"):
+                        ui.icon("manage_search", size="42px").classes("text-primary")
+                        ui.label(
+                            "Search classifications by code, title, description, or keywords."
+                        ).classes("font-medium")
+                        ui.label("Partial matching is automatic; wildcard characters are not required.").classes("text-xs")
+                    return
                 render_recent_section(spec)
                 return
             lifecycle_filter = None
@@ -1928,10 +2338,26 @@ def index() -> None:
             for key, _ in spec.columns:
                 if not key.endswith("_display"):
                     continue
-                table.add_slot(f"body-cell-{key}", """
+                if key == "type_display":
+                    table.add_slot("body-cell-type_display", """
+                        <q-td :props="props">
+                          <div class="row items-center no-wrap q-gutter-sm">
+                            <q-avatar size="30px" color="blue-1" text-color="primary" :icon="props.row.is_terminal ? 'label' : 'schema'" />
+                            <span class="text-weight-medium">{{ props.row.is_terminal ? 'Terminal' : 'Branch' }}</span>
+                          </div>
+                        </q-td>
+                    """)
+                    continue
+                relationship_icon = {
+                    "parent_org_unit_display": "corporate_fare",
+                    "org_unit_display": "corporate_fare",
+                    "aggregation_display": "folder",
+                    "scheme_display": "account_tree",
+                }.get(key, "link")
+                relationship_template = """
                     <q-td :props="props">
                       <div v-if="props.value" class="row items-center no-wrap q-gutter-sm">
-                        <q-avatar size="30px" color="blue-1" text-color="primary" icon="account_tree" />
+                        <q-avatar size="30px" color="blue-1" text-color="primary" icon="__ICON__" />
                         <div class="column">
                           <span class="text-weight-medium relationship-cell-name">{{ props.value.name }}</span>
                           <q-badge v-if="props.value.code" outline color="primary" :label="props.value.code" class="self-start" />
@@ -1939,7 +2365,8 @@ def index() -> None:
                       </div>
                       <span v-else class="text-grey-5">—</span>
                     </q-td>
-                """)
+                """.replace("__ICON__", relationship_icon)
+                table.add_slot(f"body-cell-{key}", relationship_template)
             if any(key == "effective_status" for key, _ in spec.columns):
                 table.add_slot("body-cell-effective_status", '''
                     <q-td :props="props">
@@ -1966,6 +2393,9 @@ def index() -> None:
                 buttons += '<q-btn flat round dense icon="password" color="orange" @click="$parent.$emit(\'temporary_password\', props.row)"><q-tooltip>Issue temporary password</q-tooltip></q-btn>'
             if spec.key in {"org-units", "roles", "users"}:
                 buttons += '<q-btn flat round dense :icon="props.row.status === \'inactive\' ? \'toggle_on\' : \'toggle_off\'" :color="props.row.status === \'inactive\' ? \'positive\' : \'negative\'" @click="$parent.$emit(\'lifecycle\', props.row)"><q-tooltip>{{ props.row.status === \'inactive\' ? \'Activate\' : \'Deactivate\' }}</q-tooltip></q-btn>'
+            if spec.key == "classification-schemes":
+                buttons += '<q-btn v-if="!props.row.date_published" flat round dense icon="publish" color="primary" @click="$parent.$emit(\'publish_scheme\', props.row)"><q-tooltip>Publish now</q-tooltip></q-btn>'
+                buttons += '<q-btn flat round dense :icon="props.row.date_deactivated ? \'toggle_on\' : \'toggle_off\'" :color="props.row.date_deactivated ? \'positive\' : \'negative\'" @click="$parent.$emit(\'scheme_lifecycle\', props.row)"><q-tooltip>{{ props.row.date_deactivated ? \'Reactivate\' : \'Deactivate\' }}</q-tooltip></q-btn>'
             table.add_slot("body-cell-actions", f'<q-td :props="props">{buttons}</q-td>')
             table.on("edit", lambda event: open_editor(event.args))
             table.on("history", lambda event, resource=spec.key: show_entity_history(resource, event.args))
@@ -1988,6 +2418,35 @@ def index() -> None:
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True)
                 table.on("reopen", reopen_from_table)
+            if spec.key == "classification-schemes":
+                async def publish_scheme(event) -> None:
+                    row = event.args
+                    try:
+                        await api.request(
+                            "POST", f"/api/v1/classification-schemes/{row['id']}/publish",
+                            headers={"If-Match": str(row["version"])},
+                        )
+                        ui.notify("Classification scheme published", color="positive")
+                        await load_rows(repeat_search=True)
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+                async def change_scheme_lifecycle(event) -> None:
+                    row = event.args
+                    action = "reactivate" if row.get("date_deactivated") else "deactivate"
+                    try:
+                        await api.request(
+                            "POST", f"/api/v1/classification-schemes/{row['id']}/{action}",
+                            headers={
+                                "If-Match": str(row["version"]),
+                                "X-Change-Reason": f"{action.title()} from classification administration",
+                            },
+                        )
+                        ui.notify(f"Classification scheme {action}d", color="positive")
+                        await load_rows(repeat_search=True)
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+                table.on("publish_scheme", publish_scheme)
+                table.on("scheme_lifecycle", change_scheme_lifecycle)
             if spec.key in {"users", "roles"}:
                 table.on(
                     "memberships",
@@ -2053,8 +2512,7 @@ def index() -> None:
                                 ):
                                     app.storage.user.pop("session_token", None)
                                     api.set_session_token(None)
-                                    auth_state["principal"] = None
-                                    clear_authenticated_view()
+                                    clear_signed_in_identity()
                                     login_dialog.open()
                                     return
                                 state["rows"] = [
@@ -2119,14 +2577,16 @@ def index() -> None:
         dialog.open()
 
     async def sign_out() -> None:
+        # Close the overlay immediately; waiting for the API logout first leaves
+        # the menu above the persistent login dialog during slower requests.
+        user_menu.close()
         try:
             await api.logout()
         except ApiError:
             pass
         app.storage.user.pop("session_token", None)
         api.set_session_token(None)
-        auth_state["principal"] = None
-        clear_authenticated_view()
+        clear_signed_in_identity()
         login_dialog.open()
 
     async def select_login_sessions() -> None:
@@ -2292,6 +2752,8 @@ def index() -> None:
                                     await api.revoke_session(row["id"])
                                 if row.get("is_current"):
                                     app.storage.user.pop("session_token", None)
+                                    api.set_session_token(None)
+                                    clear_signed_in_identity()
                                     login_dialog.open()
                                 else:
                                     ui.notify("Session revoked", color="positive")
@@ -2327,6 +2789,29 @@ def index() -> None:
         with table_container:
             dashboard_content = ui.column().classes("w-full p-5 gap-6")
 
+        async def show_unclassified_roots() -> None:
+            await select_entity("aggregations")
+            try:
+                result = await api.search_request("aggregations", {
+                    "where": {"and": [
+                        {"field": "parent_aggregation_id", "operator": "is_null"},
+                        {"field": "classification_id", "operator": "is_null"},
+                    ]},
+                    "sort": [{"field": "date_created", "direction": "desc"}],
+                    "limit": 100,
+                })
+                state["rows"] = await decorate_for_spec(
+                    ENTITIES["aggregations"], result["items"],
+                )
+                state["searched"] = True
+                subtitle.text = "Root aggregations missing a governing classification"
+                guidance.text = (
+                    f"Showing {len(state['rows'])} of {result['total']} unclassified root aggregations."
+                )
+                render_table(ENTITIES["aggregations"])
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
         async def load_dashboard() -> None:
             dashboard_content.clear()
             with dashboard_content:
@@ -2340,9 +2825,28 @@ def index() -> None:
                     ui.label("Loading dashboard…").classes("text-slate-500")
 
             try:
-                count_resources = ["aggregations", "records", "org-units", "roles", "users", "event-history"]
-                count_results = await asyncio.gather(
-                    *(api.count(resource) for resource in count_resources),
+                count_resources = [
+                    "aggregations", "records", "classification-schemes",
+                    "classifications", "org-units", "roles", "users", "event-history",
+                ]
+                count_results, scheme_rows, terminal_result, inactive_result, unclassified_result = await asyncio.gather(
+                    asyncio.gather(*(api.count(resource) for resource in count_resources)),
+                    api.list("classification-schemes"),
+                    api.search_request("classifications", {
+                        "where": {"field": "is_terminal", "operator": "eq", "value": True},
+                        "limit": 1,
+                    }),
+                    api.search_request("classifications", {
+                        "where": {"field": "date_deactivated", "operator": "is_not_null"},
+                        "limit": 1,
+                    }),
+                    api.search_request("aggregations", {
+                        "where": {"and": [
+                            {"field": "parent_aggregation_id", "operator": "is_null"},
+                            {"field": "classification_id", "operator": "is_null"},
+                        ]},
+                        "limit": 1,
+                    }),
                 )
                 current_user_id = auth_state["principal"]["user"]["id"]
                 recent_limit = dashboard_recent_item_limit()
@@ -2367,6 +2871,29 @@ def index() -> None:
                     ),
                 )
                 counts = dict(zip(count_resources, count_results))
+                terminal_count = int(terminal_result["total"])
+                branch_count = counts["classifications"] - terminal_count
+                inactive_classification_count = int(inactive_result["total"])
+                unclassified_root_count = int(unclassified_result["total"])
+                now = datetime.now(timezone.utc)
+                published_scheme_count = 0
+                inactive_scheme_count = 0
+                draft_scheme_count = 0
+                for scheme in scheme_rows:
+                    if scheme.get("date_deactivated"):
+                        inactive_scheme_count += 1
+                        continue
+                    published = scheme.get("date_published")
+                    try:
+                        published_at = datetime.fromisoformat(
+                            str(published).replace("Z", "+00:00")
+                        ) if published else None
+                    except (TypeError, ValueError):
+                        published_at = None
+                    if published_at and published_at <= now:
+                        published_scheme_count += 1
+                    else:
+                        draft_scheme_count += 1
                 recent = {
                     "aggregations": (recent_results[0], recent_results[1]),
                     "records": (recent_results[2], recent_results[3]),
@@ -2400,22 +2927,64 @@ def index() -> None:
                     ui.label("System overview").classes("text-lg font-semibold")
                     ui.space()
                     ui.button("Refresh", icon="refresh", on_click=load_dashboard).props("flat dense no-caps color=primary")
-                with ui.grid(columns=5).classes("w-full gap-3"):
-                    for resource, label, icon in (
-                        ("aggregations", "Aggregations", "folder"),
-                        ("records", "Records", "description"),
-                        ("org-units", "Organization units", "corporate_fare"),
-                        ("roles", "Roles", "badge"),
-                        ("users", "Users", "group"),
-                    ):
+                with ui.grid(columns=4).classes("w-full gap-3"):
+                    overview_cards = (
+                        ("aggregations", "Aggregations", "folder", None, lambda: select_entity("aggregations")),
+                        ("records", "Records", "description", None, lambda: select_entity("records")),
+                        (
+                            "classification-schemes", "Classification schemes", "account_tree",
+                            f"{published_scheme_count} published · {draft_scheme_count} draft · "
+                            f"{inactive_scheme_count} inactive",
+                            select_classification_workspace,
+                        ),
+                        (
+                            "classifications", "Classifications", "schema",
+                            f"{branch_count} branches · {terminal_count} terminals",
+                            select_classification_workspace,
+                        ),
+                        ("org-units", "Organization units", "corporate_fare", None, lambda: select_entity("org-units")),
+                        ("roles", "Roles", "badge", None, lambda: select_entity("roles")),
+                        ("users", "Users", "group", None, lambda: select_entity("users")),
+                    )
+                    for resource, label, icon, detail, handler in overview_cards:
                         with ui.card().classes("dashboard-stat cursor-pointer p-4 gap-2").on(
-                            "click", lambda _, key=resource: select_entity(key)
+                            "click", lambda _, action=handler: action()
                         ):
                             with ui.row().classes("items-center gap-3 no-wrap"):
                                 ui.avatar(icon=icon, color="blue-1", text_color="primary")
-                                with ui.column().classes("gap-0"):
+                                with ui.column().classes("gap-0 min-w-0"):
                                     ui.label(str(counts[resource])).classes("text-2xl font-bold text-slate-800")
                                     ui.label(label).classes("text-xs text-slate-500")
+                                    if detail:
+                                        ui.label(detail).classes(
+                                            "text-[11px] leading-4 text-slate-400 whitespace-normal"
+                                        )
+
+                if unclassified_root_count or inactive_classification_count:
+                    ui.label("Governance attention").classes("text-lg font-semibold mt-2")
+                    with ui.row().classes("w-full gap-3 flex-wrap"):
+                        if unclassified_root_count:
+                            with ui.card().classes(
+                                "grow min-w-[280px] cursor-pointer shadow-none border "
+                                "border-red-200 bg-red-50 p-4"
+                            ).on("click", show_unclassified_roots):
+                                with ui.row().classes("items-center gap-3 no-wrap"):
+                                    ui.avatar(icon="folder_off", color="red-1", text_color="negative")
+                                    with ui.column().classes("gap-0"):
+                                        ui.label(str(unclassified_root_count)).classes("text-xl font-bold text-negative")
+                                        ui.label("Unclassified root aggregations").classes("font-semibold")
+                                        ui.label("Root aggregations require a governing classification.").classes("text-xs text-slate-500")
+                        if inactive_classification_count:
+                            with ui.card().classes(
+                                "grow min-w-[280px] cursor-pointer shadow-none border "
+                                "border-amber-200 bg-amber-50 p-4"
+                            ).on("click", select_classification_workspace):
+                                with ui.row().classes("items-center gap-3 no-wrap"):
+                                    ui.avatar(icon="label_off", color="amber-1", text_color="amber-9")
+                                    with ui.column().classes("gap-0"):
+                                        ui.label(str(inactive_classification_count)).classes("text-xl font-bold text-amber-900")
+                                        ui.label("Inactive classifications").classes("font-semibold")
+                                        ui.label("Unavailable for new aggregation assignments.").classes("text-xs text-slate-500")
 
                 ui.label("Your recent records activity").classes("text-lg font-semibold mt-2")
                 ui.label(
@@ -2454,8 +3023,9 @@ def index() -> None:
                                         ui.label(format_timestamp(item.get("_activity_at"))).classes("text-xs text-slate-400")
                                         ui.icon("chevron_right").classes("text-slate-300")
                 for resource, count in counts.items():
-                    navigation_badges[resource].text = str(count)
-                    navigation_badges[resource].update()
+                    if resource in navigation_badges:
+                        navigation_badges[resource].text = str(count)
+                        navigation_badges[resource].update()
                 navigation_badges["login-sessions"].text = str(active_session_count)
                 navigation_badges["login-sessions"].update()
                 set_connection_status(True)
@@ -2482,6 +3052,10 @@ def index() -> None:
                                 "aggregation": "Aggregation", "record": "Record",
                                 "digital_component": "Digital component", "org_unit": "Organization unit",
                                 "user": "User", "role": "Role", "user_role_assignment": "Role assignment",
+                                "classification_scheme": "Classification scheme",
+                                "classification": "Classification",
+                                "classification_retention_rule": "Classification retention rule",
+                                "aggregation_retention_rule": "Aggregation retention rule",
                             }, label="Entity type", clearable=True,
                         ).props("outlined dense").classes("w-full")
                         operation_filter = ui.select(
@@ -2615,8 +3189,953 @@ def index() -> None:
             set_connection_status(error.status_code != 503)
             ui.notify(error_message(error), color="negative", close_button=True)
 
+    async def select_classification_workspace(
+        initial_scheme_id: int | None = None,
+        initial_classification_id: int | None = None,
+    ) -> None:
+        show_authenticated_view()
+        state.update(
+            resource="classification-workspace", rows=[], searched=True,
+            aggregation_detail=None,
+        )
+        title.text = "Classification schemes"
+        subtitle.text = "Build and govern classification hierarchies in context"
+        search_bar.set_visibility(False)
+        add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
+        guidance.text = ""
+        table_container.clear()
+
+        workspace: dict[str, Any] = {
+            "schemes": [], "scheme": None, "selected": None,
+            "children": {}, "expanded": set(), "counts": {},
+            "query": "", "search_results": [],
+            "scheme_sort": "created", "scheme_sort_direction": "asc",
+        }
+
+        with table_container:
+            with ui.column().classes("w-full gap-0"):
+                with ui.row().classes(
+                    "w-full h-[420px] shrink-0 items-stretch gap-0 no-wrap "
+                    "overflow-hidden border-b border-slate-200"
+                ):
+                    with ui.column().classes(
+                        "w-[42%] basis-[42%] shrink-0 min-w-[340px] h-full "
+                        "border-r border-slate-200 p-4 gap-3"
+                    ):
+                        with ui.row().classes("w-full items-center gap-2"):
+                            ui.label("Classification schemes").classes("text-lg font-semibold")
+                            add_scheme_button = ui.button(
+                                "Add scheme", icon="add"
+                            ).props("unelevated dense no-caps color=primary").classes("ml-auto")
+                        with ui.row().classes("w-full items-center gap-2 no-wrap"):
+                            scheme_filter = ui.input("Filter schemes").props(
+                                "outlined dense clearable prepend-icon=search"
+                            ).classes("grow min-w-0")
+                            scheme_sort = ui.select(
+                                {
+                                    "created": "Creation order",
+                                    "title": "Title",
+                                    "code": "Code",
+                                    "published_status": "Status",
+                                },
+                                value="created",
+                                label="Sort by",
+                            ).props("outlined dense options-dense").classes("w-44 shrink-0")
+                            scheme_sort_direction = ui.button(
+                                icon="arrow_upward"
+                            ).props("flat dense round color=primary").classes("shrink-0")
+                            scheme_sort_direction.tooltip("Reverse sort direction")
+                        scheme_list = ui.column().classes(
+                            "w-full grow min-h-0 gap-2 overflow-y-auto pr-1"
+                        )
+                    scheme_information_panel = ui.column().classes(
+                        "grow min-w-0 h-full overflow-y-auto p-5 gap-4"
+                    )
+                classification_workspace = ui.column().classes(
+                    "w-full min-w-0 min-h-[520px] p-5 gap-4"
+                )
+
+        def scheme_lifecycle(scheme: dict[str, Any]) -> tuple[str, str]:
+            if scheme.get("date_deactivated"):
+                return "Inactive", "grey-7"
+            published = scheme.get("date_published")
+            if not published:
+                return "Draft", "blue-grey"
+            try:
+                publication = datetime.fromisoformat(str(published).replace("Z", "+00:00"))
+                now = datetime.now(publication.tzinfo or timezone.utc)
+                if publication > now:
+                    return "Scheduled", "orange"
+            except (TypeError, ValueError):
+                pass
+            return "Published", "positive"
+
+        def scheme_deletion_block_reason(scheme: dict[str, Any]) -> str | None:
+            if scheme.get("date_first_used"):
+                return (
+                    "This scheme cannot be deleted because one or more of its "
+                    "classifications have governed an aggregation. Deactivate it instead."
+                )
+            if scheme.get("date_published"):
+                return "Unpublish this unused scheme before deleting it."
+            return None
+
+        def metadata_value(
+            label: str, value: Any, *, timestamp: bool = False,
+        ) -> None:
+            with ui.column().classes("gap-0 min-w-0 w-full"):
+                ui.label(label.upper()).classes("component-meta-label")
+                rendered = format_timestamp(value) if timestamp else display_value(value)
+                ui.label(rendered).classes(
+                    "w-full text-sm text-slate-700 whitespace-pre-wrap break-words select-text"
+                )
+
+        def long_metadata_value(label: str, value: Any) -> None:
+            with ui.column().classes("w-full gap-1 min-w-0"):
+                ui.label(label.upper()).classes("component-meta-label")
+                ui.label(display_value(value)).classes(
+                    "w-full min-h-[4.75rem] max-h-32 overflow-y-auto rounded-lg "
+                    "border border-slate-200 bg-slate-50 px-3 py-2 text-sm "
+                    "leading-6 text-slate-700 whitespace-pre-wrap break-words select-text"
+                )
+
+        def render_rule_details(rule: dict[str, Any] | None) -> None:
+            if rule is None:
+                ui.label("No retention rule is defined here.").classes("text-sm text-slate-400")
+                return
+            with ui.grid(columns=3).classes("w-full gap-4"):
+                metadata_value("Current period", f"{rule['current_period_years']} years")
+                metadata_value("Intermediate period", f"{rule['intermediate_period_years']} years")
+                metadata_value(
+                    "Final disposition",
+                    rule["final_disposition"].replace("_", " ").title(),
+                )
+            metadata_value("Instructions", rule.get("instructions"))
+
+        async def load_scheme_counts(schemes: list[dict[str, Any]]) -> None:
+            rows = await api.request(
+                "GET", "/api/v1/classification-schemes/classification-counts"
+            )
+            workspace["counts"] = {
+                row["classification_scheme_id"]: (
+                    int(row["branch_count"]), int(row["terminal_count"]),
+                )
+                for row in rows
+            }
+            for scheme in schemes:
+                workspace["counts"].setdefault(scheme["id"], (0, 0))
+
+        def render_scheme_list() -> None:
+            scheme_list.clear()
+            term = (scheme_filter.value or "").strip().casefold()
+            schemes = [
+                scheme for scheme in workspace["schemes"]
+                if not term or term in " ".join(filter(None, (
+                    scheme.get("code"), scheme.get("title"), scheme.get("description"),
+                ))).casefold()
+            ]
+            with scheme_list:
+                if not schemes:
+                    ui.label("No matching schemes").classes("text-sm text-slate-400 py-5 self-center")
+                for scheme in schemes:
+                    selected = workspace["scheme"] and workspace["scheme"]["id"] == scheme["id"]
+                    status_label, status_color = scheme_lifecycle(scheme)
+                    scheme_counts = workspace["counts"].get(scheme["id"])
+                    classes = "w-full cursor-pointer shadow-none border p-2"
+                    classes += " border-blue-300 bg-blue-50" if selected else " border-slate-200"
+                    with ui.card().classes(classes).on(
+                        "click", lambda _, item=scheme: select_scheme(item)
+                    ):
+                        with ui.row().classes("w-full items-start gap-2 no-wrap"):
+                            ui.avatar(icon="account_tree", color="blue-1", text_color="primary", size="32px")
+                            with ui.column().classes("grow min-w-0 gap-0"):
+                                ui.label(scheme["title"]).classes("w-full font-semibold truncate")
+                                ui.label(scheme["code"]).classes(
+                                    "w-full text-xs font-medium text-primary truncate"
+                                )
+                                description = scheme.get("description") or "No description"
+                                description_label = ui.label(description).classes(
+                                    "w-full text-xs text-slate-500 truncate"
+                                )
+                                if scheme.get("description"):
+                                    description_label.tooltip(description)
+                            with ui.column().classes(
+                                "w-40 shrink-0 items-end gap-1"
+                            ):
+                                ui.badge(status_label, color=status_color).props("outline")
+                                if scheme_counts is None:
+                                    ui.label("Counts loading…").classes(
+                                        "w-full text-right text-xs text-slate-400 whitespace-nowrap"
+                                    )
+                                else:
+                                    branches, terminals = scheme_counts
+                                    ui.label(
+                                        f"{branches} {'branch' if branches == 1 else 'branches'} · "
+                                        f"{terminals} {'terminal' if terminals == 1 else 'terminals'}"
+                                    ).classes("w-full text-right text-xs text-slate-400 whitespace-nowrap")
+
+        async def load_children(parent_id: int | None) -> list[dict[str, Any]]:
+            scheme = workspace["scheme"]
+            if scheme is None:
+                return []
+            rows = await api.list(
+                "classifications",
+                classification_scheme_id=scheme["id"],
+                **({"roots_only": True} if parent_id is None else {"parent_classification_id": parent_id}),
+            )
+            workspace["children"][parent_id] = rows
+            return rows
+
+        async def focus_classification(item: dict[str, Any]) -> None:
+            client = page_client
+            scheme = next(
+                (entry for entry in workspace["schemes"] if entry["id"] == item["classification_scheme_id"]),
+                None,
+            )
+            if scheme is None:
+                return
+            if workspace["scheme"] is None or workspace["scheme"]["id"] != scheme["id"]:
+                workspace.update(scheme=scheme, selected=None, children={}, expanded=set(), query="", search_results=[])
+                await load_children(None)
+                render_scheme_list()
+            path = await api.classification_path(item["id"])
+            parent_id = None
+            for node in path[:-1]:
+                if parent_id not in workspace["children"]:
+                    await load_children(parent_id)
+                workspace["expanded"].add(node["id"])
+                if node["id"] not in workspace["children"]:
+                    await load_children(node["id"])
+                parent_id = node["id"]
+            workspace["selected"] = item
+            await render_workspace_right()
+            await client.run_javascript(
+                "requestAnimationFrame(() => { "
+                f"document.getElementById('classification-tree-node-{item['id']}')"
+                "?.scrollIntoView({block: 'center', behavior: 'smooth'}); })"
+            )
+
+        async def toggle_branch(item: dict[str, Any]) -> None:
+            client = page_client
+            scroll_top = await client.run_javascript(
+                "document.getElementById('classification-tree-scroll')?.scrollTop || 0"
+            )
+            if item["id"] in workspace["expanded"]:
+                workspace["expanded"].remove(item["id"])
+            else:
+                if item["id"] not in workspace["children"]:
+                    await load_children(item["id"])
+                workspace["expanded"].add(item["id"])
+            await render_workspace_right()
+            await client.run_javascript(
+                "requestAnimationFrame(() => requestAnimationFrame(() => { "
+                "const tree = document.getElementById('classification-tree-scroll'); "
+                f"if (tree) tree.scrollTop = {float(scroll_top or 0)}; "
+                "}));"
+            )
+
+        def render_tree_level(
+            parent_id: int | None, depth: int = 0, ancestor_inactive: bool = False,
+        ) -> None:
+            rows = workspace["children"].get(parent_id, [])
+            for item in rows:
+                directly_inactive = bool(item.get("date_deactivated"))
+                effectively_inactive = bool(
+                    ancestor_inactive
+                    or directly_inactive
+                    or (workspace["scheme"] or {}).get("date_deactivated")
+                )
+                selected = workspace["selected"] and workspace["selected"]["id"] == item["id"]
+                tree_row = ui.row().classes(
+                    "w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50 "
+                    + ("bg-blue-50" if selected else "")
+                ).style(f"padding-left: {depth * 20 + 4}px")
+                if selected:
+                    tree_row.props(f"id=classification-tree-node-{item['id']}")
+                with tree_row:
+                    with ui.element("div").classes(
+                        "w-8 h-8 shrink-0 flex items-center justify-center"
+                    ):
+                        if not item["is_terminal"]:
+                            ui.button(
+                                icon="expand_more" if item["id"] in workspace["expanded"] else "chevron_right",
+                                on_click=lambda _, node=item: toggle_branch(node),
+                            ).props("flat round dense size=sm color=blue-grey")
+                    ui.icon(
+                        "label" if item["is_terminal"] else "schema",
+                        color="primary",
+                        size="20px",
+                    ).classes("w-6 shrink-0 mr-2")
+                    with ui.column().classes("grow min-w-0 gap-0 cursor-pointer py-1").on(
+                        "click", lambda _, node=item: focus_classification(node)
+                    ):
+                        ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
+                        ui.label(item["code"]).classes("text-xs text-slate-400")
+                    if effectively_inactive:
+                        inactive_label = "Inactive" if directly_inactive else "Inactive via parent"
+                        if (workspace["scheme"] or {}).get("date_deactivated"):
+                            inactive_label = "Inactive via scheme"
+                        ui.badge(inactive_label, color="grey-7").props("outline")
+                    else:
+                        ui.badge("Terminal" if item["is_terminal"] else "Branch", color="primary").props("outline")
+                if not item["is_terminal"] and item["id"] in workspace["expanded"]:
+                    children = workspace["children"].get(item["id"], [])
+                    if children:
+                        render_tree_level(item["id"], depth + 1, effectively_inactive)
+                    else:
+                        ui.label("No child classifications").classes("text-xs text-slate-400 py-1").style(
+                            f"padding-left: {(depth + 1) * 20 + 36}px"
+                        )
+
+        async def create_classification(parent: dict[str, Any] | None = None) -> None:
+            scheme = workspace["scheme"]
+            if scheme is None:
+                return
+            if parent and parent.get("is_terminal"):
+                ui.notify("Terminal classifications cannot contain children", color="warning")
+                return
+
+            async def saved(item: dict[str, Any]) -> None:
+                await load_children(parent["id"] if parent else None)
+                if parent:
+                    workspace["expanded"].add(parent["id"])
+                await load_scheme_counts(workspace["schemes"])
+                render_scheme_list()
+                await focus_classification(item)
+
+            await open_editor(
+                initial_values={
+                    "classification_scheme_id": scheme["id"],
+                    "parent_classification_id": parent["id"] if parent else None,
+                },
+                locked_fields={"classification_scheme_id", "parent_classification_id"},
+                on_saved=saved,
+                resource_key="classifications",
+            )
+
+        async def edit_selected() -> None:
+            selected = workspace["selected"]
+            if selected is None:
+                return
+
+            async def saved(item: dict[str, Any]) -> None:
+                parent_id = item.get("parent_classification_id")
+                await load_children(parent_id)
+                await load_scheme_counts(workspace["schemes"])
+                render_scheme_list()
+                await focus_classification(item)
+
+            await open_editor(selected, on_saved=saved, resource_key="classifications")
+
+        async def change_classification_lifecycle(item: dict[str, Any]) -> None:
+            deactivated = bool(item.get("date_deactivated"))
+            action = "reactivate" if deactivated else "deactivate"
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("w-[540px] max-w-full"):
+                ui.label(f"{action.title()} classification?").classes("text-xl font-semibold")
+                ui.label(f"{item['code']} — {item['title']}").classes("font-semibold")
+                ui.label(
+                    "Existing aggregation assignments and retention rules will not be changed. "
+                    + (
+                        "The classification may still remain unavailable through an inactive ancestor or scheme."
+                        if deactivated else
+                        "This classification and its descendants will be unavailable for new assignments."
+                    )
+                ).classes("text-sm text-slate-600")
+                reason = ui.textarea(f"Reason for {action}").props("outlined autogrow").classes("w-full")
+
+                async def apply_change() -> None:
+                    if not (reason.value or "").strip():
+                        ui.notify(f"A reason for {action} is required", color="warning")
+                        return
+                    try:
+                        updated = await api.request(
+                            "POST", f"/api/v1/classifications/{item['id']}/{action}",
+                            headers={
+                                "If-Match": str(item["version"]),
+                                "X-Change-Reason": reason.value.strip(),
+                            },
+                        )
+                        dialog.close()
+                        ui.notify(f"Classification {action}d", color="positive")
+                        await reload_workspace(updated["classification_scheme_id"], updated["id"])
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button(action.title(), on_click=apply_change).props(
+                        "unelevated no-caps color=" + ("positive" if deactivated else "negative")
+                    )
+            dialog.open()
+
+        async def confirm_delete_classification(item: dict[str, Any]) -> None:
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("w-[540px] max-w-full"):
+                ui.label("Delete classification permanently?").classes("text-xl font-semibold")
+                ui.label(f"{item['code']} — {item['title']}").classes("font-semibold")
+                ui.label(
+                    "Its directly owned retention rule and recent-selection references will also be "
+                    "removed. Immutable event history will remain. This cannot be undone."
+                ).classes("text-sm text-slate-600")
+                reason = ui.textarea("Reason for deletion").props("outlined autogrow").classes("w-full")
+
+                async def remove() -> None:
+                    if not (reason.value or "").strip():
+                        ui.notify("A reason for deletion is required", color="warning")
+                        return
+                    try:
+                        await api.request(
+                            "DELETE", f"/api/v1/classifications/{item['id']}",
+                            headers={
+                                "If-Match": str(item["version"]),
+                                "X-Change-Reason": reason.value.strip(),
+                            },
+                        )
+                        dialog.close()
+                        ui.notify("Classification deleted", color="positive")
+                        await reload_workspace(item["classification_scheme_id"])
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button("Delete permanently", icon="delete_forever", on_click=remove).props(
+                        "unelevated no-caps color=negative"
+                    )
+            dialog.open()
+
+        async def search_within_scheme(query_control: Any) -> None:
+            term = (query_control.value or "").strip()
+            workspace["query"] = term
+            if not term:
+                workspace["search_results"] = []
+            else:
+                scheme_id = workspace["scheme"]["id"]
+                result = await api.search_request("classifications", {
+                    "where": {"and": [
+                        {"field": "classification_scheme_id", "operator": "eq", "value": scheme_id},
+                        {"or": [
+                            {"field": field, "operator": "contains_ci", "value": term}
+                            for field in CLASSIFICATION_WORKSPACE_SEARCH_FIELDS
+                        ]},
+                    ]},
+                    "sort": [{"field": "code", "direction": "asc"}],
+                    "limit": 100,
+                })
+                workspace["search_results"] = result["items"]
+            await render_workspace_right()
+
+        async def render_workspace_right() -> None:
+            scheme_information_panel.clear()
+            classification_workspace.clear()
+            scheme = workspace["scheme"]
+            with scheme_information_panel:
+                if scheme is None:
+                    with ui.column().classes(
+                        "w-full h-full items-center justify-center gap-3 text-slate-500"
+                    ):
+                        ui.icon("account_tree", size="54px").classes("text-primary")
+                        ui.label("Select a classification scheme").classes(
+                            "text-xl font-semibold text-slate-700"
+                        )
+                        ui.label("Its information will appear here.").classes("text-sm")
+                else:
+                    status_label, status_color = scheme_lifecycle(scheme)
+                    with ui.row().classes("w-full items-start gap-3"):
+                        ui.avatar(icon="account_tree", color="blue-1", text_color="primary")
+                        with ui.column().classes("grow min-w-0 gap-0"):
+                            with ui.row().classes("items-center gap-2"):
+                                ui.label(scheme["title"]).classes("text-xl font-semibold")
+                                ui.badge(status_label, color=status_color).props("outline")
+                            ui.label(scheme["code"]).classes(
+                                "w-full text-sm text-primary font-medium whitespace-normal break-all select-text"
+                            )
+                    with ui.row().classes("w-full items-center gap-1 flex-wrap"):
+                        ui.button("Edit scheme", icon="edit", on_click=lambda: open_editor(
+                            scheme, on_saved=lambda _: reload_workspace(scheme["id"]),
+                            resource_key="classification-schemes",
+                        )).props("flat dense no-caps")
+                        ui.button(
+                            "Event history", icon="history",
+                            on_click=lambda: show_entity_history("classification-schemes", scheme),
+                        ).props("flat dense no-caps")
+                        if not scheme.get("date_published"):
+                            ui.button(
+                                "Publish", icon="publish",
+                                on_click=lambda: publish_workspace_scheme(scheme),
+                            ).props("flat dense no-caps color=primary")
+                        else:
+                            unpublish_button = ui.button(
+                                "Unpublish", icon="unpublished",
+                                on_click=lambda: unpublish_workspace_scheme(scheme),
+                            ).props("flat dense no-caps color=primary")
+                            if scheme.get("date_first_used"):
+                                unpublish_button.disable()
+                                unpublish_button.tooltip(
+                                    "Schemes that have governed aggregations cannot be unpublished"
+                                )
+                        ui.button(
+                            "Reactivate" if scheme.get("date_deactivated") else "Deactivate",
+                            icon="toggle_on" if scheme.get("date_deactivated") else "toggle_off",
+                            color="positive" if scheme.get("date_deactivated") else "negative",
+                            on_click=lambda: change_workspace_scheme_lifecycle(scheme),
+                        ).props("flat dense no-caps")
+                        deletion_reason = scheme_deletion_block_reason(scheme)
+                        branches, terminals = workspace["counts"].get(scheme["id"], (0, 0))
+                        delete_label = (
+                            "Delete scheme and classifications"
+                            if branches + terminals else "Delete scheme"
+                        )
+                        delete_button = ui.button(
+                            delete_label, icon="delete_outline", color="negative",
+                            on_click=lambda: confirm_delete_workspace_scheme(scheme),
+                        ).props("flat dense no-caps")
+                        if deletion_reason:
+                            delete_button.disable()
+                            delete_button.tooltip(deletion_reason)
+                    if deletion_reason:
+                        with ui.row().classes(
+                            "w-full items-start gap-2 rounded-lg border border-amber-200 "
+                            "bg-amber-50 px-3 py-2"
+                        ):
+                            ui.icon("info", color="amber-8", size="18px").classes("shrink-0 mt-px")
+                            ui.label(deletion_reason).classes("text-xs text-amber-900 leading-5")
+                    ui.label("Scheme information").classes("font-semibold")
+                    with ui.grid(columns=3).classes("w-full gap-4"):
+                        metadata_value("Code", scheme.get("code"))
+                        metadata_value("Lifecycle", status_label)
+                        metadata_value("Edition", scheme.get("edition"))
+                        metadata_value("Authority", scheme.get("authority"))
+                        metadata_value("Published", scheme.get("date_published"), timestamp=True)
+                        metadata_value("First used", scheme.get("date_first_used"), timestamp=True)
+                        metadata_value("Deactivated", scheme.get("date_deactivated"), timestamp=True)
+                        metadata_value("Created", scheme.get("date_created"), timestamp=True)
+                        metadata_value("Last updated", scheme.get("date_updated"), timestamp=True)
+                    long_metadata_value("Description", scheme.get("description"))
+                    long_metadata_value("Scope note", scheme.get("scope_note"))
+
+            with classification_workspace:
+                if scheme is None:
+                    with ui.column().classes(
+                        "w-full items-center justify-center gap-2 py-16 text-slate-500"
+                    ):
+                        ui.icon("schema", size="44px").classes("text-primary")
+                        ui.label("Select a scheme to browse its classifications.").classes("text-sm")
+                    return
+                status_label, status_color = scheme_lifecycle(scheme)
+                with ui.row().classes("w-full items-end gap-2"):
+                    classification_search = ui.input(
+                        "Search this scheme", value=workspace["query"],
+                    ).props("outlined dense clearable prepend-icon=search").classes("grow")
+                    ui.button("Search", icon="search", on_click=lambda: search_within_scheme(classification_search)).props("unelevated dense no-caps")
+                    if workspace["query"]:
+                        ui.button("Clear", on_click=lambda: clear_classification_search()).props("flat dense no-caps")
+                    classification_search.on("keydown.enter", lambda: search_within_scheme(classification_search))
+
+                if workspace["query"]:
+                    with ui.card().classes("w-full shadow-none border border-blue-100 bg-blue-50 p-3 gap-2"):
+                        ui.label(f"{len(workspace['search_results'])} matching classifications").classes("font-semibold")
+                        if not workspace["search_results"]:
+                            ui.label("No classifications match this search.").classes("text-sm text-slate-500")
+                        for result in workspace["search_results"]:
+                            with ui.row().classes("w-full items-center gap-2 cursor-pointer rounded p-2 hover:bg-white").on(
+                                "click", lambda _, item=result: focus_classification(item)
+                            ):
+                                ui.icon("label" if result["is_terminal"] else "schema", color="primary")
+                                with ui.column().classes("grow gap-0"):
+                                    ui.label(result["title"]).classes("font-semibold")
+                                    ui.label(" — ".join(filter(None, (result["code"], result.get("description"))))).classes("text-xs text-slate-500")
+
+                selected = workspace["selected"]
+                with ui.grid(columns=2).classes(
+                    "w-full h-[620px] min-h-0 gap-4 items-stretch"
+                ):
+                    with ui.card().classes(
+                        "w-full h-full min-h-0 overflow-hidden shadow-none "
+                        "border border-slate-200 p-3 gap-1"
+                    ):
+                        with ui.row().classes("w-full items-center"):
+                            ui.label("Classification tree").classes("font-semibold")
+                            ui.space()
+                            ui.button(
+                                icon="add", on_click=lambda: create_classification()
+                            ).props("flat round dense color=primary").tooltip(
+                                "Add root classification"
+                            )
+                            child_button = ui.button(
+                                icon="subdirectory_arrow_right",
+                                on_click=lambda: create_classification(selected)
+                                if selected is not None and not selected["is_terminal"]
+                                else None,
+                            ).props("flat round dense color=primary")
+                            if selected is None:
+                                child_button.props("disable").tooltip(
+                                    "Select a branch classification before adding a child"
+                                )
+                            elif selected["is_terminal"]:
+                                child_button.props("disable").tooltip(
+                                    "Terminal classifications cannot contain children"
+                                )
+                            else:
+                                child_button.tooltip(
+                                    f"Add child classification beneath {selected['title']}"
+                                )
+                            ui.button(icon="refresh", on_click=lambda: refresh_tree()).props("flat round dense").tooltip("Refresh tree")
+                        with ui.column().classes(
+                            "w-full grow min-h-0 overflow-y-auto gap-1 pr-1"
+                        ).props("id=classification-tree-scroll"):
+                            roots = workspace["children"].get(None, [])
+                            if roots:
+                                render_tree_level(None)
+                            else:
+                                ui.label("This scheme has no classifications yet.").classes("text-sm text-slate-400 py-8 self-center")
+                    with ui.card().classes(
+                        "w-full h-full min-h-0 overflow-y-auto shadow-none "
+                        "border border-slate-200 p-4 gap-3"
+                    ):
+                        if selected is None:
+                            ui.label("Select a classification").classes("font-semibold")
+                            ui.label("Its metadata and effective retention rule will appear here.").classes("text-sm text-slate-500")
+                        else:
+                            with ui.row().classes("w-full items-start gap-3"):
+                                ui.avatar(icon="label" if selected["is_terminal"] else "schema", color="blue-1", text_color="primary")
+                                with ui.column().classes("grow gap-0"):
+                                    ui.label(selected["title"]).classes("text-lg font-semibold")
+                                    ui.label(selected["code"]).classes(
+                                        "w-full text-sm text-primary whitespace-normal break-all select-text"
+                                    )
+                                ui.badge("Terminal" if selected["is_terminal"] else "Branch", color="primary").props("outline")
+                            if selected.get("description"):
+                                ui.label(selected["description"]).classes("text-sm text-slate-600")
+                            path = await api.classification_path(selected["id"])
+                            selected_children = await load_children(selected["id"])
+                            inactive_ancestor = next(
+                                (item for item in path[:-1] if item.get("date_deactivated")), None,
+                            )
+                            if scheme.get("date_deactivated"):
+                                effective_status = "Inactive via scheme"
+                                effective_status_explanation = (
+                                    f"The scheme {scheme['code']} — {scheme['title']} is deactivated."
+                                )
+                            elif selected.get("date_deactivated"):
+                                effective_status = "Inactive"
+                                effective_status_explanation = (
+                                    "This classification is directly deactivated and cannot govern new aggregations."
+                                )
+                            elif inactive_ancestor:
+                                effective_status = "Inactive via ancestor"
+                                effective_status_explanation = (
+                                    f"Ancestor {inactive_ancestor['code']} — {inactive_ancestor['title']} is deactivated."
+                                )
+                            else:
+                                effective_status = "Active"
+                                effective_status_explanation = (
+                                    "This classification has no direct or inherited deactivation."
+                                )
+                            ui.label(" › ".join(item["code"] for item in path)).classes("text-xs text-slate-400")
+                            with ui.row().classes("items-center gap-2"):
+                                ui.badge(
+                                    effective_status,
+                                    color="positive" if effective_status == "Active" else "grey-7",
+                                ).props("outline")
+                                ui.label(effective_status_explanation).classes("text-xs text-slate-500")
+                            direct_result, effective_result = await asyncio.gather(
+                                api.classification_retention_rule(selected["id"]),
+                                api.classification_effective_rule(selected["id"]),
+                                return_exceptions=True,
+                            )
+                            for result in (direct_result, effective_result):
+                                if isinstance(result, ApiError) and result.status_code != 404:
+                                    raise result
+                                if isinstance(result, Exception) and not isinstance(result, ApiError):
+                                    raise result
+                            direct_rule = direct_result if isinstance(direct_result, dict) else None
+                            effective_rule = effective_result if isinstance(effective_result, dict) else None
+
+                            ui.separator()
+                            ui.label("Classification information").classes("font-semibold")
+                            parent = path[-2] if len(path) > 1 else None
+                            with ui.grid(columns=2).classes("w-full gap-4"):
+                                metadata_value("Code", selected.get("code"))
+                                metadata_value("Authority", selected.get("authority"))
+                                metadata_value("Keywords", selected.get("keywords"))
+                                metadata_value(
+                                    "Parent classification",
+                                    f"{parent['code']} — {parent['title']}" if parent else None,
+                                )
+                                metadata_value("Created", selected.get("date_created"), timestamp=True)
+                                metadata_value("Last updated", selected.get("date_updated"), timestamp=True)
+                                metadata_value("First used", selected.get("date_first_used"), timestamp=True)
+                                metadata_value("Deactivated", selected.get("date_deactivated"), timestamp=True)
+                            long_metadata_value("Description", selected.get("description"))
+                            long_metadata_value("Scope note", selected.get("scope_note"))
+
+                            ui.separator()
+                            ui.label("Effective retention rule").classes("font-semibold")
+                            if effective_rule:
+                                inherited = effective_rule["defined_by_classification_id"] != selected["id"]
+                                source = next(
+                                    (
+                                        item for item in path
+                                        if item["id"] == effective_rule["defined_by_classification_id"]
+                                    ),
+                                    None,
+                                )
+                                provenance = "Defined on this classification"
+                                if inherited:
+                                    provenance = (
+                                        f"Inherited from {source['code']} — {source['title']}"
+                                        if source else "Inherited from an ancestor classification"
+                                    )
+                                with ui.row().classes("items-center gap-2"):
+                                    ui.badge("Inherited" if inherited else "Direct", color="indigo").props("outline")
+                                    ui.label(provenance).classes("text-sm text-slate-500")
+                                render_rule_details(effective_rule)
+                            else:
+                                ui.label("No direct or inherited rule").classes("text-sm text-slate-400")
+                            if effective_rule and effective_rule.get("defined_by_classification_id") != selected["id"]:
+                                ui.separator()
+                                ui.label("Direct retention rule").classes("font-semibold")
+                                render_rule_details(direct_rule)
+                            with ui.row().classes("w-full justify-end gap-2"):
+                                ui.button(
+                                    "Event history", icon="history",
+                                    on_click=lambda: show_entity_history("classifications", selected),
+                                ).props("flat dense no-caps")
+                                ui.button("Edit", icon="edit", on_click=edit_selected).props("flat dense no-caps")
+                                ui.button(
+                                    "Reactivate" if selected.get("date_deactivated") else "Deactivate",
+                                    icon="toggle_on" if selected.get("date_deactivated") else "toggle_off",
+                                    color="positive" if selected.get("date_deactivated") else "negative",
+                                    on_click=lambda: change_classification_lifecycle(selected),
+                                ).props("flat dense no-caps")
+                                deletion_reason = None
+                                if scheme.get("date_deactivated"):
+                                    deletion_reason = "Reactivate the scheme before deleting classifications."
+                                elif scheme.get("date_published"):
+                                    deletion_reason = "Unpublish the scheme before deleting classifications."
+                                elif selected.get("date_first_used"):
+                                    deletion_reason = (
+                                        "This classification has governed an aggregation and can only be deactivated."
+                                    )
+                                elif selected_children:
+                                    deletion_reason = "Remove child classifications first."
+                                delete_button = ui.button(
+                                    "Delete", icon="delete_outline", color="negative",
+                                    on_click=lambda: confirm_delete_classification(selected),
+                                ).props("flat dense no-caps")
+                                if deletion_reason:
+                                    delete_button.disable()
+                                    delete_button.tooltip(deletion_reason)
+                            if deletion_reason:
+                                with ui.row().classes(
+                                    "w-full items-start gap-2 rounded-lg border border-amber-200 "
+                                    "bg-amber-50 px-3 py-2"
+                                ):
+                                    ui.icon("info", color="amber-8", size="18px").classes("shrink-0 mt-px")
+                                    ui.label(deletion_reason).classes("text-xs text-amber-900 leading-5")
+
+        async def clear_classification_search() -> None:
+            workspace["query"], workspace["search_results"] = "", []
+            await render_workspace_right()
+
+        async def publish_workspace_scheme(scheme: dict[str, Any]) -> None:
+            try:
+                await api.request(
+                    "POST", f"/api/v1/classification-schemes/{scheme['id']}/publish",
+                    headers={"If-Match": str(scheme["version"])},
+                )
+                ui.notify("Classification scheme published", color="positive")
+                await reload_workspace(scheme["id"])
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        async def unpublish_workspace_scheme(scheme: dict[str, Any]) -> None:
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("w-[520px] max-w-full"):
+                ui.label("Unpublish classification scheme?").classes("text-xl font-semibold")
+                ui.label(
+                    f"{scheme['code']} — {scheme['title']} will no longer be available "
+                    "for new aggregation assignments."
+                ).classes("text-sm text-slate-700")
+                reason = ui.textarea("Reason for unpublishing").props("outlined autogrow").classes("w-full")
+
+                async def unpublish() -> None:
+                    if not (reason.value or "").strip():
+                        ui.notify("A reason for unpublishing is required", color="warning")
+                        return
+                    try:
+                        await api.request(
+                            "POST", f"/api/v1/classification-schemes/{scheme['id']}/unpublish",
+                            headers={
+                                "If-Match": str(scheme["version"]),
+                                "X-Change-Reason": reason.value.strip(),
+                            },
+                        )
+                        dialog.close()
+                        ui.notify("Classification scheme unpublished", color="positive")
+                        await reload_workspace(scheme["id"])
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button("Unpublish", icon="unpublished", on_click=unpublish).props(
+                        "unelevated no-caps color=primary"
+                    )
+            dialog.open()
+
+        async def confirm_delete_workspace_scheme(scheme: dict[str, Any]) -> None:
+            branches, terminals = workspace["counts"].get(scheme["id"], (0, 0))
+            total = branches + terminals
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("w-[560px] max-w-full"):
+                ui.label("Delete classification scheme?").classes("text-xl font-semibold")
+                ui.label(f"{scheme['code']} — {scheme['title']}").classes(
+                    "font-semibold text-slate-800"
+                )
+                if total:
+                    ui.label(
+                        f"This permanently deletes {total} classifications "
+                        f"({branches} branches and {terminals} terminals) and their directly "
+                        "owned retention rules."
+                    ).classes("text-sm text-slate-700")
+                else:
+                    ui.label("This permanently deletes the empty scheme.").classes(
+                        "text-sm text-slate-700"
+                    )
+                ui.label(
+                    "Immutable audit events are retained. This action cannot be undone."
+                ).classes("text-xs text-slate-500")
+                reason = ui.textarea("Reason for deletion").props("outlined autogrow").classes("w-full")
+
+                async def delete_scheme() -> None:
+                    if not (reason.value or "").strip():
+                        ui.notify("A reason for deletion is required", color="warning")
+                        return
+                    try:
+                        await api.request(
+                            "DELETE", f"/api/v1/classification-schemes/{scheme['id']}",
+                            headers={
+                                "If-Match": str(scheme["version"]),
+                                "X-Change-Reason": reason.value.strip(),
+                            },
+                        )
+                        dialog.close()
+                        ui.notify("Classification scheme deleted", color="positive")
+                        await refresh_navigation_counts()
+                        await reload_workspace()
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button(
+                        "Delete permanently", icon="delete_forever", color="negative",
+                        on_click=delete_scheme,
+                    ).props("unelevated no-caps")
+            dialog.open()
+
+        async def change_workspace_scheme_lifecycle(scheme: dict[str, Any]) -> None:
+            action = "reactivate" if scheme.get("date_deactivated") else "deactivate"
+            try:
+                await api.request(
+                    "POST", f"/api/v1/classification-schemes/{scheme['id']}/{action}",
+                    headers={
+                        "If-Match": str(scheme["version"]),
+                        "X-Change-Reason": f"{action.title()} from classification administration",
+                    },
+                )
+                ui.notify(f"Classification scheme {action}d", color="positive")
+                await reload_workspace(scheme["id"])
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        async def refresh_tree() -> None:
+            scheme = workspace["scheme"]
+            selected = workspace["selected"]
+            if scheme is None:
+                return
+            workspace["children"] = {}
+            await load_children(None)
+            if selected:
+                await focus_classification(selected)
+            else:
+                await render_workspace_right()
+
+        async def select_scheme(scheme: dict[str, Any]) -> None:
+            workspace.update(
+                scheme=scheme, selected=None, children={}, expanded=set(),
+                query="", search_results=[],
+            )
+            await load_children(None)
+            render_scheme_list()
+            await render_workspace_right()
+
+        async def reload_workspace(
+            scheme_id: int | None = None, classification_id: int | None = None,
+        ) -> None:
+            try:
+                schemes = await api.list(
+                    "classification-schemes",
+                    sort=workspace["scheme_sort"],
+                    direction=workspace["scheme_sort_direction"],
+                )
+                workspace["schemes"] = schemes
+                render_scheme_list()
+                target_scheme = next((item for item in schemes if item["id"] == scheme_id), None)
+                if target_scheme:
+                    await select_scheme(target_scheme)
+                else:
+                    workspace.update(scheme=None, selected=None, children={}, expanded=set())
+                    await render_workspace_right()
+                if classification_id is not None:
+                    try:
+                        item = await api.get("classifications", classification_id)
+                        await focus_classification(item)
+                    except ApiError as error:
+                        if error.status_code != 404:
+                            raise
+                await load_scheme_counts(schemes)
+                render_scheme_list()
+                set_connection_status(True)
+            except ApiError as error:
+                set_connection_status(error.status_code != 503)
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        async def create_scheme() -> None:
+            async def saved(scheme: dict[str, Any]) -> None:
+                await reload_workspace(scheme["id"])
+            await open_editor(on_saved=saved, resource_key="classification-schemes")
+
+        scheme_filter.on_value_change(lambda: render_scheme_list())
+
+        async def change_scheme_sort() -> None:
+            workspace["scheme_sort"] = scheme_sort.value
+            selected_id = workspace["scheme"]["id"] if workspace["scheme"] else None
+            await reload_workspace(selected_id)
+
+        async def toggle_scheme_sort_direction() -> None:
+            direction = "desc" if workspace["scheme_sort_direction"] == "asc" else "asc"
+            workspace["scheme_sort_direction"] = direction
+            scheme_sort_direction.props(
+                f"icon={'arrow_upward' if direction == 'asc' else 'arrow_downward'}"
+            )
+            selected_id = workspace["scheme"]["id"] if workspace["scheme"] else None
+            await reload_workspace(selected_id)
+
+        scheme_sort.on_value_change(lambda: change_scheme_sort())
+        scheme_sort_direction.on("click", toggle_scheme_sort_direction)
+        add_scheme_button.on("click", create_scheme)
+        await reload_workspace(initial_scheme_id, initial_classification_id)
+
     for key, button in navigation.items():
-        button.on("click", lambda _, entity_key=key: select_entity(entity_key))
+        if key == "classification-schemes":
+            button.on("click", select_classification_workspace)
+        else:
+            button.on("click", lambda _, entity_key=key: select_entity(entity_key))
     dashboard_navigation.on("click", select_dashboard)
     audit_navigation.on("click", select_audit_trail)
     sessions_navigation.on("click", select_login_sessions)
@@ -2696,11 +4215,7 @@ def index() -> None:
         except RuntimeError:
             # Background tasks may not have NiceGUI's storage request context.
             pass
-        auth_state["principal"] = None
-        current_user_name.text = "Not signed in"
-        current_user_email.text = ""
-        current_user_roles.clear()
-        clear_authenticated_view()
+        clear_signed_in_identity()
         set_connection_status(True)  # A 401 proves that the API is reachable.
         login_dialog.open()
 

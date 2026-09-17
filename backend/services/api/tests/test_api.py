@@ -66,7 +66,7 @@ def test_aggregation_crud_and_hierarchy(client: TestClient, aggregation: dict):
 def test_aggregation_number_must_be_unique(client: TestClient, aggregation: dict):
     response = client.post(
         "/api/v1/aggregations",
-        json={"aggregation_number": aggregation["aggregation_number"], "title": "Duplicate"},
+        json={"aggregation_number": aggregation["aggregation_number"], "title": "Duplicate", "classification_id": 1},
     )
     assert response.status_code == 409
 
@@ -170,14 +170,14 @@ def test_record_deletion_cascades_to_components_and_content(client: TestClient, 
 
 def test_closed_aggregation_makes_its_entire_subtree_immutable(client: TestClient):
     root = client.post("/api/v1/aggregations", json={
-        "aggregation_number": "CLOSE-ROOT", "title": "Closed root",
+        "aggregation_number": "CLOSE-ROOT", "title": "Closed root", "classification_id": 1,
     }).json()
     child = client.post("/api/v1/aggregations", json={
         "parent_aggregation_id": root["id"], "aggregation_number": "CLOSE-CHILD",
         "title": "Child",
     }).json()
     sibling = client.post("/api/v1/aggregations", json={
-        "aggregation_number": "CLOSE-SIBLING", "title": "Independent root",
+        "aggregation_number": "CLOSE-SIBLING", "title": "Independent root", "classification_id": 1,
     }).json()
     record = client.post("/api/v1/records", json={
         "aggregation_id": child["id"], "record_number": "CLOSE-REC", "title": "Protected record",
@@ -542,7 +542,7 @@ def test_api_change_creates_correlated_history(client: TestClient):
             "X-Correlation-ID": correlation_id,
             "X-Change-Reason": "Created for audit testing",
         },
-        json={"aggregation_number": "AUDIT-001", "title": "Audited item"},
+        json={"aggregation_number": "AUDIT-001", "title": "Audited item", "classification_id": 1},
     )
     assert response.status_code == 201
     aggregation = response.json()
@@ -577,14 +577,14 @@ def test_event_source_is_controlled(client: TestClient):
     rejected = client.post(
         "/api/v1/aggregations",
         headers={"X-Event-Source": "made-up-client"},
-        json={"aggregation_number": "SOURCE-INVALID", "title": "Invalid source"},
+        json={"aggregation_number": "SOURCE-INVALID", "title": "Invalid source", "classification_id": 1},
     )
     assert rejected.status_code == 400
 
     created = client.post(
         "/api/v1/aggregations",
         headers={"X-Event-Source": "web_ui"},
-        json={"aggregation_number": "SOURCE-WEB", "title": "Web source"},
+        json={"aggregation_number": "SOURCE-WEB", "title": "Web source", "classification_id": 1},
     )
     assert created.status_code == 201
     history = client.get(

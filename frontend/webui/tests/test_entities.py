@@ -4,10 +4,15 @@ from types import SimpleNamespace
 import pytest
 
 from frontend.webui.app import (
+    CHILD_AGGREGATION_CLASSIFICATION_HELP,
+    CLASSIFICATION_WORKSPACE_SEARCH_FIELDS,
+    CLASSIFICATION_SELECTOR_SEARCH_FIELDS,
+    RECORD_UPLOAD_WAIT_MESSAGE,
     buffer_upload_batch,
     component_uploader,
     component_file_icon,
     decorate_relationship_rows,
+    display_value,
     format_file_size,
     form_payload,
     format_timestamp,
@@ -15,7 +20,11 @@ from frontend.webui.app import (
 )
 from frontend.webui.app import native_preview_kind
 from frontend.webui.entities import ENTITIES
-from frontend.webui.config import dashboard_recent_days, dashboard_recent_item_limit
+from frontend.webui.config import (
+    classification_recent_selection_limit,
+    dashboard_recent_days,
+    dashboard_recent_item_limit,
+)
 
 
 def test_native_preview_kind_uses_safe_browser_renderers():
@@ -32,7 +41,10 @@ class Control:
 
 
 def test_first_class_navigation_excludes_digital_components():
-    assert tuple(ENTITIES) == ("aggregations", "records", "org-units", "users", "roles")
+    assert tuple(ENTITIES) == (
+        "aggregations", "records", "classification-schemes", "classifications",
+        "org-units", "users", "roles",
+    )
     assert ENTITIES["aggregations"].search_first
     assert ENTITIES["records"].search_first
     assert ENTITIES["org-units"].fields[0].lookup_resource == "org-units"
@@ -95,11 +107,42 @@ def test_timestamp_formatter_is_human_readable():
     assert format_timestamp(None) == "—"
 
 
+def test_plain_metadata_containing_uppercase_t_is_not_treated_as_a_timestamp():
+    code = "CORPORATE-RECORDS-MANAGEMENT-SCHEME-2026"
+    description = "This description must remain complete."
+    assert display_value(code) == code
+    assert display_value(description) == description
+    assert display_value(None) == "—"
+
+
 def test_dashboard_recent_configuration(monkeypatch):
     monkeypatch.setenv("DASHBOARD_RECENT_ITEM_LIMIT", "7")
     monkeypatch.setenv("DASHBOARD_RECENT_DAYS", "14")
     assert dashboard_recent_item_limit() == 7
     assert dashboard_recent_days() == 14
+
+
+def test_classification_recent_selection_configuration(monkeypatch):
+    monkeypatch.setenv("CLASSIFICATION_RECENT_SELECTION_LIMIT", "6")
+    assert classification_recent_selection_limit() == 6
+
+
+def test_classification_workspace_search_includes_keywords():
+    assert CLASSIFICATION_WORKSPACE_SEARCH_FIELDS == (
+        "code", "title", "description", "keywords",
+    )
+    assert CLASSIFICATION_SELECTOR_SEARCH_FIELDS == (
+        "code", "title", "description", "keywords",
+    )
+    assert ENTITIES["classifications"].search_fields == (
+        "code", "title", "description", "keywords",
+    )
+
+
+def test_contextual_form_help_explains_disabled_controls():
+    assert "inherit classification governance" in CHILD_AGGREGATION_CLASSIFICATION_HELP
+    assert "cannot have a classification assigned directly" in CHILD_AGGREGATION_CLASSIFICATION_HELP
+    assert RECORD_UPLOAD_WAIT_MESSAGE == "Please wait until all files have finished uploading."
 
 
 def test_dashboard_recent_configuration_rejects_non_positive_values(monkeypatch):

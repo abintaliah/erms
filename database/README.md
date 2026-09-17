@@ -89,6 +89,24 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/018_rename_system_actor_to_automated_process.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/019_add_classification_schemes.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/020_backfill_legacy_root_classification.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/021_seed_ewa_functional_classification_scheme.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/022_govern_classification_scheme_deletion.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/023_govern_classification_lifecycle.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/024_seed_general_classification_scheme.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -99,6 +117,12 @@ organizational units, roles, temporal role assignments, hierarchy safeguards,
 searchable indexes, and event-history triggers.
 Migration 003 adds PostgreSQL-backed digital-component content storage and
 database-managed optimistic-concurrency versions for all mutable entities.
+
+Migration 023 adds classification deactivation and immutable per-classification
+first-use provenance. Assignment marks the terminal and every ancestor as
+historically used. Only unused leaves in active, currently unpublished schemes
+can then be permanently deleted; inactive paths are excluded from new
+assignments without disturbing existing governance.
 Migration 004 adds transactional record drafts. Migration 005 adds local
 credentials, database-backed login sessions, and the original human/system
 account types.
@@ -139,6 +163,36 @@ Migration 018 separately renames audit actor type `system` to the clearer
 `automated_process`, backfills existing events with migration provenance, and
 constrains future event actor types to `user`, `anonymous`, or
 `automated_process`.
+Migration 019 adds classification schemes, unlimited-depth branch and terminal
+classifications, inheritable classification retention rules, root-aggregation
+classification assignments, root-only local retention overrides, effective-rule
+resolution, recent per-user selections, database enforcement, and audit history.
+Existing unclassified root aggregations remain readable; the root-classification
+check is deliberately installed `NOT VALID` so administrators can classify them
+without fabricated defaults. New and changed roots are enforced immediately.
+See [`../docs/classification-schemes.md`](../docs/classification-schemes.md).
+Migration 020 is a development-data remediation authorized while the system is
+still greenfield. It resolves the existing terminal `General` classification
+inside `Test Classification Scheme`, verifies that the scheme is eligible and
+the classification has an effective retention rule, assigns it to every legacy
+unclassified root aggregation, records migration provenance in event history,
+and validates the previously deferred root-classification constraint. It fails
+rather than guessing when the named scheme or classification is absent or
+ambiguous.
+Migration 021 is an idempotent greenfield development seed. It creates and
+publishes `EWA-FCS — Electricity and Water Authority Functional Classification
+Scheme` with four functional roots, twelve branches, thirty-six terminals and
+one realistic retention rule for every terminal. All seed events carry
+`migration` source and structured provenance. It refuses to overwrite an
+existing scheme with the same code or title.
+Migration 024 is a second idempotent greenfield seed. It creates and publishes
+`GCS — General Classification Scheme` with four roots covering Administration,
+Human Resources, Finance and Asset Management; twelve child branches;
+thirty-six assignable terminals; and a realistic terminal retention rule for
+every terminal. Its 89 creation events use actor type `automated_process`,
+source `migration`, a shared explicit reason, and structured metadata naming
+the migration, authorization basis, scheme and expected hierarchy counts. It
+refuses to overwrite an existing scheme with the same code or title.
 
 ## Tests
 
