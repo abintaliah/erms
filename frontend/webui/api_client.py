@@ -119,6 +119,19 @@ class ErmsApiClient:
     async def get(self, resource: str, entity_id: int) -> dict[str, Any]:
         return await self.request("GET", f"/api/v1/{resource}/{entity_id}")
 
+    async def favourites(self) -> dict[str, list[dict[str, Any]]]:
+        return await self.request("GET", "/api/v1/favourites")
+
+    async def favourite(self, resource: str, entity_id: int) -> None:
+        if resource not in {"aggregations", "records"}:
+            raise ValueError("favourites support only aggregations and records")
+        await self.request("PUT", f"/api/v1/favourites/{resource}/{entity_id}")
+
+    async def unfavourite(self, resource: str, entity_id: int) -> None:
+        if resource not in {"aggregations", "records"}:
+            raise ValueError("favourites support only aggregations and records")
+        await self.request("DELETE", f"/api/v1/favourites/{resource}/{entity_id}")
+
     async def browse_schemes(self) -> list[dict[str, Any]]:
         return await self.request("GET", "/api/v1/browse/classification-schemes")
 

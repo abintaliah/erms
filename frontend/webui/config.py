@@ -47,5 +47,9 @@ def dashboard_recent_days() -> int:
     return _positive_integer("DASHBOARD_RECENT_DAYS", 30)
 
 
+def dashboard_favourite_item_limit() -> int:
+    return _positive_integer("DASHBOARD_FAVOURITE_ITEM_LIMIT", 5)
+
+
 def classification_recent_selection_limit() -> int:
     return _positive_integer("CLASSIFICATION_RECENT_SELECTION_LIMIT", 4)

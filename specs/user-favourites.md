@@ -1,9 +1,9 @@
 # User Favourites — Technical Specification
 
-**Status:** Proposed  
+**Status:** Implemented
 **Project:** ERMS  
 **Prepared:** 17 September 2026  
-**Revision:** 0.2 — configurable Dashboard preview and View all action
+**Revision:** 1.0 — implementation completed
 
 ## 1. Purpose
 
@@ -575,6 +575,6 @@ The implementation is expected to change at least:
 - `frontend/webui/tests/`; and
 - the browser end-to-end test suite when present.
 
-Implementation documentation should be added to `docs/` when development is
-completed. This specification remains the normative statement of required
-behaviour until superseded by a later revision.
+Implementation documentation is maintained in `docs/dashboard.md`. This
+specification remains the normative statement of required behaviour until
+superseded by a later revision.

@@ -36,6 +36,8 @@ defaults:
 - `WEBUI_RELOAD` defaults to `false`
 - `WEBUI_STORAGE_SECRET` encrypts per-user authentication storage and must be
   changed outside local development
+- `DASHBOARD_FAVOURITE_ITEM_LIMIT` defaults to `5` and controls how many
+  aggregation favourites and record favourites appear in each Dashboard preview
 - `DASHBOARD_RECENT_ITEM_LIMIT` defaults to `4` and controls how many items are
   shown in each personal recent-activity category
 - `DASHBOARD_RECENT_DAYS` defaults to `30` and excludes activity older than that
@@ -47,7 +49,7 @@ defaults:
 Dashboard recent activity is attributed through the immutable audit event's
 `actor_user_id`. Created and updated cards display the matching event's
 `occurred_at` timestamp, rather than always displaying the entity creation date.
-Both settings must be positive integers and take effect when the web UI process
+Dashboard and classification limits must be positive integers and take effect when the web UI process
 is restarted. See [`../../docs/dashboard.md`](../../docs/dashboard.md) for the
 Dashboard's system-wide and user-specific data semantics.
 
