@@ -1,0 +1,947 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ClassificationScheme code="USCR-SHJ" name="النظام الموحد للوثائق المتماثلة لإمارة الشارقة" version="1.0" title_en="Unified Scheme for Common Records of the Emirate of Sharjah">
+	<Classification code="1000" title_ar="التنظيم العام للجهة" title_en="General Organization of the Entity">
+		<Classification code="1100" title_ar="شؤون الوظائف القيادية والإشرافية" title_en="Leadership and Supervisory Positions">
+			<Classification code="1110" title_ar="نشاط المسؤول" title_en="Official's Activities">
+				<Classification code="1111" title_ar="أجندة الاجتماعات واللقاءات والمواعيد" title_en="Schedule of Meetings, Encounters and Appointments">
+					<Retention current="3" intermediate="0" disposition="Destroy"/>
+				</Classification>
+				<Classification code="1112" title_ar="اجتماعات الوحدات الإدارية" title_en="Administrative Unit Meetings">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1113" title_ar="متابعة إنجاز وتنفيذ الخطط والسياسات بالجهة" title_en="Monitoring the Completion and Implementation of the Entity's Plans and Policies">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1114" title_ar="متابعة تنفيذ توجيهات وقرارات وتأشيرات المسؤول بالجهة" title_en="Monitoring Implementation of the Official's Directives, Decisions and Annotations">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1115" title_ar="متابعة التوجيهات والقرارات السامية لسمو الحاكم وسمو ولي العهد" title_en="Monitoring the Directives and Decisions of His Highness the Ruler and His Highness the Crown Prince">
+					<Retention current="2" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1116" title_ar="بطاقات ورسائل ودعوات" title_en="Cards, Letters and Invitations">
+					<Retention current="2" intermediate="0" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1120" title_ar="قرارات وتعاميم ومذكرات" title_en="Decisions, Circulars and Memoranda">
+				<Classification code="1121" title_ar="قرارات إدارية" title_en="Administrative Decisions">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1122" title_ar="قرارات مالية" title_en="Financial Decisions">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1123" title_ar="تعاميم" title_en="Circulars">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1124" title_ar="مذكرات داخلية / توجيهية" title_en="Internal / Guidance Memoranda">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1130" title_ar="التقارير" title_en="Reports">
+				<Classification code="1131" title_ar="التقارير الدورية للوحدات الإدارية" title_en="Periodic Reports of Administrative Units">
+					<Retention current="2" intermediate="5" disposition="Selective Preservation"/>
+				</Classification>
+				<Classification code="1132" title_ar="التقرير السنوي للجهة" title_en="Entity's Annual Report">
+					<Retention current="2" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1140" title_ar="المقابلات والزيارات" title_en="Meetings and Visits">
+				<Classification code="1141" title_ar="مقابلة مسؤولين من داخل الدولة" title_en="Meetings with Officials from Within the Country">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1142" title_ar="مقابلة ضيوف ووفود من خارج الدولة" title_en="Meetings with Guests and Delegations from Abroad">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1143" title_ar="زيارة رسمية داخل الدولة" title_en="Official Visits Within the Country">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1144" title_ar="زيارة رسمية خارج الدولة" title_en="Official Visits Abroad">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1150" title_ar="المجالس واللجان وفرق العمل والهيئات" title_en="Councils, Committees, Working Groups and Bodies">
+				<Classification code="1151" title_ar="تشكيل المجالس واللجان وفرق العمل" title_en="Formation of Councils, Committees and Working Groups">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1152" title_ar="العضوية في المجالس واللجان وفرق العمل" title_en="Membership in Councils, Committees and Working Groups">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1153" title_ar="اجتماعات المجالس واللجان وفرق العمل بالجهة" title_en="Meetings of the Entity's Councils, Committees and Working Groups">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1154" title_ar="اجتماعات المجالس واللجان وفرق العمل المشتركة مع الجهات المعنية" title_en="Joint Meetings of Councils, Committees and Working Groups with Relevant Entities">
+					<Retention current="1" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1155" title_ar="الإشراف على هيئة أو مؤسسة حكومية أو أهلية" title_en="Supervision of a Governmental or Nongovernmental Body or Institution">
+					<Retention current="1" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1160" title_ar="العلاقة مع المجلس التنفيذي والمجلس الاستشاري" title_en="Relations with the Executive Council and the Consultative Council">
+				<Classification code="1161" title_ar="العلاقة مع المجلس التنفيذي" title_en="Relations with the Executive Council">
+					<Retention current="3" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1162" title_ar="العلاقة مع المجلس الاستشاري" title_en="Relations with the Consultative Council">
+					<Retention current="3" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1170" title_ar="أعمال استشارة وخبرة" title_en="Consultancy and Expert Services">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="1200" title_ar="الشؤون القانونية والمنازعات" title_en="Legal Affairs and Disputes">
+			<Classification code="1210" title_ar="مشاريع القوانين واللوائح التنفيذية" title_en="Draft Laws and Implementing Regulations">
+				<Classification code="1211" title_ar="إعداد مشروع قانون أو لائحة تنفيذية" title_en="Preparation of a Draft Law or Implementing Regulation">
+					<Retention current="1" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1212" title_ar="إبداء الرأي حول مشروع قانون أو لائحة تنفيذية وتعديلاتها" title_en="Opinions on Draft Laws or Implementing Regulations and Their Amendments">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1220" title_ar="الاتفاقيات والعقود والمذكرات القانونية" title_en="Agreements, Contracts and Legal Memoranda">
+				<Classification code="1221" title_ar="إعداد مشاريع الاتفاقيات والعقود والمذكرات القانونية" title_en="Preparation of Draft Agreements, Contracts and Legal Memoranda">
+					<Retention current="1" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1222" title_ar="إبداء الرأي بشأن مشاريع الاتفاقيات والعقود والمذكرات القانونية" title_en="Opinions on Draft Agreements, Contracts and Legal Memoranda">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1230" title_ar="مشاريع القرارات والتعاميم" title_en="Draft Decisions and Circulars">
+				<Classification code="1231" title_ar="إعداد ومراجعة القرارات" title_en="Preparation and Review of Decisions">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1232" title_ar="إعداد ومراجعة التعاميم" title_en="Preparation and Review of Circulars">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1240" title_ar="الدعاوى والتظلمات والشكاوى" title_en="Lawsuits, Grievances and Complaints">
+				<Classification code="1241" title_ar="أعمال التحقيق" title_en="Investigations">
+					<Retention current="1" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1242" title_ar="متابعة الدعاوى القضائية" title_en="Monitoring Court Cases">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1250" title_ar="التسويات والمصالحات والتحكيم" title_en="Settlements, Conciliation and Arbitration">
+				<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="1300" title_ar="التخطيط والتميز المؤسسي" title_en="Planning and Institutional Excellence">
+			<Classification code="1310" title_ar="الخطط والسياسات والدراسات" title_en="Plans, Policies and Studies">
+				<Classification code="1311" title_ar="الخطط الاستراتيجية" title_en="Strategic Plans">
+					<Retention current="2" intermediate="15" disposition="Selective Preservation"/>
+				</Classification>
+				<Classification code="1312" title_ar="الخطط التشغيلية لأعمال وأنشطة الجهة" title_en="Operational Plans for the Entity's Work and Activities">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1313" title_ar="تقييم ومراجعة تنفيذ مبادرات وأنشطة الخطة الخمسية" title_en="Evaluation and Review of the Implementation of Five-Year Plan Initiatives and Activities">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1314" title_ar="خطط العمل والسياسات" title_en="Work Plans and Policies">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1315" title_ar="بحوث ودراسات" title_en="Research and Studies">
+					<Retention current="2" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1320" title_ar="التدقيق على العمليات والإجراءات الإدارية وتبسيطها" title_en="Auditing and Streamlining Administrative Processes and Procedures">
+				<Classification code="1321" title_ar="إعداد وتطوير الهيكل التنظيمي" title_en="Preparation and Development of the Organizational Structure">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1322" title_ar="تبسيط وتحسين طرق العمل" title_en="Simplification and Improvement of Work Methods">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1323" title_ar="تقارير التدقيق الإداري" title_en="Administrative Audit Reports">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1330" title_ar="الأداء المؤسسي" title_en="Institutional Performance">
+				<Classification code="1331" title_ar="الرقابة الاستراتيجية لأداء إدارات الجهة" title_en="Strategic Monitoring of the Performance of the Entity's Departments">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1332" title_ar="إعداد اتفاقية الأداء" title_en="Preparation of the Performance Agreement">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1333" title_ar="مراقبة واعتماد تنفيذ اتفاقية الأداء" title_en="Monitoring and Approval of Performance Agreement Implementation">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1334" title_ar="إدارة مؤشرات الأداء" title_en="Performance Indicator Management">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1335" title_ar="تقارير أداء إدارات الجهة" title_en="Performance Reports of the Entity's Departments">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+		</Classification>
+		<Classification code="1340" title_ar="التميز المؤسسي" title_en="Institutional Excellence">
+			<Classification code="1341" title_ar="خطط وبرامج التميز المؤسسي" title_en="Institutional Excellence Plans and Programs">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1342" title_ar="إعداد معايير الإدارة المتميزة" title_en="Development of Management Excellence Criteria">
+				<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1343" title_ar="تقييم معايير الإدارة المتميزة" title_en="Evaluation of Management Excellence Criteria">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="1350" title_ar="الجودة" title_en="Quality">
+			<Classification code="1351" title_ar="إعداد وتطوير أدلة إجراءات الأعمال الإدارية للجهة" title_en="Preparation and Development of the Entity's Administrative Procedure Manuals">
+				<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1352" title_ar="متابعة تطبيق أنظمة الجودة" title_en="Monitoring Implementation of Quality Systems">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1353" title_ar="قياس مؤشرات أداء خدمات الجهة" title_en="Measurement of Performance Indicators for the Entity's Services">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1354" title_ar="إدارة التغيير" title_en="Change Management">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="1400" title_ar="علاقات عامة وإعلام وتعاون دولي" title_en="Public Relations, Media and International Cooperation">
+			<Classification code="1410" title_ar="التنظيم والمشاركة في الفعاليات والمعارض" title_en="Organization of and Participation in Events and Exhibitions">
+				<Classification code="1411" title_ar="تنظيم الفعاليات والمعارض" title_en="Organization of Events and Exhibitions">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1412" title_ar="المشاركة في الفعاليات والمعارض" title_en="Participation in Events and Exhibitions">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1420" title_ar="الزيارات ومهمات العمل" title_en="Visits and Work Missions">
+				<Classification code="1421" title_ar="تنظيم زيارات الوفود خارج الجهة" title_en="Organization of Delegation Visits Outside the Entity">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1422" title_ar="استقبال الوفود الرسمية من داخل الدولة" title_en="Reception of Official Delegations from Within the Country">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1423" title_ar="استقبال الوفود الرسمية من خارج الدولة" title_en="Reception of Official Delegations from Abroad">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1430" title_ar="التسويق والدعاية" title_en="Marketing and Advertising">
+				<Classification code="1431" title_ar="إعلانات صحفية" title_en="Press Advertisements">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1432" title_ar="الأنشطة والبرامج التوعوية والتسويقية" title_en="Awareness and Marketing Activities and Programs">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1433" title_ar="توفير مواد وهدايا تسويقية" title_en="Provision of Promotional Materials and Gifts">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1434" title_ar="تصميم هوية الجهة والمواد والهدايا التسويقية" title_en="Design of the Entity's Visual Identity and Promotional Materials and Gifts">
+					<Retention current="2" intermediate="3" disposition="Selective Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1440" title_ar="النشاط الإعلامي" title_en="Media Activities">
+				<Classification code="1441" title_ar="تغطية إعلامية لنشاطات الجهة" title_en="Media Coverage of the Entity's Activities">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1442" title_ar="لقاءات ومقابلات صحفية وإذاعية وتلفزيونية" title_en="Press, Radio and Television Meetings and Interviews">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1443" title_ar="معالجة المواد الإعلامية" title_en="Processing of Media Materials">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1444" title_ar="الرصد والمتابعة الإعلامية" title_en="Media Monitoring and Follow-up">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1450" title_ar="إدارة المواقع ومنصات التواصل الاجتماعي" title_en="Website and Social Media Platform Management">
+				<Classification code="1451" title_ar="إنشاء المواقع والمنصات الإلكترونية" title_en="Creation of Websites and Electronic Platforms">
+					<Retention current="1" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1452" title_ar="إدارة وتحديث الموقع الإلكتروني للجهة" title_en="Management and Updating of the Entity's Website">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1453" title_ar="إدارة وتحديث منصات التواصل الاجتماعي" title_en="Management and Updating of Social Media Platforms">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1460" title_ar="التعاون المحلي" title_en="Local Cooperation">
+				<Classification code="1461" title_ar="التعاون مع الجهات الحكومية" title_en="Cooperation with Government Entities">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1462" title_ar="التعاون مع الجهات غير الحكومية" title_en="Cooperation with Nongovernmental Entities">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1463" title_ar="التعاون مع الجهات الخاصة" title_en="Cooperation with Private Entities">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1464" title_ar="الشركاء والرعاة" title_en="Partners and Sponsors">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1465" title_ar="الاشتراكات المحلية" title_en="Local Subscriptions">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1466" title_ar="العضويات المحلية" title_en="Local Memberships">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1470" title_ar="التعاون الدولي" title_en="International Cooperation">
+				<Classification code="1471" title_ar="التعاون الدولي الثنائي أو متعدد الأطراف" title_en="Bilateral or Multilateral International Cooperation">
+					<Retention current="3" intermediate="10" disposition="Selective Preservation"/>
+				</Classification>
+				<Classification code="1472" title_ar="التعاون مع المنظمات والهيئات الحكومية الإقليمية والدولية" title_en="Cooperation with Regional and International Governmental Organizations and Bodies">
+					<Retention current="3" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1473" title_ar="التعاون مع المنظمات والمؤسسات والجمعيات والمراكز غير الحكومية" title_en="Cooperation with Nongovernmental Organizations, Institutions, Associations and Centers">
+					<Retention current="3" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1474" title_ar="التعاون مع مؤسسات خاصة" title_en="Cooperation with Private Institutions">
+					<Retention current="3" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+		</Classification>
+		<Classification code="1500" title_ar="تقنية المعلومات والاتصالات" title_en="Information and Communications Technology">
+			<Classification code="1510" title_ar="المنظومات والبرمجيات والتطبيقات وقواعد البيانات" title_en="Systems, Software, Applications and Databases">
+				<Classification code="1511" title_ar="الاحتياجات من المنظومات والبرامج والتطبيقات وقواعد البيانات" title_en="Requirements for Systems, Software, Applications and Databases">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1512" title_ar="توفير المنظومات والبرامج والتطبيقات وقواعد البيانات" title_en="Provision of Systems, Software, Applications and Databases">
+					<Retention current="1" intermediate="10" disposition="Selective Preservation"/>
+				</Classification>
+				<Classification code="1513" title_ar="تحديث وتطوير المنظومات والبرمجيات والتطبيقات وقواعد البيانات" title_en="Updating and Development of Systems, Software, Applications and Databases">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1514" title_ar="تصميم النظم الآلية والبرامج والمواقع وقواعد البيانات" title_en="Design of Automated Systems, Software, Websites and Databases">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1515" title_ar="تشغيل النظم الآلية والبرامج والتطبيقات وقواعد البيانات" title_en="Operation of Automated Systems, Software, Applications and Databases">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1516" title_ar="جمع ومعالجة وتحليل بيانات ومعلومات" title_en="Collection, Processing and Analysis of Data and Information">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1520" title_ar="اختبار وفحص واعتماد الأنظمة والبرامج" title_en="Testing, Inspection and Approval of Systems and Software">
+				<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1530" title_ar="الشبكات والأنظمة" title_en="Networks and Systems">
+				<Classification code="1531" title_ar="الربط بالشبكات ووسائل الاتصال" title_en="Connection to Networks and Communication Facilities">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1532" title_ar="الربط بالأنظمة الإلكترونية" title_en="Connection to Electronic Systems">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1533" title_ar="تطوير وصيانة الشبكات والأنظمة" title_en="Development and Maintenance of Networks and Systems">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1540" title_ar="الدعم الفني لمستخدمي أجهزة وشبكات تقنية المعلومات" title_en="Technical Support for Users of IT Devices and Networks">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="1550" title_ar="الحفظ الإلكتروني" title_en="Electronic Preservation">
+			<Classification code="1551" title_ar="حفظ البيانات الإلكترونية" title_en="Preservation of Electronic Data">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1552" title_ar="حفظ نسخ احتياطية من البرامج والأنظمة" title_en="Retention of Backup Copies of Software and Systems">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="1560" title_ar="أمن المعلومات" title_en="Information Security">
+			<Classification code="1561" title_ar="متابعة تنفيذ الضوابط والمعايير ومواصفات الأمن والحماية" title_en="Monitoring Implementation of Security and Protection Controls, Standards and Specifications">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1562" title_ar="مراقبة سلامة حركة البيانات" title_en="Monitoring Data Traffic Integrity">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1563" title_ar="حظر وصول المستخدمين إلى المواقع وتحديد الصلاحيات" title_en="Blocking User Access to Websites and Defining Access Permissions">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="1570" title_ar="الحوادث الأمنية وإدارة المخاطر" title_en="Security Incidents and Risk Management">
+			<Classification code="1571" title_ar="فحص وتحليل الثغرات الأمنية" title_en="Examination and Analysis of Security Vulnerabilities">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1572" title_ar="اختبار الاختراقات الأمنية والتحقيق فيها" title_en="Security Penetration Testing and Investigation">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1573" title_ar="تقييم وإدارة مخاطر تقنية المعلومات" title_en="Assessment and Management of IT Risks">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="1600" title_ar="البريد والوثائق" title_en="Correspondence and Records">
+			<Classification code="1610" title_ar="البريد الصادر" title_en="Outgoing Correspondence">
+				<Classification code="1611" title_ar="نسخ البريد الصادر" title_en="Copies of Outgoing Correspondence">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1612" title_ar="بيانات البريد الصادر" title_en="Outgoing Correspondence Data">
+					<Retention current="1" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1620" title_ar="البريد الوارد" title_en="Incoming Correspondence">
+				<Classification code="1621" title_ar="نسخ البريد الوارد" title_en="Copies of Incoming Correspondence">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1622" title_ar="بيانات البريد الوارد" title_en="Incoming Correspondence Data">
+					<Retention current="1" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1630" title_ar="أنظمة إدارة الوثائق" title_en="Records Management Systems">
+				<Classification code="1631" title_ar="إعداد نظام تصنيف ومدد استبقاء الوثائق" title_en="Development of a Records Classification and Retention Schedule">
+					<Retention current="1" intermediate="10" disposition="Selective Preservation"/>
+				</Classification>
+				<Classification code="1632" title_ar="تحديث نظام تصنيف ومدد استبقاء الوثائق" title_en="Updating the Records Classification and Retention Schedule">
+					<Retention current="1" intermediate="10" disposition="Selective Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1640" title_ar="تطبيق نظام إدارة الوثائق الجارية" title_en="Implementation of the Active Records Management System">
+				<Classification code="1641" title_ar="متابعة تطبيق نظام إدارة الوثائق الجارية" title_en="Monitoring Implementation of the Active Records Management System">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1642" title_ar="طلبات إعادة تنشيط الملفات" title_en="File Reactivation Requests">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1650" title_ar="تطبيق المدد والمصير النهائي للوثائق" title_en="Application of Records Retention Periods and Final Disposition">
+				<Classification code="1651" title_ar="إتلاف الوثائق" title_en="Records Destruction">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1652" title_ar="بيانات الإتلاف" title_en="Destruction Data">
+					<Retention current="1" intermediate="20" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1653" title_ar="تحويل وثائق وسيطة" title_en="Transfer of Semi-active Records">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1654" title_ar="بيانات تحويل الوثائق الوسيطة" title_en="Semi-active Records Transfer Data">
+					<Retention current="1" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1655" title_ar="انتقاء الوثائق الأرشيفية" title_en="Selection of Archival Records">
+					<Retention current="2" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1656" title_ar="طلبات ترحيل الأرشيف" title_en="Archive Transfer Requests">
+					<Retention current="2" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1660" title_ar="إتاحة الوثائق الوسيطة" title_en="Access to Semi-active Records">
+				<Classification code="1661" title_ar="طلبات الاطلاع على الوثائق الوسيطة" title_en="Requests to Consult Semi-active Records">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1662" title_ar="بيانات الاطلاع على الوثائق الوسيطة" title_en="Semi-active Records Consultation Data">
+					<Retention current="1" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1663" title_ar="رقمنة الوثائق" title_en="Records Digitization">
+					<Retention current="1" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1670" title_ar="إدارة مخازن الحفظ" title_en="Records Storage Management">
+				<Classification code="1671" title_ar="تشخيص وضع الوثائق" title_en="Assessment of the State of Records">
+					<Retention current="2" intermediate="10" disposition="Selective Preservation"/>
+				</Classification>
+				<Classification code="1672" title_ar="فرز الوثائق" title_en="Records Sorting">
+					<Retention current="1" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1673" title_ar="بيانات أعمال الفرز" title_en="Sorting Activity Data">
+					<Retention current="1" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1674" title_ar="تهيئة أماكن حفظ الوثائق" title_en="Preparation of Records Storage Areas">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1675" title_ar="مخططات حفظ وترفيف الوثائق" title_en="Records Storage and Shelving Plans">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1676" title_ar="جرد الوثائق الوسيطة" title_en="Inventory of Semi-active Records">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+		</Classification>
+		<Classification code="1700" title_ar="التوثيق والمكتبة" title_en="Documentation and Library Services">
+			<Classification code="1710" title_ar="جمع وتوثيق المعلومات" title_en="Collection and Documentation of Information">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1720" title_ar="اقتناء المصادر والمراجع" title_en="Acquisition of Sources and References">
+				<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1730" title_ar="التبادل والإهداء" title_en="Exchange and Donation">
+				<Classification code="1731" title_ar="تبادل وإهداء المصادر والمراجع" title_en="Exchange and Donation of Sources and References">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1732" title_ar="إصدارات مهداة من الجهة" title_en="Publications Donated by the Entity">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1733" title_ar="إصدارات مهداة إلى الجهة" title_en="Publications Donated to the Entity">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1740" title_ar="الخدمات المعرفية" title_en="Knowledge Services">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="1750" title_ar="بيانات فهرسة المصادر والمراجع" title_en="Cataloging Data for Sources and References">
+				<Retention current="1" intermediate="15" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="1800" title_ar="الإحصاء والاستبيانات والترجمة" title_en="Statistics, Surveys and Translation">
+			<Classification code="1810" title_ar="إحصائيات واستبيانات" title_en="Statistics and Surveys">
+				<Classification code="1811" title_ar="إحصائيات دورية" title_en="Periodic Statistics">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1812" title_ar="إحصائيات خصوصية سنوية" title_en="Annual Special-purpose Statistics">
+					<Retention current="2" intermediate="15" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1813" title_ar="استبيانات" title_en="Surveys">
+					<Retention current="2" intermediate="0" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="1820" title_ar="أعمال ترجمة" title_en="Translation Services">
+				<Classification code="1821" title_ar="ترجمة المنشورات" title_en="Translation of Publications">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1822" title_ar="ترجمة الوثائق" title_en="Translation of Documents">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+		</Classification>
+	</Classification>
+	<Classification code="2000" title_ar="إدارة الموارد البشرية" title_en="Human Resources Management">
+		<Classification code="2100" title_ar="التوظيف وملفات الموظفين" title_en="Recruitment and Employee Files">
+			<Classification code="2110" title_ar="احتياجات التوظيف" title_en="Recruitment Needs">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="2120" title_ar="طلبات التوظيف" title_en="Employment Applications">
+				<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="2130" title_ar="الوظائف الشاغرة والمستحدثة" title_en="Vacant and Newly Created Positions">
+				<Classification code="2131" title_ar="قائمة الوظائف الشاغرة والمستحدثة" title_en="List of Vacant and Newly Created Positions">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2132" title_ar="بطاقات الوصف الوظيفي" title_en="Job Description Cards">
+					<Retention current="1" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="2140" title_ar="ملفات الموظفين" title_en="Employee Files">
+				<Classification code="2141" title_ar="ملف الموظف الخاص" title_en="Employee's Confidential File">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2142" title_ar="ملف الموظف العام" title_en="Employee's General File">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2143" title_ar="ملف الموظف بعقد خاص" title_en="File of an Employee on a Special Contract">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2144" title_ar="ملف الموظف حسب نظام المكافأة الشهرية" title_en="File of an Employee under the Monthly Remuneration System">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2145" title_ar="ملف الموظف بعقد مؤقت" title_en="File of an Employee on a Temporary Contract">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2146" title_ar="ملف الموظف حسب نظام الدوام الجزئي" title_en="File of an Employee under the Part-time Work System">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2147" title_ar="ملف الموظف حسب أنظمة الوظائف الخصوصية" title_en="File of an Employee under Special Employment Systems">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+		</Classification>
+		<Classification code="2200" title_ar="متابعة مواعيد العمل والإجازات" title_en="Monitoring Working Hours and Leave">
+			<Classification code="2210" title_ar="تقارير الحضور والانصراف" title_en="Attendance and Departure Reports">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="2220" title_ar="تصاريح الخروج" title_en="Exit Permits">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="2300" title_ar="التدريب والتأهيل والإيفاد" title_en="Training, Qualification and Official Assignments">
+			<Classification code="2310" title_ar="احتياجات التدريب" title_en="Training Needs">
+				<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="2320" title_ar="اعتماد وتنفيذ الدورات التدريبية" title_en="Approval and Implementation of Training Courses">
+				<Classification code="2321" title_ar="اعتماد البرامج التدريبية المتخصصة" title_en="Approval of Specialized Training Programs">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2322" title_ar="تدريب داخل الجهة" title_en="Training Within the Entity">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2323" title_ar="تدريب خارج الجهة" title_en="Training Outside the Entity">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2324" title_ar="تدريب خارج الدولة" title_en="Training Abroad">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2325" title_ar="تدريب متدربين من خارج الجهة" title_en="Training of Trainees from Outside the Entity">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="2330" title_ar="تأهيل الموظفين" title_en="Employee Qualification">
+				<Classification code="2331" title_ar="تأهيل داخل الدولة" title_en="Qualification Within the Country">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2332" title_ar="تأهيل خارج الدولة" title_en="Qualification Abroad">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="2340" title_ar="الإيفاد" title_en="Official Assignments">
+				<Classification code="2341" title_ar="إيفاد في مهمة داخل الدولة" title_en="Assignment on a Mission Within the Country">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="2342" title_ar="إيفاد في مهمة خارج الدولة" title_en="Assignment on a Mission Abroad">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+		</Classification>
+		<Classification code="2400" title_ar="أداء الموظفين" title_en="Employee Performance">
+			<Classification code="2410" title_ar="خطة الأداء السنوي للموظف" title_en="Employee's Annual Performance Plan">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="2420" title_ar="تقييم الأداء المرحلي للموظف" title_en="Employee's Interim Performance Evaluation">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="2430" title_ar="تأديب الموظف" title_en="Employee Disciplinary Action">
+				<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+	</Classification>
+	<Classification code="3000" title_ar="إدارة الموارد المالية" title_en="Financial Resources Management">
+		<Classification code="3100" title_ar="الموازنة" title_en="Budget">
+			<Classification code="3110" title_ar="إعداد الموازنة العامة" title_en="Preparation of the General Budget">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3120" title_ar="مقترحات الموازنات الخصوصية" title_en="Special Budget Proposals">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3130" title_ar="تعديلات الموازنة" title_en="Budget Amendments">
+				<Classification code="3131" title_ar="المناقلات بين بنود الموازنة" title_en="Transfers Between Budget Items">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3132" title_ar="الاعتمادات الإضافية" title_en="Supplementary Appropriations">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3133" title_ar="التعديلات غير المالية" title_en="Nonfinancial Amendments">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3134" title_ar="الإضافات" title_en="Additions">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="3140" title_ar="الحساب الختامي للموازنة" title_en="Final Budget Accounts">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3150" title_ar="تقارير الموازنة المالية" title_en="Financial Budget Reports">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="3200" title_ar="الإيرادات والمقبوضات" title_en="Revenue and Receipts">
+			<Classification code="3210" title_ar="تحصيل الإيرادات والمقبوضات المالية" title_en="Collection of Revenue and Financial Receipts">
+				<Retention current="2" intermediate="13" disposition="Selective Preservation"/>
+			</Classification>
+			<Classification code="3220" title_ar="بيانات الإيرادات واستلام المتحصلات" title_en="Revenue and Collection Receipt Data">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3230" title_ar="الأمانات والتأمينات" title_en="Deposits Held in Trust and Security Deposits">
+				<Classification code="3231" title_ar="الأمانات المالية" title_en="Financial Deposits Held in Trust">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3232" title_ar="التأمينات المالية" title_en="Financial Security Deposits">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+		</Classification>
+		<Classification code="3300" title_ar="نفقات الرواتب والأجور" title_en="Salary and Wage Expenditure">
+			<Classification code="3310" title_ar="كشوفات رواتب وأجور الموظفين" title_en="Employee Salary and Wage Statements">
+				<Classification code="3311" title_ar="كشف رواتب الموظفين المواطنين" title_en="Salary Statement for National Employees">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3312" title_ar="كشف رواتب الموظفين غير المواطنين" title_en="Salary Statement for Nonnational Employees">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3313" title_ar="كشف رواتب الموظفين بعقود مؤقتة" title_en="Salary Statement for Employees on Temporary Contracts">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="3320" title_ar="صرف رواتب الموظفين" title_en="Payment of Employee Salaries">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3330" title_ar="صرف العلاوات" title_en="Payment of Salary Increments">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3340" title_ar="صرف البدلات" title_en="Payment of Allowances">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3350" title_ar="صرف المكافآت" title_en="Payment of Bonuses">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3360" title_ar="مصروفات المزايا" title_en="Benefit Expenses">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3370" title_ar="المساهمات والتعويضات الاجتماعية" title_en="Social Contributions and Compensation">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="3400" title_ar="النفقات التشغيلية والرأسمالية" title_en="Operating and Capital Expenditure">
+			<Classification code="3410" title_ar="النفقات التشغيلية" title_en="Operating Expenditure">
+				<Classification code="3411" title_ar="المصاريف الجارية" title_en="Current Expenses">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3412" title_ar="الدعم والإعانات والمنح" title_en="Support, Subsidies and Grants">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3413" title_ar="مصاريف أخرى" title_en="Other Expenses">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="3420" title_ar="النفقات الرأسمالية" title_en="Capital Expenditure">
+				<Classification code="3421" title_ar="المصروفات الرأسمالية" title_en="Capital Expenses">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3422" title_ar="المشاريع التطويرية" title_en="Development Projects">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="3430" title_ar="بيانات المصروفات" title_en="Expenditure Data">
+				<Retention current="1" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3440" title_ar="السلف" title_en="Advances">
+				<Classification code="3441" title_ar="السلف المستديمة" title_en="Standing Advances">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3442" title_ar="السلف المؤقتة" title_en="Temporary Advances">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3443" title_ar="بيانات السلف" title_en="Advance Data">
+					<Retention current="1" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+		</Classification>
+		<Classification code="3500" title_ar="المشتريات والمبيعات" title_en="Purchases and Sales">
+			<Classification code="3510" title_ar="المناقصة العامة" title_en="Open Tender">
+				<Retention current="1" intermediate="15" disposition="Selective Preservation"/>
+			</Classification>
+			<Classification code="3520" title_ar="المناقصة المحدودة" title_en="Restricted Tender">
+				<Retention current="1" intermediate="15" disposition="Selective Preservation"/>
+			</Classification>
+			<Classification code="3530" title_ar="الممارسة" title_en="Negotiated Procurement">
+				<Retention current="1" intermediate="15" disposition="Selective Preservation"/>
+			</Classification>
+			<Classification code="3540" title_ar="شراء عن طريق الأمر المباشر" title_en="Direct Purchase">
+				<Retention current="1" intermediate="15" disposition="Selective Preservation"/>
+			</Classification>
+			<Classification code="3550" title_ar="بيانات المشتريات" title_en="Purchase Data">
+				<Retention current="1" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3560" title_ar="المبيعات" title_en="Sales">
+				<Classification code="3561" title_ar="بيع الأصول المنقولة" title_en="Sale of Movable Assets">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3562" title_ar="بيع الأصول غير المنقولة والعقارات" title_en="Sale of Immovable Assets and Real Estate">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+		</Classification>
+		<Classification code="3600" title_ar="التدقيق والرقابة المالية" title_en="Financial Audit and Control">
+			<Classification code="3610" title_ar="الموازنة والارتباط المالي" title_en="Budget and Financial Commitments">
+				<Classification code="3611" title_ar="التدقيق على الموازنة والارتباط المالي" title_en="Audit of the Budget and Financial Commitments">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3612" title_ar="التدقيق على الحساب الختامي" title_en="Audit of the Final Accounts">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3613" title_ar="بيانات الالتزامات والارتباطات" title_en="Liability and Commitment Data">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="3620" title_ar="التدقيق على المصروفات والإيرادات وحوافظ الإيداعات البنكية" title_en="Audit of Expenditure, Revenue and Bank Deposit Slips">
+				<Classification code="3621" title_ar="التدقيق على المصروفات وأوامر الشراء" title_en="Audit of Expenditure and Purchase Orders">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3622" title_ar="التدقيق على تحصيل الإيرادات" title_en="Audit of Revenue Collection">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3623" title_ar="التدقيق على حوافظ الإيداعات البنكية" title_en="Audit of Bank Deposit Slips">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3624" title_ar="مراجعة السجلات المحاسبية والمستندات النقدية والبنكية" title_en="Review of Accounting Records and Cash and Bank Documents">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3625" title_ar="تدقيق الكفالات البنكية الخاصة بشهادات الدفع" title_en="Audit of Bank Guarantees Relating to Payment Certificates">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="3630" title_ar="التدقيق على أوامر الشراء والسلف" title_en="Audit of Purchase Orders and Advances">
+				<Classification code="3631" title_ar="مراجعة العمليات الحسابية الخاصة بأمر الشراء المحلي" title_en="Review of Calculations Relating to Local Purchase Orders">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3632" title_ar="المراجعة والتدقيق على الخزينة والسلف" title_en="Review and Audit of the Treasury and Advances">
+					<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3633" title_ar="بيانات الشيكات المرتجعة" title_en="Returned Cheque Data">
+					<Retention current="1" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="3634" title_ar="بيانات الأصول الثابتة" title_en="Fixed Asset Data">
+					<Retention current="1" intermediate="13" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="3640" title_ar="التدقيق على كتب التكليف والعقود والاتفاقيات" title_en="Audit of Engagement Letters, Contracts and Agreements">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3650" title_ar="التدقيق على بيانات وسندات التسوية والقيد" title_en="Audit of Settlement and Journal Entry Statements and Vouchers">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="3660" title_ar="التدقيق من قبل جهات خارجية" title_en="Audit by External Entities">
+				<Retention current="2" intermediate="13" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+	</Classification>
+	<Classification code="4000" title_ar="إدارة الموارد المادية والخدمات المساندة" title_en="Physical Resources and Support Services Management">
+		<Classification code="4100" title_ar="العقارات والمباني والمرافق" title_en="Real Estate, Buildings and Facilities">
+			<Classification code="4110" title_ar="تسجيل وحصر العقارات" title_en="Registration and Inventory of Real Estate">
+				<Classification code="4111" title_ar="ملف خاص بكل عقار" title_en="Individual Property File">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4112" title_ar="حصر العقارات" title_en="Real Estate Inventory">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="4120" title_ar="إنشاء وتهيئة العقارات" title_en="Construction and Preparation of Properties">
+				<Classification code="4121" title_ar="متابعة الأعمال الإنشائية الجديدة" title_en="Monitoring New Construction Works">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4122" title_ar="تهيئة وتوسعة وصيانة المباني والمنشآت والمرافق" title_en="Preparation, Expansion and Maintenance of Buildings, Structures and Facilities">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="4130" title_ar="هدم المباني والمنشآت" title_en="Demolition of Buildings and Structures">
+				<Retention current="1" intermediate="15" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="4140" title_ar="إيجار العقارات والمرافق" title_en="Property and Facility Leasing">
+				<Classification code="4141" title_ar="استئجار العقارات والمرافق" title_en="Leasing of Properties and Facilities from Others">
+					<Retention current="1" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4142" title_ar="تأجير العقارات والمرافق" title_en="Leasing of Properties and Facilities to Others">
+					<Retention current="1" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="4150" title_ar="تأمين العقار" title_en="Property Insurance">
+				<Retention current="1" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="4160" title_ar="إدارة المواقف" title_en="Parking Management">
+				<Classification code="4161" title_ar="توفير موقف دائم" title_en="Provision of a Permanent Parking Space">
+					<Retention current="2" intermediate="0" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4162" title_ar="توفير موقف مؤقت" title_en="Provision of a Temporary Parking Space">
+					<Retention current="2" intermediate="0" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4163" title_ar="مخالفات استغلال المواقف من قبل الموظفين" title_en="Parking Misuse Violations by Employees">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4164" title_ar="مخالفات استغلال المواقف من قبل غير الموظفين" title_en="Parking Misuse Violations by Nonemployees">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+		</Classification>
+		<Classification code="4200" title_ar="الآلات والمركبات والمعدات والتجهيزات" title_en="Machinery, Vehicles, Equipment and Fixtures">
+			<Classification code="4210" title_ar="اقتناء وإهلاك المركبات والآليات والمعدات" title_en="Acquisition and Depreciation of Vehicles, Machinery and Equipment">
+				<Classification code="4211" title_ar="اقتناء المركبات والآليات والمعدات" title_en="Acquisition of Vehicles, Machinery and Equipment">
+					<Retention current="1" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4212" title_ar="إهلاك المركبات والآليات والمعدات" title_en="Depreciation of Vehicles, Machinery and Equipment">
+					<Retention current="1" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="4220" title_ar="ملف المركبات أو الآليات أو المعدات" title_en="Vehicle, Machinery or Equipment File">
+				<Retention current="1" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="4230" title_ar="حركة المركبات والآليات والمعدات" title_en="Movement of Vehicles, Machinery and Equipment">
+				<Classification code="4231" title_ar="كشوف توزيع السائقين وجداول المناوبة" title_en="Driver Assignment Lists and Shift Schedules">
+					<Retention current="1" intermediate="0" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4232" title_ar="متابعة حركة المركبات والآليات والمعدات" title_en="Monitoring the Movement of Vehicles, Machinery and Equipment">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="4240" title_ar="الوقود" title_en="Fuel">
+				<Classification code="4241" title_ar="بطاقات الوقود" title_en="Fuel Cards">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4242" title_ar="إيصالات الوقود" title_en="Fuel Receipts">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="4250" title_ar="استئجار المركبات أو الآليات أو المعدات" title_en="Rental of Vehicles, Machinery or Equipment">
+				<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="4260" title_ar="حوادث ومخالفات المركبات والآليات والمعدات" title_en="Accidents and Violations Involving Vehicles, Machinery and Equipment">
+				<Classification code="4261" title_ar="حوادث المركبات والآليات والمعدات" title_en="Accidents Involving Vehicles, Machinery and Equipment">
+					<Retention current="1" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4262" title_ar="مخالفات المركبات والآليات والمعدات" title_en="Violations Involving Vehicles, Machinery and Equipment">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="4270" title_ar="الأثاث والتجهيزات" title_en="Furniture and Fixtures">
+				<Classification code="4271" title_ar="الاحتياجات من الأثاث والتجهيزات" title_en="Furniture and Fixture Requirements">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4272" title_ar="توفير وتركيب الأثاث والتجهيزات" title_en="Provision and Installation of Furniture and Fixtures">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4273" title_ar="تأمين المواد والأثاث والتجهيزات" title_en="Insurance of Materials, Furniture and Fixtures">
+					<Retention current="1" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4274" title_ar="متابعة تشغيل التجهيزات" title_en="Monitoring Fixture Operation">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4275" title_ar="صيانة الأثاث والتجهيزات" title_en="Maintenance of Furniture and Fixtures">
+					<Retention current="1" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4276" title_ar="استعارة واستئجار الأثاث والتجهيزات" title_en="Borrowing and Rental of Furniture and Fixtures">
+					<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+		</Classification>
+		<Classification code="4300" title_ar="المخازن والتزويد" title_en="Warehousing and Supply">
+			<Classification code="4310" title_ar="تزويد المستودعات بالمواد والتجهيزات والمستلزمات" title_en="Supply of Materials, Equipment and Supplies to Warehouses">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="4320" title_ar="صرف المواد والتجهيزات" title_en="Issuance of Materials and Equipment">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="4330" title_ar="جرد المواد والتجهيزات" title_en="Inventory of Materials and Equipment">
+				<Classification code="4331" title_ar="الجرد الدوري" title_en="Periodic Inventory">
+					<Retention current="2" intermediate="0" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4332" title_ar="الجرد الفجائي" title_en="Unannounced Inventory">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4333" title_ar="الجرد السنوي" title_en="Annual Inventory">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="4340" title_ar="إتلاف الأصول والمواد والمستلزمات" title_en="Disposal of Assets, Materials and Supplies">
+				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="4400" title_ar="الأمن والصحة والسلامة" title_en="Security, Health and Safety">
+			<Classification code="4410" title_ar="المراقبة والحراسة" title_en="Surveillance and Guarding">
+				<Classification code="4411" title_ar="التعاقد مع شركات الأمن والحراسة والسلامة" title_en="Contracting with Security, Guarding and Safety Companies">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4412" title_ar="متابعة أعمال المراقبة والحراسة" title_en="Monitoring Surveillance and Guarding Activities">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="4420" title_ar="الشأن الأمني بالجهة" title_en="Entity Security Affairs">
+				<Classification code="4421" title_ar="التدخلات الأمنية" title_en="Security Interventions">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="4422" title_ar="إدارة المفقودات" title_en="Lost Property Management">
+					<Retention current="2" intermediate="0" disposition="Permanent Preservation"/>
+				</Classification>
+			</Classification>
+			<Classification code="4430" title_ar="إدارة المخاطر الأمنية" title_en="Security Risk Management">
+				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+		<Classification code="4500" title_ar="الخدمات" title_en="Services">
+			<Classification code="4510" title_ar="تصاريح الدخول والخروج" title_en="Entry and Exit Permits">
+				<Retention current="2" intermediate="3" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="4520" title_ar="إصدار الشهادات" title_en="Issuance of Certificates">
+				<Retention current="1" intermediate="0" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="4530" title_ar="توفير خدمات للمستفيدين" title_en="Provision of Services to Beneficiaries">
+				<Retention current="2" intermediate="0" disposition="Permanent Preservation"/>
+			</Classification>
+			<Classification code="4540" title_ar="توفير المستخدمين" title_en="Provision of Support Staff">
+				<Retention current="1" intermediate="0" disposition="Permanent Preservation"/>
+			</Classification>
+		</Classification>
+	</Classification>
+</ClassificationScheme>

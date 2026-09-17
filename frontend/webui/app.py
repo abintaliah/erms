@@ -2829,13 +2829,10 @@ def index() -> None:
                     "aggregations", "records", "classification-schemes",
                     "classifications", "org-units", "roles", "users", "event-history",
                 ]
-                count_results, scheme_rows, terminal_result, inactive_result, unclassified_result = await asyncio.gather(
+                count_results, scheme_rows, scheme_classification_counts, inactive_result, unclassified_result = await asyncio.gather(
                     asyncio.gather(*(api.count(resource) for resource in count_resources)),
                     api.list("classification-schemes"),
-                    api.search_request("classifications", {
-                        "where": {"field": "is_terminal", "operator": "eq", "value": True},
-                        "limit": 1,
-                    }),
+                    api.request("GET", "/api/v1/classification-schemes/classification-counts"),
                     api.search_request("classifications", {
                         "where": {"field": "date_deactivated", "operator": "is_not_null"},
                         "limit": 1,
@@ -2871,14 +2868,19 @@ def index() -> None:
                     ),
                 )
                 counts = dict(zip(count_resources, count_results))
-                terminal_count = int(terminal_result["total"])
-                branch_count = counts["classifications"] - terminal_count
+                branch_count = sum(int(row["branch_count"]) for row in scheme_classification_counts)
+                terminal_count = sum(int(row["terminal_count"]) for row in scheme_classification_counts)
+                assignable_terminal_count = sum(
+                    int(row["eligible_terminal_count"])
+                    for row in scheme_classification_counts
+                )
                 inactive_classification_count = int(inactive_result["total"])
                 unclassified_root_count = int(unclassified_result["total"])
                 now = datetime.now(timezone.utc)
                 published_scheme_count = 0
                 inactive_scheme_count = 0
                 draft_scheme_count = 0
+                draft_scheme_ids: set[int] = set()
                 for scheme in scheme_rows:
                     if scheme.get("date_deactivated"):
                         inactive_scheme_count += 1
@@ -2894,6 +2896,12 @@ def index() -> None:
                         published_scheme_count += 1
                     else:
                         draft_scheme_count += 1
+                        draft_scheme_ids.add(int(scheme["id"]))
+                draft_terminal_count = sum(
+                    int(row["terminal_count"])
+                    for row in scheme_classification_counts
+                    if int(row["classification_scheme_id"]) in draft_scheme_ids
+                )
                 recent = {
                     "aggregations": (recent_results[0], recent_results[1]),
                     "records": (recent_results[2], recent_results[3]),
@@ -2939,7 +2947,9 @@ def index() -> None:
                         ),
                         (
                             "classifications", "Classifications", "schema",
-                            f"{branch_count} branches · {terminal_count} terminals",
+                            f"{branch_count} branches · {terminal_count} terminals\n"
+                            f"{assignable_terminal_count} assignable terminals · "
+                            f"{draft_terminal_count} draft terminals",
                             select_classification_workspace,
                         ),
                         ("org-units", "Organization units", "corporate_fare", None, lambda: select_entity("org-units")),
@@ -2957,7 +2967,7 @@ def index() -> None:
                                     ui.label(label).classes("text-xs text-slate-500")
                                     if detail:
                                         ui.label(detail).classes(
-                                            "text-[11px] leading-4 text-slate-400 whitespace-normal"
+                                            "text-[11px] leading-4 text-slate-400 whitespace-pre-line"
                                         )
 
                 if unclassified_root_count or inactive_classification_count:
@@ -3211,6 +3221,7 @@ def index() -> None:
             "children": {}, "expanded": set(), "counts": {},
             "query": "", "search_results": [],
             "scheme_sort": "created", "scheme_sort_direction": "asc",
+            "tree_revision": 0,
         }
 
         with table_container:
@@ -3379,16 +3390,40 @@ def index() -> None:
             scheme = workspace["scheme"]
             if scheme is None:
                 return []
+            scheme_id = int(scheme["id"])
             rows = await api.list(
                 "classifications",
-                classification_scheme_id=scheme["id"],
+                classification_scheme_id=scheme_id,
                 **({"roots_only": True} if parent_id is None else {"parent_classification_id": parent_id}),
             )
-            workspace["children"][parent_id] = rows
+            current_scheme = workspace["scheme"]
+            if current_scheme and int(current_scheme["id"]) == scheme_id:
+                workspace["children"][parent_id] = rows
             return rows
 
-        async def focus_classification(item: dict[str, Any]) -> None:
+        async def focus_classification(
+            item: dict[str, Any], *, reveal: bool = False,
+        ) -> None:
             client = page_client
+            if (
+                not reveal
+                and workspace["selected"]
+                and workspace["selected"]["id"] == item["id"]
+            ):
+                return
+            workspace["tree_revision"] += 1
+            revision = workspace["tree_revision"]
+
+            def is_current() -> bool:
+                return revision == workspace["tree_revision"]
+
+            scroll_top = None
+            if not reveal:
+                scroll_top = await client.run_javascript(
+                    "document.getElementById('classification-tree-scroll')?.scrollTop || 0"
+                )
+                if not is_current():
+                    return
             scheme = next(
                 (entry for entry in workspace["schemes"] if entry["id"] == item["classification_scheme_id"]),
                 None,
@@ -3398,34 +3433,62 @@ def index() -> None:
             if workspace["scheme"] is None or workspace["scheme"]["id"] != scheme["id"]:
                 workspace.update(scheme=scheme, selected=None, children={}, expanded=set(), query="", search_results=[])
                 await load_children(None)
+                if not is_current():
+                    return
                 render_scheme_list()
             path = await api.classification_path(item["id"])
+            if not is_current():
+                return
             parent_id = None
             for node in path[:-1]:
                 if parent_id not in workspace["children"]:
                     await load_children(parent_id)
+                    if not is_current():
+                        return
                 workspace["expanded"].add(node["id"])
                 if node["id"] not in workspace["children"]:
                     await load_children(node["id"])
+                    if not is_current():
+                        return
                 parent_id = node["id"]
             workspace["selected"] = item
             await render_workspace_right()
-            await client.run_javascript(
-                "requestAnimationFrame(() => { "
-                f"document.getElementById('classification-tree-node-{item['id']}')"
-                "?.scrollIntoView({block: 'center', behavior: 'smooth'}); })"
-            )
+            if reveal:
+                await client.run_javascript(
+                    "requestAnimationFrame(() => requestAnimationFrame(() => { "
+                    "const tree = document.getElementById('classification-tree-scroll'); "
+                    f"const node = document.getElementById('classification-tree-node-{item['id']}'); "
+                    "if (!tree || !node) return; "
+                    "const treeBox = tree.getBoundingClientRect(); "
+                    "const nodeBox = node.getBoundingClientRect(); "
+                    "if (nodeBox.top < treeBox.top || nodeBox.bottom > treeBox.bottom) "
+                    "node.scrollIntoView({block: 'center', behavior: 'smooth'}); "
+                    "}));"
+                )
+            else:
+                await client.run_javascript(
+                    "requestAnimationFrame(() => requestAnimationFrame(() => { "
+                    "const tree = document.getElementById('classification-tree-scroll'); "
+                    f"if (tree) tree.scrollTop = {float(scroll_top or 0)}; "
+                    "}));"
+                )
 
         async def toggle_branch(item: dict[str, Any]) -> None:
             client = page_client
+            workspace["tree_revision"] += 1
+            revision = workspace["tree_revision"]
             scroll_top = await client.run_javascript(
                 "document.getElementById('classification-tree-scroll')?.scrollTop || 0"
             )
+            if revision != workspace["tree_revision"]:
+                return
             if item["id"] in workspace["expanded"]:
                 workspace["expanded"].remove(item["id"])
             else:
                 if item["id"] not in workspace["children"]:
                     await load_children(item["id"])
+                    if revision != workspace["tree_revision"]:
+                        return
                 workspace["expanded"].add(item["id"])
             await render_workspace_right()
             await client.run_javascript(
@@ -3480,7 +3543,9 @@ def index() -> None:
                     else:
                         ui.badge("Terminal" if item["is_terminal"] else "Branch", color="primary").props("outline")
                 if not item["is_terminal"] and item["id"] in workspace["expanded"]:
-                    children = workspace["children"].get(item["id"], [])
+                    children = workspace["children"].get(item["id"])
+                    if children is None:
+                        continue
                     if children:
                         render_tree_level(item["id"], depth + 1, effectively_inactive)
                     else:
@@ -3502,7 +3567,7 @@ def index() -> None:
                     workspace["expanded"].add(parent["id"])
                 await load_scheme_counts(workspace["schemes"])
                 render_scheme_list()
-                await focus_classification(item)
+                await focus_classification(item, reveal=True)
 
             await open_editor(
                 initial_values={
@@ -3741,7 +3806,7 @@ def index() -> None:
                             ui.label("No classifications match this search.").classes("text-sm text-slate-500")
                         for result in workspace["search_results"]:
                             with ui.row().classes("w-full items-center gap-2 cursor-pointer rounded p-2 hover:bg-white").on(
-                                "click", lambda _, item=result: focus_classification(item)
+                                "click", lambda _, item=result: focus_classification(item, reveal=True)
                             ):
                                 ui.icon("label" if result["is_terminal"] else "schema", color="primary")
                                 with ui.column().classes("grow gap-0"):
@@ -4058,19 +4123,27 @@ def index() -> None:
             selected = workspace["selected"]
             if scheme is None:
                 return
+            workspace["tree_revision"] += 1
+            revision = workspace["tree_revision"]
             workspace["children"] = {}
             await load_children(None)
+            if revision != workspace["tree_revision"]:
+                return
             if selected:
                 await focus_classification(selected)
             else:
                 await render_workspace_right()
 
         async def select_scheme(scheme: dict[str, Any]) -> None:
+            workspace["tree_revision"] += 1
+            revision = workspace["tree_revision"]
             workspace.update(
                 scheme=scheme, selected=None, children={}, expanded=set(),
                 query="", search_results=[],
             )
             await load_children(None)
+            if revision != workspace["tree_revision"]:
+                return
             render_scheme_list()
             await render_workspace_right()
 
@@ -4094,7 +4167,7 @@ def index() -> None:
                 if classification_id is not None:
                     try:
                         item = await api.get("classifications", classification_id)
-                        await focus_classification(item)
+                        await focus_classification(item, reveal=True)
                     except ApiError as error:
                         if error.status_code != 404:
                             raise

@@ -15,6 +15,11 @@ digital components; it only prevents new assignments or moves into that scheme.
 Reactivation clears `date_deactivated`. Deactivation and reactivation require a
 change reason and are written to the immutable event history.
 
+Classification-scheme seeds and file-plan imports default to draft
+(`date_published = NULL`) unless the source contains an explicit publication
+date or publication is explicitly requested. Publication is a separate
+governance decision and is never inferred merely because an import succeeded.
+
 Publication may be reversed only while a scheme remains unused. The explicit
 **Unpublish** action clears `date_published`, requires a reason, and records the
 change in event history. It exists to correct accidental or premature
@@ -109,6 +114,14 @@ function-specific retention rule and detailed disposal instructions. The seed
 is idempotent and its scheme, classification and rule creation events all carry
 the same migration source, automated-process actor, explicit reason and
 structured bulk-operation provenance.
+
+The Mutamathilah example importer loads `examples/fileplans/mutamathilah.xml`
+as the draft scheme `USCR-SHJ — Unified Scheme for Common Records of the Emirate
+of Sharjah`. English `title_en` values populate titles, while Arabic scheme and
+classification titles populate descriptions. The importer validates the full
+hierarchy and retention model, translates controlled dispositions, and creates
+all rows plus their immutable events in one transaction with a single
+correlation identifier and source-file checksum.
 
 The NiceGUI aggregation form presents eligible terminals with code, title, and
 description. Its searchable hierarchy-aware list places the current user's

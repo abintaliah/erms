@@ -53,6 +53,13 @@ Dashboard's system-wide and user-specific data semantics.
 
 Real environment variables override `.env` values.
 
+## Linux deployment
+
+See the [deployment guide](../../docs/deployment.md) for one-server and
+split-server deployments, separate API and UI systemd services, load balancing,
+NiceGUI session affinity and shared storage, and temporary SSH deployment with
+`tmux`.
+
 ## Current scope
 
 The interface provides the shared application shell, local authentication,

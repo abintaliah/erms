@@ -194,6 +194,21 @@ source `migration`, a shared explicit reason, and structured metadata naming
 the migration, authorization basis, scheme and expected hierarchy counts. It
 refuses to overwrite an existing scheme with the same code or title.
 
+The larger XML example file plan is imported through the transactional seed
+utility rather than embedded into SQL:
+
+```bash
+backend/services/api/.venv/bin/python database/seeds/import_mutamathilah.py \
+  --database-url "$DATABASE_URL"
+```
+
+It imports `examples/fileplans/mutamathilah.xml` as draft unless the XML supplies
+`date_published`. It maps `title_en` to the title and preserves the Arabic scheme
+name and classification `title_ar` in description fields. It refuses collisions,
+validates expected counts and deferred constraints, verifies all audit events,
+and records `025_seed_mutamathilah_classification_scheme` only after the entire
+transaction succeeds.
+
 ## Tests
 
 ```bash

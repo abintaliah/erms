@@ -110,6 +110,7 @@ class ClassificationSchemeClassificationCounts(ApiModel):
     classification_scheme_id: int
     branch_count: int
     terminal_count: int
+    eligible_terminal_count: int
 
 
 class RetentionRuleInput(ApiModel):

@@ -118,4 +118,52 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/content_stor
 env DATABASE_URL="${DATABASE_URL}" PYTHONPATH="${PROJECT_DIR}" \
     "${API_VENV}/bin/python" -m pytest "${API_DIR}/tests"
 
+"${API_VENV}/bin/python" "${DATABASE_DIR}/seeds/import_mutamathilah.py" \
+    --database-url "${DATABASE_URL}"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on <<'SQL'
+DO $$
+DECLARE
+    scheme_id bigint;
+    correlation_count integer;
+BEGIN
+    SELECT id INTO STRICT scheme_id
+      FROM classification_schemes
+     WHERE code = 'USCR-SHJ'
+       AND title = 'Unified Scheme for Common Records of the Emirate of Sharjah'
+       AND description = 'النظام الموحد للوثائق المتماثلة لإمارة الشارقة'
+       AND date_published IS NULL;
+
+    IF (SELECT count(*) FROM classifications WHERE classification_scheme_id=scheme_id) <> 345 THEN
+        RAISE EXCEPTION 'Mutamathilah import classification count mismatch';
+    END IF;
+    IF (SELECT count(*) FROM classifications WHERE classification_scheme_id=scheme_id AND is_terminal) <> 254 THEN
+        RAISE EXCEPTION 'Mutamathilah import terminal count mismatch';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM classifications
+        WHERE classification_scheme_id=scheme_id
+          AND (description IS NULL OR btrim(description) = '')
+    ) THEN
+        RAISE EXCEPTION 'Mutamathilah Arabic description mapping is incomplete';
+    END IF;
+    SELECT count(DISTINCT correlation_id) INTO correlation_count
+      FROM event_history
+     WHERE metadata->>'migration' = '025_seed_mutamathilah_classification_scheme';
+    IF correlation_count <> 1 THEN
+        RAISE EXCEPTION 'Mutamathilah events do not share one correlation id';
+    END IF;
+    IF (
+        SELECT count(*) FROM event_history
+        WHERE metadata->>'migration' = '025_seed_mutamathilah_classification_scheme'
+          AND source = 'migration'
+          AND actor_type = 'automated_process'
+    ) <> 600 THEN
+        RAISE EXCEPTION 'Mutamathilah audit provenance count mismatch';
+    END IF;
+END;
+$$;
+SQL
+"${API_VENV}/bin/python" "${DATABASE_DIR}/seeds/import_mutamathilah.py" \
+    --database-url "${DATABASE_URL}"
+
 echo "Core records management database and API tests passed."

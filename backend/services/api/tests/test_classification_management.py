@@ -82,7 +82,21 @@ def test_scheme_classification_counts_are_aggregated_in_one_request(client: Test
         "classification_scheme_id": scheme["id"],
         "branch_count": 1,
         "terminal_count": 1,
+        "eligible_terminal_count": 0,
     }
+
+    published = client.post(
+        f"/api/v1/classification-schemes/{scheme['id']}/publish",
+        headers={"If-Match": str(scheme["version"])},
+    )
+    assert published.status_code == 200, published.text
+    counted = next(
+        row for row in client.get(
+            "/api/v1/classification-schemes/classification-counts"
+        ).json()
+        if row["classification_scheme_id"] == scheme["id"]
+    )
+    assert counted["eligible_terminal_count"] == 1
 
 
 def test_unused_unpublished_scheme_bulk_deletion_is_audited(client: TestClient):

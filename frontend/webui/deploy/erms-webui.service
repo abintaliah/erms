@@ -1,0 +1,21 @@
+[Unit]
+Description=ERMS NiceGUI web UI
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=erms
+Group=erms
+WorkingDirectory=/opt/erms
+EnvironmentFile=/etc/erms/webui.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/erms/run-webui.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

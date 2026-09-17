@@ -108,7 +108,16 @@ def classification_counts_by_scheme(
                   ) AS branch_count,
                   count(classification.id) FILTER (
                       WHERE classification.is_terminal
-                  ) AS terminal_count
+                  ) AS terminal_count,
+                  count(classification.id) FILTER (
+                      WHERE classification.is_terminal
+                        AND classification_scheme_is_eligible(scheme.id)
+                        AND classification_is_effectively_active(classification.id)
+                        AND EXISTS (
+                            SELECT 1
+                              FROM effective_classification_retention_rule(classification.id)
+                        )
+                  ) AS eligible_terminal_count
              FROM classification_schemes AS scheme
         LEFT JOIN classifications AS classification
                ON classification.classification_scheme_id = scheme.id

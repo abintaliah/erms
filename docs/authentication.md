@@ -36,6 +36,11 @@ Cookie-authenticated write requests require the matching CSRF header. The
 NiceGUI service keeps its API token in encrypted user storage and sends it as a
 Bearer credential to the API.
 
+API instances sharing the same database do not require session affinity.
+Multiple NiceGUI instances require frontend affinity; shared user storage is
+optional for preserving login data across instances;
+see the [deployment guide](deployment.md).
+
 - `AUTH_SESSION_IDLE_MINUTES` controls sliding idle expiry (default `30`).
 - `AUTH_SESSION_ABSOLUTE_HOURS` controls the maximum lifetime (default `12`).
 - `WEBUI_STORAGE_SECRET` encrypts NiceGUI user storage and must be replaced in
