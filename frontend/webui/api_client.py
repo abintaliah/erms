@@ -119,6 +119,19 @@ class ErmsApiClient:
     async def get(self, resource: str, entity_id: int) -> dict[str, Any]:
         return await self.request("GET", f"/api/v1/{resource}/{entity_id}")
 
+    async def browse_schemes(self) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/browse/classification-schemes")
+
+    async def browse_page(
+        self, path: str, *, cursor: str | None = None, query: str = "", limit: int = 50,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if cursor:
+            params["cursor"] = cursor
+        if query:
+            params["query"] = query
+        return await self.request("GET", f"/api/v1/browse/{path}", params=params)
+
     async def history(self, resource: str, entity_id: int, *, limit: int = 200) -> list[dict[str, Any]]:
         return await self.request(
             "GET", f"/api/v1/{resource}/{entity_id}/history", params={"limit": limit}

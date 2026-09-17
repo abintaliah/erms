@@ -50,6 +50,7 @@ from .schemas import (
 from .search import search_rows
 from .user_management import router as user_management_router
 from .classification_management import router as classification_management_router
+from .browse import router as browse_router
 
 
 @asynccontextmanager
@@ -70,6 +71,7 @@ app = FastAPI(
 app.include_router(user_management_router)
 app.include_router(authentication_router)
 app.include_router(classification_management_router)
+app.include_router(browse_router)
 
 EVENT_SOURCES = {
     "api", "web_ui", "bulk_import", "background_worker", "scheduled_job",

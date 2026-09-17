@@ -113,6 +113,57 @@ class ClassificationSchemeClassificationCounts(ApiModel):
     eligible_terminal_count: int
 
 
+class BrowseClassificationNode(ApiModel):
+    id: int
+    classification_scheme_id: int
+    parent_classification_id: int | None
+    code: str
+    title: str
+    description: str | None
+    is_terminal: bool
+    date_deactivated: datetime | None
+    child_classification_count: int
+    root_aggregation_count: int
+
+
+class BrowseAggregationNode(ApiModel):
+    id: int
+    parent_aggregation_id: int | None
+    classification_id: int | None
+    classification_code: str | None
+    classification_title: str | None
+    aggregation_number: str
+    title: str
+    description: str | None
+    date_created: datetime
+    date_opened: datetime
+    date_closed: datetime | None
+    child_aggregation_count: int
+    record_count: int
+
+
+class BrowseRecordNode(ApiModel):
+    id: int
+    aggregation_id: int
+    aggregation_number: str
+    aggregation_title: str
+    record_number: str
+    title: str
+    description: str | None
+    date_created: datetime
+    date_originated: datetime
+    digital_component_count: int
+
+
+BrowseNode = TypeVar("BrowseNode")
+
+
+class BrowsePage(ApiModel, Generic[BrowseNode]):
+    items: list[BrowseNode]
+    next_cursor: str | None
+    total: int
+
+
 class RetentionRuleInput(ApiModel):
     current_period_years: int = Field(ge=0)
     intermediate_period_years: int = Field(ge=0)

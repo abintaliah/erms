@@ -70,7 +70,11 @@ schemes and classifications share a vertically stacked administration workspace
 with a fixed-height scrollable scheme browser, lazy-loaded hierarchy,
 contextual root/child creation, classification search, and effective-rule
 provenance. See [`../../docs/classification-schemes.md`](../../docs/classification-schemes.md)
-for its behavior. The selected-classification pane exposes deactivate,
+for its behavior. The Aggregations page also provides a cursor-paginated,
+lazy-loaded browser from published classification schemes through root and
+child aggregations to records, with concise details shown beside the tree. See
+[`../../docs/aggregation-classification-browser.md`](../../docs/aggregation-classification-browser.md).
+The selected-classification pane exposes deactivate,
 reactivate, and delete actions. Delete is enabled only for an unused leaf in an
 active, unpublished scheme; otherwise inline guidance explains the blocking
 condition. Direct, ancestor-derived, and scheme-derived inactivity are visibly

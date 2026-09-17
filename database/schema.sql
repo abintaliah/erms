@@ -22,6 +22,8 @@ CREATE TABLE aggregations (
 
 CREATE INDEX aggregations_parent_aggregation_id_idx
     ON aggregations (parent_aggregation_id);
+CREATE INDEX aggregations_parent_number_browse_idx
+    ON aggregations (parent_aggregation_id, aggregation_number COLLATE "C", id);
 
 CREATE TABLE records (
     id              bigserial PRIMARY KEY,
@@ -40,6 +42,8 @@ CREATE TABLE records (
 
 CREATE INDEX records_aggregation_id_idx
     ON records (aggregation_id);
+CREATE INDEX records_aggregation_number_browse_idx
+    ON records (aggregation_id, record_number COLLATE "C", id);
 
 CREATE TABLE digital_components (
     id              bigserial PRIMARY KEY,
@@ -1354,6 +1358,8 @@ CREATE UNIQUE INDEX classifications_scheme_code_ci_unique
     ON classifications (classification_scheme_id, lower(code));
 CREATE INDEX classifications_scheme_parent_idx
     ON classifications (classification_scheme_id, parent_classification_id);
+CREATE INDEX classifications_parent_code_browse_idx
+    ON classifications (classification_scheme_id, parent_classification_id, code COLLATE "C", id);
 
 CREATE TABLE classification_retention_rules (
     id                        bigserial PRIMARY KEY,
@@ -1376,6 +1382,8 @@ ALTER TABLE aggregations
         REFERENCES classifications(id) ON DELETE RESTRICT;
 CREATE INDEX aggregations_classification_id_idx
     ON aggregations (classification_id);
+CREATE INDEX aggregations_classification_number_browse_idx
+    ON aggregations (classification_id, aggregation_number COLLATE "C", id);
 ALTER TABLE aggregations
     ADD CONSTRAINT aggregations_root_classification_consistent
     CHECK (

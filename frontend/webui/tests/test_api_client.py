@@ -54,6 +54,31 @@ def test_classification_search_uses_literal_case_insensitive_containment():
     }
 
 
+def test_browse_page_preserves_opaque_cursor_and_scoped_filter():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"items": [], "next_cursor": None, "total": 0})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.browse_page(
+                "aggregations/8/records", cursor="opaque-token", query="annual", limit=25,
+            )
+        finally:
+            await client.close()
+
+    result = asyncio.run(exercise())
+    assert result["total"] == 0
+    assert captured["path"] == "/api/v1/browse/aggregations/8/records"
+    assert captured["params"] == {
+        "limit": "25", "cursor": "opaque-token", "query": "annual",
+    }
+
+
 def test_personal_classification_recent_activity_uses_audit_events():
     requests = []
 

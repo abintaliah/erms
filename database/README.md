@@ -107,6 +107,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/024_seed_general_classification_scheme.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/026_add_classification_browser_indexes.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -123,6 +126,10 @@ first-use provenance. Assignment marks the terminal and every ancestor as
 historically used. Only unused leaves in active, currently unpublished schemes
 can then be permanently deleted; inactive paths are excluded from new
 assignments without disturbing existing governance.
+Migration 026 adds the compound relationship-and-business-identifier indexes
+used by the cursor-paginated classification, aggregation, and record browser.
+See
+[`../docs/aggregation-classification-browser.md`](../docs/aggregation-classification-browser.md).
 Migration 004 adds transactional record drafts. Migration 005 adds local
 credentials, database-backed login sessions, and the original human/system
 account types.
