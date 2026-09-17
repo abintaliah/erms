@@ -107,7 +107,7 @@ required.
 
 ## 5. Data model
 
-Migration `028_add_user_favourites.sql` adds two relationship tables. Separate
+Migration `029_add_user_favourites.sql` adds two relationship tables. Separate
 tables are required so PostgreSQL can enforce foreign-key integrity for both
 target types. A polymorphic `entity_type` and `entity_id` table must not be
 used.
@@ -142,12 +142,12 @@ supports entity deletion and diagnostics. An index on
 
 The two tables and indexes must be present in both:
 
-- `database/migrations/028_add_user_favourites.sql`, for existing databases;
+- `database/migrations/029_add_user_favourites.sql`, for existing databases;
   and
 - `database/schema.sql`, for new databases.
 
 The migration must be transactional and record
-`028_add_user_favourites` in `schema_migrations` only after all objects have
+`029_add_user_favourites` in `schema_migrations` only after all objects have
 been created successfully. `database/README.md` must include the migration in
 the ordered upgrade instructions.
 
@@ -563,7 +563,7 @@ The feature is complete only when all of the following are true:
 
 The implementation is expected to change at least:
 
-- `database/migrations/028_add_user_favourites.sql`;
+- `database/migrations/029_add_user_favourites.sql`;
 - `database/schema.sql`;
 - `database/README.md`;
 - `backend/services/api/schemas.py`;

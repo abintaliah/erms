@@ -113,6 +113,9 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/027_segment_postgresql_content.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
+  -f database/migrations/028_seed_current_user_management.sql
 ```
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
@@ -139,6 +142,13 @@ upload sessions, and preserves existing content as segment zero. It is
 transactional but intentionally does not use the command-line `-1` wrapper
 because the migration contains its own transaction. See
 [`../docs/content-storage.md`](../docs/content-storage.md).
+Migration 028 seeds the organizational units, roles, human users, and role
+assignments exported from the development database on 17 September 2026. It
+uses codes and email addresses to resolve relationships and can reuse a
+consistent pre-existing bootstrap identity. It is strictly test-only: every
+seeded user receives the shared password `pass12345678`, forced password change
+is disabled, and existing sessions for those users are revoked. Never apply
+this migration to production or another security-sensitive environment.
 Migration 004 adds transactional record drafts. Migration 005 adds local
 credentials, database-backed login sessions, and the original human/system
 account types.
