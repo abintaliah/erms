@@ -1,4 +1,4 @@
-from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from psycopg import Connection
@@ -13,6 +13,7 @@ from .schemas import (
     ClassificationRead,
     ClassificationRetentionRuleRead,
     ClassificationSchemeCreate,
+    ClassificationSchemeClassificationCounts,
     ClassificationSchemeRead,
     ClassificationSchemeUpdate,
     ClassificationUpdate,
@@ -50,16 +51,39 @@ def create_scheme(payload: ClassificationSchemeCreate, connection: Connection = 
 @router.get("/classification-schemes", response_model=list[ClassificationSchemeRead], tags=["classification schemes"])
 def list_schemes(
     eligible: bool | None = None,
+    sort: Literal["created", "title", "code", "published_status"] = "created",
+    direction: Literal["asc", "desc"] = "asc",
     limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    if eligible is None:
-        return list_rows(connection, "classification_schemes", limit=limit, offset=offset)
-    predicate = "date_deactivated IS NULL AND date_published IS NOT NULL AND date_published <= CURRENT_TIMESTAMP"
-    if not eligible:
-        predicate = f"NOT ({predicate})"
+    predicates: list[str] = []
+    if eligible is not None:
+        eligible_predicate = (
+            "date_deactivated IS NULL AND date_published IS NOT NULL "
+            "AND date_published <= CURRENT_TIMESTAMP"
+        )
+        predicates.append(eligible_predicate if eligible else f"NOT ({eligible_predicate})")
+
+    order_expressions = {
+        "created": "id",
+        "title": "LOWER(title)",
+        "code": "LOWER(code)",
+        "published_status": """CASE
+            WHEN date_deactivated IS NOT NULL THEN 3
+            WHEN date_published IS NULL THEN 2
+            WHEN date_published > CURRENT_TIMESTAMP THEN 1
+            ELSE 0 END""",
+    }
+    order_direction = direction.upper()
+    query = "SELECT * FROM classification_schemes"
+    if predicates:
+        query += " WHERE " + " AND ".join(predicates)
+    query += (
+        f" ORDER BY {order_expressions[sort]} {order_direction}, "
+        f"LOWER(title) {order_direction}, id {order_direction} LIMIT %s OFFSET %s"
+    )
     return list(connection.execute(
-        f"SELECT * FROM classification_schemes WHERE {predicate} ORDER BY id LIMIT %s OFFSET %s",
+        query,
         (limit, offset),
     ).fetchall())
 
@@ -67,6 +91,30 @@ def list_schemes(
 @router.post("/classification-schemes/search", response_model=SearchResponse[ClassificationSchemeRead], tags=["classification schemes"])
 def search_schemes(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
     return search_rows(connection, "classification_schemes", payload)
+
+
+@router.get(
+    "/classification-schemes/classification-counts",
+    response_model=list[ClassificationSchemeClassificationCounts],
+    tags=["classification schemes"],
+)
+def classification_counts_by_scheme(
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return list(connection.execute(
+        """SELECT scheme.id AS classification_scheme_id,
+                  count(classification.id) FILTER (
+                      WHERE classification.id IS NOT NULL AND NOT classification.is_terminal
+                  ) AS branch_count,
+                  count(classification.id) FILTER (
+                      WHERE classification.is_terminal
+                  ) AS terminal_count
+             FROM classification_schemes AS scheme
+        LEFT JOIN classifications AS classification
+               ON classification.classification_scheme_id = scheme.id
+         GROUP BY scheme.id
+         ORDER BY scheme.id"""
+    ).fetchall())
 
 
 @router.get("/classification-schemes/{scheme_id}", response_model=ClassificationSchemeRead, tags=["classification schemes"])
@@ -96,6 +144,37 @@ def publish_scheme(
         current = get_or_404(connection, "classification_schemes", scheme_id)
         raise HTTPException(status_code=412, detail={"message": "entity has changed", "current_version": current["version"]})
     return row
+
+
+@router.post("/classification-schemes/{scheme_id}/unpublish", response_model=ClassificationSchemeRead, tags=["classification schemes"])
+def unpublish_scheme(
+    scheme_id: int, version: int = Depends(expected_version),
+    reason: str | None = Header(None, alias="X-Change-Reason"),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    _required_reason(reason)
+    row = connection.execute(
+        """UPDATE classification_schemes
+              SET date_published=NULL
+            WHERE id=%s AND version=%s
+              AND date_published IS NOT NULL
+              AND date_first_used IS NULL
+        RETURNING *""",
+        (scheme_id, version),
+    ).fetchone()
+    if row is not None:
+        return row
+    current = get_or_404(connection, "classification_schemes", scheme_id)
+    if current["version"] != version:
+        raise HTTPException(status_code=412, detail={
+            "message": "entity has changed", "current_version": current["version"],
+        })
+    if current["date_first_used"] is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="a classification scheme that has governed an aggregation cannot be unpublished",
+        )
+    raise HTTPException(status_code=409, detail="classification scheme is already unpublished")
 
 
 @router.post("/classification-schemes/{scheme_id}/deactivate", response_model=ClassificationSchemeRead, tags=["classification schemes"])
@@ -128,8 +207,10 @@ def reactivate_scheme(
 @router.delete("/classification-schemes/{scheme_id}", status_code=204, tags=["classification schemes"])
 def delete_scheme(
     scheme_id: int, version: int = Depends(expected_version),
+    reason: str | None = Header(None, alias="X-Change-Reason"),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    _required_reason(reason)
     delete_row(connection, "classification_schemes", scheme_id, version)
     return Response(status_code=204)
 
@@ -168,6 +249,7 @@ def list_classifications(
         clauses.append("c.parent_classification_id = %s"); parameters.append(parent_classification_id)
     if eligible:
         clauses.extend(("c.is_terminal", "classification_scheme_is_eligible(c.classification_scheme_id)",
+                        "classification_is_effectively_active(c.id)",
                         "EXISTS (SELECT 1 FROM effective_classification_retention_rule(c.id))"))
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
     parameters.extend((limit, offset))
@@ -192,6 +274,7 @@ def recent_classifications(
            JOIN classifications c ON c.id=recent.classification_id
            WHERE recent.user_id=%s AND c.is_terminal
              AND classification_scheme_is_eligible(c.classification_scheme_id)
+             AND classification_is_effectively_active(c.id)
              AND EXISTS (SELECT 1 FROM effective_classification_retention_rule(c.id))
            ORDER BY recent.last_selected_at DESC LIMIT %s""",
         (principal.user_id, limit),
@@ -212,7 +295,7 @@ def classification_path(classification_id: int, connection: Connection = Depends
                JOIN lineage child ON p.id=child.parent_classification_id
            ) SELECT id, classification_scheme_id, parent_classification_id, code, title,
                     description, authority, scope_note, keywords, is_terminal,
-                    date_created, date_updated, version
+                    date_created, date_updated, date_deactivated, date_first_used, version
              FROM lineage ORDER BY depth DESC""", (classification_id,)
     ).fetchall()
     if not rows:
@@ -232,10 +315,48 @@ def update_classification(
 @router.delete("/classifications/{classification_id}", status_code=204, tags=["classifications"])
 def delete_classification(
     classification_id: int, version: int = Depends(expected_version),
+    reason: str | None = Header(None, alias="X-Change-Reason"),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    _required_reason(reason)
     delete_row(connection, "classifications", classification_id, version)
     return Response(status_code=204)
+
+
+@router.post("/classifications/{classification_id}/deactivate", response_model=ClassificationRead, tags=["classifications"])
+def deactivate_classification(
+    classification_id: int, version: int = Depends(expected_version),
+    reason: str | None = Header(None, alias="X-Change-Reason"),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    _required_reason(reason)
+    current = get_or_404(connection, "classifications", classification_id)
+    if current["date_deactivated"] is not None:
+        raise HTTPException(status_code=409, detail="classification is already deactivated")
+    row = connection.execute(
+        "UPDATE classifications SET date_deactivated=CURRENT_TIMESTAMP "
+        "WHERE id=%s AND version=%s RETURNING *",
+        (classification_id, version),
+    ).fetchone()
+    if row is None:
+        current = get_or_404(connection, "classifications", classification_id)
+        raise HTTPException(status_code=412, detail={
+            "message": "entity has changed", "current_version": current["version"],
+        })
+    return row
+
+
+@router.post("/classifications/{classification_id}/reactivate", response_model=ClassificationRead, tags=["classifications"])
+def reactivate_classification(
+    classification_id: int, version: int = Depends(expected_version),
+    reason: str | None = Header(None, alias="X-Change-Reason"),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    _required_reason(reason)
+    current = get_or_404(connection, "classifications", classification_id)
+    if current["date_deactivated"] is None:
+        raise HTTPException(status_code=409, detail="classification is already active")
+    return update_row(connection, "classifications", classification_id, {"date_deactivated": None}, version)
 
 
 @router.get("/classifications/{classification_id}/history", response_model=list[EventHistoryRead], tags=["event history"])

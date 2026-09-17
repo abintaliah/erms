@@ -1305,11 +1305,15 @@ CREATE TABLE classification_schemes (
     date_updated     timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_published   timestamptz,
     date_deactivated timestamptz,
+    date_first_used  timestamptz,
     version          bigint NOT NULL DEFAULT 1,
     CONSTRAINT classification_schemes_code_not_blank CHECK (btrim(code) <> ''),
     CONSTRAINT classification_schemes_title_not_blank CHECK (btrim(title) <> ''),
     CONSTRAINT classification_schemes_dates_in_order CHECK (
         date_deactivated IS NULL OR date_deactivated >= date_created
+    ),
+    CONSTRAINT classification_schemes_first_use_in_order CHECK (
+        date_first_used IS NULL OR date_first_used >= date_created
     ),
     CONSTRAINT classification_schemes_version_positive CHECK (version > 0)
 );
@@ -1330,11 +1334,19 @@ CREATE TABLE classifications (
     is_terminal              boolean NOT NULL DEFAULT false,
     date_created             timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_updated             timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    date_deactivated         timestamptz,
+    date_first_used          timestamptz,
     version                  bigint NOT NULL DEFAULT 1,
     CONSTRAINT classifications_code_not_blank CHECK (btrim(code) <> ''),
     CONSTRAINT classifications_title_not_blank CHECK (btrim(title) <> ''),
     CONSTRAINT classifications_not_own_parent CHECK (
         parent_classification_id IS NULL OR parent_classification_id <> id
+    ),
+    CONSTRAINT classifications_dates_in_order CHECK (
+        date_deactivated IS NULL OR date_deactivated >= date_created
+    ),
+    CONSTRAINT classifications_first_use_in_order CHECK (
+        date_first_used IS NULL OR date_first_used >= date_created
     ),
     CONSTRAINT classifications_version_positive CHECK (version > 0)
 );
@@ -1416,6 +1428,21 @@ BEGIN
     IF NEW.date_deactivated IS NOT NULL AND NEW.date_deactivated < NEW.date_created THEN
         RAISE EXCEPTION 'classification scheme date_deactivated cannot precede date_created';
     END IF;
+    IF TG_OP = 'UPDATE'
+       AND OLD.date_first_used IS NOT NULL
+       AND NEW.date_first_used IS DISTINCT FROM OLD.date_first_used THEN
+        RAISE EXCEPTION 'classification scheme date_first_used is immutable once set';
+    END IF;
+    IF TG_OP = 'UPDATE'
+       AND OLD.date_published IS NOT NULL
+       AND NEW.date_published IS NULL THEN
+        IF OLD.date_first_used IS NOT NULL THEN
+            RAISE EXCEPTION 'a classification scheme that has governed an aggregation cannot be unpublished';
+        END IF;
+        IF NULLIF(current_setting('app.change_reason', true), '') IS NULL THEN
+            RAISE EXCEPTION 'unpublishing a classification scheme requires a change reason';
+        END IF;
+    END IF;
     RETURN NEW;
 END;
 $$;
@@ -1430,6 +1457,138 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
     )
     FROM classification_schemes
     WHERE id = p_scheme_id;
+$$;
+
+CREATE OR REPLACE FUNCTION classification_is_effectively_active(p_classification_id bigint)
+RETURNS boolean LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE lineage AS (
+        SELECT id, parent_classification_id, date_deactivated
+        FROM classifications WHERE id = p_classification_id
+        UNION ALL
+        SELECT parent.id, parent.parent_classification_id, parent.date_deactivated
+        FROM classifications AS parent
+        JOIN lineage AS child ON parent.id = child.parent_classification_id
+    )
+    SELECT EXISTS (SELECT 1 FROM lineage)
+       AND NOT EXISTS (SELECT 1 FROM lineage WHERE date_deactivated IS NOT NULL);
+$$;
+
+CREATE OR REPLACE FUNCTION validate_classification_dates()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.date_deactivated IS NOT NULL AND NEW.date_deactivated > CURRENT_TIMESTAMP THEN
+        RAISE EXCEPTION 'classification date_deactivated cannot be in the future';
+    END IF;
+    IF NEW.date_deactivated IS NOT NULL AND NEW.date_deactivated < NEW.date_created THEN
+        RAISE EXCEPTION 'classification date_deactivated cannot precede date_created';
+    END IF;
+    IF TG_OP = 'UPDATE'
+       AND OLD.date_first_used IS NOT NULL
+       AND NEW.date_first_used IS DISTINCT FROM OLD.date_first_used THEN
+        RAISE EXCEPTION 'classification date_first_used is immutable once set';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION record_classification_governance_first_use()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    scheme_id bigint;
+    used_at timestamptz := CURRENT_TIMESTAMP;
+BEGIN
+    IF NEW.classification_id IS NULL
+       OR (TG_OP = 'UPDATE' AND NEW.classification_id IS NOT DISTINCT FROM OLD.classification_id) THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT classification_scheme_id INTO scheme_id
+    FROM classifications
+    WHERE id = NEW.classification_id;
+
+    WITH RECURSIVE lineage AS (
+        SELECT id, parent_classification_id
+        FROM classifications WHERE id = NEW.classification_id
+        UNION ALL
+        SELECT parent.id, parent.parent_classification_id
+        FROM classifications AS parent
+        JOIN lineage AS child ON parent.id = child.parent_classification_id
+    )
+    UPDATE classifications
+    SET date_first_used = used_at
+    WHERE id IN (SELECT id FROM lineage) AND date_first_used IS NULL;
+
+    UPDATE classification_schemes
+    SET date_first_used = used_at
+    WHERE id = scheme_id AND date_first_used IS NULL;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION protect_classification_deletion()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    scheme_row classification_schemes%ROWTYPE;
+BEGIN
+    SELECT * INTO scheme_row FROM classification_schemes WHERE id = OLD.classification_scheme_id;
+    IF scheme_row.date_deactivated IS NOT NULL THEN
+        RAISE EXCEPTION 'classifications cannot be deleted while their scheme is deactivated';
+    END IF;
+    IF scheme_row.date_published IS NOT NULL THEN
+        RAISE EXCEPTION 'classification scheme must be unpublished before deleting classifications';
+    END IF;
+    IF OLD.date_first_used IS NOT NULL THEN
+        RAISE EXCEPTION 'a classification that has governed an aggregation cannot be deleted; deactivate it instead';
+    END IF;
+    IF EXISTS (SELECT 1 FROM classifications WHERE parent_classification_id = OLD.id) THEN
+        RAISE EXCEPTION 'classification has children; delete its child classifications first';
+    END IF;
+    IF EXISTS (SELECT 1 FROM aggregations WHERE classification_id = OLD.id) THEN
+        RAISE EXCEPTION 'classification is assigned to an aggregation and cannot be deleted';
+    END IF;
+    IF NULLIF(current_setting('app.change_reason', true), '') IS NULL THEN
+        RAISE EXCEPTION 'deleting a classification requires a change reason';
+    END IF;
+    RETURN OLD;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION delete_unused_classification_scheme()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    deleted_count integer;
+BEGIN
+    IF OLD.date_published IS NOT NULL THEN
+        RAISE EXCEPTION 'published classification schemes must be unpublished before deletion';
+    END IF;
+    IF OLD.date_first_used IS NOT NULL THEN
+        RAISE EXCEPTION 'a classification scheme that has governed an aggregation cannot be deleted';
+    END IF;
+    IF EXISTS (
+        SELECT 1
+        FROM aggregations AS a
+        JOIN classifications AS c ON c.id = a.classification_id
+        WHERE c.classification_scheme_id = OLD.id
+    ) THEN
+        RAISE EXCEPTION 'classification scheme has classifications assigned to aggregations';
+    END IF;
+
+    LOOP
+        DELETE FROM classifications AS candidate
+        WHERE candidate.classification_scheme_id = OLD.id
+          AND NOT EXISTS (
+              SELECT 1 FROM classifications AS child
+              WHERE child.parent_classification_id = candidate.id
+          );
+        GET DIAGNOSTICS deleted_count = ROW_COUNT;
+        EXIT WHEN deleted_count = 0;
+    END LOOP;
+
+    IF EXISTS (SELECT 1 FROM classifications WHERE classification_scheme_id = OLD.id) THEN
+        RAISE EXCEPTION 'classification scheme hierarchy could not be deleted safely';
+    END IF;
+    RETURN OLD;
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION validate_classification_structure()
@@ -1559,6 +1718,9 @@ BEGIN
             IF NOT classification_scheme_is_eligible(scheme_id) THEN
                 RAISE EXCEPTION 'selected classification scheme is not active and published';
             END IF;
+            IF NOT classification_is_effectively_active(NEW.classification_id) THEN
+                RAISE EXCEPTION 'selected classification or one of its ancestors is deactivated';
+            END IF;
         END IF;
     ELSIF NEW.classification_id IS NOT NULL THEN
         RAISE EXCEPTION 'child aggregations cannot have a classification';
@@ -1659,7 +1821,8 @@ END;
 $$;
 
 CREATE TRIGGER classification_schemes_validate_dates
-BEFORE INSERT OR UPDATE OF date_created, date_deactivated ON classification_schemes
+BEFORE INSERT OR UPDATE OF date_created, date_published, date_deactivated, date_first_used
+ON classification_schemes
 FOR EACH ROW EXECUTE FUNCTION validate_classification_scheme_dates();
 CREATE TRIGGER classification_schemes_touch
 BEFORE UPDATE ON classification_schemes
@@ -1667,6 +1830,9 @@ FOR EACH ROW EXECUTE FUNCTION touch_classification_date_updated();
 CREATE TRIGGER classifications_touch
 BEFORE UPDATE ON classifications
 FOR EACH ROW EXECUTE FUNCTION touch_classification_date_updated();
+CREATE TRIGGER classifications_validate_dates
+BEFORE INSERT OR UPDATE OF date_created, date_deactivated, date_first_used ON classifications
+FOR EACH ROW EXECUTE FUNCTION validate_classification_dates();
 CREATE TRIGGER classification_retention_rules_touch
 BEFORE UPDATE ON classification_retention_rules
 FOR EACH ROW EXECUTE FUNCTION touch_classification_date_updated();
@@ -1701,6 +1867,16 @@ FOR EACH ROW EXECUTE FUNCTION validate_root_aggregation_retention_rules();
 CREATE TRIGGER aggregations_record_classification_selection
 AFTER INSERT OR UPDATE OF classification_id ON aggregations
 FOR EACH ROW EXECUTE FUNCTION record_classification_selection();
+CREATE TRIGGER aggregations_record_classification_governance_first_use
+AFTER INSERT OR UPDATE OF classification_id ON aggregations
+FOR EACH ROW EXECUTE FUNCTION record_classification_governance_first_use();
+
+CREATE TRIGGER classification_schemes_delete_unused
+BEFORE DELETE ON classification_schemes
+FOR EACH ROW EXECUTE FUNCTION delete_unused_classification_scheme();
+CREATE TRIGGER classifications_protect_deletion
+BEFORE DELETE ON classifications
+FOR EACH ROW EXECUTE FUNCTION protect_classification_deletion();
 
 CREATE TRIGGER classification_schemes_bump_version
 BEFORE UPDATE ON classification_schemes

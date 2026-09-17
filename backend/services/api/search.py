@@ -144,6 +144,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "scope_note": NULLABLE_TEXT, "edition": NULLABLE_TEXT,
         "date_created": DATETIME, "date_updated": DATETIME,
         "date_published": NULLABLE_DATETIME, "date_deactivated": NULLABLE_DATETIME,
+        "date_first_used": NULLABLE_DATETIME,
     },
     "classifications": {
         "id": INTEGER, "version": INTEGER, "classification_scheme_id": INTEGER,
@@ -151,6 +152,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "description": NULLABLE_TEXT, "authority": NULLABLE_TEXT,
         "scope_note": NULLABLE_TEXT, "keywords": NULLABLE_TEXT,
         "is_terminal": BOOLEAN, "date_created": DATETIME, "date_updated": DATETIME,
+        "date_deactivated": NULLABLE_DATETIME, "date_first_used": NULLABLE_DATETIME,
     },
 }
 

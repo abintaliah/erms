@@ -63,7 +63,11 @@ schemes and classifications share a vertically stacked administration workspace
 with a fixed-height scrollable scheme browser, lazy-loaded hierarchy,
 contextual root/child creation, classification search, and effective-rule
 provenance. See [`../../docs/classification-schemes.md`](../../docs/classification-schemes.md)
-for its behavior. See
+for its behavior. The selected-classification pane exposes deactivate,
+reactivate, and delete actions. Delete is enabled only for an unused leaf in an
+active, unpublished scheme; otherwise inline guidance explains the blocking
+condition. Direct, ancestor-derived, and scheme-derived inactivity are visibly
+distinguished. See
 [`../../docs/authentication.md`](../../docs/authentication.md) for authentication
 operations and security behavior. Digital components can be downloaded in their
 original format or viewed through the bundled, self-hosted PDF.js viewer. See

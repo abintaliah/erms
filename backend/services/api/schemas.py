@@ -102,7 +102,14 @@ class ClassificationSchemeRead(ClassificationSchemeCreate):
     date_created: datetime
     date_updated: datetime
     date_deactivated: datetime | None
+    date_first_used: datetime | None
     version: int
+
+
+class ClassificationSchemeClassificationCounts(ApiModel):
+    classification_scheme_id: int
+    branch_count: int
+    terminal_count: int
 
 
 class RetentionRuleInput(ApiModel):
@@ -157,6 +164,8 @@ class ClassificationRead(ApiModel):
     is_terminal: bool
     date_created: datetime
     date_updated: datetime
+    date_deactivated: datetime | None
+    date_first_used: datetime | None
     version: int
 
 

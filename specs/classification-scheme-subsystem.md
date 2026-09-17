@@ -3,8 +3,8 @@
 **Status:** Approved — implementation baseline  
 **Project:** ERMS  
 **Prepared:** 16 September 2026  
-**Revision:** 0.3 — root-only aggregation retention and disposition confirmed  
-**Implementation state:** Implemented in migration 019, FastAPI, and NiceGUI
+**Revision:** 0.5 — retention validation triggers clarified
+**Implementation state:** Implemented through migration 023, FastAPI, and NiceGUI
 
 ## 1. Purpose
 
@@ -128,6 +128,74 @@ Deactivating a scheme:
   recent-selection results.
 - Leaves it visible in administration and audit interfaces.
 
+### 4.4 Classification lifecycle and effective availability
+
+Classifications also use dates rather than a redundant status column:
+
+```text
+date_deactivated IS NULL     => directly active
+date_deactivated IS NOT NULL => directly inactive
+```
+
+The date cannot be in the future or precede `date_created`. Clearing it
+reactivates the classification. A classification is effectively available for
+a new aggregation assignment only when all of the following hold:
+
+- Its scheme is active and currently published.
+- It and every ancestor classification are active.
+- It is terminal.
+- It has an effective retention rule.
+
+Deactivating a branch makes its entire descendant subtree unavailable for new
+assignments without rewriting descendant rows. A descendant may also remain
+directly inactive in its own right. Reactivating an ancestor restores only
+descendants that have no other inactive ancestor and are not directly inactive.
+
+Deactivation and reactivation never remove or rewrite existing aggregation
+assignments and never change effective-retention resolution for those existing
+assignments. They govern future selection only. Both actions require a reason,
+optimistic concurrency, and an audit event.
+
+### 4.5 Historical governance and permanent deletion
+
+`date_first_used` is an immutable historical marker. When a terminal
+classification is first assigned to a root aggregation, the same assignment
+time is recorded for:
+
+- the assigned terminal classification;
+- every ancestor classification in its path, because those ancestors
+  contribute classification context and may supply inherited retention; and
+- the classification scheme.
+
+Removing or changing the aggregation assignment does not clear these markers.
+They answer whether the object has *ever* participated in governing an
+aggregation, not whether it is referenced now.
+
+A classification may be permanently deleted only when every condition below
+is true at deletion time:
+
+1. Its scheme is currently unpublished. A scheme that was published and later
+   unpublished is eligible; publication history alone is not a prohibition.
+2. Its scheme is active.
+3. `date_first_used IS NULL`, meaning the classification has never governed an
+   aggregation, directly or as an ancestor.
+4. It has no child classifications; individual deletion never silently
+   cascades through a subtree.
+5. No aggregation currently references it.
+6. The supplied optimistic-concurrency version still matches.
+7. A nonblank deletion reason is supplied.
+
+Its directly owned retention rule and recent-selection rows are dependent data
+and are deleted by referential cascade. Immutable event history remains. These
+rules are enforced by PostgreSQL so direct SQL cannot bypass them.
+
+When permanent deletion is unavailable, the administrative alternative is to
+deactivate the classification. The UI must keep the Delete action visible but
+disabled and explain the exact blocking condition, for example: “Unpublish the
+scheme first”, “Reactivate the scheme before deleting classifications”,
+“Remove child classifications first”, or “This classification has governed an
+aggregation and can only be deactivated.”
+
 ## 5. Data model
 
 All mutable first-class tables use `bigserial` primary keys, database-managed
@@ -170,6 +238,8 @@ should be deactivated rather than deleted.
 | `is_terminal` | `boolean` | Required; defaults to `false` |
 | `date_created` | `timestamptz` | Automatically assigned |
 | `date_updated` | `timestamptz` | Automatically maintained |
+| `date_deactivated` | `timestamptz` | Nullable; cannot be future or before creation |
+| `date_first_used` | `timestamptz` | Nullable immutable historical-governance marker |
 | `version` | `bigint` | Positive optimistic-concurrency value |
 
 Rules:
@@ -183,7 +253,8 @@ Rules:
 - Branch-to-terminal conversion requires no children and an effective rule.
 - Terminal-to-branch conversion requires no assigned aggregations.
 - Reparenting cannot move a classification between schemes.
-- Deletion is restricted while children or aggregation assignments exist.
+- Permanent deletion follows section 4.5; otherwise the classification is
+  deactivated to prevent future assignment.
 
 The UI must not rely on color alone to distinguish types:
 
@@ -287,7 +358,6 @@ Validation is required after:
 - Creating or updating a terminal classification.
 - Reparenting a classification subtree.
 - Creating, updating, or deleting a retention rule.
-- Deleting or moving an ancestor that supplies an inherited rule.
 
 Deleting a rule is rejected if any terminal descendant would be left without
 an effective rule.
@@ -325,6 +395,7 @@ In addition:
 - A root aggregation may only reference a terminal classification.
 - For a new assignment or changed classification, the scheme must be active
   and currently published.
+- The classification and all of its ancestors must be active.
 - The classification must have an effective retention rule.
 - A child aggregation must store no classification ID.
 - A child aggregation must not own an aggregation retention rule.
@@ -447,7 +518,17 @@ Required operations include:
 
 - Standard scheme CRUD with `If-Match` concurrency.
 - Publish, deactivate, and reactivate scheme actions.
+- Unpublish an accidentally published scheme only before its first aggregation
+  assignment, requiring a change reason.
+- Transactionally delete an unpublished, never-used scheme, cascading through
+  its draft classification hierarchy only after rechecking that no aggregation
+  references it. Preserve immutable audit history and require optimistic
+  concurrency plus a deletion reason.
 - Standard classification CRUD with `If-Match` concurrency.
+- Classification deactivate/reactivate actions requiring a reason and
+  `If-Match`, with effective subtree availability enforced server-side.
+- Classification deletion requiring a reason and `If-Match`, permitted only
+  for an unused leaf in an active, currently unpublished scheme.
 - Transactional classification creation with an optional direct rule.
 - Direct-rule create/update/delete.
 - Lazy children query by scheme and `parent_classification_id`.
@@ -479,6 +560,8 @@ the controlled search registry. Classification searchable fields include:
 - `scope_note`
 - `keywords`
 - `is_terminal`
+- `date_deactivated`
+- `date_first_used`
 - creation/update dates
 
 The existing `contains_ci`, `starts_with_ci`, and `ends_with_ci` operators remain
@@ -660,6 +743,14 @@ Required coverage:
 - Rule deletion impact on terminal descendants.
 - Rule cascade on classification deletion.
 - Classification/scheme deletion restrictions.
+- Immutable first-use tracking for an assigned classification, all ancestors,
+  and its scheme.
+- Direct classification deactivation, inherited subtree ineligibility,
+  independent descendant deactivation, and reactivation behavior.
+- Existing assignments and retention resolution surviving classification
+  deactivation.
+- Classification deletion after publish then unpublish, and rejection while
+  published, scheme-inactive, historically used, non-leaf, or currently used.
 - Root aggregation mandatory classification.
 - Child aggregation classification prohibition.
 - Root-to-child moves requiring atomic removal of both classification and local
@@ -700,7 +791,8 @@ The subsystem is complete only when:
 3. Existing roots are explicitly classified and the final constraint validates.
 4. API and NiceGUI workflows implement the specified behavior.
 5. Effective rule and provenance are visible for every aggregation.
-6. Search, recent selections, audit history, and concurrency are tested.
+6. Search, recent selections, lifecycle/deletion semantics, audit history, and
+   concurrency are tested.
 7. Disposable-database, API, frontend, and applicable browser tests pass.
 8. User and technical documentation is complete.
 9. The classification subsystem changes are committed to git.

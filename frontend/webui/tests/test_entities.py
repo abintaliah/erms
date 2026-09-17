@@ -4,8 +4,10 @@ from types import SimpleNamespace
 import pytest
 
 from frontend.webui.app import (
+    CHILD_AGGREGATION_CLASSIFICATION_HELP,
     CLASSIFICATION_WORKSPACE_SEARCH_FIELDS,
     CLASSIFICATION_SELECTOR_SEARCH_FIELDS,
+    RECORD_UPLOAD_WAIT_MESSAGE,
     buffer_upload_batch,
     component_uploader,
     component_file_icon,
@@ -135,6 +137,12 @@ def test_classification_workspace_search_includes_keywords():
     assert ENTITIES["classifications"].search_fields == (
         "code", "title", "description", "keywords",
     )
+
+
+def test_contextual_form_help_explains_disabled_controls():
+    assert "inherit classification governance" in CHILD_AGGREGATION_CLASSIFICATION_HELP
+    assert "cannot have a classification assigned directly" in CHILD_AGGREGATION_CLASSIFICATION_HELP
+    assert RECORD_UPLOAD_WAIT_MESSAGE == "Please wait until all files have finished uploading."
 
 
 def test_dashboard_recent_configuration_rejects_non_positive_values(monkeypatch):

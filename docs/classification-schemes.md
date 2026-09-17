@@ -15,6 +15,40 @@ digital components; it only prevents new assignments or moves into that scheme.
 Reactivation clears `date_deactivated`. Deactivation and reactivation require a
 change reason and are written to the immutable event history.
 
+Publication may be reversed only while a scheme remains unused. The explicit
+**Unpublish** action clears `date_published`, requires a reason, and records the
+change in event history. It exists to correct accidental or premature
+publication; it is not a way to withdraw a scheme that has already governed
+records.
+
+PostgreSQL sets the immutable `date_first_used` timestamp the first time a root
+aggregation is assigned to any classification in the scheme. Publication by
+itself does not set this value. Once set, the scheme cannot be unpublished or
+hard-deleted, even if all affected aggregations are subsequently moved or
+deleted. This preserves the historical governance context. Such a scheme must
+be deactivated when it should no longer accept assignments.
+
+## Classification lifecycle
+
+A classification is directly active while its own `date_deactivated` is null.
+For a new assignment it must also be *effectively active*: its scheme and every
+classification in its ancestor path must be active. Deactivating a branch
+makes its complete subtree unavailable for new aggregation assignments without
+rewriting descendant rows. A descendant can still have an independent direct
+deactivation; reactivating its ancestor does not clear that state. The UI
+distinguishes **Inactive**, **Inactive via ancestor**, and **Inactive via
+scheme**.
+
+Classification deactivation is prospective. Existing assignments remain intact
+and continue resolving the same classification and retention rules. Deactivate
+and reactivate operations require a reason and current version and are audited.
+
+On first assignment, PostgreSQL permanently records `date_first_used` on the
+selected terminal, every ancestor in its path, and its scheme. Ancestors count
+as historically used because they supplied governance context and may have
+supplied inherited retention. Reassignment or deletion of the aggregation does
+not clear these markers.
+
 ## Branches, terminals, and hierarchy
 
 Classifications have unlimited hierarchy depth and are explicitly one of:
@@ -67,6 +101,15 @@ documented retention rule, with periods and final actions tailored to the
 business function. The seed is development-only, idempotent, and fully audited
 as an automated migration.
 
+Migration 024 provides a complementary general corporate scheme. `GCS — General
+Classification Scheme` contains 52 classifications: four roots for
+Administration, Human Resources, Finance and Asset Management; twelve child
+branches; and thirty-six terminal classifications. Each terminal has a
+function-specific retention rule and detailed disposal instructions. The seed
+is idempotent and its scheme, classification and rule creation events all carry
+the same migration source, automated-process actor, explicit reason and
+structured bulk-operation provenance.
+
 The NiceGUI aggregation form presents eligible terminals with code, title, and
 description. Its searchable hierarchy-aware list places the current user's
 recent selections first. The number retained in this list is configured by
@@ -99,6 +142,11 @@ branch with both the scheme and parent locked by context. It is disabled until
 a branch is selected and remains disabled for terminal classifications. Scheme
 lifecycle actions, scheme and classification editing, tree refresh, and
 classification search all remain in the same workspace.
+
+The selected-classification pane contains audited deactivate, reactivate, and
+delete actions. Delete remains visible when unavailable, but is disabled with
+the exact reason. Deactivation is the normal alternative for a classification
+that has already participated in governance.
 
 Viewing metadata does not require entering an edit workflow. Selecting a scheme
 shows its authority, scope note, edition, publication and lifecycle dates, and
@@ -143,3 +191,57 @@ audited using the same immutable event-history subsystem as other entities.
 Classification rules cascade only when their owning classification is deleted;
 local rules cascade only when their owning root aggregation is deleted. Foreign
 keys otherwise restrict deletion while children or assignments exist.
+
+### Classification deletion rules
+
+A classification may be permanently deleted only when every condition is true:
+
+- Its scheme is currently unpublished and active. Previous publication followed
+  by unpublication does not permanently bar deletion.
+- Its immutable `date_first_used` is null; neither it nor descendant governance
+  has ever caused it to govern an aggregation.
+- It is a leaf. Individual deletion never silently cascades through a subtree,
+  so child classifications must be removed first.
+- No aggregation currently references it.
+- The request supplies the current version and a nonblank deletion reason.
+
+PostgreSQL rechecks these conditions even for direct SQL. Its directly owned
+retention rule and users' recent-selection rows cascade as dependent data;
+immutable event history remains. The UI explains whether the administrator must
+unpublish or reactivate the scheme, remove children, or deactivate a historically
+used classification instead.
+
+### Scheme deletion rules
+
+Permanent deletion is deliberately limited to schemes which are both currently
+unpublished and have never governed an aggregation:
+
+- `date_published` must be null. An unused scheme that was published by mistake
+  may first be unpublished with a recorded reason.
+- `date_first_used` must be null. Once any classification has been assigned to
+  an aggregation, this value is permanent and deletion remains forbidden.
+- No aggregation may currently reference a classification in the scheme. This
+  is checked again inside the deletion transaction as a defensive integrity
+  condition.
+- The caller must supply the current scheme version and a non-blank deletion
+  reason.
+
+An eligible empty scheme is deleted directly. If an eligible scheme contains a
+draft classification hierarchy, PostgreSQL removes that hierarchy from the
+deepest classifications upward in the same transaction, then removes the
+scheme. Direct classification retention rules and users' recent-classification
+selection entries cascade with their classifications. No aggregation, record,
+digital component, or aggregation-local retention rule is deleted by this
+operation. If any validation fails, the entire transaction is rolled back.
+
+The scheme, classifications, and directly owned retention rules generate their
+normal immutable deletion events. Event history is retained after the source
+rows disappear and includes the administrator's reason. Optimistic concurrency
+prevents deletion when the scheme changed after the UI loaded it.
+
+The administration UI always explains why deletion is unavailable. A published
+but unused scheme instructs the user to unpublish it first. A scheme with
+`date_first_used` explains that it has governed aggregations and must be
+deactivated instead. For an eligible populated draft, the confirmation displays
+the number of branch and terminal classifications that will be removed and
+warns that the operation cannot be undone.

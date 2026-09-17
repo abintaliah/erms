@@ -1,6 +1,8 @@
 -- Test-only fixture: turn the freshly bootstrapped database into the state that
 -- existed immediately before migration 001.
 DROP TRIGGER IF EXISTS aggregations_record_classification_selection ON aggregations;
+DROP TRIGGER IF EXISTS aggregations_record_classification_scheme_first_use ON aggregations;
+DROP TRIGGER IF EXISTS aggregations_record_classification_governance_first_use ON aggregations;
 DROP TRIGGER IF EXISTS aggregations_validate_local_rule_root ON aggregations;
 DROP TRIGGER IF EXISTS aggregations_validate_classification ON aggregations;
 DROP TABLE IF EXISTS user_classification_selections;
@@ -12,6 +14,12 @@ ALTER TABLE aggregations
 DROP TABLE IF EXISTS classifications;
 DROP TABLE IF EXISTS classification_schemes;
 DROP FUNCTION IF EXISTS record_classification_selection();
+DROP FUNCTION IF EXISTS record_classification_scheme_first_use();
+DROP FUNCTION IF EXISTS record_classification_governance_first_use();
+DROP FUNCTION IF EXISTS protect_classification_deletion();
+DROP FUNCTION IF EXISTS validate_classification_dates();
+DROP FUNCTION IF EXISTS classification_is_effectively_active(bigint);
+DROP FUNCTION IF EXISTS delete_unused_classification_scheme();
 DROP FUNCTION IF EXISTS aggregation_effective_retention_rule(bigint);
 DROP FUNCTION IF EXISTS validate_root_aggregation_retention_rules();
 DROP FUNCTION IF EXISTS validate_aggregation_classification();
@@ -22,6 +30,10 @@ DROP FUNCTION IF EXISTS classification_scheme_is_eligible(bigint);
 DROP FUNCTION IF EXISTS validate_classification_scheme_dates();
 DROP FUNCTION IF EXISTS touch_classification_date_updated();
 DELETE FROM schema_migrations WHERE version = '019_add_classification_schemes';
+DELETE FROM schema_migrations WHERE version IN (
+    '022_govern_classification_scheme_deletion',
+    '023_govern_classification_lifecycle'
+);
 DROP TRIGGER IF EXISTS digital_component_blobs_protect_closed_aggregation ON digital_component_blobs;
 DROP TRIGGER IF EXISTS digital_components_protect_closed_aggregation ON digital_components;
 DROP TRIGGER IF EXISTS records_protect_closed_aggregation ON records;
