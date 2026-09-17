@@ -1,9 +1,9 @@
 # Segmented PostgreSQL Digital Content Storage — Implementation Specification
 
-**Status:** Proposed  
+**Status:** Implemented — segmented-storage baseline
 **Project:** ERMS  
 **Prepared:** 17 September 2026  
-**Revision:** 1.0
+**Revision:** 1.1 — implementation completed 17 September 2026
 
 ## 1. Purpose
 
@@ -18,6 +18,16 @@ keep content in PostgreSQL. It does not replace the planned S3-compatible object
 storage provider. Both providers must implement the same storage interface so
 that content APIs and records-management behavior do not depend on where bytes
 are stored.
+
+### 1.1 Implemented baseline
+
+The implemented baseline segments synchronous multipart uploads, records their
+internal upload sessions, streams full and ranged responses, safely stages
+replacements, segments record drafts, promotes drafts without reconstructing a
+file, and supplies manual/dedicated-worker cleanup. Public initiate/append/resume
+endpoints are not yet exposed; interrupted transfers currently roll back as one
+request transaction. Those endpoints can be added later without changing the
+content-set or segment model defined here.
 
 ## 2. Background and design decision
 

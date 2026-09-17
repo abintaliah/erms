@@ -32,12 +32,25 @@ INSERT INTO digital_components (
 VALUES (:'version_record_id', 1, 'hello.txt', 'text/plain', 5, 'sha256', 'test', 'available')
 RETURNING id \gset version_component_
 
-INSERT INTO digital_component_blobs (digital_component_id, content)
-VALUES (:'version_component_id', convert_to('hello', 'UTF8'));
+INSERT INTO digital_component_content_sets (
+    digital_component_id, status, size_in_bytes, segment_count,
+    checksum_algo, checksum_value, date_completed
+)
+VALUES (:'version_component_id', 'active', 5, 1, 'sha256', 'test', CURRENT_TIMESTAMP)
+RETURNING id \gset version_content_set_
+
+INSERT INTO digital_component_blobs (
+    content_set_id, segment_no, segment_size, content
+)
+VALUES (:'version_content_set_id', 0, 5, convert_to('hello', 'UTF8'));
+
+UPDATE digital_components
+SET active_content_set_id = :'version_content_set_id'
+WHERE id = :'version_component_id';
 
 SELECT 1 / CASE WHEN (SELECT convert_from(content, 'UTF8')
     FROM digital_component_blobs
-    WHERE digital_component_id = :'version_component_id') = 'hello' THEN 1 ELSE 0 END;
+    WHERE content_set_id = :'version_content_set_id') = 'hello' THEN 1 ELSE 0 END;
 
 SELECT append_domain_event(
     'digital_component', :'version_component_id', 'CONTENT_UPLOADED',

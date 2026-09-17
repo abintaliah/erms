@@ -75,6 +75,8 @@ ALTER TABLE digital_components
     DROP CONSTRAINT IF EXISTS digital_components_record_id_fkey,
     ADD CONSTRAINT digital_components_record_id_fkey
         FOREIGN KEY (record_id) REFERENCES records (id) ON DELETE RESTRICT;
+DROP TABLE IF EXISTS content_upload_sessions;
+DROP TABLE IF EXISTS record_draft_component_blobs;
 DROP TABLE IF EXISTS record_draft_components;
 DROP TABLE IF EXISTS record_drafts;
 DROP TABLE IF EXISTS login_sessions;
@@ -82,6 +84,11 @@ DROP TABLE IF EXISTS user_credentials;
 ALTER TABLE users DROP COLUMN IF EXISTS account_type;
 DELETE FROM schema_migrations WHERE version IN ('004_add_record_drafts', '005_add_authentication');
 DROP TABLE IF EXISTS digital_component_blobs;
+ALTER TABLE digital_components DROP CONSTRAINT IF EXISTS digital_components_active_content_set_fk;
+ALTER TABLE digital_components
+    DROP COLUMN IF EXISTS active_content_set_id,
+    DROP COLUMN IF EXISTS upload_completed_at;
+DROP TABLE IF EXISTS digital_component_content_sets;
 DROP TRIGGER IF EXISTS aggregations_bump_version ON aggregations;
 DROP TRIGGER IF EXISTS records_bump_version ON records;
 DROP TRIGGER IF EXISTS digital_components_bump_version ON digital_components;
@@ -90,6 +97,7 @@ DROP TRIGGER IF EXISTS users_bump_version ON users;
 DROP TRIGGER IF EXISTS roles_bump_version ON roles;
 DROP TRIGGER IF EXISTS user_role_assignments_bump_version ON user_role_assignments;
 DROP FUNCTION IF EXISTS bump_entity_version();
+DROP FUNCTION IF EXISTS bump_digital_component_version();
 DROP TRIGGER IF EXISTS event_history_remove_internal_fields ON event_history;
 DROP FUNCTION IF EXISTS remove_internal_audit_fields();
 DROP FUNCTION IF EXISTS append_domain_event(text, bigint, text, jsonb, text);

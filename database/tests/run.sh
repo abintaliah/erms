@@ -113,6 +113,12 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${DATABASE_DIR}/migrations/023_govern_classification_lifecycle.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${DATABASE_DIR}/migrations/026_add_classification_browser_indexes.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${SCRIPT_DIR}/segmented_content_migration_before.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/027_segment_postgresql_content.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${SCRIPT_DIR}/segmented_content_migration_after.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/user_management.sql"

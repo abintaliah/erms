@@ -1,47 +1,89 @@
 # Digital component content storage
 
-Digital components are lifecycle-dependent parts of their record. The
-`digital_components.record_id` foreign key uses `ON DELETE CASCADE`: deleting
-an open record atomically deletes its component metadata, and each component's
-stored PostgreSQL blob is then removed by its own cascading foreign key. The
-record-deletion confirmation in the UI states this consequence explicitly.
+Digital components are lifecycle-dependent parts of their record. Deleting an
+open record cascades through its digital-component metadata, active/staged
+content sets, and every stored segment.
 
-## Current design
+## Segmented PostgreSQL provider
 
-Digital component metadata remains in `digital_components`. Binary content is
-stored separately in `digital_component_blobs.content`, a PostgreSQL `bytea`
-column. PostgreSQL can move large `bytea` values into its TOAST storage
-automatically, so normal entity queries do not have to retrieve the bytes.
+The PostgreSQL provider stores a logical file as ordered `bytea` rows rather
+than one database value. `digital_component_content_sets` identifies a complete
+candidate copy and `digital_component_blobs` stores its numbered segments. The
+default segment size is 16 MiB, avoiding PostgreSQL's approximately 1 GiB limit
+for an individual `bytea` value without assembling a large file in API memory.
 
-The separation is deliberate: the API uses a content-storage interface whose
-current implementation is PostgreSQL. A future S3 implementation can use
-`storage_backend = 's3'` and `storage_key` without changing the public content
-endpoints or the rest of the records model.
+`digital_components.active_content_set_id` selects the verified set served to
+users. Replacement uploads use a separate staged set. Only after its size,
+sequence, and SHA-256 checksum are verified does one transaction switch the
+active pointer; failed replacements leave the original available.
 
-`CONTENT_STORAGE_BACKEND` selects the provider and currently accepts only
-`postgresql`. `MAX_UPLOAD_SIZE_BYTES` defaults to 52,428,800 bytes (50 MiB).
-The API calculates the file size and SHA-256 checksum; clients do not supply
-trusted values for uploaded content.
+Record-draft files use `record_draft_component_blobs`. A successfully uploaded
+draft file remains there until the record package is created, the component or
+draft is cancelled, or the draft expires. Permanently failed, cancelled, and
+expired uploads have their bytes removed by cleanup.
+
+## Streaming and ranges
+
+Uploads are hashed and divided without collecting the complete file in memory.
+Downloads, original PDFs, images, audio, and video are streamed in segment
+order. Content endpoints accept one HTTP byte range and return `206`,
+`Content-Range`, `Content-Length`, `Accept-Ranges`, and a checksum-derived
+`ETag`. This supports PDF.js loading, native media seeking, and resumable
+downloads. Office conversion currently requires materializing the bounded
+source for LibreOffice and remains subject to rendition-size configuration.
+
+## Configuration
+
+| Setting | Default | Purpose |
+|---|---:|---|
+| `CONTENT_STORAGE_BACKEND` | `postgresql` | Storage provider; S3-compatible storage is planned |
+| `MAX_UPLOAD_SIZE_BYTES` | `52428800` | Policy limit for a complete file; raise deliberately for large-file deployments |
+| `CONTENT_SEGMENT_SIZE_BYTES` | `16777216` | Segment size; accepted range is 1 byte–64 MiB |
+| `CONTENT_SEGMENT_CHECKSUMS_ENABLED` | `true` | Store SHA-256 for each segment |
+| `CONTENT_UPLOAD_SESSION_TTL_SECONDS` | `86400` | Intended lifetime of an incomplete resumable upload |
+| `CONTENT_CLEANUP_INTERVAL_SECONDS` | `3600` | Dedicated cleanup-worker interval |
+
+The complete logical file always has an authoritative SHA-256 checksum and
+64-bit size. Segment checksums provide localized integrity evidence.
 
 ## Endpoints
 
-- `POST /api/v1/records/{record_id}/digital-components/upload` creates the
-  component and accepts multipart fields `file`, `component_order`, and an
-  optional `date_originated`.
-- `GET /api/v1/digital-components/{id}/content` downloads the content.
-- `PUT /api/v1/digital-components/{id}/content` replaces the content and
-  requires `If-Match`.
-- `DELETE /api/v1/digital-components/{id}/content` removes the stored bytes,
-  marks the component as `deleted`, and requires `If-Match`.
+- `POST /api/v1/records/{record_id}/digital-components/upload`
+- `GET /api/v1/digital-components/{id}/content`
+- `GET /api/v1/digital-components/{id}/rendition`
+- `PUT /api/v1/digital-components/{id}/content` with `If-Match`
+- `DELETE /api/v1/digital-components/{id}/content` with `If-Match`
 
-Content operations add `CONTENT_UPLOADED`, `CONTENT_DOWNLOADED`,
-`CONTENT_REPLACED`, and `CONTENT_DELETED` events. These events store file name,
-MIME type, size and checksum metadata only. File bytes are never copied into
-`event_history`.
+Clients do not need to know whether content is segmented or, later, stored in
+S3. File bytes are never copied into `event_history`.
+
+## Cleanup
+
+The same cleanup service supports manual and scheduled execution:
+
+```bash
+python -m backend.services.api.content_cleanup --dry-run
+python -m backend.services.api.content_cleanup --batch-size 100
+python -m backend.services.api.content_cleanup --watch
+```
+
+Run `--watch` as one dedicated worker, or invoke the one-shot command from an
+operating-system/container scheduler. Do not run an independent timer in every
+FastAPI worker. Cleanup uses an advisory lock, bounded batches, idempotent
+deletion, and records a `CONTENT_CLEANUP` domain event when it changes state.
+
+It removes expired incomplete sessions, permanently failed/cancelled staged
+sets, expired drafts and their segments, and unreferenced superseded content
+sets. It never removes a verified file belonging to an unexpired open draft.
 
 ## Operational boundary
 
-This PostgreSQL provider is suitable for getting the system running and for
-modest files. Before adopting large files or high download volume, add the S3
-provider and stream content directly from object storage. Database backups,
-replication, and storage capacity currently include all uploaded content.
+Segmentation removes the single-value limit, not PostgreSQL's operational cost.
+Content still increases database I/O, WAL, replication traffic, backup size,
+restore time, and connection occupancy during slow downloads. Deployments using
+large files must monitor these resources and size the upload policy and pools
+accordingly. S3-compatible storage remains the recommended later provider for
+large scale or high concurrency.
+
+The detailed design, lifecycle, migration rules, and acceptance criteria are in
+[`specs/segmented-postgresql-content-storage.md`](../specs/segmented-postgresql-content-storage.md).

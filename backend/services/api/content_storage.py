@@ -1,51 +1,287 @@
 import hashlib
 import os
 from dataclasses import dataclass
-from typing import BinaryIO, Protocol
+from typing import BinaryIO, Iterator, Protocol
 
 from fastapi import HTTPException, UploadFile, status
 from psycopg import Connection
 
-from .config import integer_environment
-
-CHUNK_SIZE = 1024 * 1024
+from .config import boolean_environment, integer_environment
+from .database import pool
 
 
 @dataclass(frozen=True)
 class UploadedContent:
-    content: bytes
     size_in_bytes: int
     checksum_value: str
+    segment_count: int
+
+
+@dataclass(frozen=True)
+class ContentLocation:
+    content_set_id: int
+    size_in_bytes: int
+    segment_count: int
 
 
 class ContentStorage(Protocol):
-    def store(self, connection: Connection, component_id: int, content: bytes) -> None: ...
+    def store_upload(self, connection: Connection, component_id: int, upload: UploadFile) -> UploadedContent: ...
+    def store_draft_upload(self, connection: Connection, draft_component_id: int, upload: UploadFile) -> UploadedContent: ...
+    def promote_draft(self, connection: Connection, draft_component_id: int, component_id: int) -> None: ...
+    def location(self, connection: Connection, component_id: int) -> ContentLocation | None: ...
+    def iter_content(self, location: ContentLocation, start: int = 0, end: int | None = None) -> Iterator[bytes]: ...
     def read(self, connection: Connection, component_id: int) -> bytes | None: ...
     def delete(self, connection: Connection, component_id: int) -> bool: ...
 
 
-class PostgreSQLContentStorage:
-    def store(self, connection: Connection, component_id: int, content: bytes) -> None:
-        connection.execute(
-            """INSERT INTO digital_component_blobs (digital_component_id, content)
-               VALUES (%s, %s)
-               ON CONFLICT (digital_component_id) DO UPDATE
-               SET content = EXCLUDED.content, date_stored = CURRENT_TIMESTAMP""",
-            (component_id, content),
-        )
+def inspect_upload(upload: UploadFile) -> UploadedContent:
+    """Measure and hash a spooled upload without retaining the file in memory."""
+    digest = hashlib.sha256()
+    total = 0
+    count = 0
+    maximum = integer_environment("MAX_UPLOAD_SIZE_BYTES", 50 * 1024 * 1024, minimum=1)
+    upload.file.seek(0)
+    while content := upload.file.read(_segment_size()):
+        total += len(content)
+        if total > maximum:
+            upload.file.seek(0)
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=f"file exceeds the configured {maximum}-byte upload limit",
+            )
+        digest.update(content)
+        count += 1
+    upload.file.seek(0)
+    return UploadedContent(total, digest.hexdigest(), count)
 
-    def read(self, connection: Connection, component_id: int) -> bytes | None:
-        row = connection.execute(
-            "SELECT content FROM digital_component_blobs WHERE digital_component_id = %s",
+
+def _segment_size() -> int:
+    value = integer_environment("CONTENT_SEGMENT_SIZE_BYTES", 16 * 1024 * 1024, minimum=1)
+    if value > 64 * 1024 * 1024:
+        raise RuntimeError("CONTENT_SEGMENT_SIZE_BYTES must not exceed 67108864")
+    return value
+
+
+def _segment_digest(content: bytes) -> tuple[str | None, str | None]:
+    if not boolean_environment("CONTENT_SEGMENT_CHECKSUMS_ENABLED", True):
+        return None, None
+    return "sha256", hashlib.sha256(content).hexdigest()
+
+
+def _stream_segments(
+    connection: Connection, source: BinaryIO, insert_sql: str, owner_id: int,
+) -> UploadedContent:
+    digest = hashlib.sha256()
+    total = 0
+    segment_no = 0
+    maximum = integer_environment("MAX_UPLOAD_SIZE_BYTES", 50 * 1024 * 1024, minimum=1)
+    while content := source.read(_segment_size()):
+        total += len(content)
+        if total > maximum:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=f"file exceeds the configured {maximum}-byte upload limit",
+            )
+        digest.update(content)
+        algorithm, segment_checksum = _segment_digest(content)
+        connection.execute(
+            insert_sql,
+            (owner_id, segment_no, len(content), algorithm, segment_checksum, content),
+        )
+        segment_no += 1
+    return UploadedContent(total, digest.hexdigest(), segment_no)
+
+
+class PostgreSQLContentStorage:
+    def store_upload(
+        self, connection: Connection, component_id: int, upload: UploadFile,
+    ) -> UploadedContent:
+        old = connection.execute(
+            "SELECT active_content_set_id FROM digital_components WHERE id = %s FOR UPDATE",
             (component_id,),
         ).fetchone()
-        return None if row is None else bytes(row["content"])
+        if old is None:
+            raise HTTPException(status_code=404, detail="digital component not found")
+        content_set = connection.execute(
+            """INSERT INTO digital_component_content_sets (digital_component_id, status)
+               VALUES (%s, 'staged') RETURNING id""", (component_id,),
+        ).fetchone()
+        session = connection.execute(
+            """INSERT INTO content_upload_sessions
+                   (digital_component_id, content_set_id, status, expires_at)
+               VALUES (%s, %s, 'uploading', CURRENT_TIMESTAMP + (%s * interval '1 second'))
+               RETURNING id""",
+            (component_id, content_set["id"],
+             integer_environment("CONTENT_UPLOAD_SESSION_TTL_SECONDS", 86400, minimum=1)),
+        ).fetchone()
+        uploaded = _stream_segments(
+            connection, upload.file,
+            """INSERT INTO digital_component_blobs
+                   (content_set_id, segment_no, segment_size,
+                    segment_checksum_algo, segment_checksum_value, content)
+               VALUES (%s, %s, %s, %s, %s, %s)""",
+            content_set["id"],
+        )
+        connection.execute(
+            """UPDATE content_upload_sessions SET status = 'finalizing',
+                   next_segment_no = %s, bytes_received = %s,
+                   date_updated = CURRENT_TIMESTAMP WHERE id = %s""",
+            (uploaded.segment_count, uploaded.size_in_bytes, session["id"]),
+        )
+        if old["active_content_set_id"] is not None:
+            connection.execute(
+                "UPDATE digital_component_content_sets SET status = 'superseded' WHERE id = %s",
+                (old["active_content_set_id"],),
+            )
+        connection.execute(
+            """UPDATE digital_component_content_sets SET status = 'active',
+                   size_in_bytes = %s, segment_count = %s, checksum_algo = 'sha256',
+                   checksum_value = %s, date_completed = CURRENT_TIMESTAMP
+               WHERE id = %s""",
+            (uploaded.size_in_bytes, uploaded.segment_count,
+             uploaded.checksum_value, content_set["id"]),
+        )
+        connection.execute(
+            """UPDATE digital_components SET active_content_set_id = %s,
+                   upload_completed_at = CURRENT_TIMESTAMP WHERE id = %s""",
+            (content_set["id"], component_id),
+        )
+        connection.execute(
+            """UPDATE content_upload_sessions SET status = 'completed',
+                   date_updated = CURRENT_TIMESTAMP WHERE id = %s""", (session["id"],),
+        )
+        if old["active_content_set_id"] is not None:
+            connection.execute(
+                "DELETE FROM digital_component_content_sets WHERE id = %s",
+                (old["active_content_set_id"],),
+            )
+        return uploaded
+
+    def store_draft_upload(
+        self, connection: Connection, draft_component_id: int, upload: UploadFile,
+    ) -> UploadedContent:
+        session = connection.execute(
+            """INSERT INTO content_upload_sessions (draft_component_id, status, expires_at)
+               VALUES (%s, 'uploading', CURRENT_TIMESTAMP + (%s * interval '1 second'))
+               RETURNING id""",
+            (draft_component_id,
+             integer_environment("CONTENT_UPLOAD_SESSION_TTL_SECONDS", 86400, minimum=1)),
+        ).fetchone()
+        uploaded = _stream_segments(
+            connection, upload.file,
+            """INSERT INTO record_draft_component_blobs
+                   (record_draft_component_id, segment_no, segment_size,
+                    segment_checksum_algo, segment_checksum_value, content)
+               VALUES (%s, %s, %s, %s, %s, %s)""",
+            draft_component_id,
+        )
+        connection.execute(
+            """UPDATE record_draft_components SET size_in_bytes = %s,
+                   checksum_value = %s, content_status = 'available',
+                   segment_count = %s, upload_completed_at = CURRENT_TIMESTAMP
+               WHERE id = %s""",
+            (uploaded.size_in_bytes, uploaded.checksum_value,
+             uploaded.segment_count, draft_component_id),
+        )
+        connection.execute(
+            """UPDATE content_upload_sessions SET status = 'completed',
+                   next_segment_no = %s, bytes_received = %s,
+                   date_updated = CURRENT_TIMESTAMP WHERE id = %s""",
+            (uploaded.segment_count, uploaded.size_in_bytes, session["id"]),
+        )
+        return uploaded
+
+    def promote_draft(
+        self, connection: Connection, draft_component_id: int, component_id: int,
+    ) -> None:
+        staged = connection.execute(
+            """SELECT size_in_bytes, segment_count, checksum_algo, checksum_value
+               FROM record_draft_components
+               WHERE id = %s AND content_status = 'available'""",
+            (draft_component_id,),
+        ).fetchone()
+        if staged is None:
+            raise HTTPException(status_code=409, detail="draft component upload is not complete")
+        content_set = connection.execute(
+            """INSERT INTO digital_component_content_sets
+                   (digital_component_id, status, size_in_bytes, segment_count,
+                    checksum_algo, checksum_value, date_completed)
+               VALUES (%s, 'active', %s, %s, %s, %s, CURRENT_TIMESTAMP)
+               RETURNING id""",
+            (component_id, staged["size_in_bytes"], staged["segment_count"],
+             staged["checksum_algo"], staged["checksum_value"]),
+        ).fetchone()
+        connection.execute(
+            """INSERT INTO digital_component_blobs
+                   (content_set_id, segment_no, segment_size,
+                    segment_checksum_algo, segment_checksum_value, content, date_stored)
+               SELECT %s, segment_no, segment_size, segment_checksum_algo,
+                      segment_checksum_value, content, date_stored
+               FROM record_draft_component_blobs
+               WHERE record_draft_component_id = %s ORDER BY segment_no""",
+            (content_set["id"], draft_component_id),
+        )
+        connection.execute(
+            """UPDATE digital_components SET active_content_set_id = %s,
+                   upload_completed_at = CURRENT_TIMESTAMP WHERE id = %s""",
+            (content_set["id"], component_id),
+        )
+
+    def location(self, connection: Connection, component_id: int) -> ContentLocation | None:
+        row = connection.execute(
+            """SELECT content_set.id AS content_set_id, content_set.size_in_bytes,
+                      content_set.segment_count
+               FROM digital_components component
+               JOIN digital_component_content_sets content_set
+                 ON content_set.id = component.active_content_set_id
+               WHERE component.id = %s AND component.content_status = 'available'
+                 AND content_set.status = 'active'""", (component_id,),
+        ).fetchone()
+        return None if row is None else ContentLocation(**row)
+
+    def iter_content(
+        self, location: ContentLocation, start: int = 0, end: int | None = None,
+    ) -> Iterator[bytes]:
+        stop = location.size_in_bytes if end is None else min(end, location.size_in_bytes)
+        if start >= stop:
+            return
+        offset = 0
+        with pool.connection() as connection:
+            with connection.cursor(name=f"content_stream_{location.content_set_id}") as cursor:
+                cursor.execute(
+                    """SELECT segment_size, content FROM digital_component_blobs
+                       WHERE content_set_id = %s ORDER BY segment_no""",
+                    (location.content_set_id,),
+                )
+                for row in cursor:
+                    segment_start = offset
+                    segment_end = offset + row["segment_size"]
+                    offset = segment_end
+                    if segment_end <= start:
+                        continue
+                    if segment_start >= stop:
+                        break
+                    content = bytes(row["content"])
+                    local_start = max(0, start - segment_start)
+                    local_end = min(len(content), stop - segment_start)
+                    if local_start < local_end:
+                        yield content[local_start:local_end]
+
+    def read(self, connection: Connection, component_id: int) -> bytes | None:
+        location = self.location(connection, component_id)
+        return None if location is None else b"".join(self.iter_content(location))
 
     def delete(self, connection: Connection, component_id: int) -> bool:
-        return connection.execute(
-            "DELETE FROM digital_component_blobs WHERE digital_component_id = %s RETURNING digital_component_id",
+        row = connection.execute(
+            """UPDATE digital_components SET active_content_set_id = NULL
+               WHERE id = %s AND active_content_set_id IS NOT NULL RETURNING id""",
             (component_id,),
-        ).fetchone() is not None
+        ).fetchone()
+        connection.execute(
+            "DELETE FROM digital_component_content_sets WHERE digital_component_id = %s",
+            (component_id,),
+        )
+        return row is not None
 
 
 def configured_storage() -> ContentStorage:
@@ -53,21 +289,3 @@ def configured_storage() -> ContentStorage:
     if backend != "postgresql":
         raise RuntimeError(f"unsupported CONTENT_STORAGE_BACKEND: {backend}")
     return PostgreSQLContentStorage()
-
-
-def read_upload(upload: UploadFile) -> UploadedContent:
-    maximum = integer_environment("MAX_UPLOAD_SIZE_BYTES", 50 * 1024 * 1024, minimum=1)
-    digest = hashlib.sha256()
-    chunks: list[bytes] = []
-    size = 0
-    source: BinaryIO = upload.file
-    while chunk := source.read(CHUNK_SIZE):
-        size += len(chunk)
-        if size > maximum:
-            raise HTTPException(
-                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                detail=f"file exceeds the configured {maximum}-byte upload limit",
-            )
-        digest.update(chunk)
-        chunks.append(chunk)
-    return UploadedContent(b"".join(chunks), size, digest.hexdigest())

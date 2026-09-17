@@ -116,8 +116,22 @@ API_RELOAD=false
 DB_POOL_MIN_SIZE=1
 DB_POOL_MAX_SIZE=10
 CONTENT_STORAGE_BACKEND=postgresql
+CONTENT_SEGMENT_SIZE_BYTES=16777216
+CONTENT_SEGMENT_CHECKSUMS_ENABLED=true
+CONTENT_UPLOAD_SESSION_TTL_SECONDS=86400
+CONTENT_CLEANUP_INTERVAL_SECONDS=3600
 AUTH_COOKIE_SECURE=true
 ```
+
+Run segmented-content cleanup from exactly one dedicated worker or deployment
+scheduler, not from every API worker:
+
+```bash
+python -m backend.services.api.content_cleanup --watch
+```
+
+Administrators can inspect or execute cleanup manually with `--dry-run` and
+`--batch-size`. The worker uses a PostgreSQL advisory lock to prevent overlap.
 
 Example `/etc/erms/webui.env`:
 

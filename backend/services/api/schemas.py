@@ -360,7 +360,9 @@ class DigitalComponentRead(ApiModel):
     checksum_value: str
     storage_backend: Literal["postgresql", "s3"]
     storage_key: str | None
-    content_status: Literal["pending", "available", "failed", "quarantined", "deleted"]
+    content_status: Literal["pending", "uploading", "available", "failed", "quarantined", "deleted"]
+    active_content_set_id: int | None = None
+    upload_completed_at: datetime | None = None
     version: int
 
 
