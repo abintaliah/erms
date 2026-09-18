@@ -53,6 +53,13 @@ and client description. A user can revoke their own sessions. Members of the
 `system-administrator` role can see all sessions, force logout one session, or
 force logout all sessions for a user. Destructive actions require confirmation.
 
+Login sessions are transient operational security state rather than the durable
+authentication ledger. The planned session-cleanup worker will audit terminal
+session details and remove expired or long-revoked rows after a configurable
+retention period. See the
+[operational tools catalogue](operations.md#5-login-session-cleanup) and the
+[authentication and login-session lifecycle specification](../specs/authentication-and-login-session-lifecycle.md).
+
 ## API
 
 - `POST /api/v1/auth/login`
