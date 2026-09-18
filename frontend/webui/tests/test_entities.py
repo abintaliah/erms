@@ -281,6 +281,14 @@ def test_navigation_drawer_collapses_to_clickable_icon_rail():
     assert "ui.tooltip(label)" in source
 
 
+def test_aggregation_browser_load_more_preserves_the_previous_last_child_anchor():
+    source = inspect.getsource(index)
+    assert 'browse_item_dom_id(current["items"][-1])' in source
+    assert "render_tree_preserving_scroll(anchor_id=append_anchor_id)" in source
+    assert "anchor.getBoundingClientRect().top" in source
+    assert '.props(f"id={browse_item_dom_id(item)}")' in source
+
+
 def test_favourite_click_handler_stops_propagation_inside_function():
     assert STOP_PROPAGATION_CLICK_HANDLER.startswith("(event) =>")
     assert "event.stopPropagation(); emit();" in STOP_PROPAGATION_CLICK_HANDLER

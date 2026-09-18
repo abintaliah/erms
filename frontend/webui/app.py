@@ -4208,16 +4208,30 @@ def index() -> None:
         detail_panel: Any = None
         scheme_select: Any = None
 
-        async def render_tree_preserving_scroll() -> None:
+        async def render_tree_preserving_scroll(*, anchor_id: str | None = None) -> None:
+            anchor_expression = (
+                f"document.getElementById('{anchor_id}')?.getBoundingClientRect().top ?? null"
+                if anchor_id else "null"
+            )
             scroll_position = await page_client.run_javascript(
                 "({ page: window.scrollY || 0, "
-                "tree: document.getElementById('aggregation-browser-tree')?.scrollTop || 0 })"
+                "tree: document.getElementById('aggregation-browser-tree')?.scrollTop || 0, "
+                f"anchor: {anchor_expression} }})"
             )
             render_tree()
+            anchor_top = (scroll_position or {}).get("anchor")
+            anchor_top_javascript = "null" if anchor_top is None else str(float(anchor_top))
+            anchor_restore = (
+                f"const anchor = document.getElementById('{anchor_id}'); "
+                f"if (anchor && {anchor_top_javascript} !== null) "
+                f"tree.scrollTop += anchor.getBoundingClientRect().top - {float(anchor_top or 0)}; "
+                if anchor_id else ""
+            )
             await page_client.run_javascript(
                 "requestAnimationFrame(() => requestAnimationFrame(() => { "
                 "const tree = document.getElementById('aggregation-browser-tree'); "
                 f"if (tree) tree.scrollTop = {float((scroll_position or {}).get('tree', 0))}; "
+                f"if (tree) {{ {anchor_restore} }} "
                 f"window.scrollTo(0, {float((scroll_position or {}).get('page', 0))}); "
                 "}));"
             )
@@ -4338,6 +4352,10 @@ def index() -> None:
             current = browse["collections"].get(key)
             if current is None or current["loading"]:
                 return
+            append_anchor_id = (
+                browse_item_dom_id(current["items"][-1])
+                if append and current["items"] else None
+            )
             browse["revision"] += 1
             current["request_version"] += 1
             request_version = current["request_version"]
@@ -4369,7 +4387,16 @@ def index() -> None:
                 if current["request_version"] == request_version:
                     current["loading"] = False
                     if render:
-                        await render_tree_preserving_scroll()
+                        await render_tree_preserving_scroll(anchor_id=append_anchor_id)
+
+        def browse_item_dom_id(item: dict[str, Any]) -> str:
+            if "is_terminal" in item:
+                kind = "classification"
+            elif "aggregation_number" in item:
+                kind = "aggregation"
+            else:
+                kind = "record"
+            return f"aggregation-browser-{kind}-{int(item['id'])}"
 
         async def filter_collection(key: str, value: str) -> None:
             current = browse["collections"][key]
@@ -4480,7 +4507,7 @@ def index() -> None:
         def render_classification(item: dict[str, Any], depth: int) -> None:
             node = ("classification", item["id"])
             expanded = node in browse["expanded"]
-            with ui.row().classes(
+            with ui.row().props(f"id={browse_item_dom_id(item)}").classes(
                 "w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50"
             ).style(f"padding-left: {depth * 20 + 4}px"):
                 ui.button(
@@ -4518,7 +4545,7 @@ def index() -> None:
             node = ("aggregation", item["id"])
             expanded = node in browse["expanded"]
             selected = browse["selected"] == node
-            with ui.row().classes(
+            with ui.row().props(f"id={browse_item_dom_id(item)}").classes(
                 "w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50 "
                 + ("bg-blue-50" if selected else "")
             ).style(f"padding-left: {depth * 20 + 4}px"):
@@ -4564,7 +4591,7 @@ def index() -> None:
         def render_record(item: dict[str, Any], depth: int) -> None:
             item["type"] = "record"
             selected = browse["selected"] == ("record", item["id"])
-            with ui.row().classes(
+            with ui.row().props(f"id={browse_item_dom_id(item)}").classes(
                 "w-full items-center no-wrap rounded-lg py-2 pr-2 hover:bg-blue-50 cursor-pointer "
                 + ("bg-blue-50" if selected else "")
             ).style(f"padding-left: {depth * 20 + 40}px").on(
