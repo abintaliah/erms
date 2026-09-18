@@ -497,6 +497,7 @@ class PrincipalRead(ApiModel):
     roles: list[PrincipalRoleRead]
     session: PrincipalSessionRead
     must_change_password: bool
+    previous_login_at: datetime | None
 
 
 class LoginSessionRead(ApiModel):

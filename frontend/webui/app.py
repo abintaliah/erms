@@ -594,19 +594,80 @@ def index() -> None:
                          "Segoe UI", sans-serif;
             letter-spacing: -.008em;
         }
+        /* Connection state is presented in the application footer. Keep
+           NiceGUI's reconnect machinery, but suppress its duplicate popup. */
+        #popup { display: none !important; }
         .erms-header {
-            background: var(--erms-bg); color: var(--erms-ink);
+            background: #f4f6f8; color: var(--erms-ink);
             border-bottom: 1px solid var(--erms-border); box-shadow: none !important;
+            min-height: 54px; padding: 0 18px;
         }
-        .erms-brand { gap: 9px; min-width: 0; }
-        .erms-brand-mark { width: 32px; height: 38px; flex: 0 0 auto; }
+        .erms-footer {
+            min-height: 34px; padding: 0 18px;
+            background: #f4f6f8; color: #687386;
+            border-top: 1px solid var(--erms-border); box-shadow: none !important;
+        }
+        .erms-footer-credit { font-size: .72rem; letter-spacing: .01em; }
+        .erms-dashboard-card .erms-shared-control { display: none !important; }
+        .erms-brand { gap: 8px; min-width: 0; }
+        .erms-brand-mark { width: 28px; height: 33px; flex: 0 0 auto; }
         .erms-brand-name {
             color: #152033; font-family: Righteous, Inter, ui-sans-serif, sans-serif;
-            font-size: 1.34rem; font-weight: 400; letter-spacing: .035em; line-height: 1;
+            font-size: 1.24rem; font-weight: 400; letter-spacing: .035em; line-height: 1;
         }
         .erms-drawer {
             background: #ffffff; color: #172033;
             border-right: 1px solid var(--erms-border) !important;
+            overflow: visible !important;
+        }
+        .erms-drawer .q-drawer__content { overflow-x: visible !important; }
+        .erms-drawer-toggle {
+            position: absolute !important; right: -13px; top: 18px; z-index: 20;
+            width: 27px; height: 34px; min-width: 27px; min-height: 34px;
+            padding: 0; border: 1px solid var(--erms-border);
+            border-radius: 9px; background: #ffffff !important; color: #52657a !important;
+        }
+        .erms-drawer-toggle:hover {
+            background: var(--erms-blue-soft) !important; color: var(--erms-blue-deep) !important;
+        }
+        .erms-drawer-toggle .q-icon,
+        .erms-profile-action .q-icon {
+            font-family: "Material Symbols Outlined" !important;
+            font-weight: 300 !important;
+            font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 20;
+        }
+        .erms-drawer-toggle .q-icon { font-size: 19px; }
+        .erms-profile-action .q-icon { font-size: 21px; }
+        .erms-profile-action .q-btn__content { gap: 12px; }
+        .erms-profile-action {
+            min-height: 38px !important; height: 38px !important;
+            margin: 0 !important; padding: 2px 10px !important;
+        }
+        .erms-profile-actions {
+            display: flex !important; flex-direction: column; gap: 0 !important;
+            margin: 0 !important; padding: 0 !important;
+        }
+        .wathiq-login-card {
+            width: min(680px, calc(100vw - 32px)); max-width: none !important;
+            padding: 0 !important; gap: 0 !important; overflow: hidden;
+            border: 1px solid var(--erms-border); border-radius: 18px;
+        }
+        .wathiq-login-brand-panel {
+            width: 270px; min-height: 430px; padding: 34px;
+            background: linear-gradient(145deg, #eaf5fc, #f7fbfe);
+            border-right: 1px solid #d9eaf4;
+        }
+        .wathiq-login-mark { width: 35px; height: 42px; }
+        .wathiq-login-word {
+            color: #152033; font-family: Righteous, Inter, ui-sans-serif, sans-serif;
+            font-size: 1.45rem; letter-spacing: .035em;
+        }
+        .wathiq-login-form { width: 410px; min-height: 430px; padding: 38px; }
+        .wathiq-login-error { min-height: 20px; }
+        @media (max-width: 640px) {
+            .wathiq-login-brand-panel { display: none !important; }
+            .wathiq-login-form { width: 100%; min-height: auto; padding: 30px 24px; }
+        }
         }
         .erms-nav-heading {
             color: var(--erms-blue-deep); font-size: .67rem; font-weight: 700;
@@ -742,34 +803,54 @@ def index() -> None:
     """)
 
     with ui.header().classes("erms-header items-center gap-3"):
-        drawer_toggle_button = ui.button(icon="menu").props(
-            "flat round color=blue-grey-9 aria-label='Collapse navigation'"
-        )
         with ui.row().classes("erms-brand items-center no-wrap").props("aria-label='Wathiq'"):
             ui.image("/static/brand/wathiq-mark.svg?v=2").classes("erms-brand-mark").props(
                 "fit=contain alt='Wathiq mark'"
             )
             ui.label("wathiq").classes("erms-brand-name")
         ui.space()
-        with ui.icon("cloud_done").classes("text-positive text-xl") as connection_icon:
-            connection_tooltip = ui.tooltip("Connected")
         user_menu_button = ui.button(icon="account_circle").props("flat round color=blue-grey-9")
         with user_menu_button, ui.menu() as user_menu:
             with ui.column().classes("w-72 p-3 gap-2"):
-                current_user_name = ui.label("Not signed in").classes("font-semibold")
-                current_user_email = ui.label().classes("text-xs text-slate-500")
+                with ui.row().classes("w-full items-center gap-3 no-wrap"):
+                    with ui.avatar(size="44px").style(
+                        "background:#64748b !important;color:white !important"
+                    ) as current_user_avatar:
+                        current_user_avatar_initials = ui.label("?").classes("font-medium")
+                    with ui.column().classes("gap-0 min-w-0"):
+                        current_user_name = ui.label("Not signed in").classes(
+                            "font-semibold line-clamp-1"
+                        )
+                        current_user_email = ui.label().classes(
+                            "text-xs text-slate-500 line-clamp-1"
+                        )
+                ui.separator()
+                ui.label("Previous sign-in").classes("component-meta-label")
+                current_user_last_login = ui.label("First sign-in").classes("text-sm text-slate-600")
                 ui.separator()
                 ui.label("Assigned roles").classes("component-meta-label")
                 current_user_roles = ui.column().classes("w-full gap-1")
                 ui.separator()
-                change_password_menu = ui.button("Change password", icon="password").props("flat no-caps align=left").classes("w-full")
-                my_sessions_menu = ui.button("Login sessions", icon="devices").props("flat no-caps align=left").classes("w-full")
-                sign_out_menu = ui.button("Sign out", icon="logout", color="negative").props("flat no-caps align=left").classes("w-full")
+                with ui.column().classes("erms-profile-actions w-full").style(
+                    "gap:0 !important;margin:0 !important;padding:0 !important"
+                ):
+                    change_password_menu = ui.button("Change password", icon="key").props(
+                        "flat dense no-caps align=left"
+                    ).classes("erms-profile-action w-full")
+                    sign_out_menu = ui.button("Sign out", icon="logout", color="negative").props(
+                        "flat dense no-caps align=left"
+                    ).classes("erms-profile-action w-full")
+
+    with ui.footer().classes("erms-footer items-center"):
+        with ui.icon("cloud_done").classes("text-positive text-lg") as connection_icon:
+            connection_tooltip = ui.tooltip("Connected")
+        ui.space()
+        ui.label("Designed and built by Sharjah Archives").classes("erms-footer-credit")
 
     def set_connection_status(connected: bool) -> None:
         connection_icon.name = "cloud_done" if connected else "cloud_off"
         connection_icon.classes(
-            replace="text-positive text-xl" if connected else "text-negative text-xl"
+            replace="text-positive text-lg" if connected else "text-negative text-lg"
         )
         connection_tooltip.text = "Connected" if connected else "Disconnected"
         connection_icon.update()
@@ -790,8 +871,13 @@ def index() -> None:
         return button
 
     with ui.left_drawer(value=True).props(
-        "width=300 mini-width=64 show-if-above bordered"
+        "width=300 mini-width=64 show-if-above"
     ).classes("erms-drawer") as drawer:
+        drawer_toggle_button = ui.button(icon="chevron_left").props(
+            "flat dense aria-label='Collapse navigation'"
+        ).classes("erms-drawer-toggle")
+        with drawer_toggle_button:
+            drawer_toggle_tooltip = ui.tooltip("Collapse navigation")
         navigation: dict[str, Any] = {}
         dashboard_navigation = drawer_link(
             "Dashboard", "dashboard", navigation_key="dashboard", extra_classes="mt-4",
@@ -848,8 +934,10 @@ def index() -> None:
             drawer.props(add="mini")
             drawer.classes(add="erms-drawer--collapsed")
             drawer_toggle_button.props(
-                remove="aria-label", add="aria-label='Expand navigation'"
+                remove="aria-label icon",
+                add="aria-label='Expand navigation' icon=chevron_right",
             )
+            drawer_toggle_tooltip.text = "Expand navigation"
             for heading in drawer_headings:
                 heading.set_visibility(False)
             for button, _, _ in drawer_links:
@@ -860,8 +948,10 @@ def index() -> None:
             drawer.props(remove="mini")
             drawer.classes(remove="erms-drawer--collapsed")
             drawer_toggle_button.props(
-                remove="aria-label", add="aria-label='Collapse navigation'"
+                remove="aria-label icon",
+                add="aria-label='Collapse navigation' icon=chevron_left",
             )
+            drawer_toggle_tooltip.text = "Collapse navigation"
             for heading in drawer_headings:
                 heading.set_visibility(True)
             for button, label, _ in drawer_links:
@@ -890,7 +980,9 @@ def index() -> None:
                 ).props("unelevated rounded")
 
         with ui.card().classes("erms-card w-full p-0") as content_card:
-            with ui.row().classes("w-full items-center px-4 pt-4 gap-2") as aggregation_mode_bar:
+            with ui.row().classes(
+                "erms-shared-control w-full items-center px-4 pt-4 gap-2"
+            ) as aggregation_mode_bar:
                 ui.label("View").classes("text-xs font-semibold uppercase tracking-wide text-slate-400 mr-1")
                 aggregation_search_mode = ui.button("Search", icon="search").props(
                     "unelevated dense no-caps color=primary"
@@ -898,10 +990,14 @@ def index() -> None:
                 aggregation_browse_mode = ui.button(
                     "Browse classification", icon="account_tree"
                 ).props("flat dense no-caps color=primary")
-            with ui.row().classes("w-full items-end p-4 gap-2") as search_bar:
+            with ui.row().classes(
+                "erms-shared-control w-full items-end p-4 gap-2"
+            ) as search_bar:
                 search_input = ui.input("Search by number, title or description").props("outlined clearable").classes("grow")
                 search_button = ui.button("Search", icon="search").props("unelevated")
-            guidance = ui.label().classes("px-4 pb-4 text-slate-500")
+            guidance = ui.label().classes(
+                "erms-shared-control px-4 pb-4 text-slate-500"
+            )
             table_container = ui.column().classes("w-full gap-0")
     content_card.set_visibility(False)
     aggregation_mode_bar.set_visibility(False)
@@ -919,6 +1015,9 @@ def index() -> None:
             "org-units": "corporate_fare",
             "roles": "badge",
             "users": "group",
+            "organization-browser": "lan",
+            "audit-trail": "manage_history",
+            "login-sessions": "devices",
         }.get(page)
         if icon_name:
             page_title_icon.name = icon_name
@@ -1009,6 +1108,10 @@ def index() -> None:
         page: str, label: str, *, entity_id: int | None = None,
         accessible_label: str | None = None,
     ) -> None:
+        if page == "dashboard":
+            content_card.classes(add="erms-dashboard-card")
+        else:
+            content_card.classes(remove="erms-dashboard-card")
         set_active_drawer_link(page)
         set_page_title_icon(page)
         if navigation_state["restoring"]:
@@ -1080,6 +1183,7 @@ def index() -> None:
         state["favourite_ids"] = {"aggregations": set(), "records": set()}
         title.text = ""
         subtitle.text = ""
+        page_title_icon.set_visibility(False)
         guidance.text = ""
         table_container.clear()
         search_bar.set_visibility(False)
@@ -1091,10 +1195,16 @@ def index() -> None:
 
     def clear_signed_in_identity() -> None:
         """Remove account identity and overlays before presenting sign-in again."""
+        drawer.hide()
         user_menu.close()
         auth_state["principal"] = None
         current_user_name.text = "Not signed in"
         current_user_email.text = ""
+        current_user_avatar_initials.text = "?"
+        current_user_avatar.style(
+            replace="background:#64748b !important;color:white !important"
+        )
+        current_user_last_login.text = "First sign-in"
         current_user_roles.clear()
         navigation_state["trail"] = []
         app.storage.user.pop("navigation_trail", None)
@@ -3631,10 +3741,20 @@ def index() -> None:
                 table.on("lifecycle", confirm_lifecycle)
 
     def populate_user_menu(principal: dict[str, Any]) -> None:
+        drawer.show()
         auth_state["principal"] = principal
         user = principal["user"]
         current_user_name.text = user["name"]
         current_user_email.text = user.get("email") or user["account_type"].title()
+        avatar = user_avatar(user)
+        current_user_avatar_initials.text = avatar["initials"]
+        current_user_avatar.style(
+            replace=f"background:{avatar['color']} !important;color:white !important"
+        )
+        previous_login_at = principal.get("previous_login_at")
+        current_user_last_login.text = (
+            format_timestamp(previous_login_at) if previous_login_at else "First sign-in"
+        )
         current_user_roles.clear()
         with current_user_roles:
             if not principal["roles"]:
@@ -3901,7 +4021,7 @@ def index() -> None:
         guidance.text = ""
         table_container.clear()
         with table_container:
-            dashboard_content = ui.column().classes("w-full p-5 gap-6")
+            dashboard_content = ui.column().classes("w-full px-5 pb-5 pt-0 gap-4")
 
         async def show_unclassified_roots() -> None:
             await select_entity("aggregations")
@@ -6823,8 +6943,17 @@ def index() -> None:
     audit_navigation.on("click", select_audit_trail)
     sessions_navigation.on("click", lambda: select_login_sessions())
     change_password_menu.on("click", show_change_password)
-    my_sessions_menu.on("click", lambda: select_login_sessions())
     sign_out_menu.on("click", sign_out)
+
+    async def refresh_user_profile() -> None:
+        if auth_state.get("principal"):
+            try:
+                populate_user_menu(await api.me())
+            except ApiError:
+                # The shared unauthorized handler presents sign-in when needed.
+                pass
+
+    user_menu.on("show", refresh_user_profile)
     async def add_for_current_context() -> None:
         current = state.get("aggregation_detail")
         if not current:
@@ -6857,15 +6986,47 @@ def index() -> None:
     search_button.on("click", lambda: load_rows())
     search_input.on("keydown.enter", lambda: load_rows())
     login_dialog = ui.dialog().props("persistent")
-    with login_dialog, ui.card().classes("w-[460px] max-w-[calc(100vw-32px)] p-7 gap-4"):
-        with ui.row().classes("items-center gap-3"):
-            ui.avatar(icon="lock", color="blue-1", text_color="primary")
-            with ui.column().classes("gap-0"):
-                ui.label("Sign in to ERMS").classes("text-2xl font-semibold")
-                ui.label("Use your organization credentials").classes("text-sm text-slate-500")
-        login_email = ui.input("Email address").props("outlined autocomplete=username").classes("w-full")
-        login_password = ui.input("Password", password=True, password_toggle_button=True).props("outlined autocomplete=current-password").classes("w-full")
-        login_error = ui.label().classes("text-negative text-sm")
+    with login_dialog, ui.card().classes("wathiq-login-card"):
+        with ui.row().classes("w-full items-stretch no-wrap gap-0"):
+            with ui.column().classes(
+                "wathiq-login-brand-panel shrink-0 justify-between gap-0"
+            ):
+                with ui.column().classes("gap-6"):
+                    with ui.row().classes("items-center gap-3 no-wrap"):
+                        ui.image("/static/brand/wathiq-mark.svg?v=2").classes(
+                            "wathiq-login-mark"
+                        ).props("fit=contain alt='Wathiq mark'")
+                        ui.label("wathiq").classes("wathiq-login-word")
+                    with ui.column().classes("gap-2"):
+                        ui.label("Your records.\nYour evidence.\nIn order.").classes(
+                            "text-2xl font-semibold leading-tight whitespace-pre-line"
+                        )
+                        ui.label(
+                            "Secure access to the Sharjah Archives records management workspace."
+                        ).classes("text-sm leading-5 text-slate-600")
+                ui.label(
+                    "Reliable stewardship\nAccountable governance\nTrusted access"
+                ).classes("text-xs leading-5 text-slate-500 whitespace-pre-line")
+            with ui.column().classes("wathiq-login-form gap-3"):
+                ui.label("Sign in").classes("text-2xl font-semibold")
+                ui.label("Use your organization credentials to continue.").classes(
+                    "text-sm text-slate-500 mb-2"
+                )
+                login_email = ui.input("Email address").props(
+                    "outlined autocomplete=username"
+                ).classes("w-full")
+                login_password = ui.input(
+                    "Password", password=True, password_toggle_button=True
+                ).props("outlined autocomplete=current-password").classes("w-full")
+                login_error = ui.label().classes(
+                    "wathiq-login-error text-negative text-sm"
+                )
+                login_submit = ui.button("Continue to wathiq", icon="login").props(
+                    "unelevated no-caps"
+                ).classes("w-full")
+                ui.label("Need help? Contact your system administrator.").classes(
+                    "w-full text-center text-xs text-slate-400 mt-1"
+                )
 
         async def submit_login() -> None:
             login_error.text = ""
@@ -6890,7 +7051,7 @@ def index() -> None:
             except ApiError as error:
                 login_error.text = error_message(error)
 
-        ui.button("Sign in", icon="login", on_click=submit_login).props("unelevated no-caps").classes("w-full")
+        login_submit.on("click", submit_login)
         login_password.on("keydown.enter", submit_login)
 
     def handle_unauthorized() -> None:
@@ -6938,6 +7099,7 @@ def index() -> None:
                 api.set_session_token(None)
         clear_authenticated_view()
         set_connection_status(True)
+        drawer.hide()
         login_dialog.open()
 
     ui.timer(0.05, initialize_authenticated_ui, once=True)

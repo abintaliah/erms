@@ -316,7 +316,8 @@ def test_navigation_drawer_does_not_load_or_render_entity_counts():
 
 def test_navigation_drawer_collapses_to_clickable_icon_rail():
     source = inspect.getsource(index)
-    assert '"width=300 mini-width=64 show-if-above bordered"' in source
+    assert '"width=300 mini-width=64 show-if-above"' in source
+    assert '"width=300 mini-width=64 show-if-above bordered"' not in source
     assert '"Browse", "lan", navigation_key="organization-browser"' in source
     assert "erms-nav-link" in source
     assert "white-space: nowrap" in source
@@ -335,6 +336,11 @@ def test_navigation_drawer_collapses_to_clickable_icon_rail():
     assert "def set_page_title_icon(page: str)" in source
     assert 'page_title_icon = ui.icon("dashboard")' in source
     assert "page_title_icon = ui.icon()" not in source
+    assert 'ui.label("Previous sign-in")' in source
+    assert 'current_user_last_login = ui.label("First sign-in")' in source
+    assert 'current_user_avatar_initials = ui.label("?")' in source
+    assert 'user_menu.on("show", refresh_user_profile)' in source
+    assert 'my_sessions_menu' not in source
     assert '"dashboard": "dashboard"' in source
     assert '"aggregations": "folder"' in source
     assert '"records": "description"' in source
@@ -342,9 +348,39 @@ def test_navigation_drawer_collapses_to_clickable_icon_rail():
     assert '"org-units": "corporate_fare"' in source
     assert '"roles": "badge"' in source
     assert '"users": "group"' in source
+    assert '"organization-browser": "lan"' in source
+    assert '"audit-trail": "manage_history"' in source
+    assert '"login-sessions": "devices"' in source
+    assert '"w-full px-5 pb-5 pt-0 gap-4"' in source
+    assert "background: #f4f6f8; color: var(--erms-ink);" in source
+    assert "min-height: 54px; padding: 0 18px;" in source
+    assert ".erms-brand-mark { width: 28px; height: 33px;" in source
+    assert 'with ui.footer().classes("erms-footer items-center")' in source
+    assert 'ui.label("Designed and built by Sharjah Archives")' in source
+    assert ".erms-footer-credit" in source
+    assert 'replace="text-positive text-lg"' in source
+    assert "#popup { display: none !important; }" in source
+    assert 'ui.label("wathiq").classes("wathiq-login-word")' in source
+    assert 'login_submit = ui.button("Continue to wathiq"' in source
+    assert 'drawer.hide()' in source
+    assert 'drawer.show()' in source
+    assert "Sign in to ERMS" not in source
+    assert 'page_title_icon.set_visibility(False)' in source
+    assert ".erms-dashboard-card .erms-shared-control" in source
+    assert 'content_card.classes(add="erms-dashboard-card")' in source
+    assert 'content_card.classes(remove="erms-dashboard-card")' in source
     assert 'drawer.props(add="mini")' in source
     assert 'drawer.props(remove="mini")' in source
     assert 'drawer.classes(add="erms-drawer--collapsed")' in source
+    assert 'ui.button(icon="chevron_left")' in source
+    assert 'icon=chevron_right' in source
+    assert 'icon="menu"' not in source
+    assert "erms-drawer-toggle" in source
+    assert "erms-profile-action" in source
+    assert 'ui.button("Change password", icon="key")' in source
+    assert 'with ui.column().classes("erms-profile-actions w-full")' in source
+    assert "min-height: 38px !important; height: 38px !important;" in source
+    assert "gap: 0 !important" in source
     assert 'button.text = ""' in source
     assert 'button.classes(add="justify-center px-0"' in source
     assert "ui.tooltip(label)" in source

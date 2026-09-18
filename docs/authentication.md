@@ -55,15 +55,24 @@ force logout all sessions for a user. Destructive actions require confirmation.
 
 Login sessions are transient operational security state rather than the durable
 authentication ledger. The session-cleanup worker audits terminal
-session details and remove expired or long-revoked rows after a configurable
+session details and removes expired or long-revoked rows after a configurable
 retention period. See the
 [operational tools catalogue](operations.md#5-login-session-cleanup) and the
 [authentication and login-session lifecycle specification](../specs/authentication-and-login-session-lifecycle.md).
 
+The user profile menu shows **Previous sign-in** as the most recent successful
+authentication event other than the current session. This value comes from the
+immutable event history, not from transient login-session rows. It therefore
+remains available after session cleanup. The menu shows **First sign-in** when
+there is no earlier successful authentication event. Session administration
+remains available on the dedicated Login sessions page; the profile menu does
+not duplicate that navigation action. The profile identity also uses the same
+stable, user-specific initials and avatar colour as other user displays.
+
 ## API
 
 - `POST /api/v1/auth/login`
-- `GET /api/v1/auth/me`
+- `GET /api/v1/auth/me` (includes nullable `previous_login_at`)
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/auth/change-password`
 - `GET /api/v1/auth/sessions`
