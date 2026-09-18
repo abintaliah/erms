@@ -409,6 +409,13 @@ def relationship_options(
     return options
 
 
+def apply_relationship_selection(control: Any, value: int, label: str) -> None:
+    """Atomically add a browsed relationship option and select it."""
+    options = dict(control.options or {})
+    options[int(value)] = label
+    control.set_options(options, value=int(value))
+
+
 def relationship_cell(item: dict[str, Any] | None, *, number_field: str | None = None) -> dict[str, Any] | None:
     if item is None:
         return None
@@ -5070,6 +5077,7 @@ def index() -> None:
         tree_host: Any = None
         summary_host: Any = None
         search_results_host: Any = None
+        selection_confirm_button: Any = None
 
         def persist() -> None:
             if is_selector:
@@ -5081,12 +5089,35 @@ def index() -> None:
                 "scroll_top": browser.get("scroll_top", 0),
             }
 
+        def selection_label(node: dict[str, Any]) -> str:
+            if node["type"] in {"role", "org_unit"} and node.get("code"):
+                return f"{node['code']} · {node.get('name') or node['id']}"
+            return str(node.get("name") or node.get("email") or node["id"])
+
+        def organization_node_dom_id(node: dict[str, Any]) -> str:
+            assignment = f"-{node['assignment_id']}" if node.get("assignment_id") else ""
+            return f"organization-browser-node-{node['type']}-{node['id']}{assignment}"
+
         async def select_node(node: dict[str, Any]) -> None:
             browser["selected"] = {
                 "type": node["type"], "id": node["id"],
+                "selectable": node_selectable(node),
+                "label": selection_label(node),
                 **({"assignment_id": node.get("assignment_id"), "role_id": node.get("role_id")} if node["type"] == "user" else {}),
             }
-            persist(); render_tree(); await render_summary(node)
+            persist()
+            await page_client.run_javascript(
+                "document.querySelectorAll('#organization-browser-tree .organization-browser-selected')"
+                ".forEach(item => item.classList.remove('organization-browser-selected', 'bg-blue-50')); "
+                f"document.getElementById('{organization_node_dom_id(node)}')"
+                "?.classList.add('organization-browser-selected', 'bg-blue-50');"
+            )
+            await render_summary(node)
+            if is_selector and selection_confirm_button is not None:
+                if node_selectable(node):
+                    selection_confirm_button.enable()
+                else:
+                    selection_confirm_button.disable()
 
         async def load_node_children(node: dict[str, Any]) -> list[dict[str, Any]]:
             key = f"{node['type']}:{node['id']}"
@@ -5139,9 +5170,11 @@ def index() -> None:
                         or browser["selected"].get("assignment_id") == node.get("assignment_id")
                     )
                 )
-                tree_row = ui.row().classes(
+                tree_row = ui.row().props(
+                    f"id={organization_node_dom_id(node)}"
+                ).classes(
                     "w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50 "
-                    + ("bg-blue-50" if selected else "")
+                    + ("organization-browser-selected bg-blue-50" if selected else "")
                 ).style(f"padding-left:{depth * 20 + 4}px")
                 with tree_row:
                     with ui.element("div").classes("w-8 h-8 shrink-0 flex items-center justify-center"):
@@ -5159,6 +5192,10 @@ def index() -> None:
                     )
                     if node_selectable(node):
                         node_content.on("click", lambda _, item=node: select_node(item))
+                        if is_selector:
+                            tree_row.on(
+                                "dblclick", lambda _, item=node: confirm_node_selection(item),
+                            )
                     with node_content:
                         ui.label(node.get("name") or str(node["id"])).classes("text-sm font-semibold line-clamp-1")
                         if node.get("code"):
@@ -5209,6 +5246,7 @@ def index() -> None:
                     target = result
             if target is None:
                 target = result
+            render_tree()
             await select_node({**target, "type": result["type"]})
             await ui.run_javascript(
                 "document.querySelector('#organization-browser-tree .bg-blue-50')?.scrollIntoView({block:'center'})"
@@ -5216,6 +5254,9 @@ def index() -> None:
 
         async def open_selected(node: dict[str, Any]) -> None:
             persist()
+            if is_selector and not node_selectable(node):
+                ui.notify("Select an active item of the requested type", color="warning")
+                return
             if node["type"] == "user":
                 if is_selector:
                     target_control.set_value(node["id"]); dialog.close()
@@ -5228,6 +5269,28 @@ def index() -> None:
                     await select_organization_unit_details(node["id"])
                 else:
                     await select_role_details(node["id"])
+
+        async def confirm_browser_selection() -> None:
+            selected = browser.get("selected")
+            if (
+                not selected
+                or selected.get("type") != selection_mode
+                or not selected.get("selectable")
+            ):
+                ui.notify(
+                    f"Select an active {selection_mode.replace('_', ' ')} first",
+                    color="warning",
+                )
+                return
+            apply_relationship_selection(
+                target_control, selected["id"], selected["label"],
+            )
+            await asyncio.sleep(0)
+            dialog.close()
+
+        async def confirm_node_selection(node: dict[str, Any]) -> None:
+            await select_node(node)
+            await confirm_browser_selection()
 
         async def render_summary(node: dict[str, Any]) -> None:
             summary_host.clear()
@@ -5284,8 +5347,12 @@ def index() -> None:
                                     ui.label(str(value).title() if label in {"Effective status", "Direct status", "Account status", "Account type", "Assignment validity"} else str(value)).classes("text-sm font-medium text-right")
                                 if guidance_text:
                                     ui.label(guidance_text).classes("w-full text-[10px] leading-3 text-slate-400")
-                    action_label = "Select" if is_selector else f"Open {node['type'].replace('_', ' ')}"
-                    ui.button(action_label.title(), icon="open_in_new" if not is_selector else "check", on_click=lambda: open_selected(node)).props("unelevated no-caps").classes("self-end")
+                    if not is_selector:
+                        action_label = f"Open {node['type'].replace('_', ' ')}"
+                        ui.button(
+                            action_label.title(), icon="open_in_new",
+                            on_click=lambda: open_selected(node),
+                        ).props("unelevated no-caps").classes("self-end")
 
         async def run_search() -> None:
             search_results_host.clear()
@@ -5302,9 +5369,17 @@ def index() -> None:
                     ui.label("No matching organization units, roles, or users").classes("px-2 py-3 text-slate-400")
                 for result in results:
                     with ui.card().classes("w-full shadow-none border border-slate-200 p-0"):
-                        with ui.row().classes("w-full items-start gap-3 px-3 py-2 cursor-pointer no-wrap").on(
-                            "click", lambda _, item=result: reveal_result(item)
-                        ):
+                        result_row = ui.row().classes(
+                            "w-full items-start gap-3 px-3 py-2 cursor-pointer no-wrap"
+                        ).on("click", lambda _, item=result: reveal_result(item))
+                        if is_selector:
+                            async def confirm_search_result(item: dict[str, Any] = result) -> None:
+                                await reveal_result(item)
+                                await confirm_browser_selection()
+                            result_row.on(
+                                "dblclick", lambda _, action=confirm_search_result: action()
+                            )
+                        with result_row:
                             ui.avatar(
                                 icon={"org_unit": "corporate_fare", "role": "badge", "user": "person"}[result["type"]],
                                 color="blue-1", text_color="primary", size="36px",
@@ -5391,11 +5466,12 @@ def index() -> None:
                 )
             if is_selector:
                 with ui.row().classes("w-full justify-end"):
-                    ui.button(
-                        "Clear selection", icon="clear",
-                        on_click=lambda: (target_control.set_value(None), dialog.close()),
-                    ).props("flat no-caps color=grey-7")
                     ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    selection_confirm_button = ui.button(
+                        f"Select {selection_mode.replace('_', ' ')}", icon="check",
+                        on_click=confirm_browser_selection,
+                    ).props("unelevated no-caps color=primary")
+                    selection_confirm_button.disable()
         browser["roots"] = [{**item, "type": "org_unit"} for item in await api.organization_roots()]
         def remember_scroll(event: Any) -> None:
             try:

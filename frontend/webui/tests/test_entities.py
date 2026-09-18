@@ -17,6 +17,7 @@ from frontend.webui.app import (
     NAVIGATION_VISIBLE_LIMIT,
     USER_SUSPENSION_ACTION_BUTTONS,
     STOP_PROPAGATION_CLICK_HANDLER,
+    apply_relationship_selection,
     buffer_upload_batch,
     component_uploader,
     component_file_icon,
@@ -287,6 +288,37 @@ def test_aggregation_browser_load_more_preserves_the_previous_last_child_anchor(
     assert "render_tree_preserving_scroll(anchor_id=append_anchor_id)" in source
     assert "anchor.getBoundingClientRect().top" in source
     assert '.props(f"id={browse_item_dom_id(item)}")' in source
+
+
+def test_organization_browser_selectors_have_persistent_confirmation_action():
+    source = inspect.getsource(index)
+    assert '"Clear selection"' not in source
+    assert 'f"Select {selection_mode.replace(\'_\', \' \')}"' in source
+    assert "selection_confirm_button.disable()" in source
+    assert "selection_confirm_button.enable()" in source
+    assert "apply_relationship_selection(" in source
+    assert '"dblclick", lambda _, item=node: confirm_node_selection(item)' in source
+    assert '"dblclick", lambda _, action=confirm_search_result: action()' in source
+    assert "await confirm_browser_selection()" in source
+    assert "organization-browser-selected" in source
+    assert "organization_node_dom_id(node)" in source
+    assert "persist(); render_tree(); await render_summary(node)" not in source
+
+
+def test_browsed_relationship_selection_adds_option_and_value_atomically():
+    class FakeControl:
+        def __init__(self):
+            self.options = {1: "Existing user"}
+            self.value = None
+
+        def set_options(self, options, *, value):
+            self.options = options
+            self.value = value
+
+    control = FakeControl()
+    apply_relationship_selection(control, 42, "Selected user")
+    assert control.options == {1: "Existing user", 42: "Selected user"}
+    assert control.value == 42
 
 
 def test_favourite_click_handler_stops_propagation_inside_function():
