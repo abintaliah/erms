@@ -132,6 +132,11 @@ python -m backend.services.api.content_cleanup --watch
 
 Administrators can inspect or execute cleanup manually with `--dry-run` and
 `--batch-size`. The worker uses a PostgreSQL advisory lock to prevent overlap.
+The central [operational tools catalogue](operations.md) lists this worker,
+planned login-session cleanup, authentication administration, database
+operations, their scheduling alternatives, and required safeguards. Deployment
+runbooks must use that catalogue rather than discovering operational commands
+from feature documentation.
 
 Example `/etc/erms/webui.env`:
 
