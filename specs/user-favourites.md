@@ -3,14 +3,16 @@
 **Status:** Implemented
 **Project:** ERMS  
 **Prepared:** 17 September 2026  
-**Revision:** 1.0 — implementation completed
+**Revision:** 1.2 — entity-listing previews added
 
 ## 1. Purpose
 
 This specification defines personal favourites for aggregations and records.
 An authenticated person account can mark an aggregation or record as a favourite,
 see a configurable favourites preview on the Dashboard, use **View all** to see
-the complete list, open a favourite, and remove an item from their favourites.
+the complete list, see favourite aggregations and records on their respective
+search/listing pages, open a favourite, and remove an item from their
+favourites.
 
 Favourites provide a direct navigation aid. They do not change an aggregation,
 record, classification, retention rule, lifecycle state, access permission, or
@@ -26,6 +28,8 @@ This feature includes:
   already exists;
 - a Dashboard section containing a configurable preview of favourites belonging
   to the authenticated user, with access to the complete list;
+- Favourite aggregations and Favourite records previews on their respective
+  search and listing pages, with access to each complete favourites list;
 - navigation from each Dashboard favourite to the existing aggregation or
   record interface;
 - database, REST API, API-client, NiceGUI, and automated-test changes; and
@@ -289,7 +293,7 @@ communicated by colour alone; the icon shape and label also change.
 The control appears in:
 
 - the aggregation detail header or primary aggregation summary card;
-- the record detail-dialog header;
+- the Record Detail page header;
 - aggregation search-result action cells;
 - record search-result action cells;
 - contained-aggregation cards where an action can be added without making the
@@ -407,14 +411,28 @@ Loading uses the Dashboard's existing spinner treatment. A favourites request
 failure uses the existing Dashboard error handling and must not render stale
 data from another user.
 
-### 9.5 Configuration
+### 9.5 Aggregations-page and Records-page previews
+
+The Aggregations and Records search and listing pages show **Favourite
+aggregations** and **Favourite records**, respectively, before their
+recent-activity or search-results content. Each uses the same configurable
+limit, newest-first order, entry metadata, open behavior, filled-heart removal
+action, and **View all** pattern as its corresponding Dashboard card.
+
+The preview remains visible before and after a search so favourites continue to
+provide direct navigation while the result table is displayed. Removing an
+entry updates both the preview and any open complete-list dialog without
+opening the record. Changes made through record-table heart controls refresh
+the preview.
+
+### 9.6 Configuration
 
 The NiceGUI service reads the following setting from the process environment or
 the project `.env` file:
 
 | Variable | Default | Meaning |
 | --- | ---: | --- |
-| `DASHBOARD_FAVOURITE_ITEM_LIMIT` | `5` | Maximum aggregation entries and maximum record entries shown in their respective Dashboard preview cards |
+| `DASHBOARD_FAVOURITE_ITEM_LIMIT` | `5` | Maximum entries in each Dashboard and entity-listing favourites preview |
 
 The value must be a positive integer. An absent value uses the default of five.
 An invalid or non-positive value is a configuration error and must use the

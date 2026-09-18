@@ -92,7 +92,7 @@ identifiers when names are revised.
 | `role_id` | Assigned organizational role |
 | `date_assigned` | Automatically assigned audit timestamp |
 | `valid_from` | Beginning of the effective period; defaults to `date_assigned` |
-| `valid_until` | Optional inclusive end of the effective period |
+| `valid_until` | Optional exclusive end of the effective period |
 
 The same user can hold the same role during separate periods. The combination
 of user, role, and `valid_from` is unique. PostgreSQL rejects an end timestamp
@@ -101,6 +101,32 @@ earlier than its start timestamp.
 The authenticated actor who creates, changes, or deletes an assignment is
 recorded authoritatively in immutable event history. The assignment row does
 not duplicate that actor identity.
+
+## Status and authorization semantics
+
+User account status, role effectiveness, and assignment validity are separate
+concepts and must not be presented as interchangeable statuses:
+
+- A user has one account status: `active`, `inactive`, or `suspended`. A user
+  does not have a derived or inherited “effective status.”
+- An inactive or suspended user cannot authenticate. This restriction comes
+  from the user's own account status, not from an organization unit or role.
+- A role is effective only when the role, its owning organization unit, and
+  every ancestor organization unit are active.
+- Making a role or organization unit inactive does not change the status of an
+  assigned user. It only prevents the affected role from contributing
+  permissions.
+- Permissions from the user's other effective roles remain available, provided
+  their assignments are currently valid.
+- Assignment validity belongs to one user-role relationship. It is current when
+  server time is at or after the inclusive `valid_from` and, when present,
+  before the exclusive `valid_until`. Future and expired assignments contribute
+  no permissions but do not change either the user or role lifecycle status.
+
+The organization tree therefore shows an assigned user's account status only.
+It does not put assignment validity on the user node as if it were another user
+status. Administrators can inspect assignment validity in the selected
+occurrence summary, assignment filters, and assignment tables.
 
 ## Lifecycle and deletion
 
@@ -177,11 +203,11 @@ timestamps are rejected.
 
 The organization-unit, role, and user lists expose explicit Activate and
 Deactivate actions with a confirmation that explains the consequences. User
-lists additionally expose Suspend and Unsuspend. Their
-status column and status filter use **effective status**: a role whose own row
-is active is nevertheless shown as inactive when its organizational unit or an
-ancestor unit is inactive. A tooltip identifies whether the cause is direct or
-inherited.
+lists additionally expose Suspend and Unsuspend. User status columns and
+filters show the user's account status. Role and organization-unit status
+presentation may show effective status: a role whose own row is active is
+nevertheless ineffective when its organizational unit or an ancestor unit is
+inactive. A tooltip identifies whether the cause is direct or inherited.
 
 Assignment dialogs keep existing assignments visible for historical clarity,
 but do not offer inactive users or effectively inactive roles as new assignment

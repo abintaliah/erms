@@ -65,7 +65,7 @@ ENTITIES = {
     ),
     "users": EntitySpec(
         "users", "Users", "user",
-        (("_avatar", ""), ("name", "Name"), ("email", "Email"), ("account_type", "Account type"), ("effective_status", "Status")),
+        (("_avatar", ""), ("name", "Name"), ("email", "Email"), ("account_type", "Account type"), ("status", "Status")),
         (FieldSpec("name", "Name", required=True), FieldSpec("email", "Email"), FieldSpec("external_id", "External ID"), FieldSpec("account_type", "Account type", "account_type", True)),
     ),
     "roles": EntitySpec(

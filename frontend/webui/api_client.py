@@ -103,8 +103,30 @@ class ErmsApiClient:
     async def change_password(self, current_password: str, new_password: str) -> None:
         await self.request("POST", "/api/v1/auth/change-password", json={"current_password": current_password, "new_password": new_password})
 
-    async def login_sessions(self) -> list[dict[str, Any]]:
-        return await self.request("GET", "/api/v1/auth/sessions")
+    async def login_sessions(
+        self, *, user_id: int | None = None, limit: int | None = None,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params = {"offset": offset}
+        if user_id is not None:
+            params["user_id"] = user_id
+        if limit is not None:
+            params["limit"] = limit
+        return await self.request("GET", "/api/v1/auth/sessions", params=params)
+
+    async def login_sessions_page(
+        self, user_id: int, *, limit: int = 5, offset: int = 0,
+        query: str = "", session_status: str = "all",
+        sort_by: str = "date_created", descending: bool = True,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "GET", "/api/v1/auth/sessions/page",
+            params={
+                "user_id": user_id, "limit": limit, "offset": offset,
+                "query": query, "session_status": session_status,
+                "sort_by": sort_by, "descending": descending,
+            },
+        )
 
     async def revoke_session(self, session_id: int) -> None:
         await self.request("DELETE", f"/api/v1/auth/sessions/{session_id}")
@@ -138,6 +160,40 @@ class ErmsApiClient:
 
     async def browse_schemes(self) -> list[dict[str, Any]]:
         return await self.request("GET", "/api/v1/browse/classification-schemes")
+
+    async def organization_roots(self) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/browse/organization/roots")
+
+    async def organization_children(
+        self, org_unit_id: int, *, include_roles: bool = True,
+    ) -> dict[str, list[dict[str, Any]]]:
+        return await self.request(
+            "GET", f"/api/v1/browse/organization/org-units/{org_unit_id}/children",
+            params={"include_roles": str(include_roles).lower()},
+        )
+
+    async def organization_role_users(
+        self, role_id: int, *, validity: str = "all",
+    ) -> list[dict[str, Any]]:
+        return await self.request(
+            "GET", f"/api/v1/browse/organization/roles/{role_id}/users",
+            params={"validity": validity},
+        )
+
+    async def organization_summary(self, kind: str, entity_id: int) -> dict[str, Any]:
+        if kind not in {"org-units", "roles"}:
+            raise ValueError("organization summaries support org-units and roles")
+        return await self.request(
+            "GET", f"/api/v1/browse/organization/{kind}/{entity_id}/summary",
+        )
+
+    async def search_organization(
+        self, query: str, *, entity_type: str = "all", status: str = "all",
+    ) -> list[dict[str, Any]]:
+        return await self.request(
+            "GET", "/api/v1/browse/organization/search",
+            params={"query": query, "entity_type": entity_type, "status": status},
+        )
 
     async def browse_page(
         self, path: str, *, cursor: str | None = None, query: str = "", limit: int = 50,

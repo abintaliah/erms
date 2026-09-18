@@ -21,6 +21,7 @@ from .config import (
     port,
     reload_enabled,
     storage_secret,
+    user_details_session_limit,
 )
 from .entities import ENTITIES, EntitySpec, FieldSpec
 
@@ -110,6 +111,16 @@ def user_avatar(user: dict[str, Any]) -> dict[str, str]:
     stable_key = str(user.get("id") or user.get("email") or user.get("name") or "unknown")
     color_index = hashlib.sha256(stable_key.encode("utf-8")).digest()[0] % len(USER_AVATAR_COLORS)
     return {"initials": initials.upper(), "color": USER_AVATAR_COLORS[color_index]}
+
+
+def render_user_avatar(user: dict[str, Any], *, size: str = "38px") -> Any:
+    """Render the same deterministic avatar used by the Users listing."""
+    avatar = user_avatar(user)
+    with ui.avatar(size=size).style(
+        f"background:{avatar['color']} !important;color:white !important"
+    ) as control:
+        ui.label(avatar["initials"]).classes("font-medium")
+    return control
 
 
 def display_value(value: Any) -> str:
@@ -611,6 +622,12 @@ def index() -> None:
             ("ORGANIZATION STRUCTURE", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
         ):
             ui.label(heading).classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
+            if heading == "ORGANIZATION STRUCTURE":
+                organization_browser_navigation = ui.button(
+                    "Browse", icon="account_tree",
+                ).props("flat align=left no-caps").classes(
+                    "w-full justify-start px-4"
+                )
             for key, icon in entries:
                 navigation[key], navigation_badges[key] = drawer_link(ENTITIES[key].label, icon)
         ui.label("SYSTEM ADMINISTRATION").classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
@@ -877,8 +894,7 @@ def index() -> None:
         if entity_type == "aggregation":
             await open_aggregation(entity)
         elif entity_type == "record":
-            with table_container:
-                await show_record_details(entity)
+            await show_record_details(entity)
         elif entity_type == "digital_component":
             try:
                 record = await api.get("records", entity["record_id"])
@@ -1043,7 +1059,7 @@ def index() -> None:
             render_event_timeline(history, timeline)
         dialog.open()
 
-    async def show_components(record: dict[str, Any]) -> None:
+    async def show_components(record: dict[str, Any], *, container: Any | None = None) -> None:
         try:
             aggregations = await api.list("aggregations")
         except ApiError as error:
@@ -1057,6 +1073,7 @@ def index() -> None:
         current_rows: list[dict[str, Any]] = []
         upload_lock = asyncio.Lock()
         uploader_control: dict[str, Any] = {}
+        component_refresh: dict[str, Any] = {}
 
         async def download_component(component: dict[str, Any]) -> None:
             try:
@@ -1167,13 +1184,13 @@ def index() -> None:
             async def stage_buffered_files() -> None:
                 try:
                     async with upload_lock:
-                        await refresh_components()
+                        await component_refresh["fn"]()
                         first_position = len(current_rows) + 1
                         for offset, (content, name, mime_type) in enumerate(buffered_files):
                             await api.upload_component(
                                 record["id"], first_position + offset, name, content, mime_type,
                             )
-                            await refresh_components()
+                            await component_refresh["fn"]()
                     with component_area:
                         ui.notify(
                             f"{len(buffered_files)} digital component{'s' if len(buffered_files) != 1 else ''} uploaded",
@@ -1188,14 +1205,78 @@ def index() -> None:
                 stage_buffered_files(), name=f"stage components for record {record['id']}"
             )
 
-        dialog = ui.dialog()
-        with dialog, ui.card().classes("max-h-[calc(100vh-32px)]").style("width: 920px; max-width: calc(100vw - 32px)"):
-            with ui.row().classes("w-full items-start no-wrap"):
-                with ui.column().classes("gap-0 grow"):
-                    ui.label("Digital components").classes("text-xl font-semibold")
-                    ui.label(f"Record {record['record_number']}").classes("text-sm text-slate-500")
-                ui.button(icon="close", on_click=dialog.close).props("flat round dense")
-            with ui.element("div").classes("w-full overflow-y-auto max-h-[calc(100vh-190px)] pr-1"):
+        dialog = None
+        component_area: Any = None
+
+        def render_current_components() -> None:
+            component_area.clear()
+            with component_area:
+                if not current_rows:
+                    with ui.column().classes(
+                        "col-span-full w-full items-center justify-center py-10 gap-2 text-center text-slate-400"
+                    ):
+                        ui.icon("cloud_upload").classes("text-4xl")
+                        ui.label("No digital components have been uploaded yet.")
+                else:
+                    render_component_cards(
+                        current_rows, move_component, remove_component,
+                        lambda item: show_entity_history("digital-components", item),
+                        view_component, download_component, readonly=readonly,
+                    )
+
+        async def refresh_components() -> None:
+            try:
+                rows = await api.components(record["id"])
+                current_rows.clear()
+                current_rows.extend(rows)
+                render_current_components()
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative")
+
+        async def move_component(component: dict[str, Any], direction: int) -> None:
+            index = next((i for i, item in enumerate(current_rows) if item["id"] == component["id"]), -1)
+            target = index + direction
+            if index < 0 or target < 0 or target >= len(current_rows):
+                return
+            reordered = list(current_rows)
+            reordered[index], reordered[target] = reordered[target], reordered[index]
+            try:
+                await api.reorder_components(record["id"], [
+                    {"id": item["id"], "component_order": position}
+                    for position, item in enumerate(reordered, 1)
+                ])
+                await refresh_components()
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative")
+
+        async def remove_component(component: dict[str, Any]) -> None:
+            previous_rows = list(current_rows)
+            current_rows[:] = [item for item in current_rows if item["id"] != component["id"]]
+            render_current_components()
+            try:
+                await api.delete_component(component["id"], component["version"])
+                ui.notify("Digital component removed", color="positive")
+                await refresh_components()
+            except ApiError as error:
+                current_rows[:] = previous_rows
+                render_current_components()
+                ui.notify(error_message(error), color="negative")
+
+        component_refresh["fn"] = refresh_components
+
+        async def render_component_section(*, standalone: bool) -> None:
+            nonlocal component_area
+            if standalone:
+                with ui.row().classes("w-full items-start no-wrap"):
+                    with ui.column().classes("gap-0 grow"):
+                        ui.label("Digital components").classes("text-xl font-semibold")
+                        ui.label(f"Record {record['record_number']}").classes("text-sm text-slate-500")
+                    ui.button(icon="close", on_click=dialog.close).props("flat round dense")
+            scroll_classes = (
+                "w-full overflow-y-auto max-h-[calc(100vh-190px)] pr-1"
+                if standalone else "w-full"
+            )
+            with ui.element("div").classes(scroll_classes):
                 if readonly:
                     with ui.row().classes("w-full items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg"):
                         ui.icon("lock", color="amber-8")
@@ -1210,78 +1291,67 @@ def index() -> None:
                 with ui.element("div").classes("component-list w-full mt-3"):
                     component_area = ui.element("div").classes("component-grid w-full")
 
-            def render_current_components() -> None:
-                component_area.clear()
-                with component_area:
-                    if not current_rows:
-                        with ui.column().classes("w-full items-center py-8 gap-2 text-slate-400"):
-                            ui.icon("cloud_upload").classes("text-4xl")
-                            ui.label("No digital components uploaded yet.")
-                    else:
-                        render_component_cards(
-                            current_rows, move_component, remove_component,
-                            lambda item: show_entity_history("digital-components", item),
-                            view_component, download_component, readonly=readonly,
-                        )
+            if standalone:
+                with ui.row().classes("w-full justify-end"):
+                    ui.button("Close", on_click=dialog.close).props("flat")
+            await refresh_components()
 
-            async def move_component(component: dict[str, Any], direction: int) -> None:
-                index = next((i for i, item in enumerate(current_rows) if item["id"] == component["id"]), -1)
-                target = index + direction
-                if index < 0 or target < 0 or target >= len(current_rows):
-                    return
-                reordered = list(current_rows)
-                reordered[index], reordered[target] = reordered[target], reordered[index]
-                try:
-                    await api.reorder_components(record["id"], [
-                        {"id": item["id"], "component_order": position}
-                        for position, item in enumerate(reordered, 1)
-                    ])
-                    await refresh_components()
-                except ApiError as error:
-                    ui.notify(error_message(error), color="negative")
-
-            async def remove_component(component: dict[str, Any]) -> None:
-                previous_rows = list(current_rows)
-                current_rows[:] = [item for item in current_rows if item["id"] != component["id"]]
-                render_current_components()
-                try:
-                    await api.delete_component(component["id"], component["version"])
-                    ui.notify("Digital component removed", color="positive")
-                    await refresh_components()
-                except ApiError as error:
-                    current_rows[:] = previous_rows
-                    render_current_components()
-                    ui.notify(error_message(error), color="negative")
-
-            async def refresh_components() -> None:
-                try:
-                    rows = await api.components(record["id"])
-                    current_rows.clear()
-                    current_rows.extend(rows)
-                    render_current_components()
-                except ApiError as error:
-                    ui.notify(error_message(error), color="negative")
-
-            with ui.row().classes("w-full justify-end"):
-                ui.button("Close", on_click=dialog.close).props("flat")
-        await refresh_components()
-        dialog.open()
+        if container is None:
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("max-h-[calc(100vh-32px)]").style("width: 920px; max-width: calc(100vw - 32px)"):
+                await render_component_section(standalone=True)
+        else:
+            with container:
+                await render_component_section(standalone=False)
+        if dialog is not None:
+            dialog.open()
 
     async def show_record_details(record: dict[str, Any]) -> None:
-        dialog = ui.dialog()
+        """Navigate to the dedicated details page for a record."""
+        await select_record_details(record["id"])
+
+    async def select_record_details(record_id: int) -> None:
+        previous_resource = state.get("resource")
+        if previous_resource != "record-details":
+            state["record_detail_return_resource"] = previous_resource
+            state["record_detail_return_aggregation"] = state.get("aggregation_detail")
+        show_authenticated_view()
+        state.update(resource="record-details", record_detail_id=record_id, rows=[], searched=True)
+        search_bar.set_visibility(False)
+        aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
+        guidance.text = ""
+        table_container.clear()
+
+        try:
+            fetched = await api.get("records", record_id)
+            record = (await decorate_for_spec(ENTITIES["records"], [fetched]))[0]
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+
+        title.text = record["title"]
+        subtitle.text = f"Record {record['record_number']}"
 
         async def refresh_record_view(saved: dict[str, Any] | None = None) -> None:
-            dialog.close()
-            aggregation_context = state.get("aggregation_detail")
+            await select_record_details((saved or record)["id"])
+
+        async def leave_record_page() -> None:
+            aggregation_context = state.get("record_detail_return_aggregation")
+            return_resource = state.get("record_detail_return_resource")
             if aggregation_context:
                 await open_aggregation(aggregation_context)
-            elif state.get("resource") == "dashboard":
+            elif return_resource == "dashboard":
                 await select_dashboard()
             else:
                 await select_entity("records")
-            if saved is not None:
-                decorated = await decorate_for_spec(ENTITIES["records"], [saved])
-                await show_record_details(decorated[0])
+
+        async def open_containing_aggregation() -> None:
+            try:
+                await open_aggregation(await api.get("aggregations", record["aggregation_id"]))
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
 
         async def confirm_delete_record() -> None:
             confirmation = ui.dialog()
@@ -1309,7 +1379,7 @@ def index() -> None:
                         ui.notify("Record deleted", color="positive")
                         await refresh_navigation_counts()
                         await load_recent(ENTITIES["records"])
-                        await refresh_record_view()
+                        await leave_record_page()
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True)
 
@@ -1321,50 +1391,64 @@ def index() -> None:
                     ).props("unelevated no-caps")
             confirmation.open()
 
-        with dialog, ui.card().classes("w-[720px] max-w-full"):
-            with ui.row().classes(RECORD_DETAIL_HEADER_CLASSES):
-                ui.avatar(icon="description", color="blue-1", text_color="primary")
-                with ui.column().classes(RECORD_DETAIL_TITLE_CLASSES):
-                    ui.label(record["title"]).classes("text-xl font-semibold break-words")
-                    ui.label(record["record_number"]).classes("text-sm text-primary font-medium")
-                favourite_button("records", record["id"])
-                ui.button(icon="close", on_click=dialog.close).props("flat round")
-            if record.get("_effectively_closed"):
-                with ui.row().classes("w-full items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg"):
-                    ui.icon("lock", color="amber-8")
-                    ui.label("This record is read-only because its aggregation hierarchy is closed.").classes("text-sm text-amber-900")
-            if record.get("description"):
-                ui.label(record["description"]).classes("text-slate-600")
-            with ui.row().classes("w-full gap-8 text-sm"):
-                with ui.column().classes("gap-0"):
-                    ui.label("Originated").classes("text-xs text-slate-400 uppercase")
-                    ui.label(format_timestamp(record.get("date_originated"))).classes("font-medium text-slate-700")
-                with ui.column().classes("gap-0"):
-                    ui.label("Created").classes("text-xs text-slate-400 uppercase")
-                    ui.label(format_timestamp(record.get("date_created"))).classes("font-medium text-slate-700")
-            with ui.row().classes("w-full justify-end"):
-                if not record.get("_effectively_closed"):
+        with table_container, ui.column().classes("w-full p-5 gap-5"):
+            with ui.card().classes("w-full shadow-none border border-slate-200 p-5 gap-4"):
+                with ui.row().classes(f"w-full {RECORD_DETAIL_HEADER_CLASSES} gap-3"):
+                    ui.avatar(icon="description", color="blue-1", text_color="primary", size="58px")
+                    with ui.column().classes(RECORD_DETAIL_TITLE_CLASSES):
+                        ui.label(record["title"]).classes("text-xl font-semibold break-words")
+                        ui.label(record["record_number"]).classes("text-sm text-primary font-medium")
+                    favourite_button("records", record["id"])
+                    ui.button("Back", icon="arrow_back", on_click=leave_record_page).props("flat no-caps")
+                    if not record.get("_effectively_closed"):
+                        ui.button(
+                            "Edit", icon="edit",
+                            on_click=lambda: open_editor(
+                                record, on_saved=refresh_record_view, resource_key="records",
+                            ),
+                        ).props("flat no-caps")
+                        ui.button(
+                            "Delete", icon="delete_outline", color="negative",
+                            on_click=confirm_delete_record,
+                        ).props("flat no-caps")
                     ui.button(
-                        "Delete", icon="delete_outline", color="negative",
-                        on_click=confirm_delete_record,
-                    ).props("flat")
-                    ui.button(
-                        "Edit", icon="edit",
-                        on_click=lambda: open_editor(
-                            record, on_saved=refresh_record_view,
-                            resource_key="records",
-                        ),
-                    ).props("flat")
-                ui.button(
-                    "Event history", icon="history",
-                    on_click=lambda: show_entity_history("records", record),
-                ).props("flat")
-                ui.button(
-                    "Digital components",
-                    icon="attach_file",
-                    on_click=lambda: show_components(record),
-                ).props("outline")
-        dialog.open()
+                        "Event history", icon="history",
+                        on_click=lambda: show_entity_history("records", record),
+                    ).props("flat no-caps")
+                if record.get("_effectively_closed"):
+                    with ui.row().classes("w-full items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg"):
+                        ui.icon("lock", color="amber-8")
+                        ui.label("This record is read-only because its aggregation hierarchy is closed.").classes("text-sm text-amber-900")
+                if record.get("description"):
+                    ui.label(record["description"]).classes("w-full text-slate-600 whitespace-pre-wrap")
+                ui.separator()
+                with ui.grid(columns=3).classes("w-full gap-4"):
+                    for label, value in (
+                        ("Originated", format_timestamp(record.get("date_originated"))),
+                        ("Created", format_timestamp(record.get("date_created"))),
+                        ("Containing aggregation", record.get("aggregation_display")),
+                    ):
+                        with ui.column().classes("gap-0 min-w-0"):
+                            ui.label(label.upper()).classes("text-xs text-slate-400")
+                            if label == "Containing aggregation" and isinstance(value, dict):
+                                aggregation_label = " — ".join(filter(None, (value.get("code"), value.get("name"))))
+                                ui.button(
+                                    aggregation_label,
+                                    on_click=open_containing_aggregation,
+                                ).props("flat dense no-caps color=primary align=left").classes(
+                                    "font-medium self-start -ml-2"
+                                )
+                            else:
+                                ui.label(str(value or "—")).classes("font-medium text-slate-700")
+
+            with ui.card().classes("w-full shadow-none border border-slate-200 p-5 gap-4"):
+                with ui.row().classes("w-full items-center gap-3"):
+                    ui.icon("attach_file", color="primary", size="28px")
+                    with ui.column().classes("gap-0 grow"):
+                        ui.label("Digital components").classes("text-xl font-semibold")
+                        ui.label("Files belonging to this record can be managed directly here.").classes("text-sm text-slate-500")
+                components_host = ui.column().classes("w-full gap-3")
+                await show_components(record, container=components_host)
 
     async def decorate_for_spec(
         spec: EntitySpec, rows: list[dict[str, Any]]
@@ -1435,7 +1519,6 @@ def index() -> None:
                 {
                     **item,
                     "_avatar": user_avatar(item),
-                    "effective_status": item.get("status"),
                     "_inactive_reason": item.get("status", "active").title(),
                 }
                 for item in rows
@@ -1826,6 +1909,16 @@ def index() -> None:
                         (initial_values or {}).get(field.name) if creating else source.get(field.name) if source else None,
                         lookup_options.get(field.name),
                     )
+                    if field.lookup_resource in {"org-units", "roles", "users"}:
+                        selector_mode = {
+                            "org-units": "org_unit", "roles": "role", "users": "user",
+                        }[field.lookup_resource]
+                        ui.button(
+                            "Browse organization structure", icon="account_tree",
+                            on_click=lambda _, control=controls[field.name], mode=selector_mode: show_organization_structure(
+                                selection_mode=mode, target_control=control,
+                            ),
+                        ).props("flat dense no-caps color=primary").classes("self-start -mt-2")
                     if field.name in (locked_fields or set()):
                         controls[field.name].disable()
                     if (
@@ -2183,6 +2276,15 @@ def index() -> None:
                 selection_holder["control"] = relationship_select(
                     f"Select {counterpart_label}", {}
                 ).classes("grow")
+                ui.button(
+                    "Browse", icon="account_tree",
+                    on_click=lambda: show_organization_structure(
+                        selection_mode="role" if for_user else "user",
+                        target_control=selection_holder["control"],
+                    ),
+                ).props("outline no-caps color=primary aria-label='Browse organization structure'").tooltip(
+                    f"Browse and select a {counterpart_label}"
+                )
                 assign_button = ui.button("Assign", on_click=assign, icon="person_add").props("unelevated")
                 if not assignment_allowed:
                     selection_holder["control"].disable()
@@ -2193,6 +2295,11 @@ def index() -> None:
         await load_memberships()
 
     async def open_aggregation(aggregation: dict[str, Any]) -> None:
+        previous_resource = state.get("resource")
+        if previous_resource != "aggregation-details":
+            state["aggregation_detail_return_resource"] = previous_resource
+            state["aggregation_detail_return_record_id"] = state.get("record_detail_id")
+        state["resource"] = "aggregation-details"
         try:
             all_aggregations = await api.list("aggregations")
             by_id = {item["id"]: item for item in all_aggregations}
@@ -2244,6 +2351,18 @@ def index() -> None:
             subtitle.text = current["aggregation_number"]
             table_container.clear()
             with table_container:
+                async def leave_aggregation_page() -> None:
+                    return_resource = state.get("aggregation_detail_return_resource")
+                    return_record_id = state.get("aggregation_detail_return_record_id")
+                    if return_resource == "record-details" and return_record_id:
+                        await select_record_details(return_record_id)
+                    elif return_resource == "dashboard":
+                        await select_dashboard()
+                    elif return_resource == "aggregation-browser":
+                        await select_aggregation_browser()
+                    else:
+                        await select_entity("aggregations")
+
                 async def reopen_current() -> None:
                     try:
                         reopened = await api.update(
@@ -2388,6 +2507,9 @@ def index() -> None:
                                 ui.label(current["aggregation_number"]).classes("text-xs text-primary font-semibold")
                                 ui.label(current["title"]).classes("text-lg font-semibold break-words")
                             favourite_button("aggregations", current["id"])
+                            ui.button(
+                                "Back", icon="arrow_back", on_click=leave_aggregation_page,
+                            ).props("flat dense no-caps")
                         if current.get("description"):
                             ui.label(current["description"]).classes("text-sm text-slate-600")
                         with ui.row().classes("w-full justify-end"):
@@ -2581,9 +2703,119 @@ def index() -> None:
                                     ui.label(number).classes("text-xs text-slate-400 leading-tight")
                                 ui.icon("chevron_right", size="18px").classes("text-slate-300")
 
+    def render_entity_favourites_section(spec: EntitySpec) -> None:
+        preview_host = ui.column().classes("w-full gap-2 px-5 pt-5")
+        limit = dashboard_favourite_item_limit()
+        resource = spec.key
+        singular = "aggregation" if resource == "aggregations" else "record"
+        heading = f"Favourite {resource}"
+        icon = "folder" if resource == "aggregations" else "description"
+
+        async def open_favourite(item: dict[str, Any]) -> None:
+            try:
+                entity = await api.get(resource, item["id"])
+                if resource == "aggregations":
+                    await open_aggregation(entity)
+                else:
+                    await show_record_details(entity)
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        def render_entry(item: dict[str, Any], *, after_remove: Any) -> None:
+            with ui.row().classes(
+                "recent-card cursor-pointer w-full items-center no-wrap px-3 py-2 gap-3"
+            ).on("click", lambda _, selected=item: open_favourite(selected)):
+                ui.icon(icon, color="primary")
+                with ui.column().classes("gap-0 grow min-w-0"):
+                    ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
+                    number = item.get("aggregation_number") or item.get("record_number")
+                    ui.label(number or f"{singular.title()} #{item['id']}").classes(
+                        "text-xs text-slate-400"
+                    )
+                    if resource == "records":
+                        aggregation = " — ".join(filter(None, (
+                            item.get("aggregation_number"), item.get("aggregation_title"),
+                        )))
+                        if aggregation:
+                            ui.label(aggregation).classes("text-xs text-slate-400 line-clamp-1")
+                remove_button = ui.button(icon="favorite", color="red").props(
+                    "flat round dense aria-label='Remove from favourites'"
+                )
+                remove_button.tooltip("Remove from favourites")
+                remove_button.on(
+                    "click", lambda _, selected=item: after_remove(selected),
+                    js_handler=STOP_PROPAGATION_CLICK_HANDLER,
+                )
+                ui.icon("chevron_right").classes("text-slate-300")
+
+        def show_all() -> None:
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("w-[760px] max-w-full max-h-[85vh]"):
+                with ui.row().classes("w-full items-center"):
+                    ui.label(heading).classes("text-xl font-semibold")
+                    ui.space()
+                    ui.button(icon="close", on_click=dialog.close).props("flat round")
+                complete_host = ui.column().classes("w-full gap-2 max-h-[65vh] overflow-y-auto")
+
+            def render_complete() -> None:
+                complete_host.clear()
+                with complete_host:
+                    items = state["favourites"][resource]
+                    if not items:
+                        ui.label(f"No favourite {resource}").classes("text-sm text-slate-400 py-4")
+                    for item in items:
+                        render_entry(
+                            item,
+                            after_remove=lambda selected: remove_favourite(
+                                selected, refresh_dialog=render_complete,
+                            ),
+                        )
+
+            render_complete()
+            dialog.open()
+
+        async def remove_favourite(
+            item: dict[str, Any], *, refresh_dialog: Any | None = None,
+        ) -> None:
+            selected = await toggle_favourite(resource, item["id"])
+            if selected:
+                return
+            state["favourites"][resource] = [
+                row for row in state["favourites"][resource]
+                if int(row["id"]) != int(item["id"])
+            ]
+            render_table(spec)
+            if refresh_dialog is not None:
+                refresh_dialog()
+
+        def render_preview() -> None:
+            preview_host.clear()
+            items = state["favourites"][resource]
+            with preview_host:
+                with ui.row().classes("w-full items-center gap-2"):
+                    ui.icon("favorite", color="red")
+                    ui.label(heading).classes("text-lg font-semibold")
+                    ui.badge(str(len(items)), color="blue-grey").props("outline")
+                    ui.space()
+                    if len(items) > limit:
+                        ui.button(
+                            f"View all ({len(items)})", icon="open_in_full",
+                            on_click=show_all,
+                        ).props("flat dense no-caps color=primary")
+                if not items:
+                    ui.label(f"No favourite {resource}").classes("text-sm text-slate-400 py-2")
+                else:
+                    with ui.grid(columns=2).classes("w-full gap-3"):
+                        for item in items[:limit]:
+                            render_entry(item, after_remove=remove_favourite)
+
+        render_preview()
+
     def render_table(spec: EntitySpec) -> None:
         table_container.clear()
         with table_container:
+            if spec.key in {"aggregations", "records"}:
+                render_entity_favourites_section(spec)
             if spec.search_first and not state["searched"]:
                 if spec.key == "classifications":
                     with ui.column().classes("w-full items-center py-12 gap-2 text-slate-500"):
@@ -2694,12 +2926,25 @@ def index() -> None:
                       ><q-tooltip>{{ props.row._inactive_reason }}</q-tooltip></q-badge>
                     </q-td>
                 ''')
+            if any(key == "status" for key, _ in spec.columns):
+                table.add_slot("body-cell-status", '''
+                    <q-td :props="props">
+                      <q-badge
+                        :color="props.value === 'active' ? 'positive' : (props.value === 'suspended' ? 'warning' : 'grey-7')"
+                        :label="props.value"
+                      />
+                    </q-td>
+                ''')
             if spec.key in {"records", "aggregations"}:
                 closed_label = f"Closed {spec.singular} metadata cannot be changed"
                 buttons = '<q-btn flat round dense :icon="props.row._is_favourite ? \'favorite\' : \'favorite_border\'" :color="props.row._is_favourite ? \'red\' : \'primary\'" :aria-label="props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\'" @click.stop="$parent.$emit(\'toggle_favourite\', props.row)"><q-tooltip>{{ props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\' }}</q-tooltip></q-btn>'
                 buttons += f'<q-btn flat round dense icon="edit" color="primary" :disable="props.row._effectively_closed" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>{{{{ props.row._effectively_closed ? \'{closed_label}\' : \'Edit\' }}}}</q-tooltip></q-btn>'
             else:
                 buttons = '<q-btn flat round dense icon="edit" color="primary" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>Edit</q-tooltip></q-btn>'
+            if spec.key == "org-units":
+                buttons = '<q-btn flat round dense icon="open_in_new" color="primary" @click="$parent.$emit(\'open_org_unit\', props.row)"><q-tooltip>Open organization unit</q-tooltip></q-btn>' + buttons
+            if spec.key == "roles":
+                buttons = '<q-btn flat round dense icon="open_in_new" color="primary" @click="$parent.$emit(\'open_role\', props.row)"><q-tooltip>Open role</q-tooltip></q-btn>' + buttons
             buttons += '<q-btn flat round dense icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn>'
             if spec.key == "records":
                 buttons += '<q-btn flat round dense icon="attach_file" color="secondary" @click="$parent.$emit(\'components\', props.row)"><q-tooltip>Digital components</q-tooltip></q-btn>'
@@ -2709,6 +2954,7 @@ def index() -> None:
             if spec.key in {"users", "roles"}:
                 buttons += '<q-btn flat round dense icon="group" color="secondary" @click="$parent.$emit(\'memberships\', props.row)"><q-tooltip>Role assignments</q-tooltip></q-btn>'
             if spec.key == "users":
+                buttons = '<q-btn flat round dense icon="open_in_new" color="primary" @click="$parent.$emit(\'open_user\', props.row)"><q-tooltip>Open user</q-tooltip></q-btn>' + buttons
                 buttons += '<q-btn flat round dense icon="password" color="orange" @click="$parent.$emit(\'temporary_password\', props.row)"><q-tooltip>Issue temporary password</q-tooltip></q-btn>'
             if spec.key in {"org-units", "roles", "users"}:
                 buttons += LIFECYCLE_ACTION_BUTTONS
@@ -2720,6 +2966,10 @@ def index() -> None:
             table.add_slot("body-cell-actions", f'<q-td :props="props">{buttons}</q-td>')
             table.on("edit", lambda event: open_editor(event.args))
             table.on("history", lambda event, resource=spec.key: show_entity_history(resource, event.args))
+            if spec.key == "org-units":
+                table.on("open_org_unit", lambda event: select_organization_unit_details(event.args["id"]))
+            if spec.key == "roles":
+                table.on("open_role", lambda event: select_role_details(event.args["id"]))
             if spec.key in {"aggregations", "records"}:
                 async def toggle_table_favourite(event) -> None:
                     row = event.args
@@ -2729,6 +2979,9 @@ def index() -> None:
                             table_row["_is_favourite"] = selected
                             break
                     table.update()
+                    if spec.key in {"aggregations", "records"}:
+                        await reload_favourites()
+                        render_table(spec)
                 table.on("toggle_favourite", toggle_table_favourite)
             if spec.key == "records":
                 table.on("components", lambda event: show_components(event.args))
@@ -2786,6 +3039,7 @@ def index() -> None:
                     ),
                 )
             if spec.key == "users":
+                table.on("open_user", lambda event: select_user_details(event.args["id"]))
                 async def issue_password(event) -> None:
                     try:
                         result = await api.issue_temporary_password(event.args["id"])
@@ -2958,15 +3212,19 @@ def index() -> None:
         except ApiError:
             pass
         app.storage.user.pop("session_token", None)
+        app.storage.user.pop("organization_browser_state", None)
         api.set_session_token(None)
         clear_signed_in_identity()
         login_dialog.open()
 
-    async def select_login_sessions() -> None:
+    async def select_login_sessions(user_id: int | None = None) -> None:
         show_authenticated_view()
         state.update(resource="login-sessions", rows=[], searched=True, aggregation_detail=None)
         title.text = "Login sessions"
-        subtitle.text = "Review and revoke authenticated sessions"
+        subtitle.text = (
+            "Review and revoke sessions for the selected user"
+            if user_id is not None else "Review and revoke authenticated sessions"
+        )
         add_button.set_visibility(False)
         add_record_button.set_visibility(False)
         search_bar.set_visibility(False)
@@ -2978,7 +3236,7 @@ def index() -> None:
 
         async def load_sessions() -> None:
             try:
-                rows = await api.login_sessions()
+                rows = await api.login_sessions(user_id=user_id)
             except ApiError as error:
                 ui.notify(error_message(error), color="negative")
                 return
@@ -2991,8 +3249,9 @@ def index() -> None:
                     "name": row.get("user_name"),
                     "email": row.get("user_email"),
                 })
-            navigation_badges["login-sessions"].text = str(active_count)
-            navigation_badges["login-sessions"].update()
+            if user_id is None:
+                navigation_badges["login-sessions"].text = str(active_count)
+                navigation_badges["login-sessions"].update()
             outer.clear()
             with outer:
                 with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-3"):
@@ -4220,6 +4479,709 @@ def index() -> None:
         guidance.text = "Large collections are search-first to avoid loading unbounded result sets."
         render_table(ENTITIES["aggregations"])
 
+    async def select_organization_unit_details(org_unit_id: int) -> None:
+        show_authenticated_view()
+        state.update(resource="org-unit-details", rows=[], searched=True, aggregation_detail=None)
+        search_bar.set_visibility(False); aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False); add_record_button.set_visibility(False)
+        guidance.text = ""; table_container.clear()
+        try:
+            unit = await api.organization_summary("org-units", org_unit_id)
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True); return
+        title.text = unit["name"]; subtitle.text = "Organization unit details and inherited lifecycle effects"
+
+        async def refresh(_: Any = None) -> None:
+            await select_organization_unit_details(org_unit_id)
+
+        async def change_status() -> None:
+            try:
+                await api.set_active(
+                    "org-units", org_unit_id, unit["version"],
+                    active=unit["status"] == "inactive",
+                )
+                await refresh()
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        with table_container, ui.column().classes("w-full p-5 gap-4"):
+            with ui.card().classes("w-full shadow-none border border-slate-200 p-5 gap-4"):
+                with ui.row().classes("w-full items-start gap-4"):
+                    ui.avatar(icon="corporate_fare", color="blue-1", text_color="primary", size="58px")
+                    with ui.column().classes("gap-1 grow"):
+                        ui.label(unit["name"]).classes("text-xl font-semibold")
+                        ui.label(unit["code"]).classes("text-primary")
+                        if unit.get("description"): ui.label(unit["description"]).classes("text-slate-600")
+                    ui.button("Edit", icon="edit", on_click=lambda: open_editor(unit, on_saved=refresh, resource_key="org-units")).props("flat no-caps")
+                    ui.button("History", icon="history", on_click=lambda: show_entity_history("org-units", unit)).props("flat no-caps")
+                    ui.button("Activate" if unit["status"] == "inactive" else "Deactivate", icon="toggle_on" if unit["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline no-caps")
+                with ui.grid(columns=3).classes("w-full gap-4"):
+                    for label, value in (
+                        ("Direct status", unit.get("status")), ("Effective status", unit.get("effective_status")),
+                        ("Inactive because of", (unit.get("inactive_source") or {}).get("name")),
+                        ("Parent", (unit.get("parent") or {}).get("name")),
+                        ("Direct child units", unit.get("child_org_unit_count")),
+                        ("Direct roles", unit.get("role_count")),
+                    ):
+                        guidance_text = {
+                            "Direct status": "Set directly on this organization unit, without considering parent units.",
+                            "Effective status": "Also includes inactivity inherited from any parent organization unit.",
+                        }.get(label)
+                        with ui.column().classes("gap-0 border-b border-slate-100 pb-1.5"):
+                            ui.label(label.upper()).classes("text-xs text-slate-400")
+                            ui.label(str(value).title() if value is not None else "—").classes("font-medium")
+                            if guidance_text:
+                                ui.label(guidance_text).classes("w-full text-[10px] leading-3 text-slate-400")
+
+    async def select_role_details(role_id: int) -> None:
+        show_authenticated_view()
+        state.update(resource="role-details", rows=[], searched=True, aggregation_detail=None)
+        search_bar.set_visibility(False); aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False); add_record_button.set_visibility(False)
+        guidance.text = ""; table_container.clear()
+        try:
+            role = await api.organization_summary("roles", role_id)
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True); return
+        title.text = role["name"]; subtitle.text = "Role details, assignments, supervision, and inherited lifecycle effects"
+
+        async def refresh(_: Any = None) -> None:
+            await select_role_details(role_id)
+
+        async def change_status() -> None:
+            try:
+                await api.set_active("roles", role_id, role["version"], active=role["status"] == "inactive")
+                await refresh()
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        with table_container, ui.column().classes("w-full p-5 gap-4"):
+            with ui.card().classes("w-full shadow-none border border-slate-200 p-5 gap-4"):
+                with ui.row().classes("w-full items-start gap-4"):
+                    ui.avatar(icon="badge", color="blue-1", text_color="primary", size="58px")
+                    with ui.column().classes("gap-1 grow"):
+                        ui.label(role["name"]).classes("text-xl font-semibold")
+                        ui.label(role["code"]).classes("text-primary")
+                        if role.get("description"): ui.label(role["description"]).classes("text-slate-600")
+                    ui.button("Edit", icon="edit", on_click=lambda: open_editor(role, on_saved=refresh, resource_key="roles")).props("flat no-caps")
+                    ui.button("User assignments", icon="group", on_click=lambda: show_memberships(role, for_user=False)).props("flat no-caps")
+                    ui.button("History", icon="history", on_click=lambda: show_entity_history("roles", role)).props("flat no-caps")
+                    ui.button("Activate" if role["status"] == "inactive" else "Deactivate", icon="toggle_on" if role["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline no-caps")
+                with ui.grid(columns=3).classes("w-full gap-4"):
+                    for label, value in (
+                        ("Direct status", role.get("status")), ("Effective status", role.get("effective_status")),
+                        ("Organization unit", role.get("org_unit_name")),
+                        ("Supervising role", role.get("supervisor_role_name")),
+                        ("Supervised roles", role.get("subordinate_role_count")),
+                        ("All assignments", role.get("assigned_user_count")),
+                        ("Current assignments", role.get("current_assignment_count")),
+                        ("Future assignments", role.get("future_assignment_count")),
+                        ("Expired assignments", role.get("expired_assignment_count")),
+                    ):
+                        guidance_text = {
+                            "Direct status": "Set directly on this role, without considering its organization structure.",
+                            "Effective status": "Also includes inactivity inherited from its organization unit or any ancestor unit.",
+                        }.get(label)
+                        with ui.column().classes("gap-0 border-b border-slate-100 pb-1.5"):
+                            ui.label(label.upper()).classes("text-xs text-slate-400")
+                            ui.label(str(value).title() if value is not None else "—").classes("font-medium")
+                            if guidance_text:
+                                ui.label(guidance_text).classes("w-full text-[10px] leading-3 text-slate-400")
+
+    async def select_user_details(user_id: int) -> None:
+        """Render the extensible single-user management view."""
+        show_authenticated_view()
+        state.update(resource="user-details", rows=[], searched=True, aggregation_detail=None)
+        search_bar.set_visibility(False)
+        aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
+        guidance.text = ""
+        table_container.clear()
+        try:
+            session_page_size = user_details_session_limit()
+            person, assignments = await asyncio.gather(
+                api.get("users", user_id), api.user_roles(user_id),
+            )
+            roles = await api.list("roles")
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+        title.text = person["name"]
+        subtitle.text = "User details and account administration"
+        role_by_id = {item["id"]: item for item in roles}
+
+        async def refresh_user(_: Any = None) -> None:
+            await select_user_details(user_id)
+
+        async def change_status(action: str) -> None:
+            try:
+                if action in {"suspend", "unsuspend"}:
+                    await api.set_user_suspended(
+                        user_id, person["version"], suspended=action == "suspend",
+                    )
+                else:
+                    await api.set_active(
+                        "users", user_id, person["version"], active=action == "activate",
+                    )
+                ui.notify(f"User {action}d", color="positive")
+                await refresh_user()
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        async def issue_password() -> None:
+            try:
+                result = await api.issue_temporary_password(user_id)
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+                return
+            dialog = ui.dialog().props("persistent")
+            with dialog, ui.card().classes("w-[520px] max-w-full"):
+                ui.label("Temporary password issued").classes("text-xl font-semibold")
+                ui.label(result["temporary_password"]).classes(
+                    "font-mono text-lg bg-slate-100 rounded p-3 select-all"
+                )
+                ui.label("Copy it now; it will not be shown again.").classes("text-sm text-slate-500")
+                ui.button("I have copied it", on_click=dialog.close).props("unelevated no-caps").classes("self-end")
+            dialog.open()
+
+        with table_container:
+            with ui.column().classes("w-full p-5 gap-4"):
+                with ui.card().classes("w-full shadow-none border border-slate-200 p-5"):
+                    with ui.row().classes("w-full items-start gap-4"):
+                        render_user_avatar(person, size="64px")
+                        with ui.column().classes("gap-1 grow"):
+                            ui.label(person["name"]).classes("text-xl font-semibold")
+                            ui.label(person.get("email") or "No email address").classes("text-slate-500")
+                            with ui.row().classes("gap-2"):
+                                ui.badge(person["account_type"].title(), color="blue-grey").props("outline")
+                                ui.badge(person["status"].title(), color={"active": "positive", "suspended": "warning"}.get(person["status"], "grey-7"))
+                        with ui.row().classes("gap-1"):
+                            ui.button("Edit", icon="edit", on_click=lambda: open_editor(person, on_saved=refresh_user, resource_key="users")).props("flat no-caps")
+                            ui.button("Role assignments", icon="group", on_click=lambda: show_memberships(person, for_user=True)).props("flat no-caps")
+                            ui.button("Temporary password", icon="password", on_click=issue_password).props("flat no-caps color=orange")
+                            ui.button("History", icon="history", on_click=lambda: show_entity_history("users", person)).props("flat no-caps")
+                    with ui.row().classes("w-full justify-end gap-2"):
+                        if person["status"] == "inactive":
+                            ui.button("Activate", icon="toggle_on", on_click=lambda: change_status("activate")).props("outline no-caps color=positive")
+                        else:
+                            ui.button("Deactivate", icon="toggle_off", on_click=lambda: change_status("deactivate")).props("outline no-caps color=negative")
+                        if person["status"] == "suspended":
+                            ui.button("Unsuspend", icon="play_circle", on_click=lambda: change_status("unsuspend")).props("outline no-caps color=positive")
+                        else:
+                            suspend = ui.button("Suspend", icon="pause_circle", on_click=lambda: change_status("suspend")).props("outline no-caps color=warning")
+                            if person["status"] != "active":
+                                suspend.disable(); suspend.tooltip("Activate the user before suspending")
+                ui.label("Role assignments").classes("text-lg font-semibold")
+                if not assignments:
+                    ui.label("No role assignments").classes("text-slate-400")
+                else:
+                    now = datetime.now(timezone.utc)
+                    assignment_rows = []
+                    for item in assignments:
+                        role = role_by_id.get(item["role_id"], {})
+                        valid_from = datetime.fromisoformat(str(item["valid_from"]).replace("Z", "+00:00"))
+                        valid_until = datetime.fromisoformat(str(item["valid_until"]).replace("Z", "+00:00")) if item.get("valid_until") else None
+                        validity = "future" if valid_from > now else "expired" if valid_until and valid_until <= now else "current"
+                        assignment_rows.append({
+                            **item, "role": " — ".join(filter(None, (role.get("code"), role.get("name")))) or str(item["role_id"]),
+                            "role_status": role.get("effective_status", role.get("status", "unknown")),
+                            "validity": validity,
+                        })
+                    with ui.row().classes("w-full items-end gap-2"):
+                        assignment_search = ui.input("Filter role name or code").props("outlined dense clearable").classes("grow")
+                        assignment_status = ui.select({"all": "All role statuses", "active": "Active", "inactive": "Inactive"}, value="all", label="Role status").props("outlined dense options-dense").classes("w-44")
+                        assignment_validity = ui.select({"all": "All validity", "current": "Current", "future": "Future", "expired": "Expired"}, value="all", label="Assignment validity").props("outlined dense options-dense").classes("w-48")
+                    assignment_table = ui.table(columns=[
+                        {"name": "role", "label": "Role", "field": "role", "align": "left", "sortable": True},
+                        {"name": "role_status", "label": "Role status", "field": "role_status", "align": "left", "sortable": True},
+                        {"name": "validity", "label": "Validity", "field": "validity", "align": "left", "sortable": True},
+                        {"name": "valid_from", "label": "Valid from", "field": "valid_from", "align": "left", "sortable": True},
+                        {"name": "valid_until", "label": "Valid until", "field": "valid_until", "align": "left", "sortable": True},
+                    ], rows=assignment_rows, row_key="id", pagination={"rowsPerPage": 5, "sortBy": "role", "descending": False}).props("flat bordered dense").classes("w-full h-[190px] overflow-y-auto")
+                    add_timestamp_slots(assignment_table, ["valid_from", "valid_until"])
+                    def filter_assignments() -> None:
+                        query = (assignment_search.value or "").strip().casefold()
+                        assignment_table.rows = [row for row in assignment_rows if (
+                            (not query or query in row["role"].casefold())
+                            and (assignment_status.value == "all" or row["role_status"] == assignment_status.value)
+                            and (assignment_validity.value == "all" or row["validity"] == assignment_validity.value)
+                        )]
+                        assignment_table.update()
+                    for control in (assignment_search, assignment_status, assignment_validity):
+                        control.on_value_change(filter_assignments)
+
+                ui.label("Login sessions").classes("text-lg font-semibold")
+                session_state = {"offset": 0, "total": 0}
+                with ui.row().classes("w-full items-end gap-2"):
+                    session_query = ui.input("Filter IP address or client").props("outlined dense clearable").classes("grow")
+                    session_status = ui.select({"all": "All statuses", "active": "Active", "expired": "Expired", "revoked": "Revoked"}, value="all", label="Status").props("outlined dense options-dense").classes("w-40")
+                    session_sort = ui.select({"date_created": "Signed in", "last_seen_at": "Last activity", "expires_at": "Expiry", "status": "Status", "client_ip": "IP address"}, value="date_created", label="Sort by").props("outlined dense options-dense").classes("w-40")
+                    session_direction = ui.select({True: "Newest/descending", False: "Oldest/ascending"}, value=True, label="Direction").props("outlined dense options-dense").classes("w-48")
+                session_table = ui.table(columns=[
+                    {"name": "status", "label": "Status", "field": "status", "align": "left", "sortable": True},
+                    {"name": "date_created", "label": "Signed in", "field": "date_created", "align": "left", "sortable": True},
+                    {"name": "last_seen_at", "label": "Last activity", "field": "last_seen_at", "align": "left", "sortable": True},
+                    {"name": "expires_at", "label": "Expires", "field": "expires_at", "align": "left", "sortable": True},
+                    {"name": "client_ip", "label": "IP address", "field": "client_ip", "align": "left", "sortable": True},
+                    {"name": "user_agent", "label": "Client", "field": "user_agent", "align": "left"},
+                    {"name": "actions", "label": "", "field": "actions", "align": "right"},
+                ], rows=[], row_key="id").props("flat bordered dense hide-bottom").classes("w-full h-[190px] overflow-y-auto")
+                add_timestamp_slots(session_table, ["date_created", "last_seen_at", "expires_at"])
+                session_table.add_slot("body-cell-actions", '''<q-td :props="props"><q-btn v-if="props.row.status === 'active'" flat round dense color="negative" icon="logout" @click="$parent.$emit('revoke', props.row)"><q-tooltip>Force logout this session</q-tooltip></q-btn></q-td>''')
+                with ui.row().classes("w-full items-center justify-end gap-2"):
+                    session_page_label = ui.label().classes("text-sm text-slate-500")
+                    session_previous = ui.button("Previous", icon="chevron_left").props("flat dense no-caps")
+                    session_next = ui.button("Next", icon="chevron_right").props("flat dense no-caps")
+
+                async def load_session_page(*, reset: bool = False) -> None:
+                    if reset: session_state["offset"] = 0
+                    try:
+                        page = await api.login_sessions_page(
+                            user_id, limit=session_page_size, offset=session_state["offset"],
+                            query=session_query.value or "", session_status=session_status.value or "all",
+                            sort_by=session_sort.value or "date_created", descending=bool(session_direction.value),
+                        )
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True); return
+                    session_state["total"] = page["total"]
+                    session_table.rows = page["items"]; session_table.update()
+                    start = session_state["offset"] + 1 if page["total"] else 0
+                    end = min(session_state["offset"] + len(page["items"]), page["total"])
+                    session_page_label.text = f"{start}-{end} of {page['total']}"; session_page_label.update()
+                    (session_previous.enable if session_state["offset"] > 0 else session_previous.disable)()
+                    (session_next.enable if session_state["offset"] + session_page_size < page["total"] else session_next.disable)()
+
+                async def previous_sessions() -> None:
+                    session_state["offset"] = max(0, session_state["offset"] - session_page_size); await load_session_page()
+                async def next_sessions() -> None:
+                    session_state["offset"] += session_page_size; await load_session_page()
+                session_previous.on("click", previous_sessions); session_next.on("click", next_sessions)
+                for control in (session_query, session_status, session_sort, session_direction):
+                    control.on_value_change(lambda: load_session_page(reset=True))
+                async def revoke_user_session(event: Any) -> None:
+                    try:
+                        await api.revoke_session(event.args["id"]); ui.notify("Login session revoked", color="positive"); await load_session_page()
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+                session_table.on("revoke", revoke_user_session)
+                await load_session_page()
+
+    async def show_organization_structure(
+        *, selection_mode: str | None = None, target_control: Any = None,
+    ) -> None:
+        """Shared lazy organization browser for the page and selectors."""
+        is_selector = selection_mode is not None
+        if is_selector:
+            dialog = ui.dialog()
+            host = dialog
+            saved_state: dict[str, Any] = {
+                "expanded": [], "selected": None, "query": "", "validity": "all",
+                "entity_type": selection_mode or "all", "status": "all", "scroll_top": 0,
+            }
+        else:
+            show_authenticated_view()
+            state.update(resource="organization-browser", rows=[], searched=True, aggregation_detail=None)
+            title.text = "Browse organization structure"
+            subtitle.text = "Explore organization units, roles, and assigned users"
+            search_bar.set_visibility(False); aggregation_mode_bar.set_visibility(False)
+            add_button.set_visibility(False); add_record_button.set_visibility(False)
+            guidance.text = ""; table_container.clear()
+            host = table_container
+            saved_state = dict(app.storage.user.get("organization_browser_state") or {})
+            saved_state.setdefault("expanded", []); saved_state.setdefault("selected", None)
+            saved_state.setdefault("query", ""); saved_state.setdefault("validity", "all")
+            saved_state.setdefault("entity_type", "all"); saved_state.setdefault("status", "all")
+            saved_state.setdefault("scroll_top", 0)
+
+        expanded = set(saved_state["expanded"])
+        browser: dict[str, Any] = {"roots": [], "children": {}, "selected": saved_state["selected"]}
+        tree_host: Any = None
+        summary_host: Any = None
+        search_results_host: Any = None
+
+        def persist() -> None:
+            if is_selector:
+                return
+            app.storage.user["organization_browser_state"] = {
+                "expanded": sorted(expanded), "selected": browser["selected"],
+                "query": query_input.value or "", "validity": validity_filter.value,
+                "entity_type": entity_type_filter.value, "status": status_filter.value,
+                "scroll_top": browser.get("scroll_top", 0),
+            }
+
+        async def select_node(node: dict[str, Any]) -> None:
+            browser["selected"] = {
+                "type": node["type"], "id": node["id"],
+                **({"assignment_id": node.get("assignment_id"), "role_id": node.get("role_id")} if node["type"] == "user" else {}),
+            }
+            persist(); render_tree(); await render_summary(node)
+
+        async def load_node_children(node: dict[str, Any]) -> list[dict[str, Any]]:
+            key = f"{node['type']}:{node['id']}"
+            if key in browser["children"]:
+                return browser["children"][key]
+            if node["type"] == "org_unit":
+                result = await api.organization_children(
+                    node["id"], include_roles=selection_mode != "org_unit",
+                )
+                children = [{**item, "type": "org_unit"} for item in result["org_units"]]
+                if selection_mode != "org_unit":
+                    children += [{**item, "type": "role"} for item in result["roles"]]
+            else:
+                children = [] if selection_mode == "role" else [
+                    {**item, "type": "user"} for item in await api.organization_role_users(
+                        node["id"], validity=validity_filter.value,
+                    )
+                ]
+            browser["children"][key] = children
+            return children
+
+        async def toggle_node(node: dict[str, Any]) -> None:
+            key = f"{node['type']}:{node['id']}"
+            if key in expanded:
+                expanded.remove(key)
+            else:
+                expanded.add(key)
+                if key not in browser["children"]:
+                    await load_node_children(node)
+            persist(); render_tree()
+
+        def node_selectable(node: dict[str, Any]) -> bool:
+            if not is_selector or node["type"] != selection_mode:
+                return not is_selector
+            status = node.get("effective_status", node.get("status"))
+            return status == "active"
+
+        def render_nodes(nodes: list[dict[str, Any]], depth: int = 0) -> None:
+            for node in nodes:
+                key = f"{node['type']}:{node['id']}"
+                can_expand = node["type"] == "org_unit" or (
+                    node["type"] == "role" and selection_mode not in {"org_unit", "role"}
+                )
+                selected = (
+                    browser["selected"]
+                    and browser["selected"].get("type") == node["type"]
+                    and browser["selected"].get("id") == node["id"]
+                    and (
+                        node["type"] != "user"
+                        or browser["selected"].get("assignment_id") == node.get("assignment_id")
+                    )
+                )
+                tree_row = ui.row().classes(
+                    "w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50 "
+                    + ("bg-blue-50" if selected else "")
+                ).style(f"padding-left:{depth * 20 + 4}px")
+                with tree_row:
+                    with ui.element("div").classes("w-8 h-8 shrink-0 flex items-center justify-center"):
+                        if can_expand:
+                            ui.button(
+                                icon="expand_more" if key in expanded else "chevron_right",
+                                on_click=lambda _, item=node: toggle_node(item),
+                            ).props("flat round dense size=sm color=blue-grey")
+                    ui.icon(
+                        {"org_unit": "corporate_fare", "role": "badge", "user": "person"}[node["type"]],
+                        color="primary", size="20px",
+                    ).classes("w-6 shrink-0 mr-2")
+                    node_content = ui.column().classes(
+                        "grow min-w-0 gap-0 py-1 " + ("cursor-pointer" if node_selectable(node) else "")
+                    )
+                    if node_selectable(node):
+                        node_content.on("click", lambda _, item=node: select_node(item))
+                    with node_content:
+                        ui.label(node.get("name") or str(node["id"])).classes("text-sm font-semibold line-clamp-1")
+                        if node.get("code"):
+                            ui.label(node["code"]).classes("text-xs text-slate-400")
+                    status_value = node.get("effective_status", node.get("status"))
+                    if node["type"] == "user":
+                        ui.badge(
+                            str(node.get("status") or "active").title(),
+                            color={"active": "positive", "suspended": "warning"}.get(node.get("status"), "grey-7"),
+                        ).props("outline")
+                    elif status_value and status_value != "active":
+                        ui.badge(status_value.title(), color="grey-7").props("outline")
+                    if is_selector and not node_selectable(node):
+                        node_content.tooltip(
+                            "This item is visible for context but cannot be selected because it is not active"
+                            if node["type"] == selection_mode else "Use this item to navigate the hierarchy"
+                        )
+                if key in expanded:
+                    render_nodes(browser["children"].get(key, []), depth + 1)
+
+        def render_tree() -> None:
+            tree_host.clear()
+            with tree_host:
+                if not browser["roots"]:
+                    ui.label("No organization units found").classes("p-4 text-slate-400")
+                render_nodes(browser["roots"])
+
+        async def reveal_result(result: dict[str, Any]) -> None:
+            """Load and expand the exact ancestor path returned by search."""
+            nodes = browser["roots"]
+            target: dict[str, Any] | None = None
+            for unit_id in result.get("org_unit_path") or []:
+                target = next((item for item in nodes if item["id"] == unit_id), None)
+                if target is None:
+                    return
+                key = f"org_unit:{unit_id}"
+                expanded.add(key)
+                nodes = await load_node_children(target)
+            if result["type"] == "role":
+                target = next((item for item in nodes if item["type"] == "role" and item["id"] == result["id"]), result)
+            elif result["type"] == "user":
+                role = next((item for item in nodes if item["type"] == "role" and item["id"] == result.get("role_id")), None)
+                if role is not None:
+                    expanded.add(f"role:{role['id']}")
+                    users = await load_node_children(role)
+                    target = next((item for item in users if item.get("assignment_id") == result.get("assignment_id")), result)
+                else:
+                    target = result
+            if target is None:
+                target = result
+            await select_node({**target, "type": result["type"]})
+            await ui.run_javascript(
+                "document.querySelector('#organization-browser-tree .bg-blue-50')?.scrollIntoView({block:'center'})"
+            )
+
+        async def open_selected(node: dict[str, Any]) -> None:
+            persist()
+            if node["type"] == "user":
+                if is_selector:
+                    target_control.set_value(node["id"]); dialog.close()
+                else:
+                    await select_user_details(node["id"])
+            elif is_selector:
+                target_control.set_value(node["id"]); dialog.close()
+            else:
+                if node["type"] == "org_unit":
+                    await select_organization_unit_details(node["id"])
+                else:
+                    await select_role_details(node["id"])
+
+        async def render_summary(node: dict[str, Any]) -> None:
+            summary_host.clear()
+            if node["type"] in {"org_unit", "role"}:
+                item = await api.organization_summary(
+                    "org-units" if node["type"] == "org_unit" else "roles", node["id"],
+                )
+            else:
+                item = node
+            with summary_host:
+                with ui.column().classes("w-full gap-3 p-5"):
+                    with ui.row().classes("w-full items-start gap-3 no-wrap"):
+                        if node["type"] == "user":
+                            render_user_avatar(item, size="38px")
+                        else:
+                            ui.avatar(
+                                icon="corporate_fare" if node["type"] == "org_unit" else "badge",
+                                color="blue-1", text_color="primary", size="56px",
+                            )
+                        with ui.column().classes("gap-0 grow min-w-0"):
+                            ui.label(item.get("name") or "Selected item").classes("text-xl font-semibold")
+                            if item.get("code"): ui.label(item["code"]).classes("text-primary")
+                            if item.get("email"): ui.label(item["email"]).classes("text-slate-500")
+                    if item.get("description"):
+                        ui.label(item["description"]).classes("text-sm text-slate-600 bg-slate-50 rounded p-3 w-full")
+                    for label, value in (
+                        ("Account status" if node["type"] == "user" else "Effective status", item.get("effective_status", item.get("status"))),
+                        ("Account type", item.get("account_type")),
+                        ("Organization unit", item.get("org_unit_name")),
+                        ("Selected through role", " — ".join(filter(None, (item.get("role_code"), item.get("role_name")))) or None),
+                        ("Supervising role", item.get("supervisor_role_name")),
+                        ("Direct status", item.get("status") if node["type"] != "user" else None),
+                        ("Inactive because of", (item.get("inactive_source") or {}).get("name") if isinstance(item.get("inactive_source"), dict) else None),
+                        ("Child units", item.get("child_org_unit_count")),
+                        ("Roles", item.get("role_count")),
+                        ("Supervised roles", item.get("subordinate_role_count")),
+                        ("Assigned users", item.get("assigned_user_count")),
+                        ("Current assignments", item.get("current_assignment_count")),
+                        ("Future assignments", item.get("future_assignment_count")),
+                        ("Expired assignments", item.get("expired_assignment_count")),
+                        ("Assignment validity", item.get("assignment_validity")),
+                        ("Valid from", format_timestamp(item.get("valid_from")) if item.get("valid_from") else None),
+                        ("Valid until", format_timestamp(item.get("valid_until")) if item.get("valid_until") else None),
+                    ):
+                        if value is not None:
+                            guidance_text = None
+                            if label == "Effective status":
+                                guidance_text = "Includes inactivity inherited from organization-unit ancestors."
+                            elif label == "Direct status":
+                                guidance_text = "Set directly on this item, without considering its ancestors."
+                            with ui.column().classes("w-full gap-0 border-b border-slate-100 py-1.5"):
+                                with ui.row().classes("w-full justify-between items-center gap-3"):
+                                    ui.label(label).classes("text-xs uppercase tracking-wide text-slate-400")
+                                    ui.label(str(value).title() if label in {"Effective status", "Direct status", "Account status", "Account type", "Assignment validity"} else str(value)).classes("text-sm font-medium text-right")
+                                if guidance_text:
+                                    ui.label(guidance_text).classes("w-full text-[10px] leading-3 text-slate-400")
+                    action_label = "Select" if is_selector else f"Open {node['type'].replace('_', ' ')}"
+                    ui.button(action_label.title(), icon="open_in_new" if not is_selector else "check", on_click=lambda: open_selected(node)).props("unelevated no-caps").classes("self-end")
+
+        async def run_search() -> None:
+            search_results_host.clear()
+            query = (query_input.value or "").strip()
+            persist()
+            if not query:
+                return
+            type_filter = selection_mode or entity_type_filter.value
+            results = await api.search_organization(
+                query, entity_type=type_filter, status=status_filter.value,
+            )
+            with search_results_host:
+                if not results:
+                    ui.label("No matching organization units, roles, or users").classes("px-2 py-3 text-slate-400")
+                for result in results:
+                    with ui.card().classes("w-full shadow-none border border-slate-200 p-0"):
+                        with ui.row().classes("w-full items-start gap-3 px-3 py-2 cursor-pointer no-wrap").on(
+                            "click", lambda _, item=result: reveal_result(item)
+                        ):
+                            ui.avatar(
+                                icon={"org_unit": "corporate_fare", "role": "badge", "user": "person"}[result["type"]],
+                                color="blue-1", text_color="primary", size="36px",
+                            ).classes("shrink-0")
+                            with ui.column().classes("grow min-w-0 gap-0 items-start text-left"):
+                                ui.label(result.get("name") or result.get("code")).classes("font-medium text-left")
+                                if result.get("code"):
+                                    ui.label(result["code"]).classes("text-xs text-primary text-left")
+                                if result.get("email"):
+                                    ui.label(result["email"]).classes("text-xs text-slate-500 text-left")
+                                if result.get("role_name"):
+                                    ui.label(f"Via role: {result.get('role_code')} — {result['role_name']}").classes("text-xs text-slate-500 text-left")
+
+        if is_selector:
+            with dialog:
+                card_context = ui.card().classes(
+                    "w-[1100px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)]"
+                )
+        else:
+            with table_container:
+                card_context = ui.column().classes("w-full p-4 gap-3")
+        with card_context:
+            if is_selector:
+                ui.label(f"Browse {selection_mode.replace('_', ' ')}s").classes("text-xl font-semibold")
+            with ui.row().classes("w-full items-end gap-2"):
+                query_input = ui.input("Search organization structure", value=saved_state.get("query", "")).props("outlined dense clearable").classes("grow")
+                validity_filter = ui.select(
+                    {"all": "All assignments", "current": "Current", "future": "Future", "expired": "Expired"},
+                    value=saved_state.get("validity", "all"), label="Assignment validity",
+                ).props("outlined dense options-dense").classes("w-48")
+                if selection_mode in {"org_unit", "role"}:
+                    validity_filter.set_visibility(False)
+                ui.button("Search", icon="search", on_click=run_search).props("flat dense no-caps")
+                query_input.on("keydown.enter", run_search)
+                filters_button = ui.button("Filters", icon="filter_list").props("flat dense no-caps")
+                async def refresh_browser() -> None:
+                    browser["children"].clear()
+                    browser["roots"] = [{**item, "type": "org_unit"} for item in await api.organization_roots()]
+                    await restore_expanded(browser["roots"])
+                    render_tree()
+                    if browser.get("selected"):
+                        selected = browser["selected"]
+                        try:
+                            if selected["type"] == "user" and selected.get("role_id"):
+                                candidates = await api.organization_role_users(selected["role_id"], validity="all")
+                                refreshed = next((item for item in candidates if item.get("assignment_id") == selected.get("assignment_id")), None)
+                                if refreshed: await render_summary({**refreshed, "type": "user"})
+                            elif selected["type"] != "user":
+                                refreshed = await api.organization_summary("org-units" if selected["type"] == "org_unit" else "roles", selected["id"])
+                                await render_summary({**refreshed, "type": selected["type"]})
+                        except ApiError:
+                            browser["selected"] = None; persist()
+                    ui.notify("Organization structure refreshed", color="positive")
+                ui.button("Refresh", icon="refresh", on_click=refresh_browser).props("flat dense no-caps")
+            with ui.row().classes("w-full items-end gap-2 rounded bg-slate-50 p-2") as advanced_filters:
+                entity_type_filter = ui.select(
+                    {"all": "All entity types", "org_unit": "Organization units", "role": "Roles", "user": "Users"},
+                    value=selection_mode or saved_state.get("entity_type", "all"), label="Entity type",
+                ).props("outlined dense options-dense").classes("w-52")
+                if is_selector:
+                    entity_type_filter.disable()
+                status_filter = ui.select(
+                    {"all": "All statuses", "active": "Active", "inactive": "Inactive", "suspended": "Suspended"},
+                    value=saved_state.get("status", "all"), label="Status",
+                ).props("outlined dense options-dense").classes("w-48")
+                ui.button("Clear", icon="filter_alt_off", on_click=lambda: (
+                    entity_type_filter.set_value(selection_mode or "all"),
+                    status_filter.set_value("all"), validity_filter.set_value("all"),
+                )).props("flat dense no-caps")
+            advanced_filters.set_visibility(False)
+            filters_button.on("click", lambda: advanced_filters.set_visibility(not advanced_filters.visible))
+            search_results_host = ui.column().classes("w-full gap-0")
+            layout_direction = "flex-col" if is_selector else "no-wrap"
+            browser_height = "h-[520px]" if is_selector else "h-[720px]"
+            with ui.row().classes(f"w-full {browser_height} gap-0 border border-slate-200 rounded-lg overflow-hidden {layout_direction}"):
+                tree_classes = (
+                    "w-full h-[340px] overflow-auto border-b"
+                    if is_selector else "w-1/2 min-w-[360px] h-full overflow-auto border-r"
+                )
+                tree_host = ui.column().classes(f"{tree_classes} p-2 gap-0 border-slate-200").props("id=organization-browser-tree")
+                summary_host = ui.column().classes(
+                    "w-full h-[180px] overflow-auto min-w-0"
+                    if is_selector else "grow min-w-0 h-full overflow-y-auto"
+                )
+            if is_selector:
+                with ui.row().classes("w-full justify-end"):
+                    ui.button(
+                        "Clear selection", icon="clear",
+                        on_click=lambda: (target_control.set_value(None), dialog.close()),
+                    ).props("flat no-caps color=grey-7")
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+        browser["roots"] = [{**item, "type": "org_unit"} for item in await api.organization_roots()]
+        def remember_scroll(event: Any) -> None:
+            try:
+                browser["scroll_top"] = float(event.args)
+                persist()
+            except (TypeError, ValueError):
+                pass
+        tree_host.on("scroll", remember_scroll, js_handler="event => emit(event.target.scrollTop)", throttle=0.25)
+        async def change_validity() -> None:
+            for key in [key for key in browser["children"] if key.startswith("role:")]:
+                browser["children"].pop(key, None)
+            persist()
+            await restore_expanded(browser["roots"])
+            render_tree()
+        validity_filter.on_value_change(change_validity)
+        async def restore_expanded(nodes: list[dict[str, Any]]) -> None:
+            for node in nodes:
+                key = f"{node['type']}:{node['id']}"
+                if key in expanded and node["type"] != "user":
+                    await restore_expanded(await load_node_children(node))
+        await restore_expanded(browser["roots"])
+        render_tree()
+        if saved_state.get("scroll_top"):
+            await ui.run_javascript(
+                f"const tree=document.getElementById('organization-browser-tree'); if(tree) tree.scrollTop={float(saved_state['scroll_top'])}"
+            )
+        if browser["selected"]:
+            selected = browser["selected"]
+            try:
+                if selected["type"] == "user":
+                    node = None
+                    if selected.get("role_id"):
+                        candidates = await api.organization_role_users(
+                            selected["role_id"], validity="all",
+                        )
+                        node = next((item for item in candidates if item.get("assignment_id") == selected.get("assignment_id")), None)
+                    if node is None:
+                        node = await api.get("users", selected["id"])
+                    node["type"] = "user"
+                else:
+                    node = await api.organization_summary(
+                        "org-units" if selected["type"] == "org_unit" else "roles", selected["id"],
+                    ); node["type"] = selected["type"]
+                await render_summary(node)
+            except ApiError:
+                browser["selected"] = None; persist()
+        else:
+            with summary_host:
+                guidance_target = (
+                    {"org_unit": "organization unit", "role": "role", "user": "user"}[selection_mode]
+                    if is_selector else "organization unit, role, or user"
+                )
+                article = "an" if guidance_target == "organization unit" else "a"
+                ui.label(f"Select {article} {guidance_target} to view its summary.").classes("p-8 text-slate-400")
+        if is_selector:
+            dialog.open()
+
     async def select_entity(key: str) -> None:
         show_authenticated_view()
         state.update(
@@ -4241,6 +5203,8 @@ def index() -> None:
         add_record_button.set_visibility(False)
         search_input.value = ""
         try:
+            if key in {"aggregations", "records"}:
+                await reload_favourites()
             if spec.search_first:
                 await load_recent(spec)
             if key == "aggregations" and state.get("aggregation_mode") == "browse":
@@ -5266,10 +6230,11 @@ def index() -> None:
     aggregation_search_mode.on("click", select_aggregation_search)
     aggregation_browse_mode.on("click", select_aggregation_browser)
     dashboard_navigation.on("click", select_dashboard)
+    organization_browser_navigation.on("click", show_organization_structure)
     audit_navigation.on("click", select_audit_trail)
-    sessions_navigation.on("click", select_login_sessions)
+    sessions_navigation.on("click", lambda: select_login_sessions())
     change_password_menu.on("click", show_change_password)
-    my_sessions_menu.on("click", select_login_sessions)
+    my_sessions_menu.on("click", lambda: select_login_sessions())
     sign_out_menu.on("click", sign_out)
     async def add_for_current_context() -> None:
         current = state.get("aggregation_detail")

@@ -18,6 +18,11 @@ collection exceeds that limit, **View all** opens its complete scrollable list.
 Selecting an entry opens the existing aggregation or record interface. Removing
 an entry updates the preview and complete list without opening the entity.
 
+The Aggregations and Records search and listing pages also show the
+authenticated user's corresponding favourites preview above recent activity or
+search results. They use the same limit and **View all** behavior as the
+Dashboard previews.
+
 Favourites are navigation preferences rather than governed entity changes.
 They do not update entity versions or create event-history entries. Deleting a
 user, aggregation, or record automatically removes its dependent favourite
@@ -42,7 +47,7 @@ project `.env` file:
 
 | Variable | Default | Meaning |
 | --- | ---: | --- |
-| `DASHBOARD_FAVOURITE_ITEM_LIMIT` | `5` | Maximum favourite aggregations and maximum favourite records shown in their respective Dashboard previews |
+| `DASHBOARD_FAVOURITE_ITEM_LIMIT` | `5` | Maximum entries in each Dashboard and entity-listing favourites preview |
 | `DASHBOARD_RECENT_ITEM_LIMIT` | `4` | Maximum items shown in each created/updated aggregation/record category |
 | `DASHBOARD_RECENT_DAYS` | `30` | Rolling number of days included in personal recent activity |
 

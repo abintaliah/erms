@@ -21,6 +21,73 @@ from .schemas import (
 router = APIRouter(prefix="/api/v1/browse", tags=["classification browser"])
 
 
+ORG_UNIT_NODE_SQL = """
+    WITH RECURSIVE ancestors AS (
+        SELECT source.id AS source_id, source.id, source.parent_org_unit_id,
+               source.status, source.code, source.name
+          FROM org_units source
+        UNION ALL
+        SELECT ancestors.source_id, parent.id, parent.parent_org_unit_id,
+               parent.status, parent.code, parent.name
+          FROM ancestors
+          JOIN org_units parent ON parent.id = ancestors.parent_org_unit_id
+    )
+    SELECT unit.id, unit.parent_org_unit_id, unit.code, unit.name,
+           unit.description, unit.status, unit.date_created,
+           unit.date_deactivated, unit.version,
+           CASE WHEN EXISTS (
+               SELECT 1 FROM ancestors
+                WHERE source_id=unit.id AND status='inactive'
+           ) THEN 'inactive' ELSE 'active' END AS effective_status,
+           (SELECT jsonb_build_object('id', inactive.id, 'code', inactive.code,
+                                      'name', inactive.name)
+              FROM ancestors inactive
+             WHERE inactive.source_id=unit.id AND inactive.status='inactive'
+             ORDER BY CASE WHEN inactive.id=unit.id THEN 0 ELSE 1 END, inactive.id
+             LIMIT 1) AS inactive_source,
+           (SELECT count(*) FROM org_units child
+             WHERE child.parent_org_unit_id=unit.id) AS child_org_unit_count,
+           (SELECT count(*) FROM roles role WHERE role.org_unit_id=unit.id) AS role_count
+      FROM org_units unit
+"""
+
+
+ROLE_NODE_SQL = """
+    WITH RECURSIVE ancestors AS (
+        SELECT source.id AS source_id, source.id, source.parent_org_unit_id,
+               source.status, source.code, source.name
+          FROM org_units source
+        UNION ALL
+        SELECT ancestors.source_id, parent.id, parent.parent_org_unit_id,
+               parent.status, parent.code, parent.name
+          FROM ancestors
+          JOIN org_units parent ON parent.id = ancestors.parent_org_unit_id
+    )
+    SELECT role.id, role.org_unit_id, role.supervisor_role_id, role.code,
+           role.name, role.description, role.status, role.date_created,
+           role.date_deactivated, role.version,
+           unit.code AS org_unit_code, unit.name AS org_unit_name,
+           supervisor.code AS supervisor_role_code,
+           supervisor.name AS supervisor_role_name,
+           CASE WHEN role.status='active' AND NOT EXISTS (
+               SELECT 1 FROM ancestors
+                WHERE source_id=role.org_unit_id AND status='inactive'
+           ) THEN 'active' ELSE 'inactive' END AS effective_status,
+           (SELECT count(*) FROM roles child
+             WHERE child.supervisor_role_id=role.id) AS subordinate_role_count,
+           (SELECT count(*) FROM user_role_assignments assignment
+             WHERE assignment.role_id=role.id) AS assigned_user_count,
+           (SELECT count(*) FROM user_role_assignments assignment
+             WHERE assignment.role_id=role.id
+               AND assignment.valid_from <= CURRENT_TIMESTAMP
+               AND (assignment.valid_until IS NULL OR assignment.valid_until > CURRENT_TIMESTAMP)
+           ) AS current_assignment_count
+      FROM roles role
+      JOIN org_units unit ON unit.id=role.org_unit_id
+ LEFT JOIN roles supervisor ON supervisor.id=role.supervisor_role_id
+"""
+
+
 def _encode_cursor(scope: str, key: str, entity_id: int, query: str) -> str:
     payload = json.dumps(
         {"scope": scope, "key": key, "id": entity_id, "query": query},
@@ -264,3 +331,199 @@ def browse_record_summary(
     if row is None:
         raise HTTPException(status_code=404, detail="record not found")
     return row
+
+
+@router.get("/organization/roots", tags=["organization browser"])
+def browse_organization_roots(
+    limit: int = Query(100, ge=1, le=100),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return list(connection.execute(
+        f"SELECT * FROM ({ORG_UNIT_NODE_SQL}) source "
+        "WHERE parent_org_unit_id IS NULL ORDER BY code COLLATE \"C\", id LIMIT %s",
+        (limit,),
+    ).fetchall())
+
+
+@router.get("/organization/org-units/{org_unit_id}/children", tags=["organization browser"])
+def browse_organization_children(
+    org_unit_id: int, include_roles: bool = True,
+    limit: int = Query(100, ge=1, le=100),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    if connection.execute("SELECT 1 FROM org_units WHERE id=%s", (org_unit_id,)).fetchone() is None:
+        raise HTTPException(status_code=404, detail="organization unit not found")
+    units = list(connection.execute(
+        f"SELECT * FROM ({ORG_UNIT_NODE_SQL}) source "
+        "WHERE parent_org_unit_id=%s ORDER BY code COLLATE \"C\", id LIMIT %s",
+        (org_unit_id, limit),
+    ).fetchall())
+    roles = []
+    if include_roles:
+        roles = list(connection.execute(
+            f"SELECT * FROM ({ROLE_NODE_SQL}) source "
+            "WHERE org_unit_id=%s ORDER BY code COLLATE \"C\", id LIMIT %s",
+            (org_unit_id, limit),
+        ).fetchall())
+    return {"org_units": units, "roles": roles}
+
+
+@router.get("/organization/roles/{role_id}/users", tags=["organization browser"])
+def browse_role_users(
+    role_id: int, validity: Literal["all", "current", "future", "expired"] = "all",
+    limit: int = Query(100, ge=1, le=100),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    role = connection.execute("SELECT id FROM roles WHERE id=%s", (role_id,)).fetchone()
+    if role is None:
+        raise HTTPException(status_code=404, detail="role not found")
+    validity_sql = {
+        "all": "TRUE",
+        "current": "assignment.valid_from <= CURRENT_TIMESTAMP AND (assignment.valid_until IS NULL OR assignment.valid_until > CURRENT_TIMESTAMP)",
+        "future": "assignment.valid_from > CURRENT_TIMESTAMP",
+        "expired": "assignment.valid_until IS NOT NULL AND assignment.valid_until <= CURRENT_TIMESTAMP",
+    }[validity]
+    return list(connection.execute(
+        f"""SELECT assignment.id AS assignment_id, assignment.role_id,
+                   assignment.valid_from, assignment.valid_until,
+                   assignment.version AS assignment_version,
+                   CASE WHEN assignment.valid_from > CURRENT_TIMESTAMP THEN 'future'
+                        WHEN assignment.valid_until IS NOT NULL AND assignment.valid_until <= CURRENT_TIMESTAMP THEN 'expired'
+                        ELSE 'current' END AS assignment_validity,
+                   role.code AS role_code, role.name AS role_name,
+                   person.id, person.name, person.email, person.external_id,
+                   person.account_type, person.status, person.date_created,
+                   person.date_deactivated, person.version
+              FROM user_role_assignments assignment
+              JOIN users person ON person.id=assignment.user_id
+              JOIN roles role ON role.id=assignment.role_id
+             WHERE assignment.role_id=%s AND {validity_sql}
+             ORDER BY person.name COLLATE "C", person.id, assignment.id
+             LIMIT %s""",
+        (role_id, limit),
+    ).fetchall())
+
+
+@router.get("/organization/org-units/{org_unit_id}/summary", tags=["organization browser"])
+def browse_org_unit_summary(
+    org_unit_id: int, connection: Connection = Depends(get_connection, scope="function"),
+):
+    row = connection.execute(
+        f"SELECT * FROM ({ORG_UNIT_NODE_SQL}) source WHERE id=%s", (org_unit_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="organization unit not found")
+    if row["parent_org_unit_id"]:
+        row["parent"] = connection.execute(
+            "SELECT id, code, name FROM org_units WHERE id=%s", (row["parent_org_unit_id"],),
+        ).fetchone()
+    else:
+        row["parent"] = None
+    return row
+
+
+@router.get("/organization/roles/{role_id}/summary", tags=["organization browser"])
+def browse_role_summary(
+    role_id: int, connection: Connection = Depends(get_connection, scope="function"),
+):
+    row = connection.execute(
+        f"SELECT * FROM ({ROLE_NODE_SQL}) source WHERE id=%s", (role_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="role not found")
+    counts = connection.execute(
+        """SELECT count(*) FILTER (WHERE valid_from > CURRENT_TIMESTAMP) AS future_assignment_count,
+                  count(*) FILTER (WHERE valid_until IS NOT NULL AND valid_until <= CURRENT_TIMESTAMP) AS expired_assignment_count
+             FROM user_role_assignments WHERE role_id=%s""", (role_id,),
+    ).fetchone()
+    return {**row, **counts}
+
+
+@router.get("/organization/search", tags=["organization browser"])
+def search_organization_structure(
+    query: str = Query(min_length=1, max_length=200),
+    entity_type: Literal["all", "org_unit", "role", "user"] = "all",
+    status: Literal["all", "active", "inactive", "suspended"] = "all",
+    limit: int = Query(50, ge=1, le=100),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    pattern = f"%{query.strip()}%"
+    status_filter = "TRUE" if status == "all" else "source.effective_status=%s"
+    status_parameters: tuple[Any, ...] = () if status == "all" else (status,)
+    results: list[dict[str, Any]] = []
+    if entity_type in {"all", "org_unit"}:
+        results.extend({"type": "org_unit", **row} for row in connection.execute(
+            f"""WITH RECURSIVE paths AS (
+                    SELECT unit.id, unit.parent_org_unit_id,
+                           ARRAY[unit.id]::bigint[] AS reverse_path
+                      FROM org_units unit
+                    UNION ALL
+                    SELECT paths.id, parent.parent_org_unit_id,
+                           paths.reverse_path || parent.id
+                      FROM paths JOIN org_units parent
+                        ON parent.id=paths.parent_org_unit_id
+                )
+                SELECT source.id, source.code, source.name, source.status,
+                       source.effective_status,
+                       (SELECT array_agg(path_id ORDER BY ordinal DESC)
+                          FROM unnest(path.reverse_path) WITH ORDINALITY p(path_id, ordinal)
+                       ) AS org_unit_path
+                  FROM ({ORG_UNIT_NODE_SQL}) source
+                  JOIN paths path ON path.id=source.id AND path.parent_org_unit_id IS NULL
+                 WHERE (source.code ILIKE %s OR source.name ILIKE %s OR COALESCE(source.description,'') ILIKE %s)
+                   AND {status_filter}
+                 ORDER BY source.code LIMIT %s""",
+            (pattern, pattern, pattern, *status_parameters, limit),
+        ).fetchall())
+    if entity_type in {"all", "role"}:
+        results.extend({"type": "role", **row} for row in connection.execute(
+            f"""WITH RECURSIVE paths AS (
+                    SELECT unit.id, unit.parent_org_unit_id,
+                           ARRAY[unit.id]::bigint[] AS reverse_path
+                      FROM org_units unit
+                    UNION ALL
+                    SELECT paths.id, parent.parent_org_unit_id,
+                           paths.reverse_path || parent.id
+                      FROM paths JOIN org_units parent
+                        ON parent.id=paths.parent_org_unit_id
+                )
+                SELECT source.id, source.code, source.name, source.status,
+                       source.effective_status, source.org_unit_id,
+                       (SELECT array_agg(path_id ORDER BY ordinal DESC)
+                          FROM unnest(path.reverse_path) WITH ORDINALITY p(path_id, ordinal)
+                       ) AS org_unit_path
+                  FROM ({ROLE_NODE_SQL}) source
+                  JOIN paths path ON path.id=source.org_unit_id AND path.parent_org_unit_id IS NULL
+                 WHERE (source.code ILIKE %s OR source.name ILIKE %s OR COALESCE(source.description,'') ILIKE %s)
+                   AND {status_filter}
+                 ORDER BY source.code LIMIT %s""",
+            (pattern, pattern, pattern, *status_parameters, limit),
+        ).fetchall())
+    if entity_type in {"all", "user"}:
+        results.extend({"type": "user", **row} for row in connection.execute(
+            f"""WITH RECURSIVE paths AS (
+                    SELECT unit.id, unit.parent_org_unit_id,
+                           ARRAY[unit.id]::bigint[] AS reverse_path
+                      FROM org_units unit
+                    UNION ALL
+                    SELECT paths.id, parent.parent_org_unit_id,
+                           paths.reverse_path || parent.id
+                      FROM paths JOIN org_units parent
+                        ON parent.id=paths.parent_org_unit_id
+                )
+                SELECT DISTINCT person.id, person.name, person.email, person.status,
+                              assignment.role_id, assignment.id AS assignment_id,
+                              role.code AS role_code, role.name AS role_name,
+                              (SELECT array_agg(path_id ORDER BY ordinal DESC)
+                                 FROM unnest(path.reverse_path) WITH ORDINALITY p(path_id, ordinal)
+                              ) AS org_unit_path
+                   FROM users person
+              LEFT JOIN user_role_assignments assignment ON assignment.user_id=person.id
+              LEFT JOIN roles role ON role.id=assignment.role_id
+              LEFT JOIN paths path ON path.id=role.org_unit_id AND path.parent_org_unit_id IS NULL
+                  WHERE (person.name ILIKE %s OR COALESCE(person.email,'') ILIKE %s)
+                    AND {status_filter.replace('source.effective_status', 'person.status')}
+               ORDER BY person.name, person.id LIMIT %s""",
+            (pattern, pattern, *status_parameters, limit),
+        ).fetchall())
+    return results[:limit]
