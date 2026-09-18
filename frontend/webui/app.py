@@ -27,6 +27,7 @@ from .entities import ENTITIES, EntitySpec, FieldSpec
 
 
 app.add_static_files("/static/pdfjs", Path(__file__).with_name("static") / "pdfjs")
+app.add_static_files("/static/brand", Path(__file__).with_name("static") / "brand")
 
 CLASSIFICATION_WORKSPACE_SEARCH_FIELDS = ("code", "title", "description", "keywords")
 CLASSIFICATION_SELECTOR_SEARCH_FIELDS = ("code", "title", "description", "keywords")
@@ -36,7 +37,7 @@ CHILD_AGGREGATION_CLASSIFICATION_HELP = (
 )
 RECORD_UPLOAD_WAIT_MESSAGE = "Please wait until all files have finished uploading."
 AGGREGATION_SUMMARY_LAYOUT_CLASSES = (
-    "bg-blue-50 border border-blue-100 shadow-none flex-1 min-w-[360px]"
+    "detail-surface shadow-none flex-1 min-w-[360px] p-5 gap-4"
 )
 RECORD_DETAIL_HEADER_CLASSES = "w-full items-start gap-2 no-wrap"
 RECORD_DETAIL_TITLE_CLASSES = "gap-0 grow min-w-0"
@@ -569,31 +570,137 @@ def index() -> None:
         "restoring": False,
     }
 
+    ui.colors(
+        primary="#268bd2", secondary="#0f749f", accent="#72b8e8",
+        positive="#2f9e44", warning="#e9a23b", negative="#dc5050",
+    )
+
+    ui.add_head_html(
+        '<link rel="preconnect" href="https://fonts.googleapis.com">'
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+        '<link href="https://fonts.googleapis.com/css2?family=Righteous&display=swap" rel="stylesheet">'
+        '<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:'
+        'opsz,wght,FILL,GRAD@20,300,0,0&display=swap" rel="stylesheet">'
+    )
     ui.add_css("""
-        :root { --erms-navy: #16324f; --erms-blue: #2563eb; --erms-bg: #f4f7fb; }
-        body { background: var(--erms-bg); color: #172033; }
-        .erms-header { background: var(--erms-navy); color: white; }
-        .erms-drawer { background: #0f2740; color: #dce8f5; }
-        .erms-nav-link { border-radius: 8px; }
+        :root {
+            --erms-ink: #172033; --erms-muted: #687386; --erms-blue: #268bd2;
+            --erms-blue-deep: #176da8; --erms-blue-soft: #eaf5fc;
+            --erms-bg: #ffffff; --erms-surface: #fff; --erms-border: #e1e6eb;
+        }
+        body {
+            background: var(--erms-bg); color: var(--erms-ink);
+            font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+                         "Segoe UI", sans-serif;
+            letter-spacing: -.008em;
+        }
+        .erms-header {
+            background: var(--erms-bg); color: var(--erms-ink);
+            border-bottom: 1px solid var(--erms-border); box-shadow: none !important;
+        }
+        .erms-brand { gap: 9px; min-width: 0; }
+        .erms-brand-mark { width: 32px; height: 38px; flex: 0 0 auto; }
+        .erms-brand-name {
+            color: #152033; font-family: Righteous, Inter, ui-sans-serif, sans-serif;
+            font-size: 1.34rem; font-weight: 400; letter-spacing: .035em; line-height: 1;
+        }
+        .erms-drawer {
+            background: #ffffff; color: #172033;
+            border-right: 1px solid var(--erms-border) !important;
+        }
+        .erms-nav-heading {
+            color: var(--erms-blue-deep); font-size: .67rem; font-weight: 700;
+            letter-spacing: .12em; text-transform: uppercase;
+        }
+        .erms-nav-link { position: relative; border-radius: 8px; color: #1f2937 !important; }
         .erms-nav-link .q-btn__content {
             width: 100%; gap: 12px; flex-wrap: nowrap; justify-content: flex-start;
+        }
+        .erms-nav-link .q-icon {
+            font-family: "Material Symbols Outlined" !important;
+            font-size: 21px; font-weight: 300 !important;
+            font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 20;
         }
         .erms-nav-link .q-btn__content .block {
             min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .erms-nav-link:hover { background: rgba(255, 255, 255, .13) !important; }
+        .erms-nav-link:hover { background: var(--erms-blue-soft) !important; color: var(--erms-blue-deep); }
+        .erms-nav-link--active {
+            background: #fff4d7 !important; color: #174b72 !important;
+        }
+        .erms-nav-link--active::before {
+            content: ""; position: absolute; left: -8px; top: 50%; transform: translateY(-50%);
+            width: 4px; height: 24px; border-radius: 0 4px 4px 0; background: var(--erms-blue);
+        }
         .erms-drawer--collapsed .erms-nav-link .q-btn__content {
             justify-content: center;
         }
-        .erms-content { max-width: 1500px; margin: 0 auto; }
-        .erms-card { border: 1px solid #e2e8f0; box-shadow: 0 8px 28px rgba(15,39,64,.06); }
+        .erms-drawer--collapsed .erms-nav-link--active::before { left: 0; }
+        .erms-page-title-icon {
+            color: var(--erms-blue-deep);
+            font-family: "Material Symbols Outlined" !important;
+            font-size: 27px; font-weight: 300 !important;
+            font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+        }
+        .erms-content { max-width: 1540px; margin: 0 auto; }
+        .erms-card {
+            background: var(--erms-surface); border: 1px solid var(--erms-border);
+            border-radius: 14px; box-shadow: none;
+        }
+        .q-card { border-radius: 14px; }
+        .erms-content .q-card { box-shadow: none !important; }
+        .q-btn { border-radius: 9px; }
+        .q-field--outlined .q-field__control { border-radius: 10px; }
+        .q-table__container { border-radius: 12px; overflow: hidden; }
+        .erms-page-table {
+            width: calc(100% - 40px) !important;
+            margin: 8px 20px 20px;
+        }
+        .erms-page-table .q-table thead tr { background: #eef7fd; }
+        .erms-page-table .q-table th {
+            color: #35546f; font-size: .74rem; font-weight: 700;
+            letter-spacing: .045em;
+        }
+        .erms-page-table .q-table tbody td { color: #334155; font-size: .875rem; }
+        .erms-page-table .q-table tbody tr:hover { background: #f7fbfe; }
+        .erms-results-divider { width: calc(100% - 40px) !important; margin: 8px 20px 0; }
+        .q-table thead tr { background: #f7f8f8; }
+        .q-table th { color: #657184; font-size: .72rem; font-weight: 700; letter-spacing: .035em; }
+        .detail-surface {
+            background: var(--erms-surface); border: 1px solid var(--erms-border);
+            border-radius: 14px;
+        }
+        .detail-field {
+            min-width: 0; padding: 10px 0; border-bottom: 1px solid #eef0f2;
+        }
+        .detail-field-label {
+            color: #8791a1; font-size: .67rem; font-weight: 700;
+            letter-spacing: .065em; text-transform: uppercase;
+        }
+        .detail-field-value { color: #263244; font-size: .9rem; font-weight: 600; line-height: 1.4; }
+        .retention-card {
+            background: linear-gradient(135deg, #f5fbff 0%, #eaf5fc 100%);
+            border: 1px solid #d5eaf8; border-radius: 14px;
+        }
+        .retention-line { position: relative; width: 22px; align-self: stretch; flex: 0 0 22px; }
+        .retention-line::before {
+            content: ""; position: absolute; top: 14px; bottom: -22px; left: 10px;
+            width: 2px; background: #a9d6f3;
+        }
+        .retention-stage:last-child .retention-line::before { display: none; }
+        .retention-dot {
+            position: relative; z-index: 1; width: 11px; height: 11px; margin: 8px 0 0 5px;
+            border-radius: 999px; background: var(--erms-blue); box-shadow: 0 0 0 4px #eaf5fc;
+        }
+        .retention-stage-label { color: #607086; font-size: .75rem; line-height: 1.2; }
+        .retention-stage-value { color: #172033; font-size: 1.15rem; font-weight: 750; line-height: 1.25; }
         .relationship-select .q-field__control { min-height: 58px; border-radius: 10px; }
         .relationship-option { min-width: 360px; }
         .relationship-option:hover { background: #f3f7ff; }
         .relationship-select .q-field__native { font-weight: 600; color: #16324f; }
         .relationship-cell-name { color: #172033; }
         .recent-card { min-height: 62px; border: 1px solid #e2e8f0; border-radius: 10px; transition: all .16s ease; }
-        .recent-card:hover { border-color: #93b4e8; transform: translateY(-2px); box-shadow: 0 8px 22px rgba(37,99,235,.10); }
+        .recent-card:hover { border-color: #93b4e8; background: #f8fcff; }
         .breadcrumb-link { color: #52657a; }
         .timestamp-date { font-size: .84rem; font-weight: 600; color: #334155; line-height: 1.15; }
         .timestamp-time { font-size: .72rem; color: #94a3b8; line-height: 1.2; }
@@ -601,7 +708,7 @@ def index() -> None:
         .component-list { container-type: inline-size; overflow: visible; padding: 2px 0; }
         @container (min-width: 760px) { .component-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         .component-card { border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: none; overflow: hidden; }
-        .component-card:hover { border-color: #a8bdd8; box-shadow: 0 5px 16px rgba(30, 64, 175, .07); }
+        .component-card:hover { border-color: #a8bdd8; background: #fafdff; }
         .component-filename { overflow-wrap: anywhere; line-height: 1.25; }
         .component-meta-label { color: #94a3b8; font-size: .68rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
         .component-meta-value { color: #475569; font-size: .8rem; line-height: 1.3; }
@@ -631,19 +738,22 @@ def index() -> None:
             text-align: left;
         }
         .dashboard-stat { border: 1px solid #e2e8f0; box-shadow: none; transition: all .16s ease; }
-        .dashboard-stat:hover { border-color: #93b4e8; transform: translateY(-2px); box-shadow: 0 8px 22px rgba(37,99,235,.08); }
+        .dashboard-stat:hover { border-color: #93b4e8; background: #f8fcff; }
     """)
 
-    with ui.header(elevated=True).classes("erms-header items-center gap-3"):
+    with ui.header().classes("erms-header items-center gap-3"):
         drawer_toggle_button = ui.button(icon="menu").props(
-            "flat round color=white aria-label='Collapse navigation'"
+            "flat round color=blue-grey-9 aria-label='Collapse navigation'"
         )
-        ui.icon("inventory_2").classes("text-2xl")
-        ui.label("ERMS").classes("text-xl font-semibold tracking-wide")
+        with ui.row().classes("erms-brand items-center no-wrap").props("aria-label='Wathiq'"):
+            ui.image("/static/brand/wathiq-mark.svg?v=2").classes("erms-brand-mark").props(
+                "fit=contain alt='Wathiq mark'"
+            )
+            ui.label("wathiq").classes("erms-brand-name")
         ui.space()
         with ui.icon("cloud_done").classes("text-positive text-xl") as connection_icon:
             connection_tooltip = ui.tooltip("Connected")
-        user_menu_button = ui.button(icon="account_circle").props("flat round color=white")
+        user_menu_button = ui.button(icon="account_circle").props("flat round color=blue-grey-9")
         with user_menu_button, ui.menu() as user_menu:
             with ui.column().classes("w-72 p-3 gap-2"):
                 current_user_name = ui.label("Not signed in").classes("font-semibold")
@@ -665,41 +775,69 @@ def index() -> None:
         connection_icon.update()
         connection_tooltip.update()
 
-    drawer_links: list[tuple[Any, str]] = []
+    drawer_links: list[tuple[Any, str, str]] = []
     drawer_headings: list[Any] = []
 
-    def drawer_link(label: str, icon: str, *, extra_classes: str = "") -> Any:
+    def drawer_link(
+        label: str, icon: str, *, navigation_key: str, extra_classes: str = "",
+    ) -> Any:
         button = ui.button(label, icon=icon).props(
             f'flat align=left no-caps aria-label="{label}"'
         ).classes(f"erms-nav-link w-full justify-start px-4 {extra_classes}")
         with button:
             ui.tooltip(label)
-        drawer_links.append((button, label))
+        drawer_links.append((button, label, navigation_key))
         return button
 
     with ui.left_drawer(value=True).props(
         "width=300 mini-width=64 show-if-above bordered"
     ).classes("erms-drawer") as drawer:
         navigation: dict[str, Any] = {}
-        dashboard_navigation = drawer_link("Dashboard", "dashboard", extra_classes="mt-4")
+        dashboard_navigation = drawer_link(
+            "Dashboard", "dashboard", navigation_key="dashboard", extra_classes="mt-4",
+        )
         for heading, entries in (
             ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
             ("ORGANIZATION STRUCTURE", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
         ):
             drawer_headings.append(
-                ui.label(heading).classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
+                ui.label(heading).classes("erms-nav-heading px-4 pt-5 pb-2")
             )
             if heading == "ORGANIZATION STRUCTURE":
-                organization_browser_navigation = drawer_link("Browse", "lan")
+                organization_browser_navigation = drawer_link(
+                    "Browse", "lan", navigation_key="organization-browser",
+                )
             for key, icon in entries:
-                navigation[key] = drawer_link(ENTITIES[key].label, icon)
+                navigation[key] = drawer_link(
+                    ENTITIES[key].label, icon, navigation_key=key,
+                )
         drawer_headings.append(
-            ui.label("SYSTEM ADMINISTRATION").classes(
-                "text-xs tracking-widest opacity-60 px-4 pt-5 pb-2"
-            )
+            ui.label("SYSTEM ADMINISTRATION").classes("erms-nav-heading px-4 pt-5 pb-2")
         )
-        audit_navigation = drawer_link("Audit trail", "manage_history")
-        sessions_navigation = drawer_link("Login sessions", "devices")
+        audit_navigation = drawer_link(
+            "Audit trail", "manage_history", navigation_key="audit-trail",
+        )
+        sessions_navigation = drawer_link(
+            "Login sessions", "devices", navigation_key="login-sessions",
+        )
+
+    def set_active_drawer_link(page: str) -> None:
+        navigation_key = {
+            "aggregation-details": "aggregations",
+            "record-details": "records",
+            "classification-workspace": "classification-schemes",
+            "org-unit-details": "org-units",
+            "role-details": "roles",
+            "user-details": "users",
+        }.get(page, page)
+        for button, _, key in drawer_links:
+            if key == navigation_key:
+                button.classes(add="erms-nav-link--active")
+                button.props(add="aria-current=page")
+            else:
+                button.classes(remove="erms-nav-link--active")
+                button.props(remove="aria-current")
+            button.update()
 
     drawer_collapsed = False
 
@@ -714,7 +852,7 @@ def index() -> None:
             )
             for heading in drawer_headings:
                 heading.set_visibility(False)
-            for button, _ in drawer_links:
+            for button, _, _ in drawer_links:
                 button.text = ""
                 button.classes(add="justify-center px-0", remove="justify-start px-4")
                 button.update()
@@ -726,7 +864,7 @@ def index() -> None:
             )
             for heading in drawer_headings:
                 heading.set_visibility(True)
-            for button, label in drawer_links:
+            for button, label, _ in drawer_links:
                 button.text = label
                 button.classes(add="justify-start px-4", remove="justify-center px-0")
                 button.update()
@@ -739,15 +877,17 @@ def index() -> None:
         breadcrumb_host = ui.element("nav").props(
             "aria-label='Navigation history'"
         ).classes("w-full min-h-7")
-        with ui.row().classes("w-full items-center"):
-            with ui.column().classes("gap-0"):
-                title = ui.label().classes("text-2xl font-semibold")
+        with ui.row().classes("w-full items-center no-wrap gap-4"):
+            with ui.column().classes("gap-0 grow min-w-0"):
+                with ui.row().classes("items-center no-wrap gap-2"):
+                    page_title_icon = ui.icon("dashboard").classes("erms-page-title-icon")
+                    title = ui.label().classes("text-2xl font-semibold")
                 subtitle = ui.label().classes("text-sm text-slate-500")
-            ui.space()
-            add_button = ui.button("Add", icon="add", color="primary").props("unelevated rounded")
-            add_record_button = ui.button(
-                "Add record", icon="note_add", color="secondary"
-            ).props("unelevated rounded")
+            with ui.row().classes("items-center no-wrap gap-2 flex-none"):
+                add_button = ui.button("Add", icon="add", color="primary").props("unelevated rounded")
+                add_record_button = ui.button(
+                    "Add record", icon="note_add", color="secondary"
+                ).props("unelevated rounded")
 
         with ui.card().classes("erms-card w-full p-0") as content_card:
             with ui.row().classes("w-full items-center px-4 pt-4 gap-2") as aggregation_mode_bar:
@@ -767,6 +907,25 @@ def index() -> None:
     aggregation_mode_bar.set_visibility(False)
     add_button.set_visibility(False)
     add_record_button.set_visibility(False)
+    page_title_icon.set_visibility(False)
+
+    def set_page_title_icon(page: str) -> None:
+        icon_name = {
+            "dashboard": "dashboard",
+            "aggregations": "folder",
+            "records": "description",
+            "classification-schemes": "account_tree",
+            "classification-workspace": "account_tree",
+            "org-units": "corporate_fare",
+            "roles": "badge",
+            "users": "group",
+        }.get(page)
+        if icon_name:
+            page_title_icon.name = icon_name
+            page_title_icon.set_visibility(True)
+            page_title_icon.update()
+        else:
+            page_title_icon.set_visibility(False)
 
     def current_navigation_snapshot() -> dict[str, Any]:
         return {
@@ -850,6 +1009,8 @@ def index() -> None:
         page: str, label: str, *, entity_id: int | None = None,
         accessible_label: str | None = None,
     ) -> None:
+        set_active_drawer_link(page)
+        set_page_title_icon(page)
         if navigation_state["restoring"]:
             return
         trail = navigation_state["trail"]
@@ -1621,21 +1782,24 @@ def index() -> None:
             confirmation.open()
 
         with table_container, ui.column().classes("w-full p-5 gap-5"):
-            with ui.card().classes("w-full shadow-none border border-slate-200 p-5 gap-4"):
-                with ui.row().classes(f"w-full {RECORD_DETAIL_HEADER_CLASSES} gap-3"):
-                    ui.avatar(icon="description", color="blue-1", text_color="primary", size="58px")
+            with ui.card().classes("detail-surface w-full shadow-none p-0 gap-0 overflow-hidden"):
+                with ui.row().classes("w-full items-center px-5 py-3 border-b border-slate-100"):
+                    ui.icon("description", color="primary", size="21px")
+                    ui.label("Record details").classes("font-semibold")
+                with ui.row().classes(f"w-full {RECORD_DETAIL_HEADER_CLASSES} gap-3 px-5 py-5"):
+                    ui.avatar(icon="description", color="blue-1", text_color="primary", size="52px")
                     with ui.column().classes(RECORD_DETAIL_TITLE_CLASSES):
-                        ui.label(record["title"]).classes("text-xl font-semibold break-words")
-                        ui.label(record["record_number"]).classes("text-sm text-primary font-medium")
+                        ui.label(record["title"]).classes("text-2xl font-semibold leading-tight break-words")
+                        ui.label(record["record_number"]).classes("text-sm text-slate-500 font-medium mt-1")
                     favourite_button("records", record["id"])
-                    ui.button("Back", icon="arrow_back", on_click=leave_record_page).props("flat no-caps")
+                    ui.button("Back", icon="arrow_back", on_click=leave_record_page).props("flat no-caps color=blue-grey-8")
                     if not record.get("_effectively_closed"):
                         ui.button(
-                            "Edit", icon="edit",
+                            "Edit metadata", icon="edit",
                             on_click=lambda: open_editor(
                                 record, on_saved=refresh_record_view, resource_key="records",
                             ),
-                        ).props("flat no-caps")
+                        ).props("outline no-caps color=primary")
                         ui.button(
                             "Delete", icon="delete_outline", color="negative",
                             on_click=confirm_delete_record,
@@ -1644,33 +1808,44 @@ def index() -> None:
                         "Event history", icon="history",
                         on_click=lambda: show_entity_history("records", record),
                     ).props("flat no-caps")
-                if record.get("_effectively_closed"):
-                    with ui.row().classes("w-full items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg"):
-                        ui.icon("lock", color="amber-8")
-                        ui.label("This record is read-only because its aggregation hierarchy is closed.").classes("text-sm text-amber-900")
-                if record.get("description"):
-                    ui.label(record["description"]).classes("w-full text-slate-600 whitespace-pre-wrap")
                 ui.separator()
-                with ui.grid(columns=3).classes("w-full gap-4"):
-                    for label, value in (
-                        ("Originated", format_timestamp(record.get("date_originated"))),
-                        ("Created", format_timestamp(record.get("date_created"))),
-                        ("Containing aggregation", record.get("aggregation_display")),
-                    ):
-                        with ui.column().classes("gap-0 min-w-0"):
-                            ui.label(label.upper()).classes("text-xs text-slate-400")
-                            if label == "Containing aggregation" and isinstance(value, dict):
-                                aggregation_label = " — ".join(filter(None, (value.get("code"), value.get("name"))))
-                                ui.button(
-                                    aggregation_label,
-                                    on_click=open_containing_aggregation,
-                                ).props("flat dense no-caps color=primary align=left").classes(
-                                    "font-medium self-start -ml-2"
-                                )
-                            else:
-                                ui.label(str(value or "—")).classes("font-medium text-slate-700")
+                with ui.column().classes("w-full px-5 py-4 gap-4"):
+                    if record.get("_effectively_closed"):
+                        with ui.row().classes("w-full items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg"):
+                            ui.icon("lock", color="amber-8")
+                            ui.label("This record is read-only because its aggregation hierarchy is closed.").classes("text-sm text-amber-900")
+                    if record.get("description"):
+                        with ui.column().classes("w-full gap-1 rounded-xl bg-slate-50 px-4 py-3"):
+                            ui.label("DESCRIPTION").classes("detail-field-label")
+                            ui.label(record["description"]).classes(
+                                "w-full text-sm leading-6 text-slate-600 whitespace-pre-wrap"
+                            )
+                    with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
+                        for label, value in (
+                            ("Record status", "Read-only" if record.get("_effectively_closed") else "Active"),
+                            ("Originated", format_timestamp(record.get("date_originated"))),
+                            ("Created", format_timestamp(record.get("date_created"))),
+                            ("Containing aggregation", record.get("aggregation_display")),
+                        ):
+                            with ui.column().classes("detail-field gap-1"):
+                                ui.label(label).classes("detail-field-label")
+                                if label == "Containing aggregation" and isinstance(value, dict):
+                                    aggregation_label = " — ".join(filter(None, (value.get("code"), value.get("name"))))
+                                    ui.button(
+                                        aggregation_label,
+                                        on_click=open_containing_aggregation,
+                                    ).props("flat dense no-caps color=primary align=left").classes(
+                                        "font-semibold self-start -ml-2"
+                                    )
+                                elif label == "Record status":
+                                    ui.badge(
+                                        str(value),
+                                        color="amber-8" if record.get("_effectively_closed") else "positive",
+                                    ).props("outline")
+                                else:
+                                    ui.label(str(value or "—")).classes("detail-field-value")
 
-            with ui.card().classes("w-full shadow-none border border-slate-200 p-5 gap-4"):
+            with ui.card().classes("detail-surface w-full shadow-none p-5 gap-4"):
                 with ui.row().classes("w-full items-center gap-3"):
                     ui.icon("attach_file", color="primary", size="28px")
                     with ui.column().classes("gap-0 grow"):
@@ -2740,7 +2915,27 @@ def index() -> None:
                                 "Back", icon="arrow_back", on_click=leave_aggregation_page,
                             ).props("flat dense no-caps")
                         if current.get("description"):
-                            ui.label(current["description"]).classes("text-sm text-slate-600")
+                            with ui.column().classes("w-full gap-1 rounded-xl bg-slate-50 px-4 py-3"):
+                                ui.label("DESCRIPTION").classes("detail-field-label")
+                                ui.label(current["description"]).classes("text-sm leading-6 text-slate-600")
+                        with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
+                            aggregation_metadata = (
+                                ("Status", "Closed" if closure else "Open"),
+                                ("Date opened", format_timestamp(current.get("date_opened"))),
+                                ("Classification", " › ".join(
+                                    f"{item['code']} — {item['title']}" for item in classification_path
+                                ) if classification_path else "Unclassified"),
+                                ("Contains", f"{len(children)} child aggregations · {len(records)} records"),
+                            )
+                            for label, value in aggregation_metadata:
+                                with ui.column().classes("detail-field gap-1"):
+                                    ui.label(label).classes("detail-field-label")
+                                    if label == "Status":
+                                        ui.badge(
+                                            str(value), color="amber-8" if closure else "positive",
+                                        ).props("outline")
+                                    else:
+                                        ui.label(str(value or "—")).classes("detail-field-value")
                         with ui.row().classes("w-full justify-end"):
                             if closure is None:
                                 delete_button = ui.button(
@@ -2781,55 +2976,68 @@ def index() -> None:
                                     f"Inherited from {closure['aggregation_number']} — {closure['title']}"
                                 ).classes("text-xs text-amber-800")
                             ui.label(format_timestamp(closure.get("date_closed"))).classes("text-xs text-amber-700")
-                    with ui.card().classes("shadow-none border border-slate-200 min-w-[150px]"):
-                        ui.label(str(len(children))).classes("text-2xl font-bold text-primary")
-                        ui.label("Child aggregations").classes("text-xs text-slate-500")
-                    with ui.card().classes("shadow-none border border-slate-200 min-w-[150px]"):
-                        ui.label(str(len(records))).classes("text-2xl font-bold text-primary")
-                        ui.label("Records").classes("text-xs text-slate-500")
-
-                if effective_rule:
-                    with ui.card().classes("mx-5 mb-5 shadow-none border border-indigo-100 bg-indigo-50"):
-                        with ui.row().classes("w-full items-center gap-3"):
-                            ui.avatar(icon="schedule", color="indigo-1", text_color="indigo")
-                            with ui.column().classes("gap-0 grow"):
-                                ui.label("Effective retention rule").classes("font-semibold text-indigo-950")
-                                if effective_rule["rule_source"] == "aggregation":
-                                    source_text = "Specified locally for the governing root aggregation"
-                                elif effective_rule.get("inheritance_depth", 0) == 0:
-                                    source_text = "Specified by its classification"
-                                else:
-                                    source_text = "Inherited from an ancestor classification"
-                                if current.get("parent_aggregation_id") is not None:
-                                    governing_root_id = effective_rule["governing_root_aggregation_id"]
-                                    governing_root = by_id.get(governing_root_id)
-                                    if governing_root:
-                                        root_reference = (
-                                            f"{governing_root['aggregation_number']} — "
-                                            f"{governing_root['title']}"
-                                        )
+                    if effective_rule:
+                        with ui.card().classes(
+                            "retention-card shadow-none p-5 gap-4 flex-1 min-w-[360px] max-w-[560px]"
+                        ):
+                            with ui.row().classes("w-full items-start gap-3"):
+                                ui.avatar(icon="schedule", color="blue-1", text_color="primary", size="44px")
+                                with ui.column().classes("gap-0 grow"):
+                                    ui.label("Effective retention rule").classes("text-lg font-semibold text-slate-900")
+                                    if effective_rule["rule_source"] == "aggregation":
+                                        source_text = "Specified locally for the governing root aggregation"
+                                    elif effective_rule.get("inheritance_depth", 0) == 0:
+                                        source_text = "Specified by its classification"
                                     else:
-                                        root_reference = f"#{governing_root_id}"
-                                    source_text += (
-                                        f" · governed by root aggregation {root_reference}"
-                                    )
-                                ui.label(source_text).classes("text-xs text-indigo-700")
-                            ui.badge(effective_rule["final_disposition"].replace("_", " ").title(), color="indigo").props("outline")
-                        with ui.row().classes("w-full gap-8 text-sm"):
-                            ui.label(f"Current: {effective_rule['current_period_years']} years")
-                            ui.label(f"Intermediate: {effective_rule['intermediate_period_years']} years")
+                                        source_text = "Inherited from an ancestor classification"
+                                    if current.get("parent_aggregation_id") is not None:
+                                        governing_root_id = effective_rule["governing_root_aggregation_id"]
+                                        governing_root = by_id.get(governing_root_id)
+                                        root_reference = (
+                                            f"{governing_root['aggregation_number']} — {governing_root['title']}"
+                                            if governing_root else f"#{governing_root_id}"
+                                        )
+                                        source_text += f" · governed by root aggregation {root_reference}"
+                                    ui.label(source_text).classes("text-xs text-sky-700")
+                                ui.badge("Effective", color="primary").props("outline")
+                            with ui.column().classes("w-full gap-0 pl-1"):
+                                for stage_label, stage_value, stage_help in (
+                                    ("Current (active)", f"{effective_rule['current_period_years']} years", "Kept with the responsible business unit"),
+                                    ("Intermediate (semi-active)", f"{effective_rule['intermediate_period_years']} years", "Retained in intermediate storage"),
+                                    ("Final disposition", effective_rule["final_disposition"].replace("_", " ").title(), "Action applied when the retention periods are complete"),
+                                ):
+                                    with ui.row().classes("retention-stage w-full items-stretch gap-3 pb-4"):
+                                        with ui.element("div").classes("retention-line"):
+                                            ui.element("div").classes("retention-dot")
+                                        with ui.column().classes("gap-0 grow min-w-0"):
+                                            ui.label(stage_label).classes("retention-stage-label")
+                                            ui.label(stage_value).classes("retention-stage-value")
+                                            ui.label(stage_help).classes("text-xs text-slate-500")
                             if classification_path:
-                                ui.label("Classification: " + " › ".join(
-                                    f"{item['code']} — {item['title']}" for item in classification_path
-                                )).classes("text-slate-600")
-                        if effective_rule.get("instructions"):
-                            ui.label(effective_rule["instructions"]).classes("text-sm text-slate-600")
-                        if current.get("parent_aggregation_id") is None and closure is None:
-                            with ui.row().classes("w-full justify-end"):
-                                ui.button(
-                                    "Edit local override" if local_retention_rule else "Set local override",
-                                    icon="tune", on_click=manage_local_retention_rule,
-                                ).props("flat dense no-caps color=primary")
+                                with ui.column().classes("w-full gap-1 border-t border-sky-100 pt-3"):
+                                    ui.label("GOVERNING CLASSIFICATION").classes("detail-field-label")
+                                    ui.label(" › ".join(
+                                        f"{item['code']} — {item['title']}" for item in classification_path
+                                    )).classes("text-sm text-slate-600")
+                            if effective_rule.get("instructions"):
+                                with ui.column().classes("w-full gap-1 rounded-xl bg-white/70 px-4 py-3"):
+                                    ui.label("INSTRUCTIONS").classes("detail-field-label")
+                                    ui.label(effective_rule["instructions"]).classes("text-sm text-slate-600")
+                            if current.get("parent_aggregation_id") is None and closure is None:
+                                with ui.row().classes("w-full justify-end"):
+                                    ui.button(
+                                        "Edit local override" if local_retention_rule else "Set local override",
+                                        icon="tune", on_click=manage_local_retention_rule,
+                                    ).props("flat dense no-caps color=primary")
+                    else:
+                        with ui.card().classes(
+                            "detail-surface shadow-none p-5 gap-3 flex-1 min-w-[360px] max-w-[560px]"
+                        ):
+                            with ui.row().classes("items-center gap-3"):
+                                ui.avatar(icon="schedule", color="blue-1", text_color="primary", size="44px")
+                                with ui.column().classes("gap-0"):
+                                    ui.label("Effective retention rule").classes("text-lg font-semibold")
+                                    ui.label("No effective retention rule is available.").classes("text-sm text-slate-500")
 
                 if children:
                     ui.label("Contained aggregations").classes("px-5 text-base font-semibold")
@@ -2855,16 +3063,25 @@ def index() -> None:
                 else:
                     for row in records:
                         row["_is_favourite"] = favourite_state("records", row["id"])
+                    with ui.row().classes("w-full items-center px-5 pt-2 gap-3"):
+                        contained_record_filter = ui.input(
+                            "Filter records",
+                            placeholder="Number, title, or date",
+                        ).props("outlined dense clearable debounce=250").classes("w-80 max-w-full")
+                        ui.space()
+                        ui.label(f"{len(records)} records").classes("text-sm text-slate-500")
                     record_table = ui.table(
                         columns=[
-                            {"name": "record_number", "label": "Number", "field": "record_number", "align": "left"},
-                            {"name": "title", "label": "Title", "field": "title", "align": "left"},
-                            {"name": "date_originated", "label": "Originated", "field": "date_originated", "align": "left"},
+                            {"name": "record_number", "label": "Number", "field": "record_number", "align": "left", "sortable": True},
+                            {"name": "title", "label": "Title", "field": "title", "align": "left", "sortable": True},
+                            {"name": "date_originated", "label": "Originated", "field": "date_originated", "align": "left", "sortable": True},
                             {"name": "actions", "label": "", "field": "actions", "align": "right"},
                         ],
                         rows=records,
                         row_key="id",
-                    ).props("flat separator=horizontal").classes("w-full")
+                        pagination=10,
+                    ).props("flat bordered separator=horizontal").classes("erms-page-table")
+                    record_table.bind_filter_from(contained_record_filter, "value")
                     add_timestamp_slots(record_table, ["date_originated"])
                     record_table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round :icon="props.row._is_favourite ? \'favorite\' : \'favorite_border\'" :color="props.row._is_favourite ? \'red\' : \'primary\'" :aria-label="props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\'" @click.stop="$parent.$emit(\'toggle_favourite\', props.row)"><q-tooltip>{{ props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\' }}</q-tooltip></q-btn><q-btn flat round icon="open_in_new" color="primary" @click="$parent.$emit(\'open_record\', props.row)"><q-tooltip>Open record</q-tooltip></q-btn><q-btn flat round icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn></q-td>')
                     record_table.on("open_record", lambda event: show_record_details(event.args))
@@ -3057,8 +3274,23 @@ def index() -> None:
                     return
                 render_recent_section(spec)
                 return
+            if spec.key == "aggregations":
+                ui.separator().classes("erms-results-divider")
+                with ui.row().classes("w-full items-center px-5 pt-2 gap-2"):
+                    ui.icon("search", color="primary")
+                    ui.label("Search results").classes("text-lg font-semibold")
+                    ui.badge(str(len(state["rows"])), color="blue-grey").props("outline")
             lifecycle_filter = None
             visible_rows = state["rows"]
+            result_filter = None
+            if spec.key in {"aggregations", "records"}:
+                with ui.row().classes("w-full items-center px-5 pt-2 gap-3"):
+                    result_filter = ui.input(
+                        "Filter displayed results",
+                        placeholder="Type to filter across the table",
+                    ).props("outlined dense clearable debounce=250").classes("w-96 max-w-full")
+                    ui.space()
+                    ui.label(f"{len(visible_rows)} results").classes("text-sm text-slate-500")
             if spec.key in {"org-units", "roles", "users"}:
                 status_options = {
                     "all": "All statuses",
@@ -3080,14 +3312,22 @@ def index() -> None:
                         if row.get("effective_status", row.get("status")) == selected_status
                     ]
             columns = [
-                {"name": key, "label": label, "field": key, "align": "left"}
+                {
+                    "name": key,
+                    "label": label,
+                    "field": key,
+                    "align": "left",
+                    "sortable": spec.key in {"aggregations", "records"} and not key.endswith("_display"),
+                }
                 for key, label in spec.columns
             ]
             columns.append({"name": "actions", "label": "", "field": "actions", "align": "right"})
             if spec.key in {"aggregations", "records"}:
                 for row in visible_rows:
                     row["_is_favourite"] = favourite_state(spec.key, row["id"])
-            table = ui.table(columns=columns, rows=visible_rows, row_key="id", pagination=25).props("flat bordered separator=horizontal").classes("w-full")
+            table = ui.table(columns=columns, rows=visible_rows, row_key="id", pagination=25).props("flat bordered separator=horizontal").classes("erms-page-table")
+            if result_filter is not None:
+                table.bind_filter_from(result_filter, "value")
             if lifecycle_filter is not None:
                 def apply_lifecycle_filter() -> None:
                     state["lifecycle_filter"] = lifecycle_filter.value
@@ -3506,7 +3746,8 @@ def index() -> None:
                     filter_actions = ui.row().classes("w-full justify-end gap-2")
                 with ui.row().classes("w-full items-center"):
                     result_summary = ui.label(
-                        f"Showing {len(rows)} sessions · {active_count} active"
+                        f"Showing {len(rows)} sessions · "
+                        f"{sum(row.get('status') == 'active' for row in rows)} active"
                     ).classes("text-sm text-slate-500")
                     ui.space()
                     ui.button("Refresh", icon="refresh", on_click=load_sessions).props("flat no-caps")
@@ -6704,12 +6945,12 @@ def index() -> None:
 
 def run() -> None:
     ui.run(
-        title="ERMS",
+        title="wathiq",
         host=host(),
         port=port(),
         reload=reload_enabled(),
         storage_secret=storage_secret(),
-        favicon="📚",
+        favicon=Path(__file__).with_name("static") / "brand" / "wathiq-mark.svg",
     )
 
 
