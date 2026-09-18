@@ -1,5 +1,11 @@
 -- Test-only fixture: turn the freshly bootstrapped database into the state that
 -- existed immediately before migration 001.
+DROP TABLE IF EXISTS user_favourite_records;
+DROP TABLE IF EXISTS user_favourite_aggregations;
+DELETE FROM schema_migrations WHERE version IN (
+    '028_add_user_favourites',
+    '030_remove_assignment_attribution_and_prepare_user_deletion'
+);
 DROP TRIGGER IF EXISTS aggregations_record_classification_selection ON aggregations;
 DROP TRIGGER IF EXISTS aggregations_record_classification_scheme_first_use ON aggregations;
 DROP TRIGGER IF EXISTS aggregations_record_classification_governance_first_use ON aggregations;

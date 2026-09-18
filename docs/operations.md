@@ -54,7 +54,7 @@ Do not run `--watch` from FastAPI startup or once per FastAPI worker.
 | Tool | Status | Default mode | Purpose |
 | --- | --- | --- | --- |
 | `backend.services.api.content_cleanup` | Implemented | One shot | Remove abandoned uploads, expired drafts, and unreferenced content sets |
-| `backend.services.api.session_cleanup` | Planned | One shot | Audit and remove expired or long-revoked login sessions |
+| `backend.services.api.session_cleanup` | Implemented | One shot | Audit and remove expired or long-revoked login sessions |
 | `backend.services.api.manage_auth` | Implemented | One shot | Bootstrap authentication and perform deliberate credential recovery |
 | Database migration commands | Implemented | One shot | Upgrade the schema exactly once per database |
 | Database seed commands | Implemented | One shot | Install optional reference, demonstration, or load-test data |
@@ -62,7 +62,7 @@ Do not run `--watch` from FastAPI startup or once per FastAPI worker.
 
 ## 4. Segmented-content cleanup
 
-**Status:** Implemented  
+**Status:** Implemented
 **Module:** `backend.services.api.content_cleanup`
 
 This worker removes expired or failed upload sessions, expired record drafts and
@@ -85,10 +85,10 @@ domain event when committed work occurs. See
 
 ## 5. Login-session cleanup
 
-**Status:** Planned by the authentication and login-session specification  
-**Planned module:** `backend.services.api.session_cleanup`
+**Status:** Implemented
+**Module:** `backend.services.api.session_cleanup`
 
-This worker will treat `login_sessions` as transient operational security data
+This worker treats `login_sessions` as transient operational security data
 while preserving `event_history` as the durable authentication audit trail.
 
 An eligible revoked session is one whose `revoked_at` is older than the
@@ -102,7 +102,7 @@ already have the required durable revocation audit information; the worker must
 verify or supply the required terminal audit event before deleting the row.
 Token and CSRF secrets or hashes must never be copied into event history.
 
-Planned interface:
+Interface:
 
 ```bash
 python -m backend.services.api.session_cleanup --dry-run --batch-size 500
@@ -141,7 +141,7 @@ python -m backend.services.api.manage_auth bootstrap \
   --email bootstrap@erms.local
 ```
 
-Reset a human user's password:
+Reset a person account's password:
 
 ```bash
 python -m backend.services.api.manage_auth reset-password user@example.org

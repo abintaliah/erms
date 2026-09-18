@@ -30,6 +30,9 @@ class ErmsApiClient:
             timeout=httpx.Timeout(30, connect=5),
             transport=transport,
         )
+        # A page can load dashboard cards and navigation counts concurrently.
+        # Keep that burst comfortably below the API's default database pool size.
+        self._request_slots = asyncio.Semaphore(4)
         self._session_token: str | None = None
         self._unauthorized_handler: Callable[[], Any] | None = None
 
@@ -50,7 +53,8 @@ class ErmsApiClient:
             headers.setdefault("Authorization", f"Bearer {self._session_token}")
         kwargs["headers"] = headers
         try:
-            response = await self._client.request(method, path, **kwargs)
+            async with self._request_slots:
+                response = await self._client.request(method, path, **kwargs)
         except RuntimeError as error:
             if self._client.is_closed:
                 raise ApiError(503, "The browser session disconnected from the ERMS API") from error
@@ -268,6 +272,15 @@ class ErmsApiClient:
         action = "activate" if active else "deactivate"
         return await self.request(
             "POST", f"/api/v1/{resource}/{entity_id}/{action}",
+            headers={"If-Match": str(version)},
+        )
+
+    async def set_user_suspended(
+        self, user_id: int, version: int, *, suspended: bool,
+    ) -> dict[str, Any]:
+        action = "suspend" if suspended else "unsuspend"
+        return await self.request(
+            "POST", f"/api/v1/users/{user_id}/{action}",
             headers={"If-Match": str(version)},
         )
 

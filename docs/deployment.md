@@ -120,6 +120,9 @@ CONTENT_SEGMENT_SIZE_BYTES=16777216
 CONTENT_SEGMENT_CHECKSUMS_ENABLED=true
 CONTENT_UPLOAD_SESSION_TTL_SECONDS=86400
 CONTENT_CLEANUP_INTERVAL_SECONDS=3600
+AUTH_SESSION_RETENTION_DAYS=90
+AUTH_SESSION_CLEANUP_INTERVAL_SECONDS=3600
+AUTH_SESSION_CLEANUP_BATCH_SIZE=500
 AUTH_COOKIE_SECURE=true
 ```
 
@@ -133,7 +136,7 @@ python -m backend.services.api.content_cleanup --watch
 Administrators can inspect or execute cleanup manually with `--dry-run` and
 `--batch-size`. The worker uses a PostgreSQL advisory lock to prevent overlap.
 The central [operational tools catalogue](operations.md) lists this worker,
-planned login-session cleanup, authentication administration, database
+login-session cleanup, authentication administration, database
 operations, their scheduling alternatives, and required safeguards. Deployment
 runbooks must use that catalogue rather than discovering operational commands
 from feature documentation.
@@ -163,6 +166,7 @@ Ready-to-install Ubuntu unit files and environment templates are provided
 within each service’s `deploy` directory:
 
 - [`erms-api.service`](../backend/services/api/deploy/erms-api.service)
+- [`erms-session-cleanup.service`](../backend/services/api/deploy/erms-session-cleanup.service)
 - [`erms-webui.service`](../frontend/webui/deploy/erms-webui.service)
 - [`api.env.example`](../backend/services/api/deploy/api.env.example)
 - [`webui.env.example`](../frontend/webui/deploy/webui.env.example)
@@ -202,6 +206,7 @@ From the deployed project root, install the units and initial configuration:
 
 ```bash
 sudo install -m 0644 backend/services/api/deploy/erms-api.service /etc/systemd/system/erms-api.service
+sudo install -m 0644 backend/services/api/deploy/erms-session-cleanup.service /etc/systemd/system/erms-session-cleanup.service
 sudo install -m 0644 frontend/webui/deploy/erms-webui.service /etc/systemd/system/erms-webui.service
 sudo install -m 0600 backend/services/api/deploy/api.env.example /etc/erms/api.env
 sudo install -m 0600 frontend/webui/deploy/webui.env.example /etc/erms/webui.env
@@ -220,7 +225,7 @@ processes as a group, and use a restrictive file-creation mask. You can verify
 the installed unit configuration on Ubuntu before enabling it:
 
 ```bash
-sudo systemd-analyze verify /etc/systemd/system/erms-api.service /etc/systemd/system/erms-webui.service
+sudo systemd-analyze verify /etc/systemd/system/erms-api.service /etc/systemd/system/erms-session-cleanup.service /etc/systemd/system/erms-webui.service
 ```
 
 The UI unit intentionally has no `Requires=erms-api.service`: systemd
@@ -233,8 +238,8 @@ On a combined server, activate the units with:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now erms-api.service erms-webui.service
-sudo systemctl status erms-api.service erms-webui.service
+sudo systemctl enable --now erms-api.service erms-session-cleanup.service erms-webui.service
+sudo systemctl status erms-api.service erms-session-cleanup.service erms-webui.service
 ```
 
 On separate servers, use only the service installed on that server. Logs and

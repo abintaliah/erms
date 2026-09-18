@@ -24,7 +24,7 @@ WHERE account_type = 'system';
 
 ALTER TABLE users
     ADD CONSTRAINT users_account_type_valid
-    CHECK (account_type IN ('human', 'service'));
+    CHECK (account_type IN ('person', 'service'));
 
 INSERT INTO schema_migrations(version)
 VALUES ('017_rename_system_accounts_to_service')

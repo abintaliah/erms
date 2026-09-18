@@ -133,7 +133,6 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "version": INTEGER,
         "user_id": INTEGER,
         "role_id": INTEGER,
-        "assigned_by": NULLABLE_INTEGER,
         "date_assigned": DATETIME,
         "valid_from": DATETIME,
         "valid_until": NULLABLE_DATETIME,

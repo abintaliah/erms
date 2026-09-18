@@ -221,7 +221,7 @@ records with “draft” in the title:
 
 ### User-role assignments
 
-`id`, `user_id`, `role_id`, `assigned_by`, `date_assigned`, `valid_from`,
+`id`, `user_id`, `role_id`, `date_assigned`, `valid_from`,
 `valid_until`
 
 The same field allowlists apply to sorting. Case-insensitive text operators are

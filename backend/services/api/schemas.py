@@ -442,16 +442,14 @@ class UserCreate(ApiModel):
     name: NonBlankString
     email: NonBlankString | None = None
     external_id: NonBlankString | None = None
-    account_type: Literal["human", "service"] = "human"
+    account_type: Literal["person", "service"] = "person"
 
 
 class UserUpdate(ApiModel):
     name: NonBlankString | None = None
     email: NonBlankString | None = None
     external_id: NonBlankString | None = None
-    account_type: Literal["human", "service"] | None = None
-    status: Literal["active", "inactive", "suspended"] | None = None
-    date_deactivated: datetime | None = None
+    account_type: Literal["person", "service"] | None = None
 
 
 class UserRead(ApiModel):
@@ -459,7 +457,7 @@ class UserRead(ApiModel):
     name: str
     email: str | None
     external_id: str | None
-    account_type: Literal["human", "service"]
+    account_type: Literal["person", "service"]
     status: Literal["active", "inactive", "suspended"]
     date_created: datetime
     date_deactivated: datetime | None
@@ -480,7 +478,7 @@ class PrincipalUserRead(ApiModel):
     id: int
     name: str
     email: str
-    account_type: Literal["human", "service"]
+    account_type: Literal["person", "service"]
 
 
 class PrincipalRoleRead(ApiModel):
@@ -506,7 +504,7 @@ class LoginSessionRead(ApiModel):
     user_id: int
     user_name: str
     user_email: str | None
-    account_type: Literal["human", "service"]
+    account_type: Literal["person", "service"]
     date_created: datetime
     last_seen_at: datetime
     expires_at: datetime
@@ -552,7 +550,6 @@ class RoleRead(ApiModel):
 class UserRoleAssignmentCreate(ApiModel):
     user_id: int
     role_id: int
-    assigned_by: int | None = None
     valid_from: datetime | None = None
     valid_until: datetime | None = None
 
@@ -570,7 +567,6 @@ class UserRoleAssignmentCreate(ApiModel):
 class UserRoleAssignmentUpdate(ApiModel):
     user_id: int | None = None
     role_id: int | None = None
-    assigned_by: int | None = None
     valid_from: datetime | None = None
     valid_until: datetime | None = None
 
@@ -579,7 +575,6 @@ class UserRoleAssignmentRead(ApiModel):
     id: int
     user_id: int
     role_id: int
-    assigned_by: int | None
     date_assigned: datetime
     valid_from: datetime
     valid_until: datetime | None

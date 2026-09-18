@@ -1,6 +1,6 @@
-ALTER TABLE users ADD COLUMN IF NOT EXISTS account_type text NOT NULL DEFAULT 'human';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS account_type text NOT NULL DEFAULT 'person';
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_account_type_valid;
-ALTER TABLE users ADD CONSTRAINT users_account_type_valid CHECK (account_type IN ('human', 'system'));
+ALTER TABLE users ADD CONSTRAINT users_account_type_valid CHECK (account_type IN ('person', 'system'));
 
 CREATE TABLE IF NOT EXISTS user_credentials (
     id bigserial PRIMARY KEY,
