@@ -13,6 +13,8 @@ from frontend.webui.app import (
     RECORD_DETAIL_HEADER_CLASSES,
     RECORD_DETAIL_TITLE_CLASSES,
     LIFECYCLE_ACTION_BUTTONS,
+    NAVIGATION_TRAIL_LIMIT,
+    NAVIGATION_VISIBLE_LIMIT,
     USER_SUSPENSION_ACTION_BUTTONS,
     STOP_PROPAGATION_CLICK_HANDLER,
     buffer_upload_batch,
@@ -27,6 +29,8 @@ from frontend.webui.app import (
     index,
     user_avatar,
     relationship_options,
+    append_navigation_entry,
+    visible_navigation_indices,
 )
 from frontend.webui.app import native_preview_kind
 from frontend.webui.entities import ENTITIES
@@ -223,6 +227,58 @@ def test_record_detail_aggregation_navigation_uses_click_handler_not_route_link(
     source = inspect.getsource(index)
     assert "on_click=open_containing_aggregation" in source
     assert "ui.link(aggregation_label, target=open_containing_aggregation)" not in source
+
+
+def test_detail_page_editors_resolve_api_entity_resources_explicitly():
+    source = inspect.getsource(index)
+    assert 'record, on_saved=refresh_record_view, resource_key="records"' in source
+    assert 'current, on_saved=open_aggregation,\n                                        resource_key="aggregations"' in source
+    assert '"aggregation-details": "aggregations"' in source
+    assert '"record-details": "records"' in source
+
+
+def test_navigation_trail_collapses_only_consecutive_duplicates_and_is_bounded():
+    trail = []
+    for index in range(NAVIGATION_TRAIL_LIMIT + 3):
+        trail = append_navigation_entry(trail, {
+            "page": "record-details", "entity_id": index, "label": f"Record {index}",
+        })
+    assert len(trail) == NAVIGATION_TRAIL_LIMIT
+    assert trail[0]["entity_id"] == 3
+    unchanged_length = append_navigation_entry(trail, {
+        "page": "record-details", "entity_id": trail[-1]["entity_id"],
+        "label": "Updated label",
+    })
+    assert len(unchanged_length) == NAVIGATION_TRAIL_LIMIT
+    assert unchanged_length[-1]["label"] == "Updated label"
+
+
+def test_navigation_visible_entries_retain_first_and_recent_pages():
+    visible, hidden = visible_navigation_indices(9)
+    assert len(visible) == NAVIGATION_VISIBLE_LIMIT
+    assert visible == [0, 5, 6, 7, 8]
+    assert hidden == [1, 2, 3, 4]
+
+
+def test_navigation_drawer_does_not_load_or_render_entity_counts():
+    source = inspect.getsource(index)
+    assert "navigation_badges" not in source
+    assert "refresh_navigation_counts" not in source
+
+
+def test_navigation_drawer_collapses_to_clickable_icon_rail():
+    source = inspect.getsource(index)
+    assert '"width=300 mini-width=64 show-if-above bordered"' in source
+    assert 'drawer_link("Browse", "lan")' in source
+    assert "erms-nav-link" in source
+    assert "white-space: nowrap" in source
+    assert ".erms-nav-link:hover" in source
+    assert 'drawer.props(add="mini")' in source
+    assert 'drawer.props(remove="mini")' in source
+    assert 'drawer.classes(add="erms-drawer--collapsed")' in source
+    assert 'button.text = ""' in source
+    assert 'button.classes(add="justify-center px-0"' in source
+    assert "ui.tooltip(label)" in source
 
 
 def test_favourite_click_handler_stops_propagation_inside_function():
