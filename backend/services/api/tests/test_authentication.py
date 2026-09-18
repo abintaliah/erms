@@ -21,6 +21,29 @@ def test_authenticated_principal_includes_roles(client: TestClient):
     assert principal["user"]["email"] == "admin@test.invalid"
     assert principal["user"]["account_type"] == "person"
     assert [role["code"] for role in principal["roles"]] == ["system-administrator"]
+    assert principal["previous_login_at"] is None
+
+
+def test_principal_reports_previous_successful_login_excluding_current_session(client: TestClient):
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@test.invalid", "password": "Temporary-Test-Password-123!"},
+    )
+    assert response.status_code == 200
+    principal = response.json()
+    assert principal["previous_login_at"] is not None
+
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        previous_event = connection.execute(
+            """SELECT occurred_at
+                 FROM event_history
+                WHERE operation = 'AUTHENTICATION_SUCCEEDED'
+                  AND (metadata->>'session_id')::bigint <> %s
+                ORDER BY occurred_at DESC, id DESC
+                LIMIT 1""",
+            (principal["session"]["id"],),
+        ).fetchone()[0]
+    assert datetime.fromisoformat(principal["previous_login_at"]) == previous_event
 
 
 def test_protected_api_rejects_missing_session(client: TestClient):

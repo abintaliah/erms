@@ -224,6 +224,51 @@ def test_record_detail_header_keeps_controls_visible_beside_long_titles():
     assert "min-w-0" in RECORD_DETAIL_TITLE_CLASSES
 
 
+def test_detail_pages_use_light_blue_metadata_and_retention_visual_system():
+    source = inspect.getsource(index)
+    assert 'primary="#268bd2"' in source
+    assert ".detail-field-label" in source
+    assert ".retention-card" in source
+    assert '"Current (active)"' in source
+    assert '"Intermediate (semi-active)"' in source
+    assert '"Final disposition"' in source
+    assert 'ui.label(str(len(children))).classes("text-2xl font-bold text-primary")' not in source
+    assert '"retention-card shadow-none p-5 gap-4 flex-1' in source
+
+
+def test_application_shell_is_flat_and_uses_one_background():
+    source = inspect.getsource(index)
+    assert "with ui.header().classes" in source
+    assert "ui.header(elevated=True)" not in source
+    assert "background: var(--erms-bg); color: var(--erms-ink);" in source
+    assert ".erms-content .q-card { box-shadow: none !important; }" in source
+    assert 'ui.image("/static/brand/wathiq-mark.svg?v=2")' in source
+    assert 'ui.label("wathiq").classes("erms-brand-name")' in source
+    assert 'ui.label("ERMS")' not in source
+    assert "family=Righteous&display=swap" in source
+    assert "font-family: Righteous, Inter" in source
+    assert "letter-spacing: .035em" in source
+    assert ".erms-page-table" in source
+    assert ".erms-page-table .q-table thead tr { background: #eef7fd; }" in source
+    assert ".erms-page-table .q-table tbody td" in source
+    assert 'classes("erms-page-table")' in source
+    assert 'ui.row().classes("w-full items-center no-wrap gap-4")' in source
+    assert 'ui.row().classes("items-center no-wrap gap-2 flex-none")' in source
+    assert 'ui.label("Search results").classes("text-lg font-semibold")' in source
+    assert '"Filter displayed results"' in source
+    assert 'table.bind_filter_from(result_filter, "value")' in source
+    assert '"sortable": spec.key in {"aggregations", "records"}' in source
+    assert '"Filter records"' in source
+    assert 'record_table.bind_filter_from(contained_record_filter, "value")' in source
+
+
+def test_brand_assets_are_exposed_through_the_frontend_static_route():
+    module_source = inspect.getsource(inspect.getmodule(index))
+    assert 'app.add_static_files("/static/brand"' in module_source
+    assert 'title="wathiq"' in module_source
+    assert 'favicon=Path(__file__).with_name("static") / "brand" / "wathiq-mark.svg"' in module_source
+
+
 def test_record_detail_aggregation_navigation_uses_click_handler_not_route_link():
     source = inspect.getsource(index)
     assert "on_click=open_containing_aggregation" in source
@@ -265,18 +310,77 @@ def test_navigation_drawer_does_not_load_or_render_entity_counts():
     source = inspect.getsource(index)
     assert "navigation_badges" not in source
     assert "refresh_navigation_counts" not in source
+    assert "active_count" not in source
+    assert "sum(row.get('status') == 'active' for row in rows)" in source
 
 
 def test_navigation_drawer_collapses_to_clickable_icon_rail():
     source = inspect.getsource(index)
-    assert '"width=300 mini-width=64 show-if-above bordered"' in source
-    assert 'drawer_link("Browse", "lan")' in source
+    assert '"width=300 mini-width=64 show-if-above"' in source
+    assert '"width=300 mini-width=64 show-if-above bordered"' not in source
+    assert '"Browse", "lan", navigation_key="organization-browser"' in source
     assert "erms-nav-link" in source
     assert "white-space: nowrap" in source
     assert ".erms-nav-link:hover" in source
+    assert ".erms-nav-heading" in source
+    assert ".erms-nav-link--active" in source
+    assert "background: #ffffff; color: #172033;" in source
+    assert "--erms-bg: #ffffff" in source
+    assert "color: #1f2937 !important" in source
+    assert 'font-family: "Material Symbols Outlined" !important' in source
+    assert 'font-variation-settings: "FILL" 0' in source
+    assert '"wght" 300' in source
+    assert "background: #fff4d7 !important; color: #174b72 !important;" in source
+    assert "def set_active_drawer_link(page: str)" in source
+    assert 'button.props(add="aria-current=page")' in source
+    assert "def set_page_title_icon(page: str)" in source
+    assert 'page_title_icon = ui.icon("dashboard")' in source
+    assert "page_title_icon = ui.icon()" not in source
+    assert 'ui.label("Previous sign-in")' in source
+    assert 'current_user_last_login = ui.label("First sign-in")' in source
+    assert 'current_user_avatar_initials = ui.label("?")' in source
+    assert 'user_menu.on("show", refresh_user_profile)' in source
+    assert 'my_sessions_menu' not in source
+    assert '"dashboard": "dashboard"' in source
+    assert '"aggregations": "folder"' in source
+    assert '"records": "description"' in source
+    assert '"classification-workspace": "account_tree"' in source
+    assert '"org-units": "corporate_fare"' in source
+    assert '"roles": "badge"' in source
+    assert '"users": "group"' in source
+    assert '"organization-browser": "lan"' in source
+    assert '"audit-trail": "manage_history"' in source
+    assert '"login-sessions": "devices"' in source
+    assert '"w-full px-5 pb-5 pt-0 gap-4"' in source
+    assert "background: #f4f6f8; color: var(--erms-ink);" in source
+    assert "min-height: 54px; padding: 0 18px;" in source
+    assert ".erms-brand-mark { width: 28px; height: 33px;" in source
+    assert 'with ui.footer().classes("erms-footer items-center")' in source
+    assert 'ui.label("Designed and built by Sharjah Archives")' in source
+    assert ".erms-footer-credit" in source
+    assert 'replace="text-positive text-lg"' in source
+    assert "#popup { display: none !important; }" in source
+    assert 'ui.label("wathiq").classes("wathiq-login-word")' in source
+    assert 'login_submit = ui.button("Continue to wathiq"' in source
+    assert 'drawer.hide()' in source
+    assert 'drawer.show()' in source
+    assert "Sign in to ERMS" not in source
+    assert 'page_title_icon.set_visibility(False)' in source
+    assert ".erms-dashboard-card .erms-shared-control" in source
+    assert 'content_card.classes(add="erms-dashboard-card")' in source
+    assert 'content_card.classes(remove="erms-dashboard-card")' in source
     assert 'drawer.props(add="mini")' in source
     assert 'drawer.props(remove="mini")' in source
     assert 'drawer.classes(add="erms-drawer--collapsed")' in source
+    assert 'ui.button(icon="chevron_left")' in source
+    assert 'icon=chevron_right' in source
+    assert 'icon="menu"' not in source
+    assert "erms-drawer-toggle" in source
+    assert "erms-profile-action" in source
+    assert 'ui.button("Change password", icon="key")' in source
+    assert 'with ui.column().classes("erms-profile-actions w-full")' in source
+    assert "min-height: 38px !important; height: 38px !important;" in source
+    assert "gap: 0 !important" in source
     assert 'button.text = ""' in source
     assert 'button.classes(add="justify-center px-0"' in source
     assert "ui.tooltip(label)" in source

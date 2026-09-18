@@ -265,21 +265,42 @@ def login(payload: LoginRequest, request: Request, response: Response, connectio
     response.set_cookie(SESSION_COOKIE, token, httponly=True, secure=COOKIE_SECURE, samesite="lax", path="/")
     response.set_cookie(CSRF_COOKIE, csrf, httponly=False, secure=COOKIE_SECURE, samesite="lax", path="/")
     principal = Principal(row["id"], session["id"], row["name"], row["email"], row["account_type"], row["must_change_password"], _roles(connection, row["id"]))
-    return principal_response(principal)
+    return principal_response(principal, connection)
 
 
-def principal_response(principal: Principal) -> dict[str, Any]:
+def _previous_login_at(connection: Connection, principal: Principal) -> datetime | None:
+    row = connection.execute(
+        """
+        SELECT occurred_at
+          FROM event_history
+         WHERE entity_type = 'user'
+           AND entity_id = %s
+           AND operation = 'AUTHENTICATION_SUCCEEDED'
+           AND COALESCE(metadata->>'session_id', '') <> %s
+         ORDER BY occurred_at DESC, id DESC
+         LIMIT 1
+        """,
+        (principal.user_id, str(principal.session_id)),
+    ).fetchone()
+    return row["occurred_at"] if row else None
+
+
+def principal_response(principal: Principal, connection: Connection) -> dict[str, Any]:
     return {
         "user": {"id": principal.user_id, "name": principal.name, "email": principal.email, "account_type": principal.account_type},
         "roles": principal.roles,
         "session": {"id": principal.session_id},
         "must_change_password": principal.must_change_password,
+        "previous_login_at": _previous_login_at(connection, principal),
     }
 
 
 @router.get("/me", response_model=PrincipalRead)
-def me(principal: Principal = Depends(principal_from_request)):
-    return principal_response(principal)
+def me(
+    principal: Principal = Depends(principal_from_request),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return principal_response(principal, connection)
 
 
 @router.post("/logout", status_code=204)

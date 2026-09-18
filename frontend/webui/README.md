@@ -88,6 +88,9 @@ lookup controls, and a dedicated user details view. See
 Authenticated pages share a persistent navigation-history breadcrumb with
 bounded overflow, page-state restoration, and detail-page Back integration.
 See [`../../docs/navigation-breadcrumbs.md`](../../docs/navigation-breadcrumbs.md).
+The shared light-blue visual system, detail-field hierarchy, and aggregation
+retention-lifecycle presentation are documented in
+[`../../docs/ui-visual-design.md`](../../docs/ui-visual-design.md).
 The selected-classification pane exposes deactivate,
 reactivate, and delete actions. Delete is enabled only for an unused leaf in an
 active, unpublished scheme; otherwise inline guidance explains the blocking
