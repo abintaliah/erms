@@ -567,6 +567,17 @@ def index() -> None:
         body { background: var(--erms-bg); color: #172033; }
         .erms-header { background: var(--erms-navy); color: white; }
         .erms-drawer { background: #0f2740; color: #dce8f5; }
+        .erms-nav-link { border-radius: 8px; }
+        .erms-nav-link .q-btn__content {
+            width: 100%; gap: 12px; flex-wrap: nowrap; justify-content: flex-start;
+        }
+        .erms-nav-link .q-btn__content .block {
+            min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .erms-nav-link:hover { background: rgba(255, 255, 255, .13) !important; }
+        .erms-drawer--collapsed .erms-nav-link .q-btn__content {
+            justify-content: center;
+        }
         .erms-content { max-width: 1500px; margin: 0 auto; }
         .erms-card { border: 1px solid #e2e8f0; box-shadow: 0 8px 28px rgba(15,39,64,.06); }
         .relationship-select .q-field__control { min-height: 58px; border-radius: 10px; }
@@ -617,7 +628,9 @@ def index() -> None:
     """)
 
     with ui.header(elevated=True).classes("erms-header items-center gap-3"):
-        ui.button(on_click=lambda: drawer.toggle(), icon="menu").props("flat round color=white")
+        drawer_toggle_button = ui.button(icon="menu").props(
+            "flat round color=white aria-label='Collapse navigation'"
+        )
         ui.icon("inventory_2").classes("text-2xl")
         ui.label("ERMS").classes("text-xl font-semibold tracking-wide")
         ui.space()
@@ -645,32 +658,75 @@ def index() -> None:
         connection_icon.update()
         connection_tooltip.update()
 
+    drawer_links: list[tuple[Any, str]] = []
+    drawer_headings: list[Any] = []
+
     def drawer_link(label: str, icon: str, *, extra_classes: str = "") -> Any:
-        with ui.button(icon=icon).props("flat align=left no-caps").classes(
-            f"w-full justify-start px-4 {extra_classes}"
-        ) as button:
-            ui.label(label).classes("text-left")
+        button = ui.button(label, icon=icon).props(
+            f'flat align=left no-caps aria-label="{label}"'
+        ).classes(f"erms-nav-link w-full justify-start px-4 {extra_classes}")
+        with button:
+            ui.tooltip(label)
+        drawer_links.append((button, label))
         return button
 
-    with ui.left_drawer(value=True).classes("erms-drawer") as drawer:
+    with ui.left_drawer(value=True).props(
+        "width=300 mini-width=64 show-if-above bordered"
+    ).classes("erms-drawer") as drawer:
         navigation: dict[str, Any] = {}
-        dashboard_navigation = ui.button("Dashboard", icon="dashboard").props("flat align=left no-caps").classes("w-full justify-start px-4 mt-4")
+        dashboard_navigation = drawer_link("Dashboard", "dashboard", extra_classes="mt-4")
         for heading, entries in (
             ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
             ("ORGANIZATION STRUCTURE", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
         ):
-            ui.label(heading).classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
+            drawer_headings.append(
+                ui.label(heading).classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
+            )
             if heading == "ORGANIZATION STRUCTURE":
-                organization_browser_navigation = ui.button(
-                    "Browse", icon="account_tree",
-                ).props("flat align=left no-caps").classes(
-                    "w-full justify-start px-4"
-                )
+                organization_browser_navigation = drawer_link("Browse", "lan")
             for key, icon in entries:
                 navigation[key] = drawer_link(ENTITIES[key].label, icon)
-        ui.label("SYSTEM ADMINISTRATION").classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
+        drawer_headings.append(
+            ui.label("SYSTEM ADMINISTRATION").classes(
+                "text-xs tracking-widest opacity-60 px-4 pt-5 pb-2"
+            )
+        )
         audit_navigation = drawer_link("Audit trail", "manage_history")
         sessions_navigation = drawer_link("Login sessions", "devices")
+
+    drawer_collapsed = False
+
+    def toggle_navigation_drawer() -> None:
+        nonlocal drawer_collapsed
+        drawer_collapsed = not drawer_collapsed
+        if drawer_collapsed:
+            drawer.props(add="mini")
+            drawer.classes(add="erms-drawer--collapsed")
+            drawer_toggle_button.props(
+                remove="aria-label", add="aria-label='Expand navigation'"
+            )
+            for heading in drawer_headings:
+                heading.set_visibility(False)
+            for button, _ in drawer_links:
+                button.text = ""
+                button.classes(add="justify-center px-0", remove="justify-start px-4")
+                button.update()
+        else:
+            drawer.props(remove="mini")
+            drawer.classes(remove="erms-drawer--collapsed")
+            drawer_toggle_button.props(
+                remove="aria-label", add="aria-label='Collapse navigation'"
+            )
+            for heading in drawer_headings:
+                heading.set_visibility(True)
+            for button, label in drawer_links:
+                button.text = label
+                button.classes(add="justify-start px-4", remove="justify-center px-0")
+                button.update()
+        drawer.update()
+        drawer_toggle_button.update()
+
+    drawer_toggle_button.on("click", toggle_navigation_drawer)
 
     with ui.column().classes("erms-content w-full p-5 gap-4"):
         breadcrumb_host = ui.element("nav").props(

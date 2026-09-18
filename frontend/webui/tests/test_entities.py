@@ -266,6 +266,21 @@ def test_navigation_drawer_does_not_load_or_render_entity_counts():
     assert "refresh_navigation_counts" not in source
 
 
+def test_navigation_drawer_collapses_to_clickable_icon_rail():
+    source = inspect.getsource(index)
+    assert '"width=300 mini-width=64 show-if-above bordered"' in source
+    assert 'drawer_link("Browse", "lan")' in source
+    assert "erms-nav-link" in source
+    assert "white-space: nowrap" in source
+    assert ".erms-nav-link:hover" in source
+    assert 'drawer.props(add="mini")' in source
+    assert 'drawer.props(remove="mini")' in source
+    assert 'drawer.classes(add="erms-drawer--collapsed")' in source
+    assert 'button.text = ""' in source
+    assert 'button.classes(add="justify-center px-0"' in source
+    assert "ui.tooltip(label)" in source
+
+
 def test_favourite_click_handler_stops_propagation_inside_function():
     assert STOP_PROPAGATION_CLICK_HANDLER.startswith("(event) =>")
     assert "event.stopPropagation(); emit();" in STOP_PROPAGATION_CLICK_HANDLER
