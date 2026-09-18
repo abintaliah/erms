@@ -19,7 +19,7 @@ def test_authenticated_principal_includes_roles(client: TestClient):
     assert response.status_code == 200
     principal = response.json()
     assert principal["user"]["email"] == "admin@test.invalid"
-    assert principal["user"]["account_type"] == "human"
+    assert principal["user"]["account_type"] == "person"
     assert [role["code"] for role in principal["roles"]] == ["system-administrator"]
 
 
@@ -60,7 +60,7 @@ def test_logout_revokes_session_and_removes_browser_cookies(client: TestClient):
 
 def test_temporary_password_requires_change_and_never_enters_audit_snapshot(client: TestClient):
     created = client.post(
-        "/api/v1/users", json={"name": "New Human", "email": "new.human@test.invalid", "account_type": "human"}
+        "/api/v1/users", json={"name": "New Person", "email": "new.person@test.invalid", "account_type": "person"}
     )
     assert created.status_code == 201
     issued = client.post(f"/api/v1/auth/users/{created.json()['id']}/temporary-password")
@@ -69,7 +69,7 @@ def test_temporary_password_requires_change_and_never_enters_audit_snapshot(clie
 
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": "new.human@test.invalid", "password": temporary_password},
+        json={"email": "new.person@test.invalid", "password": temporary_password},
     )
     assert login.status_code == 200
     assert login.json()["must_change_password"] is True
@@ -103,7 +103,7 @@ def test_service_account_is_non_interactive_and_cannot_receive_password(client: 
         f"/api/v1/auth/users/{created.json()['id']}/temporary-password"
     )
     assert issued.status_code == 422
-    assert issued.json()["detail"] == "local passwords require a human user with an email address"
+    assert issued.json()["detail"] == "local passwords require a person account with an email address"
 
 
 def test_system_administrator_can_list_and_revoke_sessions(client: TestClient):
@@ -295,7 +295,7 @@ def test_empty_database_can_bootstrap_one_interactive_administrator(client: Test
 
     assert stored["name"] == "Bootstrap Administrator"
     assert stored["email"] == BOOTSTRAP_USER_EMAIL
-    assert stored["account_type"] == "human"
+    assert stored["account_type"] == "person"
     assert stored["external_id"] == "SYSTEM-BOOTSTRAP"
     assert stored["must_change_password"] is True
     assert stored["temporary_expires_at"] == result.expires_at

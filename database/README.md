@@ -153,7 +153,7 @@ prepares assignment and draft ownership for eventual governed deletion, and
 adds the revoked-session cleanup index. The migration contains its own
 transaction.
 Migration 004 adds transactional record drafts. Migration 005 adds local
-credentials, database-backed login sessions, and the original human/system
+credentials, database-backed login sessions, and the original person/system
 account types.
 Migration 006 enforces direct and inherited aggregation closure throughout the
 hierarchy, record, component, and blob layers. The complete business rules are

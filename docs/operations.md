@@ -141,7 +141,7 @@ python -m backend.services.api.manage_auth bootstrap \
   --email bootstrap@erms.local
 ```
 
-Reset a human user's password:
+Reset a person account's password:
 
 ```bash
 python -m backend.services.api.manage_auth reset-password user@example.org

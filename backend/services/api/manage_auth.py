@@ -77,7 +77,7 @@ def bootstrap_administrator(
         JOIN user_role_assignments AS assignment ON assignment.user_id = u.id
         JOIN roles AS role ON role.id = assignment.role_id
         WHERE lower(role.code) = lower(%s)
-          AND u.account_type = 'human'
+          AND u.account_type = 'person'
           AND u.status = 'active'
           AND role_effectively_active(role.id)
           AND assignment.valid_from <= CURRENT_TIMESTAMP
@@ -108,7 +108,7 @@ def bootstrap_administrator(
     user = connection.execute(
         """
         INSERT INTO users (name, email, external_id, account_type)
-        VALUES (%s, %s, 'SYSTEM-BOOTSTRAP', 'human')
+        VALUES (%s, %s, 'SYSTEM-BOOTSTRAP', 'person')
         RETURNING id
         """,
         (name, email),
@@ -157,8 +157,8 @@ def set_temporary_password(
     ).fetchone()
     if not user:
         raise RuntimeError(f"no user exists with email {email}")
-    if user["account_type"] != "human":
-        raise RuntimeError("interactive passwords can only be issued to human users")
+    if user["account_type"] != "person":
+        raise RuntimeError("interactive passwords can only be issued to person accounts")
     connection.execute(
         """
         SELECT set_config('app.actor_type', 'automated_process', true),
@@ -239,7 +239,7 @@ def _parser() -> argparse.ArgumentParser:
     bootstrap.add_argument("--name", default=BOOTSTRAP_USER_NAME)
     bootstrap.add_argument("--email", default=BOOTSTRAP_USER_EMAIL)
     reset = commands.add_parser(
-        "reset-password", help="issue a temporary password to an existing human user"
+        "reset-password", help="issue a temporary password to an existing person account"
     )
     reset.add_argument("email")
     reset.add_argument("--make-system-administrator", action="store_true")

@@ -4,7 +4,7 @@
 
 ERMS currently supports local, database-backed authentication. Authentication
 establishes identity; authorization remains a separate subsystem. Users have an
-`account_type` of `human` or `service`. Service accounts represent software and
+`account_type` of `person` or `service`. Service accounts represent software and
 cannot use interactive password login. Administrative authority is assigned by
 the reserved `system-administrator` role, never by a superuser flag on a user.
 
@@ -14,7 +14,7 @@ independent of the authentication provider.
 
 ## Credentials and passwords
 
-`user_credentials` contains one optional local credential per human user.
+`user_credentials` contains one optional local credential per person account.
 Passwords are hashed with Argon2id and neither hashes nor plaintext passwords
 are exposed by the API or copied to event history. Repeated failures cause a
 temporary account lock. Relevant settings are:
@@ -93,7 +93,7 @@ The command performs one transaction and creates:
 
 - the reserved `SYSTEM — Platform Administration` organizational unit;
 - the reserved `system-administrator — SYSTEM — System Administrator` role;
-- one active human user, defaulting to `Bootstrap Administrator
+- one active person account, defaulting to `Bootstrap Administrator
   <bootstrap@erms.local>`;
 - the user's active role assignment; and
 - an Argon2id credential containing a newly generated temporary password.
@@ -104,7 +104,7 @@ only change the password, inspect their principal, or sign out until the
 password has been changed. The plaintext password is never placed in SQL,
 source control, `.env`, API responses, or event history.
 
-The bootstrap login has `account_type = human`, despite its administrative
+The bootstrap login has `account_type = person`, despite its administrative
 name. In this model, `service` accounts are non-interactive identities for
 software and cannot log in with passwords. The bootstrap user's administrative
 authority is derived from the normal reserved role; its email address or
@@ -125,7 +125,7 @@ privilege escalation in an established database. A failed command is rolled
 back as a whole. Re-running it cannot reset the existing bootstrap user's
 password or reveal a replacement password.
 
-For this check, an **active system administrator** means an active human user
+For this check, an **active system administrator** means an active person account
 with a currently valid assignment to the role whose stable code is
 `system-administrator`. The role itself must be active and its owning
 organizational unit and all ancestor units must be active. The command evaluates
@@ -141,7 +141,7 @@ process because the utility runs before the new bootstrap user has authenticated
 it does not impersonate that user.
 
 Do not confuse this with `users.account_type = service`. Account type classifies
-a stored identity (`human` or `service`), while event actor type classifies how
+a stored identity (`person` or `service`), while event actor type classifies how
 an event was caused (`user`, `anonymous`, or `automated_process`). An
 authenticated service identity will be recorded as actor type `user` with its
 own `actor_user_id`. See the actor taxonomy in
@@ -156,7 +156,7 @@ while any required administrator still depends on them.
 
 ## Password recovery and promotion
 
-For an existing human user, issue a new temporary password with:
+For an existing person account, issue a new temporary password with:
 
 ```bash
 backend/services/api/.venv/bin/python -m backend.services.api.manage_auth \

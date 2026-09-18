@@ -23,6 +23,7 @@ from frontend.webui.app import (
     form_payload,
     format_timestamp,
     filter_membership_rows,
+    user_avatar,
     relationship_options,
 )
 from frontend.webui.app import native_preview_kind
@@ -163,6 +164,15 @@ def test_membership_filters_identity_status_and_overlapping_validity():
     assert [row["id"] for row in filter_membership_rows(
         rows, valid_from="2026-06-01", valid_until="2026-06-30",
     )] == [1]
+
+
+def test_user_avatar_is_stable_and_uses_best_effort_initials():
+    user = {"id": 42, "name": "Sami Mali Jibtou Jari", "email": "sami@example.test"}
+    first = user_avatar(user)
+    assert first["initials"] == "SJ"
+    assert first == user_avatar(user)
+    assert user_avatar({"id": 43, "name": "Admin"})["initials"] == "AD"
+    assert user_avatar({"id": 44, "name": ""})["initials"] == "?"
 
 
 def test_classification_recent_selection_configuration(monkeypatch):

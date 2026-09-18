@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -39,6 +40,10 @@ AGGREGATION_SUMMARY_LAYOUT_CLASSES = (
 RECORD_DETAIL_HEADER_CLASSES = "w-full items-start gap-2 no-wrap"
 RECORD_DETAIL_TITLE_CLASSES = "gap-0 grow min-w-0"
 STOP_PROPAGATION_CLICK_HANDLER = "(event) => { event.stopPropagation(); emit(); }"
+USER_AVATAR_COLORS = (
+    "#2563eb", "#7c3aed", "#db2777", "#dc2626", "#ea580c",
+    "#ca8a04", "#16a34a", "#0d9488", "#0891b2", "#4f46e5",
+)
 LIFECYCLE_ACTION_BUTTONS = (
     '<q-btn v-if="props.row.status === \'inactive\'" flat round dense '
     'icon="toggle_on" color="positive" aria-label="Activate" '
@@ -91,6 +96,20 @@ def filter_membership_rows(
         return True
 
     return [row for row in rows if included(row)]
+
+
+def user_avatar(user: dict[str, Any]) -> dict[str, str]:
+    """Return stable best-effort initials and color for a user."""
+    parts = [part for part in str(user.get("name") or "").split() if part]
+    if len(parts) >= 2:
+        initials = f"{parts[0][0]}{parts[-1][0]}"
+    elif parts:
+        initials = parts[0][:2]
+    else:
+        initials = "?"
+    stable_key = str(user.get("id") or user.get("email") or user.get("name") or "unknown")
+    color_index = hashlib.sha256(stable_key.encode("utf-8")).digest()[0] % len(USER_AVATAR_COLORS)
+    return {"initials": initials.upper(), "color": USER_AVATAR_COLORS[color_index]}
 
 
 def display_value(value: Any) -> str:
@@ -429,8 +448,8 @@ def relationship_select(
 def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | None = None):
     if field.kind == "account_type":
         return ui.select(
-            {"human": "Human user", "service": "Service account"},
-            label=field.label, value=value or "human",
+            {"person": "Person", "service": "Service"},
+            label=field.label, value=value or "person",
         ).props("outlined").classes("w-full")
     if field.kind == "classification_type":
         return ui.select(
@@ -1412,11 +1431,15 @@ def index() -> None:
                 })
             return result
         if spec.key == "users":
-            return [{
-                **item,
-                "effective_status": item.get("status"),
-                "_inactive_reason": item.get("status", "active").title(),
-            } for item in rows]
+            return [
+                {
+                    **item,
+                    "_avatar": user_avatar(item),
+                    "effective_status": item.get("status"),
+                    "_inactive_reason": item.get("status", "active").title(),
+                }
+                for item in rows
+            ]
         if spec.key == "records":
             aggregations = await api.list("aggregations")
             by_id = {item["id"]: item for item in aggregations}
@@ -1991,6 +2014,7 @@ def index() -> None:
                                 ),
                                 "counterpart_name": counterpart.get("name", str(counterpart_id)),
                                 "counterpart_email": counterpart.get("email") or "",
+                                "counterpart_avatar": user_avatar(counterpart) if not for_user else None,
                                 "counterpart_search": " ".join(
                                     str(value) for value in (
                                         counterpart.get("code"), counterpart.get("name"),
@@ -2068,8 +2092,15 @@ def index() -> None:
                                 '''
                                 <q-td :props="props">
                                   <div class="column">
-                                    <span>{{ props.row.counterpart_name }}</span>
-                                    <span v-if="props.row.counterpart_email" class="text-caption text-grey-7">{{ props.row.counterpart_email }}</span>
+                                    <div class="row items-center no-wrap q-gutter-sm">
+                                      <q-avatar size="36px" :style="{ backgroundColor: props.row.counterpart_avatar.color, color: 'white' }">
+                                        {{ props.row.counterpart_avatar.initials }}
+                                      </q-avatar>
+                                      <div class="column">
+                                        <span>{{ props.row.counterpart_name }}</span>
+                                        <span v-if="props.row.counterpart_email" class="text-caption text-grey-7">{{ props.row.counterpart_email }}</span>
+                                      </div>
+                                    </div>
                                   </div>
                                 </q-td>
                                 ''',
@@ -2609,6 +2640,19 @@ def index() -> None:
             add_timestamp_slots(
                 table, [key for key, _ in spec.columns if key.startswith("date_")]
             )
+            if spec.key == "users":
+                table.add_slot("body-cell-_avatar", '''
+                    <q-td :props="props" style="width: 56px">
+                      <q-avatar size="38px" :style="{ backgroundColor: props.row._avatar.color, color: 'white' }">
+                        {{ props.row._avatar.initials }}
+                      </q-avatar>
+                    </q-td>
+                ''')
+                table.add_slot("body-cell-account_type", '''
+                    <q-td :props="props">
+                      <span>{{ props.value === 'person' ? 'Person' : 'Service' }}</span>
+                    </q-td>
+                ''')
             for key, _ in spec.columns:
                 if not key.endswith("_display"):
                     continue
@@ -2942,6 +2986,11 @@ def index() -> None:
             is_admin = any(role["code"].lower() == "system-administrator" for role in auth_state["principal"]["roles"])
             for row in rows:
                 row["can_revoke_all"] = is_admin
+                row["_user_avatar"] = user_avatar({
+                    "id": row.get("user_id"),
+                    "name": row.get("user_name"),
+                    "email": row.get("user_email"),
+                })
             navigation_badges["login-sessions"].text = str(active_count)
             navigation_badges["login-sessions"].update()
             outer.clear()
@@ -2989,10 +3038,15 @@ def index() -> None:
                 add_timestamp_slots(table, ["date_created", "last_seen_at", "expires_at"])
                 table.add_slot("body-cell-user_name", '''
                     <q-td :props="props">
-                      <div class="column">
-                        <span class="text-weight-medium">{{ props.row.user_name }}</span>
-                        <span class="text-caption text-grey-6">{{ props.row.user_email || 'No email address' }}</span>
-                        <q-badge v-if="props.row.is_current" outline color="primary" label="Current session" class="self-start q-mt-xs" />
+                      <div class="row items-center no-wrap q-gutter-sm">
+                        <q-avatar size="36px" :style="{ backgroundColor: props.row._user_avatar.color, color: 'white' }">
+                          {{ props.row._user_avatar.initials }}
+                        </q-avatar>
+                        <div class="column">
+                          <span class="text-weight-medium">{{ props.row.user_name }}</span>
+                          <span class="text-caption text-grey-6">{{ props.row.user_email || 'No email address' }}</span>
+                          <q-badge v-if="props.row.is_current" outline color="primary" label="Current session" class="self-start q-mt-xs" />
+                        </div>
                       </div>
                     </q-td>
                 ''')

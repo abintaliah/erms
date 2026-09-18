@@ -142,7 +142,7 @@ anonymous         - an unauthenticated request
 automated_process - work performed without a stored user identity
 ```
 
-An authenticated human account and a future authenticated service account both
+An authenticated person account and an authenticated service account both
 produce `actor_type: user`, because both resolve to a row in `users` and can be
 identified by `actor_user_id`. The associated user snapshot and account data
 can distinguish the two when necessary.

@@ -122,6 +122,8 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${DATABASE_DIR}/migrations/030_remove_assignment_attribution_and_prepare_user_deletion.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/031_rename_human_accounts_to_person.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${SCRIPT_DIR}/segmented_content_migration_after.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"

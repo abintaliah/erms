@@ -88,7 +88,7 @@ def resolve_principal(connection: Connection, token: str) -> Principal | None:
           AND s.expires_at > CURRENT_TIMESTAMP
           AND s.absolute_expires_at > CURRENT_TIMESTAMP
           AND u.status = 'active'
-          AND u.account_type = 'human'
+          AND u.account_type = 'person'
         """, (hash_secret(token),)
     ).fetchone()
     if not row:
@@ -205,7 +205,7 @@ def login(payload: LoginRequest, request: Request, response: Response, connectio
         """, (payload.email,)
     ).fetchone()
     now = datetime.now(timezone.utc)
-    if not row or row["status"] != "active" or row["account_type"] != "human":
+    if not row or row["status"] != "active" or row["account_type"] != "person":
         raise generic
     if row["locked_until"] and row["locked_until"] > now:
         raise generic
@@ -391,8 +391,8 @@ def issue_temporary_password(user_id: int, principal: Principal = Depends(princi
     user = connection.execute("SELECT id, email, account_type FROM users WHERE id=%s", (user_id,)).fetchone()
     if not user:
         raise HTTPException(status_code=404, detail="user not found")
-    if user["account_type"] != "human" or not user["email"]:
-        raise HTTPException(status_code=422, detail="local passwords require a human user with an email address")
+    if user["account_type"] != "person" or not user["email"]:
+        raise HTTPException(status_code=422, detail="local passwords require a person account with an email address")
     password = secrets.token_urlsafe(15)
     password_hash = hash_password(password)
     temporary_expires_at = datetime.now(timezone.utc) + timedelta(hours=24)

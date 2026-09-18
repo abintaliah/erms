@@ -442,14 +442,14 @@ class UserCreate(ApiModel):
     name: NonBlankString
     email: NonBlankString | None = None
     external_id: NonBlankString | None = None
-    account_type: Literal["human", "service"] = "human"
+    account_type: Literal["person", "service"] = "person"
 
 
 class UserUpdate(ApiModel):
     name: NonBlankString | None = None
     email: NonBlankString | None = None
     external_id: NonBlankString | None = None
-    account_type: Literal["human", "service"] | None = None
+    account_type: Literal["person", "service"] | None = None
 
 
 class UserRead(ApiModel):
@@ -457,7 +457,7 @@ class UserRead(ApiModel):
     name: str
     email: str | None
     external_id: str | None
-    account_type: Literal["human", "service"]
+    account_type: Literal["person", "service"]
     status: Literal["active", "inactive", "suspended"]
     date_created: datetime
     date_deactivated: datetime | None
@@ -478,7 +478,7 @@ class PrincipalUserRead(ApiModel):
     id: int
     name: str
     email: str
-    account_type: Literal["human", "service"]
+    account_type: Literal["person", "service"]
 
 
 class PrincipalRoleRead(ApiModel):
@@ -504,7 +504,7 @@ class LoginSessionRead(ApiModel):
     user_id: int
     user_name: str
     user_email: str | None
-    account_type: Literal["human", "service"]
+    account_type: Literal["person", "service"]
     date_created: datetime
     last_seen_at: datetime
     expires_at: datetime

@@ -30,7 +30,7 @@ defined separately in
 
 ### 2.1 Active
 
-An active human user may authenticate and use an otherwise valid session.
+An active person account may authenticate and use an otherwise valid session.
 
 ```text
 users.status = 'active'

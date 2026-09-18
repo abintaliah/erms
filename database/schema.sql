@@ -432,7 +432,7 @@ CREATE TABLE users (
     name             text NOT NULL,
     email            text,
     external_id      text,
-    account_type     text NOT NULL DEFAULT 'human',
+    account_type     text NOT NULL DEFAULT 'person',
     status           text NOT NULL DEFAULT 'active',
     date_created     timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_deactivated timestamptz,
@@ -442,7 +442,7 @@ CREATE TABLE users (
     CONSTRAINT users_external_id_not_blank
         CHECK (external_id IS NULL OR btrim(external_id) <> ''),
     CONSTRAINT users_account_type_valid
-        CHECK (account_type IN ('human', 'service')),
+        CHECK (account_type IN ('person', 'service')),
     CONSTRAINT users_status_valid
         CHECK (status IN ('active', 'inactive', 'suspended')),
     CONSTRAINT users_dates_in_order

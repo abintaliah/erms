@@ -8,7 +8,7 @@
 ## 1. Purpose
 
 This specification defines personal favourites for aggregations and records.
-An authenticated human user can mark an aggregation or record as a favourite,
+An authenticated person account can mark an aggregation or record as a favourite,
 see a configurable favourites preview on the Dashboard, use **View all** to see
 the complete list, open a favourite, and remove an item from their favourites.
 
@@ -43,7 +43,7 @@ This feature does not include:
 
 ## 3. Terminology and ownership
 
-A **favourite** is a relationship between exactly one authenticated human user
+A **favourite** is a relationship between exactly one authenticated person account
 and exactly one aggregation or record.
 
 Favourites are private. A user may read and change only their own favourites.

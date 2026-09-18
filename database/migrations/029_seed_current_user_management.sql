@@ -182,13 +182,13 @@ BEGIN
     ) ON COMMIT DROP;
 
     INSERT INTO seed_users VALUES
-        ('Bootstrap Administrator',  'bootstrap@erms.local', 'SYSTEM-BOOTSTRAP', 'human', 'active', '2026-09-17 20:14:20.094777+04', NULL, 1),
-        ('Salah Mahmoud',             'gm@sa.gov.ae',         NULL,               'human', 'active', '2026-09-17 20:25:02.419445+04', NULL, 1),
-        ('Alya Al-Salman',            'aas@sa.gov.ae',        NULL,               'human', 'active', '2026-09-17 20:25:22.382205+04', NULL, 2),
-        ('Fathiya Yousif Al-Mulla',   'fym@sa.gov.ae',        NULL,               'human', 'active', '2026-09-17 20:27:18.288719+04', NULL, 1),
-        ('Ahmed BinTaliah',           'abt@sa.gov.ae',        NULL,               'human', 'active', '2026-09-17 20:27:46.264701+04', NULL, 1),
-        ('Yahya Yai Abdullah',        'yya@sa.gov.ae',        NULL,               'human', 'active', '2026-09-17 20:28:04.649664+04', NULL, 1),
-        ('Sami Mali Jibtou Jari',     'smjj@sa.gov.ae',       NULL,               'human', 'active', '2026-09-17 20:43:53.918232+04', NULL, 1);
+        ('Bootstrap Administrator',  'bootstrap@erms.local', 'SYSTEM-BOOTSTRAP', 'person', 'active', '2026-09-17 20:14:20.094777+04', NULL, 1),
+        ('Salah Mahmoud',             'gm@sa.gov.ae',         NULL,               'person', 'active', '2026-09-17 20:25:02.419445+04', NULL, 1),
+        ('Alya Al-Salman',            'aas@sa.gov.ae',        NULL,               'person', 'active', '2026-09-17 20:25:22.382205+04', NULL, 2),
+        ('Fathiya Yousif Al-Mulla',   'fym@sa.gov.ae',        NULL,               'person', 'active', '2026-09-17 20:27:18.288719+04', NULL, 1),
+        ('Ahmed BinTaliah',           'abt@sa.gov.ae',        NULL,               'person', 'active', '2026-09-17 20:27:46.264701+04', NULL, 1),
+        ('Yahya Yai Abdullah',        'yya@sa.gov.ae',        NULL,               'person', 'active', '2026-09-17 20:28:04.649664+04', NULL, 1),
+        ('Sami Mali Jibtou Jari',     'smjj@sa.gov.ae',       NULL,               'person', 'active', '2026-09-17 20:43:53.918232+04', NULL, 1);
 
     IF EXISTS (
         SELECT 1
