@@ -40,7 +40,39 @@ AGGREGATION_SUMMARY_LAYOUT_CLASSES = (
 )
 RECORD_DETAIL_HEADER_CLASSES = "w-full items-start gap-2 no-wrap"
 RECORD_DETAIL_TITLE_CLASSES = "gap-0 grow min-w-0"
+NAVIGATION_TRAIL_LIMIT = 20
+NAVIGATION_VISIBLE_LIMIT = 5
 STOP_PROPAGATION_CLICK_HANDLER = "(event) => { event.stopPropagation(); emit(); }"
+
+
+def navigation_entry_identity(entry: dict[str, Any]) -> tuple[str, int | None]:
+    return str(entry["page"]), entry.get("entity_id")
+
+
+def append_navigation_entry(
+    trail: list[dict[str, Any]], entry: dict[str, Any],
+    *, limit: int = NAVIGATION_TRAIL_LIMIT,
+) -> list[dict[str, Any]]:
+    """Append a page visit, collapsing only a consecutive logical duplicate."""
+    updated = [dict(item) for item in trail]
+    if updated and navigation_entry_identity(updated[-1]) == navigation_entry_identity(entry):
+        updated[-1] = {**updated[-1], **entry}
+    else:
+        updated.append(dict(entry))
+    return updated[-limit:]
+
+
+def visible_navigation_indices(
+    length: int, *, limit: int = NAVIGATION_VISIBLE_LIMIT,
+) -> tuple[list[int], list[int]]:
+    """Return visible and overflow indices while retaining first and recent pages."""
+    if length <= limit:
+        return list(range(length)), []
+    recent_count = max(1, limit - 2)
+    visible = [0, *range(length - recent_count - 1, length)]
+    visible = sorted(set(visible))
+    hidden = [index for index in range(length) if index not in visible]
+    return visible, hidden
 USER_AVATAR_COLORS = (
     "#2563eb", "#7c3aed", "#db2777", "#dc2626", "#ea580c",
     "#ca8a04", "#16a34a", "#0d9488", "#0891b2", "#4f46e5",
@@ -521,6 +553,14 @@ def index() -> None:
         "favourites": {"aggregations": [], "records": []},
         "favourite_ids": {"aggregations": set(), "records": set()},
     }
+    stored_navigation = app.storage.user.get("navigation_trail")
+    navigation_state: dict[str, Any] = {
+        "trail": [
+            item for item in (stored_navigation if isinstance(stored_navigation, list) else [])
+            if isinstance(item, dict) and isinstance(item.get("page"), str)
+        ][-NAVIGATION_TRAIL_LIMIT:],
+        "restoring": False,
+    }
 
     ui.add_css("""
         :root { --erms-navy: #16324f; --erms-blue: #2563eb; --erms-bg: #f4f7fb; }
@@ -605,17 +645,15 @@ def index() -> None:
         connection_icon.update()
         connection_tooltip.update()
 
-    def drawer_link(label: str, icon: str, *, extra_classes: str = "") -> tuple[Any, Any]:
+    def drawer_link(label: str, icon: str, *, extra_classes: str = "") -> Any:
         with ui.button(icon=icon).props("flat align=left no-caps").classes(
             f"w-full justify-start px-4 {extra_classes}"
         ) as button:
-            ui.label(label).classes("grow text-left")
-            badge = ui.badge("—", color="blue-grey").props("rounded")
-        return button, badge
+            ui.label(label).classes("text-left")
+        return button
 
     with ui.left_drawer(value=True).classes("erms-drawer") as drawer:
         navigation: dict[str, Any] = {}
-        navigation_badges: dict[str, Any] = {}
         dashboard_navigation = ui.button("Dashboard", icon="dashboard").props("flat align=left no-caps").classes("w-full justify-start px-4 mt-4")
         for heading, entries in (
             ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
@@ -629,12 +667,15 @@ def index() -> None:
                     "w-full justify-start px-4"
                 )
             for key, icon in entries:
-                navigation[key], navigation_badges[key] = drawer_link(ENTITIES[key].label, icon)
+                navigation[key] = drawer_link(ENTITIES[key].label, icon)
         ui.label("SYSTEM ADMINISTRATION").classes("text-xs tracking-widest opacity-60 px-4 pt-5 pb-2")
-        audit_navigation, navigation_badges["event-history"] = drawer_link("Audit trail", "manage_history")
-        sessions_navigation, navigation_badges["login-sessions"] = drawer_link("Login sessions", "devices")
+        audit_navigation = drawer_link("Audit trail", "manage_history")
+        sessions_navigation = drawer_link("Login sessions", "devices")
 
     with ui.column().classes("erms-content w-full p-5 gap-4"):
+        breadcrumb_host = ui.element("nav").props(
+            "aria-label='Navigation history'"
+        ).classes("w-full min-h-7")
         with ui.row().classes("w-full items-center"):
             with ui.column().classes("gap-0"):
                 title = ui.label().classes("text-2xl font-semibold")
@@ -664,6 +705,149 @@ def index() -> None:
     add_button.set_visibility(False)
     add_record_button.set_visibility(False)
 
+    def current_navigation_snapshot() -> dict[str, Any]:
+        return {
+            "searched": bool(state.get("searched")),
+            "search_text": str(search_input.value or ""),
+            "lifecycle_filter": state.get("lifecycle_filter", "all"),
+            "aggregation_mode": state.get("aggregation_mode", "search"),
+        }
+
+    def persist_navigation_trail() -> None:
+        app.storage.user["navigation_trail"] = navigation_state["trail"]
+
+    async def navigate_to_breadcrumb(index: int) -> None:
+        trail = navigation_state["trail"]
+        if index < 0 or index >= len(trail):
+            return
+        entry = dict(trail[index])
+        navigation_state["trail"] = trail[:index + 1]
+        persist_navigation_trail()
+        navigation_state["restoring"] = True
+        try:
+            await restore_navigation_entry(entry)
+        except ApiError as error:
+            if error.status_code in {403, 404}:
+                navigation_state["trail"] = navigation_state["trail"][:-1]
+                persist_navigation_trail()
+                ui.notify(
+                    "That page is no longer available. Returning to the previous page.",
+                    color="warning",
+                )
+                if navigation_state["trail"]:
+                    await restore_navigation_entry(navigation_state["trail"][-1])
+                else:
+                    await select_dashboard()
+            else:
+                ui.notify(error_message(error), color="negative", close_button=True)
+        finally:
+            navigation_state["restoring"] = False
+            render_navigation_breadcrumbs()
+
+    def render_navigation_breadcrumbs() -> None:
+        breadcrumb_host.clear()
+        trail = navigation_state["trail"]
+        breadcrumb_host.set_visibility(bool(auth_state.get("principal") and trail))
+        if not trail or not auth_state.get("principal"):
+            return
+        visible, hidden = visible_navigation_indices(len(trail))
+        with breadcrumb_host, ui.row().classes(
+            "w-full items-center no-wrap gap-1 text-xs text-slate-500 overflow-hidden"
+        ):
+            previous_index = None
+            for index in visible:
+                if previous_index is not None and index > previous_index + 1:
+                    with ui.button(icon="more_horiz").props(
+                        f"flat round dense size=sm aria-label='{len(hidden)} hidden navigation entries'"
+                    ):
+                        with ui.menu():
+                            for hidden_index in hidden:
+                                item = trail[hidden_index]
+                                ui.menu_item(
+                                    item.get("label") or item["page"].replace("-", " ").title(),
+                                    on_click=lambda _, target=hidden_index: navigate_to_breadcrumb(target),
+                                )
+                if previous_index is not None:
+                    ui.icon("chevron_right", size="15px").props("aria-hidden=true").classes("shrink-0 text-slate-300")
+                entry = trail[index]
+                label = entry.get("label") or entry["page"].replace("-", " ").title()
+                if index == len(trail) - 1:
+                    ui.label(label).props("aria-current=page").classes(
+                        "font-semibold text-slate-700 truncate max-w-64"
+                    ).tooltip(entry.get("accessible_label") or label)
+                else:
+                    ui.button(
+                        label, on_click=lambda _, target=index: navigate_to_breadcrumb(target),
+                    ).props("flat dense no-caps color=blue-grey").classes(
+                        "min-w-0 max-w-52 truncate px-1"
+                    ).tooltip(entry.get("accessible_label") or label)
+                previous_index = index
+
+    def register_navigation(
+        page: str, label: str, *, entity_id: int | None = None,
+        accessible_label: str | None = None,
+    ) -> None:
+        if navigation_state["restoring"]:
+            return
+        trail = navigation_state["trail"]
+        if trail:
+            trail[-1]["state"] = current_navigation_snapshot()
+        entry = {
+            "page": page,
+            "label": label,
+            "entity_id": entity_id,
+            "accessible_label": accessible_label or label,
+            "state": {},
+        }
+        navigation_state["trail"] = append_navigation_entry(trail, entry)
+        persist_navigation_trail()
+        render_navigation_breadcrumbs()
+
+    async def breadcrumb_back(fallback: Any) -> None:
+        if len(navigation_state["trail"]) > 1:
+            await navigate_to_breadcrumb(len(navigation_state["trail"]) - 2)
+            return
+        result = fallback()
+        if asyncio.iscoroutine(result):
+            await result
+
+    async def restore_navigation_entry(entry: dict[str, Any]) -> None:
+        page = entry["page"]
+        saved = entry.get("state") or {}
+        entity_id = entry.get("entity_id")
+        if page == "dashboard":
+            await select_dashboard()
+        elif page in ENTITIES:
+            if page == "aggregations":
+                state["aggregation_mode"] = saved.get("aggregation_mode", "search")
+            await select_entity(page)
+            search_input.value = saved.get("search_text", "")
+            state["lifecycle_filter"] = saved.get("lifecycle_filter", "all")
+            if saved.get("searched") and search_input.value and ENTITIES[page].search_first:
+                await load_rows()
+            elif state["lifecycle_filter"] != "all" and page in {"org-units", "roles", "users"}:
+                render_table(ENTITIES[page])
+        elif page == "classification-workspace":
+            await select_classification_workspace()
+        elif page == "organization-browser":
+            await show_organization_structure()
+        elif page == "audit-trail":
+            await select_audit_trail()
+        elif page == "login-sessions":
+            await select_login_sessions()
+        elif page == "aggregation-details" and entity_id is not None:
+            await open_aggregation(await api.get("aggregations", entity_id))
+        elif page == "record-details" and entity_id is not None:
+            await select_record_details(entity_id)
+        elif page == "org-unit-details" and entity_id is not None:
+            await select_organization_unit_details(entity_id)
+        elif page == "role-details" and entity_id is not None:
+            await select_role_details(entity_id)
+        elif page == "user-details" and entity_id is not None:
+            await select_user_details(entity_id)
+        else:
+            raise ApiError(404, "Navigation target is no longer available")
+
     def clear_authenticated_view() -> None:
         """Remove protected data as soon as there is no authenticated principal."""
         state.update(resource="dashboard", rows=[], searched=False, aggregation_detail=None)
@@ -679,9 +863,7 @@ def index() -> None:
         add_button.set_visibility(False)
         add_record_button.set_visibility(False)
         content_card.set_visibility(False)
-        for badge in navigation_badges.values():
-            badge.text = "—"
-            badge.update()
+        breadcrumb_host.set_visibility(False)
 
     def clear_signed_in_identity() -> None:
         """Remove account identity and overlays before presenting sign-in again."""
@@ -690,6 +872,8 @@ def index() -> None:
         current_user_name.text = "Not signed in"
         current_user_email.text = ""
         current_user_roles.clear()
+        navigation_state["trail"] = []
+        app.storage.user.pop("navigation_trail", None)
         clear_authenticated_view()
 
     def show_authenticated_view() -> None:
@@ -783,21 +967,6 @@ def index() -> None:
         "classification-schemes": "classification_scheme",
         "classifications": "classification",
     }
-
-    async def refresh_navigation_counts() -> None:
-        resources = ["aggregations", "records", "classification-schemes", "org-units", "roles", "users", "event-history"]
-        try:
-            counts = await asyncio.gather(*(api.count(resource) for resource in resources))
-            for resource, count in zip(resources, counts):
-                navigation_badges[resource].text = str(count)
-                navigation_badges[resource].update()
-            sessions = await api.login_sessions()
-            navigation_badges["login-sessions"].text = str(sum(row["status"] == "active" for row in sessions))
-            navigation_badges["login-sessions"].update()
-            set_connection_status(True)
-        except ApiError as error:
-            # An HTTP response, including 401, means the API is reachable.
-            set_connection_status(error.status_code != 503)
 
     def event_value(value: Any) -> str:
         if value is None:
@@ -1311,6 +1480,7 @@ def index() -> None:
         await select_record_details(record["id"])
 
     async def select_record_details(record_id: int) -> None:
+        register_navigation("record-details", f"Record #{record_id}", entity_id=record_id)
         previous_resource = state.get("resource")
         if previous_resource != "record-details":
             state["record_detail_return_resource"] = previous_resource
@@ -1333,19 +1503,16 @@ def index() -> None:
 
         title.text = record["title"]
         subtitle.text = f"Record {record['record_number']}"
+        register_navigation(
+            "record-details", record["title"], entity_id=record_id,
+            accessible_label=f"{record['title']} — {record['record_number']}",
+        )
 
         async def refresh_record_view(saved: dict[str, Any] | None = None) -> None:
             await select_record_details((saved or record)["id"])
 
         async def leave_record_page() -> None:
-            aggregation_context = state.get("record_detail_return_aggregation")
-            return_resource = state.get("record_detail_return_resource")
-            if aggregation_context:
-                await open_aggregation(aggregation_context)
-            elif return_resource == "dashboard":
-                await select_dashboard()
-            else:
-                await select_entity("records")
+            await breadcrumb_back(lambda: select_entity("records"))
 
         async def open_containing_aggregation() -> None:
             try:
@@ -1377,7 +1544,6 @@ def index() -> None:
                         await api.delete("records", record["id"], record["version"])
                         confirmation.close()
                         ui.notify("Record deleted", color="positive")
-                        await refresh_navigation_counts()
                         await load_recent(ENTITIES["records"])
                         await leave_record_page()
                     except ApiError as error:
@@ -1669,7 +1835,6 @@ def index() -> None:
                 committed_record = await api.commit_record_draft(draft["id"])
                 dialog.close()
                 ui.notify("Record and digital components created", color="positive")
-                await refresh_navigation_counts()
                 await load_recent(spec)
                 if on_committed is not None:
                     await on_committed(committed_record)
@@ -1727,7 +1892,14 @@ def index() -> None:
         locked_fields: set[str] | None = None,
         resource_key: str | None = None,
     ) -> None:
-        spec = ENTITIES[resource_key or state["resource"]]
+        resolved_resource = resource_key or {
+            "aggregation-details": "aggregations",
+            "record-details": "records",
+            "org-unit-details": "org-units",
+            "role-details": "roles",
+            "user-details": "users",
+        }.get(state["resource"], state["resource"])
+        spec = ENTITIES[resolved_resource]
         creating = row is None
         if row and spec.key in {"aggregations", "records"} and row.get("_effectively_closed"):
             ui.notify(
@@ -1982,8 +2154,6 @@ def index() -> None:
                             )
                     dialog.close()
                     ui.notify(f"{spec.singular.capitalize()} saved", color="positive")
-                    if creating:
-                        await refresh_navigation_counts()
                     if on_saved is not None:
                         if spec.search_first:
                             await load_recent(spec)
@@ -2295,6 +2465,13 @@ def index() -> None:
         await load_memberships()
 
     async def open_aggregation(aggregation: dict[str, Any]) -> None:
+        register_navigation(
+            "aggregation-details", aggregation.get("title") or f"Aggregation #{aggregation['id']}",
+            entity_id=aggregation["id"],
+            accessible_label=" — ".join(filter(None, (
+                aggregation.get("title"), aggregation.get("aggregation_number"),
+            ))),
+        )
         previous_resource = state.get("resource")
         if previous_resource != "aggregation-details":
             state["aggregation_detail_return_resource"] = previous_resource
@@ -2352,16 +2529,7 @@ def index() -> None:
             table_container.clear()
             with table_container:
                 async def leave_aggregation_page() -> None:
-                    return_resource = state.get("aggregation_detail_return_resource")
-                    return_record_id = state.get("aggregation_detail_return_record_id")
-                    if return_resource == "record-details" and return_record_id:
-                        await select_record_details(return_record_id)
-                    elif return_resource == "dashboard":
-                        await select_dashboard()
-                    elif return_resource == "aggregation-browser":
-                        await select_aggregation_browser()
-                    else:
-                        await select_entity("aggregations")
+                    await breadcrumb_back(lambda: select_entity("aggregations"))
 
                 async def reopen_current() -> None:
                     try:
@@ -2370,7 +2538,6 @@ def index() -> None:
                             {"date_closed": None},
                         )
                         ui.notify("Aggregation reopened", color="positive")
-                        await refresh_navigation_counts()
                         await load_recent(ENTITIES["aggregations"])
                         await open_aggregation(reopened)
                     except ApiError as error:
@@ -2468,7 +2635,6 @@ def index() -> None:
                                 )
                                 confirmation.close()
                                 ui.notify("Aggregation deleted", color="positive")
-                                await refresh_navigation_counts()
                                 await load_recent(ENTITIES["aggregations"])
                                 parent = by_id.get(current.get("parent_aggregation_id"))
                                 if parent:
@@ -2526,7 +2692,8 @@ def index() -> None:
                                 ui.button(
                                     "Edit metadata", icon="edit",
                                     on_click=lambda: open_editor(
-                                        current, on_saved=open_aggregation
+                                        current, on_saved=open_aggregation,
+                                        resource_key="aggregations",
                                     ),
                                 ).props("flat dense no-caps")
                             ui.button(
@@ -3218,6 +3385,8 @@ def index() -> None:
         login_dialog.open()
 
     async def select_login_sessions(user_id: int | None = None) -> None:
+        if user_id is None:
+            register_navigation("login-sessions", "Login sessions")
         show_authenticated_view()
         state.update(resource="login-sessions", rows=[], searched=True, aggregation_detail=None)
         title.text = "Login sessions"
@@ -3240,7 +3409,6 @@ def index() -> None:
             except ApiError as error:
                 ui.notify(error_message(error), color="negative")
                 return
-            active_count = sum(row["status"] == "active" for row in rows)
             is_admin = any(role["code"].lower() == "system-administrator" for role in auth_state["principal"]["roles"])
             for row in rows:
                 row["can_revoke_all"] = is_admin
@@ -3249,9 +3417,6 @@ def index() -> None:
                     "name": row.get("user_name"),
                     "email": row.get("user_email"),
                 })
-            if user_id is None:
-                navigation_badges["login-sessions"].text = str(active_count)
-                navigation_badges["login-sessions"].update()
             outer.clear()
             with outer:
                 with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-3"):
@@ -3420,6 +3585,7 @@ def index() -> None:
         await load_sessions()
 
     async def select_dashboard() -> None:
+        register_navigation("dashboard", "Dashboard")
         show_authenticated_view()
         state.update(resource="dashboard", rows=[], searched=True, aggregation_detail=None)
         title.text = "Dashboard"
@@ -3558,8 +3724,6 @@ def index() -> None:
                     )
                     for resource, (created, updated) in recent.items()
                 }
-                sessions = await api.login_sessions()
-                active_session_count = sum(row["status"] == "active" for row in sessions)
                 favourite_limit = dashboard_favourite_item_limit()
             except ApiError as error:
                 if getattr(page_client, "_deleted", False):
@@ -3808,17 +3972,12 @@ def index() -> None:
                                             ui.label(number).classes("text-xs text-slate-400")
                                         ui.label(format_timestamp(item.get("_activity_at"))).classes("text-xs text-slate-400")
                                         ui.icon("chevron_right").classes("text-slate-300")
-                for resource, count in counts.items():
-                    if resource in navigation_badges:
-                        navigation_badges[resource].text = str(count)
-                        navigation_badges[resource].update()
-                navigation_badges["login-sessions"].text = str(active_session_count)
-                navigation_badges["login-sessions"].update()
                 set_connection_status(True)
 
         await load_dashboard()
 
     async def select_audit_trail() -> None:
+        register_navigation("audit-trail", "Audit trail")
         show_authenticated_view()
         state.update(resource="audit-trail", rows=[], searched=True, aggregation_detail=None)
         title.text = "Audit trail"
@@ -4480,6 +4639,7 @@ def index() -> None:
         render_table(ENTITIES["aggregations"])
 
     async def select_organization_unit_details(org_unit_id: int) -> None:
+        register_navigation("org-unit-details", f"Organization unit #{org_unit_id}", entity_id=org_unit_id)
         show_authenticated_view()
         state.update(resource="org-unit-details", rows=[], searched=True, aggregation_detail=None)
         search_bar.set_visibility(False); aggregation_mode_bar.set_visibility(False)
@@ -4490,6 +4650,10 @@ def index() -> None:
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True); return
         title.text = unit["name"]; subtitle.text = "Organization unit details and inherited lifecycle effects"
+        register_navigation(
+            "org-unit-details", unit["name"], entity_id=org_unit_id,
+            accessible_label=f"{unit['name']} — {unit['code']}",
+        )
 
         async def refresh(_: Any = None) -> None:
             await select_organization_unit_details(org_unit_id)
@@ -4512,6 +4676,10 @@ def index() -> None:
                         ui.label(unit["name"]).classes("text-xl font-semibold")
                         ui.label(unit["code"]).classes("text-primary")
                         if unit.get("description"): ui.label(unit["description"]).classes("text-slate-600")
+                    ui.button(
+                        "Back", icon="arrow_back",
+                        on_click=lambda: breadcrumb_back(lambda: select_entity("org-units")),
+                    ).props("flat no-caps")
                     ui.button("Edit", icon="edit", on_click=lambda: open_editor(unit, on_saved=refresh, resource_key="org-units")).props("flat no-caps")
                     ui.button("History", icon="history", on_click=lambda: show_entity_history("org-units", unit)).props("flat no-caps")
                     ui.button("Activate" if unit["status"] == "inactive" else "Deactivate", icon="toggle_on" if unit["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline no-caps")
@@ -4534,6 +4702,7 @@ def index() -> None:
                                 ui.label(guidance_text).classes("w-full text-[10px] leading-3 text-slate-400")
 
     async def select_role_details(role_id: int) -> None:
+        register_navigation("role-details", f"Role #{role_id}", entity_id=role_id)
         show_authenticated_view()
         state.update(resource="role-details", rows=[], searched=True, aggregation_detail=None)
         search_bar.set_visibility(False); aggregation_mode_bar.set_visibility(False)
@@ -4544,6 +4713,10 @@ def index() -> None:
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True); return
         title.text = role["name"]; subtitle.text = "Role details, assignments, supervision, and inherited lifecycle effects"
+        register_navigation(
+            "role-details", role["name"], entity_id=role_id,
+            accessible_label=f"{role['name']} — {role['code']}",
+        )
 
         async def refresh(_: Any = None) -> None:
             await select_role_details(role_id)
@@ -4563,6 +4736,10 @@ def index() -> None:
                         ui.label(role["name"]).classes("text-xl font-semibold")
                         ui.label(role["code"]).classes("text-primary")
                         if role.get("description"): ui.label(role["description"]).classes("text-slate-600")
+                    ui.button(
+                        "Back", icon="arrow_back",
+                        on_click=lambda: breadcrumb_back(lambda: select_entity("roles")),
+                    ).props("flat no-caps")
                     ui.button("Edit", icon="edit", on_click=lambda: open_editor(role, on_saved=refresh, resource_key="roles")).props("flat no-caps")
                     ui.button("User assignments", icon="group", on_click=lambda: show_memberships(role, for_user=False)).props("flat no-caps")
                     ui.button("History", icon="history", on_click=lambda: show_entity_history("roles", role)).props("flat no-caps")
@@ -4590,6 +4767,7 @@ def index() -> None:
 
     async def select_user_details(user_id: int) -> None:
         """Render the extensible single-user management view."""
+        register_navigation("user-details", f"User #{user_id}", entity_id=user_id)
         show_authenticated_view()
         state.update(resource="user-details", rows=[], searched=True, aggregation_detail=None)
         search_bar.set_visibility(False)
@@ -4609,6 +4787,10 @@ def index() -> None:
             return
         title.text = person["name"]
         subtitle.text = "User details and account administration"
+        register_navigation(
+            "user-details", person["name"], entity_id=user_id,
+            accessible_label=" — ".join(filter(None, (person["name"], person.get("email")))),
+        )
         role_by_id = {item["id"]: item for item in roles}
 
         async def refresh_user(_: Any = None) -> None:
@@ -4657,6 +4839,10 @@ def index() -> None:
                                 ui.badge(person["account_type"].title(), color="blue-grey").props("outline")
                                 ui.badge(person["status"].title(), color={"active": "positive", "suspended": "warning"}.get(person["status"], "grey-7"))
                         with ui.row().classes("gap-1"):
+                            ui.button(
+                                "Back", icon="arrow_back",
+                                on_click=lambda: breadcrumb_back(lambda: select_entity("users")),
+                            ).props("flat no-caps")
                             ui.button("Edit", icon="edit", on_click=lambda: open_editor(person, on_saved=refresh_user, resource_key="users")).props("flat no-caps")
                             ui.button("Role assignments", icon="group", on_click=lambda: show_memberships(person, for_user=True)).props("flat no-caps")
                             ui.button("Temporary password", icon="password", on_click=issue_password).props("flat no-caps color=orange")
@@ -4772,6 +4958,8 @@ def index() -> None:
     ) -> None:
         """Shared lazy organization browser for the page and selectors."""
         is_selector = selection_mode is not None
+        if not is_selector:
+            register_navigation("organization-browser", "Browse organization structure")
         if is_selector:
             dialog = ui.dialog()
             host = dialog
@@ -5183,6 +5371,7 @@ def index() -> None:
             dialog.open()
 
     async def select_entity(key: str) -> None:
+        register_navigation(key, ENTITIES[key].label)
         show_authenticated_view()
         state.update(
             resource=key, rows=[], searched=False, aggregation_detail=None,
@@ -5220,6 +5409,7 @@ def index() -> None:
         initial_scheme_id: int | None = None,
         initial_classification_id: int | None = None,
     ) -> None:
+        register_navigation("classification-workspace", "Classification schemes")
         show_authenticated_view()
         state.update(
             resource="classification-workspace", rows=[], searched=True,
@@ -6108,7 +6298,6 @@ def index() -> None:
                         )
                         dialog.close()
                         ui.notify("Classification scheme deleted", color="positive")
-                        await refresh_navigation_counts()
                         await reload_workspace()
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True)
@@ -6248,7 +6437,7 @@ def index() -> None:
         await open_editor(
             initial_values={"parent_aggregation_id": current["id"]},
             locked_fields={"parent_aggregation_id"},
-            on_saved=refresh_parent,
+            on_saved=refresh_parent, resource_key="aggregations",
         )
 
     async def add_record_for_current_aggregation() -> None:
@@ -6288,6 +6477,8 @@ def index() -> None:
                 app.storage.user["session_token"] = token
                 api.set_session_token(token)
                 populate_user_menu(principal)
+                navigation_state["trail"] = []
+                app.storage.user.pop("navigation_trail", None)
                 await reload_favourites()
                 login_password.value = ""
                 login_dialog.close()
@@ -6332,6 +6523,13 @@ def index() -> None:
                 if principal["must_change_password"]:
                     with table_container:
                         await show_change_password()
+                elif navigation_state["trail"]:
+                    navigation_state["restoring"] = True
+                    try:
+                        await restore_navigation_entry(navigation_state["trail"][-1])
+                    finally:
+                        navigation_state["restoring"] = False
+                        render_navigation_breadcrumbs()
                 else:
                     await select_dashboard()
                 return
