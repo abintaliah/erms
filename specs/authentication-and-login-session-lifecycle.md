@@ -241,8 +241,8 @@ Active sessions are never eligible. Retention must be configurable.
 
 ### 8.2 Operational implementation
 
-Cleanup is a separate operational command outside FastAPI. The planned module
-is `backend.services.api.session_cleanup`.
+Cleanup is a separate operational command outside FastAPI. Its module is
+`backend.services.api.session_cleanup`.
 
 It supports:
 
@@ -257,7 +257,7 @@ It supports:
 Production may schedule the one-shot command or supervise exactly one `--watch`
 process per logical database. Cleanup must never start from each FastAPI worker.
 
-Planned commands and configuration are maintained in the central
+Commands and configuration are maintained in the central
 [Operational Tools Catalogue](../docs/operations.md#5-login-session-cleanup).
 Every future operational tool must be added to that catalogue with its
 implementation.

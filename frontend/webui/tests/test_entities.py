@@ -11,6 +11,8 @@ from frontend.webui.app import (
     RECORD_UPLOAD_WAIT_MESSAGE,
     RECORD_DETAIL_HEADER_CLASSES,
     RECORD_DETAIL_TITLE_CLASSES,
+    LIFECYCLE_ACTION_BUTTONS,
+    USER_SUSPENSION_ACTION_BUTTONS,
     STOP_PROPAGATION_CLICK_HANDLER,
     buffer_upload_batch,
     component_uploader,
@@ -20,6 +22,7 @@ from frontend.webui.app import (
     format_file_size,
     form_payload,
     format_timestamp,
+    filter_membership_rows,
     relationship_options,
 )
 from frontend.webui.app import native_preview_kind
@@ -141,6 +144,27 @@ def test_dashboard_favourite_configuration_defaults_to_five(monkeypatch):
     assert dashboard_favourite_item_limit() == 5
 
 
+def test_membership_filters_identity_status_and_overlapping_validity():
+    rows = [
+        {
+            "id": 1, "counterpart_search": "Alya Al-Salman alya@example.test",
+            "counterpart_status": "active", "valid_from": "2026-01-01T00:00:00Z",
+            "valid_until": None,
+        },
+        {
+            "id": 2, "counterpart_search": "Sami Jari sami@example.test",
+            "counterpart_status": "suspended", "valid_from": "2025-01-01T00:00:00Z",
+            "valid_until": "2025-12-31T23:59:59Z",
+        },
+    ]
+    assert [row["id"] for row in filter_membership_rows(rows, query="alya")] == [1]
+    assert [row["id"] for row in filter_membership_rows(rows, query="SAMI@EXAMPLE")] == [2]
+    assert [row["id"] for row in filter_membership_rows(rows, status="suspended")] == [2]
+    assert [row["id"] for row in filter_membership_rows(
+        rows, valid_from="2026-06-01", valid_until="2026-06-30",
+    )] == [1]
+
+
 def test_classification_recent_selection_configuration(monkeypatch):
     monkeypatch.setenv("CLASSIFICATION_RECENT_SELECTION_LIMIT", "6")
     assert classification_recent_selection_limit() == 6
@@ -178,6 +202,21 @@ def test_record_detail_header_keeps_controls_visible_beside_long_titles():
 def test_favourite_click_handler_stops_propagation_inside_function():
     assert STOP_PROPAGATION_CLICK_HANDLER.startswith("(event) =>")
     assert "event.stopPropagation(); emit();" in STOP_PROPAGATION_CLICK_HANDLER
+
+
+def test_lifecycle_actions_keep_activate_button_for_inactive_rows():
+    assert 'v-if="props.row.status === \'inactive\'"' in LIFECYCLE_ACTION_BUTTONS
+    assert 'icon="toggle_on"' in LIFECYCLE_ACTION_BUTTONS
+    assert 'aria-label="Activate"' in LIFECYCLE_ACTION_BUTTONS
+    assert "v-else" in LIFECYCLE_ACTION_BUTTONS
+    assert 'aria-label="Deactivate"' in LIFECYCLE_ACTION_BUTTONS
+
+
+def test_suspend_action_remains_visible_but_disabled_for_inactive_users():
+    assert 'v-if="props.row.status !== \'suspended\'"' in USER_SUSPENSION_ACTION_BUTTONS
+    assert ':disable="props.row.status !== \'active\'"' in USER_SUSPENSION_ACTION_BUTTONS
+    assert "Activate the user before suspending" in USER_SUSPENSION_ACTION_BUTTONS
+    assert 'icon="play_circle"' in USER_SUSPENSION_ACTION_BUTTONS
 
 
 def test_dashboard_recent_configuration_rejects_non_positive_values(monkeypatch):

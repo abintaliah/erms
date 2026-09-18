@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, timezone
 
 import psycopg
 import pytest
@@ -10,6 +11,7 @@ from backend.services.api.manage_auth import (
     BOOTSTRAP_USER_EMAIL,
     bootstrap_administrator,
 )
+from backend.services.api.session_cleanup import cleanup_sessions
 
 
 def test_authenticated_principal_includes_roles(client: TestClient):
@@ -127,6 +129,132 @@ def test_deactivating_user_revokes_sessions_and_prevents_authentication(client: 
         assert connection.execute(
             "SELECT bool_and(revoked_at IS NOT NULL) FROM login_sessions WHERE user_id=1"
         ).fetchone()[0] is True
+
+
+def test_suspend_and_unsuspend_revoke_existing_sessions(client: TestClient):
+    created = client.post(
+        "/api/v1/users",
+        json={"name": "Suspension Test", "email": "suspend@test.invalid"},
+    ).json()
+    password = client.post(
+        f"/api/v1/auth/users/{created['id']}/temporary-password"
+    ).json()["temporary_password"]
+    user_client = TestClient(client.app)
+    login = user_client.post(
+        "/api/v1/auth/login",
+        json={"email": "suspend@test.invalid", "password": password},
+    )
+    assert login.status_code == 200
+
+    suspended = client.post(
+        f"/api/v1/users/{created['id']}/suspend",
+        headers={"If-Match": str(created["version"])},
+    )
+    assert suspended.status_code == 200
+    assert suspended.json()["status"] == "suspended"
+    assert suspended.json()["date_deactivated"] is None
+    assert user_client.get("/api/v1/auth/me").status_code == 401
+    assert user_client.post(
+        "/api/v1/auth/login",
+        json={"email": "suspend@test.invalid", "password": password},
+    ).status_code == 401
+
+    unsuspended = client.post(
+        f"/api/v1/users/{created['id']}/unsuspend",
+        headers={"If-Match": str(suspended.json()["version"])},
+    )
+    assert unsuspended.status_code == 200
+    assert unsuspended.json()["status"] == "active"
+    assert user_client.get("/api/v1/auth/me").status_code == 401
+    assert user_client.post(
+        "/api/v1/auth/login",
+        json={"email": "suspend@test.invalid", "password": password},
+    ).status_code == 200
+
+
+def test_authentication_events_include_safe_client_and_session_metadata(client: TestClient):
+    failed = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@test.invalid", "password": "wrong-password"},
+        headers={"User-Agent": "ERMS-Test-Agent/1.0"},
+    )
+    assert failed.status_code == 401
+    with psycopg.connect(os.environ["DATABASE_URL"], row_factory=psycopg.rows.dict_row) as connection:
+        event = connection.execute(
+            """SELECT metadata FROM event_history
+                WHERE operation='AUTHENTICATION_FAILED'
+                ORDER BY id DESC LIMIT 1"""
+        ).fetchone()
+    assert event["metadata"]["user_agent"] == "ERMS-Test-Agent/1.0"
+    assert event["metadata"]["failed_attempt_count"] == 1
+    assert event["metadata"]["lock_applied"] is False
+    serialized = str(event["metadata"])
+    assert "wrong-password" not in serialized
+    assert "token_hash" not in serialized
+
+
+def test_session_cleanup_is_dry_runnable_audited_and_bounded(client: TestClient):
+    now = datetime.now(timezone.utc)
+    with psycopg.connect(
+        os.environ["DATABASE_URL"], row_factory=psycopg.rows.dict_row
+    ) as connection:
+        expired_id = connection.execute(
+            """INSERT INTO login_sessions
+                   (user_id, session_token_hash, csrf_token_hash, date_created,
+                    last_seen_at, expires_at, absolute_expires_at, client_ip, user_agent)
+               VALUES (1, %s, %s, %s, %s, %s, %s, '192.0.2.10', 'Expired Test')
+               RETURNING id""",
+            (
+                b"expired-session-token", b"expired-csrf-token",
+                now - timedelta(days=200), now - timedelta(days=190),
+                now - timedelta(days=120), now - timedelta(days=110),
+            ),
+        ).fetchone()["id"]
+        revoked_id = connection.execute(
+            """INSERT INTO login_sessions
+                   (user_id, session_token_hash, csrf_token_hash, date_created,
+                    last_seen_at, expires_at, absolute_expires_at, revoked_at,
+                    client_ip, user_agent)
+               VALUES (1, %s, %s, %s, %s, %s, %s, %s, '192.0.2.11', 'Revoked Test')
+               RETURNING id""",
+            (
+                b"revoked-session-token", b"revoked-csrf-token",
+                now - timedelta(days=200), now - timedelta(days=190),
+                now + timedelta(days=1), now + timedelta(days=2),
+                now - timedelta(days=120),
+            ),
+        ).fetchone()["id"]
+        connection.commit()
+
+        dry_run = cleanup_sessions(
+            connection, retention_days=90, batch_size=1, dry_run=True
+        )
+        assert dry_run.selected == 1
+        connection.rollback()
+        assert connection.execute(
+            "SELECT count(*) FROM login_sessions WHERE id IN (%s, %s)",
+            (expired_id, revoked_id),
+        ).fetchone()["count"] == 2
+
+        first = cleanup_sessions(connection, retention_days=90, batch_size=1)
+        second = cleanup_sessions(connection, retention_days=90, batch_size=1)
+        assert first.removed == 1
+        assert second.removed == 1
+        assert connection.execute(
+            "SELECT count(*) FROM login_sessions WHERE id IN (%s, %s)",
+            (expired_id, revoked_id),
+        ).fetchone()["count"] == 0
+        events = connection.execute(
+            """SELECT operation, metadata FROM event_history
+                WHERE operation IN ('SESSION_EXPIRED', 'SESSION_REVOKED')
+                  AND (metadata->>'session_id')::bigint IN (%s, %s)
+                ORDER BY id""",
+            (expired_id, revoked_id),
+        ).fetchall()
+    assert {event["operation"] for event in events} == {
+        "SESSION_EXPIRED", "SESSION_REVOKED",
+    }
+    assert all("session_token" not in str(event["metadata"]) for event in events)
 
 
 def test_empty_database_can_bootstrap_one_interactive_administrator(client: TestClient):

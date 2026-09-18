@@ -257,7 +257,6 @@ BEGIN
     CREATE TEMP TABLE seed_user_role_assignments (
         user_email text NOT NULL,
         role_code text NOT NULL,
-        assigned_by_email text,
         date_assigned timestamptz NOT NULL,
         valid_from timestamptz NOT NULL,
         valid_until timestamptz,
@@ -266,28 +265,26 @@ BEGIN
     ) ON COMMIT DROP;
 
     INSERT INTO seed_user_role_assignments VALUES
-        ('bootstrap@erms.local', 'system-administrator', NULL, '2026-09-17 20:14:20.094777+04', '2026-09-17 20:14:20.094777+04', NULL, 1),
-        ('yya@sa.gov.ae',        'system-administrator', NULL, '2026-09-17 20:28:18.545482+04', '2026-09-17 20:28:18.545482+04', NULL, 1),
-        ('yya@sa.gov.ae',        'EXP-ERM',              NULL, '2026-09-17 20:28:23.107250+04', '2026-09-17 20:28:23.107250+04', NULL, 1),
-        ('abt@sa.gov.ae',        'DRS-HD',               NULL, '2026-09-17 20:28:33.669684+04', '2026-09-17 20:28:33.669684+04', NULL, 1),
-        ('fym@sa.gov.ae',        'REC-MGR',              NULL, '2026-09-17 20:28:42.231302+04', '2026-09-17 20:28:42.231302+04', NULL, 1),
-        ('aas@sa.gov.ae',        'RMD-DIR',              NULL, '2026-09-17 20:28:52.033240+04', '2026-09-17 20:28:52.033240+04', NULL, 1),
-        ('gm@sa.gov.ae',         'GM',                   NULL, '2026-09-17 20:29:00.979964+04', '2026-09-17 20:29:00.979964+04', NULL, 1),
-        ('smjj@sa.gov.ae',       'AV-RM',                NULL, '2026-09-17 20:45:07.726001+04', '2026-09-17 20:45:07.726001+04', NULL, 1);
+        ('bootstrap@erms.local', 'system-administrator', '2026-09-17 20:14:20.094777+04', '2026-09-17 20:14:20.094777+04', NULL, 1),
+        ('yya@sa.gov.ae',        'system-administrator', '2026-09-17 20:28:18.545482+04', '2026-09-17 20:28:18.545482+04', NULL, 1),
+        ('yya@sa.gov.ae',        'EXP-ERM',              '2026-09-17 20:28:23.107250+04', '2026-09-17 20:28:23.107250+04', NULL, 1),
+        ('abt@sa.gov.ae',        'DRS-HD',               '2026-09-17 20:28:33.669684+04', '2026-09-17 20:28:33.669684+04', NULL, 1),
+        ('fym@sa.gov.ae',        'REC-MGR',              '2026-09-17 20:28:42.231302+04', '2026-09-17 20:28:42.231302+04', NULL, 1),
+        ('aas@sa.gov.ae',        'RMD-DIR',              '2026-09-17 20:28:52.033240+04', '2026-09-17 20:28:52.033240+04', NULL, 1),
+        ('gm@sa.gov.ae',         'GM',                   '2026-09-17 20:29:00.979964+04', '2026-09-17 20:29:00.979964+04', NULL, 1),
+        ('smjj@sa.gov.ae',       'AV-RM',                '2026-09-17 20:45:07.726001+04', '2026-09-17 20:45:07.726001+04', NULL, 1);
 
     INSERT INTO user_role_assignments (
-        user_id, role_id, assigned_by, date_assigned,
+        user_id, role_id, date_assigned,
         valid_from, valid_until, version
     )
-    SELECT assigned_user.id, assigned_role.id, assigning_user.id,
+    SELECT assigned_user.id, assigned_role.id,
            seed.date_assigned, seed.valid_from, seed.valid_until, seed.version
     FROM seed_user_role_assignments seed
     JOIN users assigned_user
       ON lower(assigned_user.email) = lower(seed.user_email)
     JOIN roles assigned_role
       ON lower(assigned_role.code) = lower(seed.role_code)
-    LEFT JOIN users assigning_user
-      ON lower(assigning_user.email) = lower(seed.assigned_by_email)
     WHERE NOT EXISTS (
         SELECT 1
         FROM user_role_assignments existing

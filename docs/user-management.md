@@ -90,7 +90,6 @@ identifiers when names are revised.
 | `id` | Internal `bigserial` identity |
 | `user_id` | Assigned user |
 | `role_id` | Assigned organizational role |
-| `assigned_by` | Optional user who made the assignment |
 | `date_assigned` | Automatically assigned audit timestamp |
 | `valid_from` | Beginning of the effective period; defaults to `date_assigned` |
 | `valid_until` | Optional inclusive end of the effective period |
@@ -99,14 +98,13 @@ The same user can hold the same role during separate periods. The combination
 of user, role, and `valid_from` is unique. PostgreSQL rejects an end timestamp
 earlier than its start timestamp.
 
-`assigned_by` remains null for unauthenticated operations. The future
-authentication layer will derive it from server-side request context rather
-than accepting an untrusted actor identity from clients.
+The authenticated actor who creates, changes, or deletes an assignment is
+recorded authoritatively in immutable event history. The assignment row does
+not duplicate that actor identity.
 
 ## Lifecycle and deletion
 
-Deleting a user, role, or organizational unit through the REST API is a soft
-deactivation:
+Deactivation is available only through explicit lifecycle operations:
 
 - Users become `inactive` and receive `date_deactivated`.
 - Roles become `inactive` and receive `date_deactivated`.
@@ -116,9 +114,11 @@ Rows remain available for historical references. Deleting a role assignment
 removes the assignment itself, while its immutable before-state remains in
 event history.
 
-The REST `DELETE` operations are retained as compatibility aliases for
-deactivation. New clients use the explicit `POST .../{id}/deactivate` and
-`POST .../{id}/activate` lifecycle operations.
+The REST `DELETE` operations for users, roles, and organizational units are not
+currently exposed. Permanent deletion will be implemented only after the RBAC
+authorization subsystem can enforce access-continuity and dependency rules.
+`DELETE` will then mean permanent deletion exclusively; it will never be an
+alias for deactivation.
 
 ### Users
 
@@ -130,6 +130,9 @@ deactivation. New clients use the explicit `POST .../{id}/deactivate` and
   effective again when their dates, roles, and organization hierarchy permit.
 - A suspended user is also unable to authenticate, but suspension is distinct
   from deactivation and does not set `date_deactivated`.
+- Explicit `POST .../{id}/suspend` and `POST .../{id}/unsuspend` operations
+  govern suspension. Suspending revokes active sessions; unsuspending does not
+  restore them.
 
 ### Roles
 
@@ -173,7 +176,8 @@ timestamps are rejected.
 ### Administrative UI behavior
 
 The organization-unit, role, and user lists expose explicit Activate and
-Deactivate actions with a confirmation that explains the consequences. Their
+Deactivate actions with a confirmation that explains the consequences. User
+lists additionally expose Suspend and Unsuspend. Their
 status column and status filter use **effective status**: a role whose own row
 is active is nevertheless shown as inactive when its organizational unit or an
 ancestor unit is inactive. A tooltip identifies whether the cause is direct or
@@ -212,8 +216,8 @@ transaction and is restored before it commits.
 
 ## REST API
 
-Each primary resource supports create, list, retrieve, partial update, soft
-deactivation, advanced search, and history:
+Each primary resource supports create, list, retrieve, partial update, explicit
+lifecycle operations, advanced search, and history:
 
 ```text
 /api/v1/users
@@ -223,6 +227,8 @@ deactivation, advanced search, and history:
 
 Explicit lifecycle operations append `/activate` or `/deactivate` to an entity
 URL and require the current version through `If-Match`.
+Users additionally provide `/suspend` and `/unsuspend`. Permanent `DELETE` is
+intentionally unavailable until the authorization subsystem is implemented.
 
 Role assignments support ordinary CRUD, search, and history:
 

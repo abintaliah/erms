@@ -73,20 +73,32 @@ def test_org_unit_crud_hierarchy_and_global_uniqueness(
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()] == [child["id"]]
 
-    assert client.delete(f"/api/v1/org-units/{child['id']}", headers={"If-Match": str(child["version"])}).status_code == 204
-    assert client.get(f"/api/v1/org-units/{child['id']}").json()["status"] == "inactive"
+    assert client.delete(f"/api/v1/org-units/{child['id']}", headers={"If-Match": str(child["version"])}).status_code == 405
+    deactivated = client.post(
+        f"/api/v1/org-units/{child['id']}/deactivate",
+        headers={"If-Match": str(child["version"])},
+    )
+    assert deactivated.status_code == 200
+    assert deactivated.json()["status"] == "inactive"
 
 
-def test_user_crud_neutral_name_and_soft_deactivation(client: TestClient, user: dict):
+def test_user_crud_neutral_name_and_explicit_lifecycle(client: TestClient, user: dict):
     assert user["name"] == "محمد علي"
     assert user["status"] == "active"
 
-    response = client.patch(
-        f"/api/v1/users/{user['id']}", json={"status": "suspended"},
+    response = client.post(
+        f"/api/v1/users/{user['id']}/suspend",
         headers={"If-Match": str(user["version"])},
     )
     assert response.status_code == 200
     assert response.json()["status"] == "suspended"
+
+    bypass = client.patch(
+        f"/api/v1/users/{user['id']}",
+        json={"status": "active"},
+        headers={"If-Match": str(response.json()["version"])},
+    )
+    assert bypass.status_code == 422
 
     duplicate_email = client.post(
         "/api/v1/users",
@@ -94,10 +106,24 @@ def test_user_crud_neutral_name_and_soft_deactivation(client: TestClient, user: 
     )
     assert duplicate_email.status_code == 409
 
-    assert client.delete(f"/api/v1/users/{user['id']}", headers={"If-Match": str(response.json()["version"])}).status_code == 204
-    deactivated = client.get(f"/api/v1/users/{user['id']}").json()
+    assert client.delete(f"/api/v1/users/{user['id']}", headers={"If-Match": str(response.json()["version"])}).status_code == 405
+    deactivated = client.post(
+        f"/api/v1/users/{user['id']}/deactivate",
+        headers={"If-Match": str(response.json()["version"])},
+    ).json()
     assert deactivated["status"] == "inactive"
     assert deactivated["date_deactivated"] is not None
+
+
+def test_role_delete_is_not_exposed_before_permanent_deletion_is_implemented(
+    client: TestClient, role: dict,
+):
+    response = client.delete(
+        f"/api/v1/roles/{role['id']}",
+        headers={"If-Match": str(role["version"])},
+    )
+    assert response.status_code == 405
+    assert client.get(f"/api/v1/roles/{role['id']}").status_code == 200
 
 
 def test_role_cross_unit_supervision_and_cycle_prevention(

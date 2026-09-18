@@ -481,9 +481,8 @@ CREATE INDEX roles_supervisor_role_id_idx ON roles (supervisor_role_id);
 
 CREATE TABLE user_role_assignments (
     id            bigserial PRIMARY KEY,
-    user_id       bigint NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
-    role_id       bigint NOT NULL REFERENCES roles (id) ON DELETE RESTRICT,
-    assigned_by   bigint REFERENCES users (id) ON DELETE RESTRICT,
+    user_id       bigint NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    role_id       bigint NOT NULL REFERENCES roles (id) ON DELETE CASCADE,
     date_assigned timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     valid_from    timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     valid_until   timestamptz,
@@ -498,8 +497,6 @@ CREATE INDEX user_role_assignments_user_id_idx
     ON user_role_assignments (user_id);
 CREATE INDEX user_role_assignments_role_id_idx
     ON user_role_assignments (role_id);
-CREATE INDEX user_role_assignments_assigned_by_idx
-    ON user_role_assignments (assigned_by) WHERE assigned_by IS NOT NULL;
 
 CREATE TABLE user_credentials (
     id                   bigserial PRIMARY KEY,
@@ -540,6 +537,8 @@ CREATE TABLE login_sessions (
 CREATE INDEX login_sessions_user_id_idx ON login_sessions (user_id);
 CREATE INDEX login_sessions_active_idx
     ON login_sessions (expires_at, absolute_expires_at) WHERE revoked_at IS NULL;
+CREATE INDEX login_sessions_revoked_cleanup_idx
+    ON login_sessions (revoked_at, id) WHERE revoked_at IS NOT NULL;
 
 CREATE TABLE user_favourite_aggregations (
     user_id         bigint NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -690,7 +689,7 @@ ON CONFLICT (version) DO NOTHING;
 -- the complete record package. The equivalent upgrade is migration 004.
 CREATE TABLE IF NOT EXISTS record_drafts (
     id bigserial PRIMARY KEY,
-    owner_user_id bigint REFERENCES users (id) ON DELETE RESTRICT,
+    owner_user_id bigint REFERENCES users (id) ON DELETE CASCADE,
     aggregation_id bigint REFERENCES aggregations (id) ON DELETE RESTRICT,
     record_number text,
     title text,
@@ -2082,6 +2081,10 @@ ON CONFLICT(version) DO NOTHING;
 
 INSERT INTO schema_migrations(version)
 VALUES ('028_add_user_favourites')
+ON CONFLICT(version) DO NOTHING;
+
+INSERT INTO schema_migrations(version)
+VALUES ('030_remove_assignment_attribution_and_prepare_user_deletion')
 ON CONFLICT(version) DO NOTHING;
 
 

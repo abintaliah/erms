@@ -12,7 +12,7 @@ import psycopg
 from psycopg import Connection
 from psycopg.rows import dict_row
 
-from .authentication import SYSTEM_ADMIN_ROLE, hash_password
+from .authentication import SYSTEM_ADMIN_ROLE, hash_password, revoke_sessions_for_user
 from .config import required_environment
 
 
@@ -159,6 +159,16 @@ def set_temporary_password(
         raise RuntimeError(f"no user exists with email {email}")
     if user["account_type"] != "human":
         raise RuntimeError("interactive passwords can only be issued to human users")
+    connection.execute(
+        """
+        SELECT set_config('app.actor_type', 'automated_process', true),
+               set_config('app.actor_name', 'Authentication recovery tool', true),
+               set_config('app.event_source', 'administrative_tool', true),
+               set_config('app.change_reason', 'Administrative password recovery', true),
+               set_config('app.correlation_id', %s, true)
+        """,
+        (str(uuid4()),),
+    )
     password, password_hash, expires_at = _temporary_credential()
     connection.execute(
         """
@@ -170,9 +180,22 @@ def set_temporary_password(
         """,
         (user["id"], password_hash, expires_at),
     )
+    revoked = revoke_sessions_for_user(
+        connection,
+        user["id"],
+        revoked_by=None,
+        reason="password_reset",
+    )
     connection.execute(
-        "UPDATE login_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=%s AND revoked_at IS NULL",
-        (user["id"],),
+        "SELECT append_domain_event('user', %s, 'PASSWORD_RESET', %s::jsonb)",
+        (
+            user["id"],
+            json.dumps({
+                "temporary": True,
+                "expires_at": expires_at.isoformat(),
+                "sessions_revoked": revoked,
+            }),
+        ),
     )
     if make_admin:
         if not org_unit_code:

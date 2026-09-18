@@ -39,11 +39,58 @@ AGGREGATION_SUMMARY_LAYOUT_CLASSES = (
 RECORD_DETAIL_HEADER_CLASSES = "w-full items-start gap-2 no-wrap"
 RECORD_DETAIL_TITLE_CLASSES = "gap-0 grow min-w-0"
 STOP_PROPAGATION_CLICK_HANDLER = "(event) => { event.stopPropagation(); emit(); }"
+LIFECYCLE_ACTION_BUTTONS = (
+    '<q-btn v-if="props.row.status === \'inactive\'" flat round dense '
+    'icon="toggle_on" color="positive" aria-label="Activate" '
+    '@click="$parent.$emit(\'lifecycle\', props.row)">'
+    '<q-tooltip>Activate</q-tooltip></q-btn>'
+    '<q-btn v-else flat round dense icon="toggle_off" color="negative" '
+    'aria-label="Deactivate" @click="$parent.$emit(\'lifecycle\', props.row)">'
+    '<q-tooltip>Deactivate</q-tooltip></q-btn>'
+)
+USER_SUSPENSION_ACTION_BUTTONS = (
+    '<q-btn v-if="props.row.status !== \'suspended\'" flat round dense '
+    'icon="pause_circle" color="warning" '
+    ':disable="props.row.status !== \'active\'" '
+    ':aria-label="props.row.status === \'active\' ? \'Suspend\' : \'Suspend unavailable while inactive\'" '
+    '@click="$parent.$emit(\'suspend_user\', props.row)">'
+    '<q-tooltip>{{ props.row.status === \'active\' ? \'Suspend\' : '
+    "'Activate the user before suspending' }}</q-tooltip></q-btn>"
+    '<q-btn v-else flat round dense icon="play_circle" color="positive" '
+    'aria-label="Unsuspend" @click="$parent.$emit(\'unsuspend_user\', props.row)">'
+    '<q-tooltip>Unsuspend</q-tooltip></q-btn>'
+)
 
 
 def favourite_preview(items: list[dict[str, Any]], limit: int) -> tuple[list[dict[str, Any]], bool]:
     """Return a bounded Dashboard preview and whether more entries exist."""
     return items[:limit], len(items) > limit
+
+
+def filter_membership_rows(
+    rows: list[dict[str, Any]], *, query: str = "", status: str = "all",
+    valid_from: str | None = None, valid_until: str | None = None,
+) -> list[dict[str, Any]]:
+    """Filter assignments by counterpart identity, status, and overlapping validity."""
+    needle = query.strip().casefold()
+
+    def date_part(value: Any) -> str | None:
+        return str(value)[:10] if value else None
+
+    def included(row: dict[str, Any]) -> bool:
+        if needle and needle not in row.get("counterpart_search", "").casefold():
+            return False
+        if status != "all" and row.get("counterpart_status") != status:
+            return False
+        row_start = date_part(row.get("valid_from"))
+        row_end = date_part(row.get("valid_until"))
+        if valid_from and row_end and row_end < valid_from:
+            return False
+        if valid_until and row_start and row_start > valid_until:
+            return False
+        return True
+
+    return [row for row in rows if included(row)]
 
 
 def display_value(value: Any) -> str:
@@ -476,6 +523,15 @@ def index() -> None:
         .record-uploader .q-uploader__list { min-height: 58px; padding: 0; }
         .upload-empty { display: flex; align-items: center; justify-content: center; min-height: 58px; color: #94a3b8; font-size: .78rem; }
         .upload-queue { max-height: 144px; overflow-y: auto; background: #f8fafc; }
+        .membership-dialog {
+            width: min(680px, calc(100vw - 32px)) !important;
+            max-width: none !important;
+            max-height: min(700px, calc(100vh - 32px));
+            overflow: hidden;
+        }
+        .membership-table { height: min(330px, calc(100vh - 370px)); min-height: 250px; }
+        .membership-table .q-table__middle { overflow-y: auto; }
+        .membership-table thead tr th { position: sticky; top: 0; z-index: 1; background: white; }
         .audit-event { border-left: 3px solid #bfdbfe; box-shadow: none; }
         .audit-event:hover { border-left-color: #3b82f6; background: #f8fbff; }
         .audit-value { max-width: 360px; overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -1933,20 +1989,107 @@ def index() -> None:
                                     f"{counterpart.get('code', '')} — {counterpart.get('name', counterpart_id)}"
                                     if for_user else counterpart.get("name", counterpart_id)
                                 ),
+                                "counterpart_name": counterpart.get("name", str(counterpart_id)),
+                                "counterpart_email": counterpart.get("email") or "",
+                                "counterpart_search": " ".join(
+                                    str(value) for value in (
+                                        counterpart.get("code"), counterpart.get("name"),
+                                        counterpart.get("email"),
+                                    ) if value
+                                ),
                                 "counterpart_status": effective_status,
                                 "counterpart_status_reason": inactive_reason,
                             })
+                        filter_panel: Any = None
+
+                        def toggle_filter_panel() -> None:
+                            filter_panel.set_visibility(not filter_panel.visible)
+
+                        with ui.row().classes("w-full items-center gap-2"):
+                            membership_search = ui.input(
+                                f"Search {counterpart_label} name"
+                                + (" or email" if not for_user else " or code"),
+                            ).props("outlined dense clearable debounce=250").classes(
+                                "grow max-w-[430px] min-w-[220px]"
+                            )
+                            ui.button(
+                                "Filters", icon="filter_list", on_click=toggle_filter_panel,
+                            ).props("flat dense no-caps color=primary").tooltip(
+                                "Filter by status or assignment validity"
+                            )
+                        filter_panel = ui.row().classes(
+                            "w-full items-end gap-2 flex-nowrap overflow-x-auto rounded-lg "
+                            "bg-slate-50 border border-slate-200 p-3"
+                        )
+                        with filter_panel:
+                            status_options = {
+                                "all": "All statuses", "active": "Active",
+                                "inactive": "Inactive",
+                            }
+                            if not for_user:
+                                status_options["suspended"] = "Suspended"
+                            membership_status = ui.select(
+                                status_options,
+                                value="all", label="Status",
+                            ).props("outlined dense options-dense").classes("w-40 shrink-0")
+                            membership_valid_from = ui.input(
+                                "Valid during or after",
+                            ).props("outlined dense type=date clearable").classes("w-40 shrink-0")
+                            membership_valid_until = ui.input(
+                                "Valid during or before",
+                            ).props("outlined dense type=date clearable").classes("w-40 shrink-0")
+                            ui.button(
+                                icon="filter_alt_off",
+                                on_click=lambda: (
+                                    membership_status.set_value("all"),
+                                    membership_valid_from.set_value(None),
+                                    membership_valid_until.set_value(None),
+                                ),
+                            ).props("flat round dense color=grey-7 aria-label='Clear filters'").tooltip(
+                                "Clear filters"
+                            )
+                        filter_panel.set_visibility(False)
                         membership_table = ui.table(
                             columns=[
-                                {"name": "counterpart", "label": counterpart_label.capitalize(), "field": "counterpart", "align": "left"},
-                                {"name": "counterpart_status", "label": "Status", "field": "counterpart_status", "align": "left"},
-                                {"name": "valid_from", "label": "Valid from", "field": "valid_from", "align": "left"},
-                                {"name": "valid_until", "label": "Valid until", "field": "valid_until", "align": "left"},
+                                {"name": "counterpart", "label": counterpart_label.capitalize(), "field": "counterpart", "align": "left", "sortable": True},
+                                {"name": "counterpart_status", "label": "Status", "field": "counterpart_status", "align": "left", "sortable": True},
+                                {"name": "valid_from", "label": "Valid from", "field": "valid_from", "align": "left", "sortable": True},
+                                {"name": "valid_until", "label": "Valid until", "field": "valid_until", "align": "left", "sortable": True},
                                 {"name": "actions", "label": "", "field": "actions", "align": "right"},
                             ],
                             rows=rows,
                             row_key="id",
-                        ).props("flat bordered dense").classes("w-full")
+                            pagination={"rowsPerPage": 10, "sortBy": "counterpart", "descending": False},
+                        ).props("flat bordered dense").classes("w-full membership-table")
+
+                        if not for_user:
+                            membership_table.add_slot(
+                                "body-cell-counterpart",
+                                '''
+                                <q-td :props="props">
+                                  <div class="column">
+                                    <span>{{ props.row.counterpart_name }}</span>
+                                    <span v-if="props.row.counterpart_email" class="text-caption text-grey-7">{{ props.row.counterpart_email }}</span>
+                                  </div>
+                                </q-td>
+                                ''',
+                            )
+
+                        def apply_membership_filters() -> None:
+                            membership_table.rows = filter_membership_rows(
+                                rows,
+                                query=membership_search.value or "",
+                                status=membership_status.value or "all",
+                                valid_from=membership_valid_from.value or None,
+                                valid_until=membership_valid_until.value or None,
+                            )
+                            membership_table.update()
+
+                        for control in (
+                            membership_search, membership_status,
+                            membership_valid_from, membership_valid_until,
+                        ):
+                            control.on_value_change(apply_membership_filters)
                         add_timestamp_slots(membership_table, ["valid_from", "valid_until"])
                         membership_table.add_slot(
                             "body-cell-counterpart_status",
@@ -1993,7 +2136,9 @@ def index() -> None:
             except ApiError as error:
                 ui.notify(error_message(error), color="negative", close_button=True)
 
-        with dialog, ui.card().classes("w-[820px] max-w-full"):
+        with dialog, ui.card().classes(
+            "membership-dialog flex flex-col"
+        ):
             heading = entity.get("name") or entity.get("code") or entity["id"]
             ui.label(f"{counterpart_label.capitalize()} assignments — {heading}").classes("text-xl font-semibold")
             if not assignment_allowed:
@@ -2002,7 +2147,7 @@ def index() -> None:
                     ui.label(
                         "New assignments are unavailable while this user or role is ineffective. Existing assignments remain visible."
                     ).classes("text-sm text-amber-900")
-            assignments_area = ui.column().classes("w-full")
+            assignments_area = ui.column().classes("w-full min-h-0 overflow-hidden")
             with ui.row().classes("w-full items-end gap-2"):
                 selection_holder["control"] = relationship_select(
                     f"Select {counterpart_label}", {}
@@ -2522,7 +2667,9 @@ def index() -> None:
             if spec.key == "users":
                 buttons += '<q-btn flat round dense icon="password" color="orange" @click="$parent.$emit(\'temporary_password\', props.row)"><q-tooltip>Issue temporary password</q-tooltip></q-btn>'
             if spec.key in {"org-units", "roles", "users"}:
-                buttons += '<q-btn flat round dense :icon="props.row.status === \'inactive\' ? \'toggle_on\' : \'toggle_off\'" :color="props.row.status === \'inactive\' ? \'positive\' : \'negative\'" @click="$parent.$emit(\'lifecycle\', props.row)"><q-tooltip>{{ props.row.status === \'inactive\' ? \'Activate\' : \'Deactivate\' }}</q-tooltip></q-btn>'
+                buttons += LIFECYCLE_ACTION_BUTTONS
+            if spec.key == "users":
+                buttons += USER_SUSPENSION_ACTION_BUTTONS
             if spec.key == "classification-schemes":
                 buttons += '<q-btn v-if="!props.row.date_published" flat round dense icon="publish" color="primary" @click="$parent.$emit(\'publish_scheme\', props.row)"><q-tooltip>Publish now</q-tooltip></q-btn>'
                 buttons += '<q-btn flat round dense :icon="props.row.date_deactivated ? \'toggle_on\' : \'toggle_off\'" :color="props.row.date_deactivated ? \'positive\' : \'negative\'" @click="$parent.$emit(\'scheme_lifecycle\', props.row)"><q-tooltip>{{ props.row.date_deactivated ? \'Reactivate\' : \'Deactivate\' }}</q-tooltip></q-btn>'
@@ -2611,6 +2758,48 @@ def index() -> None:
                             ui.button("I have copied it", on_click=dialog.close).props("unelevated no-caps")
                     dialog.open()
                 table.on("temporary_password", issue_password)
+                async def change_suspension(event, *, suspended: bool) -> None:
+                    row = event.args
+                    action = "Suspend" if suspended else "Unsuspend"
+                    dialog = ui.dialog()
+                    with dialog, ui.card().classes("w-[520px] max-w-full"):
+                        ui.label(f"{action} user?").classes("text-xl font-semibold")
+                        ui.label(row.get("name") or f"#{row['id']}").classes("font-medium")
+                        ui.label(
+                            "All active sessions will be revoked. The user must sign in again after being unsuspended."
+                            if suspended else
+                            "The account will become active again. Previously revoked sessions will not be restored."
+                        ).classes("text-sm text-slate-600")
+
+                        async def proceed() -> None:
+                            try:
+                                saved = await api.set_user_suspended(
+                                    row["id"], row["version"], suspended=suspended,
+                                )
+                                dialog.close()
+                                if suspended and row["id"] == auth_state["principal"]["user"]["id"]:
+                                    app.storage.user.pop("session_token", None)
+                                    api.set_session_token(None)
+                                    clear_signed_in_identity()
+                                    login_dialog.open()
+                                    return
+                                state["rows"] = [
+                                    saved if item["id"] == saved["id"] else item
+                                    for item in state["rows"]
+                                ]
+                                state["rows"] = await decorate_for_spec(spec, state["rows"])
+                                render_table(spec)
+                                ui.notify(f"User {action.lower()}ed", color="positive")
+                            except ApiError as error:
+                                ui.notify(error_message(error), color="negative", close_button=True)
+
+                        with ui.row().classes("w-full justify-end gap-2"):
+                            ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                            ui.button(action, on_click=proceed).props("unelevated no-caps")
+                    dialog.open()
+
+                table.on("suspend_user", lambda event: change_suspension(event, suspended=True))
+                table.on("unsuspend_user", lambda event: change_suspension(event, suspended=False))
             if spec.key in {"org-units", "roles", "users"}:
                 async def confirm_lifecycle(event) -> None:
                     row = event.args
@@ -3446,6 +3635,8 @@ def index() -> None:
             set_connection_status(True)
             render_table(spec)
         except ApiError as error:
+            if getattr(page_client, "_deleted", False):
+                return
             set_connection_status(error.status_code != 503)
             ui.notify(error_message(error), color="negative", close_button=True)
 

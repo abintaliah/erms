@@ -128,6 +128,66 @@ def _append_event(connection: Connection, user_id: int, operation: str, metadata
     )
 
 
+def _client_context(request: Request) -> tuple[str | None, str | None]:
+    client_ip = request.client.host if request.client else None
+    try:
+        client_ip = str(ipaddress.ip_address(client_ip)) if client_ip else None
+    except ValueError:
+        client_ip = None
+    user_agent = request.headers.get("user-agent")
+    return client_ip, user_agent[:1000] if user_agent else None
+
+
+def _timestamp(value: Any) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def _session_snapshot(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "session_id": row["id"],
+        "client_ip": str(row["client_ip"]) if row.get("client_ip") else None,
+        "user_agent": row.get("user_agent"),
+        "session_created_at": _timestamp(row.get("date_created")),
+        "last_seen_at": _timestamp(row.get("last_seen_at")),
+        "expires_at": _timestamp(row.get("expires_at")),
+        "absolute_expires_at": _timestamp(row.get("absolute_expires_at")),
+        "revoked_at": _timestamp(row.get("revoked_at")),
+    }
+
+
+def revoke_sessions_for_user(
+    connection: Connection,
+    user_id: int,
+    *,
+    revoked_by: int | None,
+    reason: str,
+) -> int:
+    sessions = connection.execute(
+        """
+        UPDATE login_sessions
+           SET revoked_at = CURRENT_TIMESTAMP,
+               revoked_by = %s
+         WHERE user_id = %s AND revoked_at IS NULL
+        RETURNING id, client_ip, user_agent, date_created, last_seen_at,
+                  expires_at, absolute_expires_at, revoked_at
+        """,
+        (revoked_by, user_id),
+    ).fetchall()
+    if sessions:
+        _append_event(
+            connection,
+            user_id,
+            "SESSION_REVOKED",
+            {
+                "revocation_scope": "all",
+                "revocation_reason": reason,
+                "sessions_revoked": len(sessions),
+                "sessions": [_session_snapshot(session) for session in sessions],
+            },
+        )
+    return len(sessions)
+
+
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
 
@@ -160,7 +220,14 @@ def login(payload: LoginRequest, request: Request, response: Response, connectio
             "UPDATE user_credentials SET failed_attempt_count=%s, last_failed_at=%s, locked_until=%s, date_updated=%s WHERE user_id=%s",
             (attempts, now, locked_until, now, row["id"]),
         )
-        _append_event(connection, row["id"], "AUTHENTICATION_FAILED", {"locked": bool(locked_until)})
+        client_ip, user_agent = _client_context(request)
+        _append_event(connection, row["id"], "AUTHENTICATION_FAILED", {
+            "client_ip": client_ip,
+            "user_agent": user_agent,
+            "failed_attempt_count": attempts,
+            "lock_applied": bool(locked_until),
+            "locked_until": _timestamp(locked_until),
+        })
         # The request intentionally ends with an HTTP error. Persist the failure
         # before raising so the dependency cleanup cannot roll back lockout state.
         connection.commit()
@@ -170,11 +237,7 @@ def login(payload: LoginRequest, request: Request, response: Response, connectio
     token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
     expires_at = now + timedelta(minutes=IDLE_MINUTES)
     absolute_at = now + timedelta(hours=ABSOLUTE_HOURS)
-    client_ip = request.client.host if request.client else None
-    try:
-        client_ip = str(ipaddress.ip_address(client_ip)) if client_ip else None
-    except ValueError:
-        client_ip = None
+    client_ip, user_agent = _client_context(request)
     session = connection.execute(
         """
         INSERT INTO login_sessions
@@ -182,7 +245,7 @@ def login(payload: LoginRequest, request: Request, response: Response, connectio
         VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id
         """,
         (row["id"], hash_secret(token), hash_secret(csrf), expires_at, absolute_at,
-         client_ip, request.headers.get("user-agent")),
+         client_ip, user_agent),
     ).fetchone()
     connection.execute(
         "UPDATE user_credentials SET failed_attempt_count=0, locked_until=NULL, last_authenticated_at=%s, date_updated=%s WHERE user_id=%s",
@@ -192,7 +255,13 @@ def login(payload: LoginRequest, request: Request, response: Response, connectio
         "SELECT set_config('app.user_id', %s, true), set_config('app.actor_type', 'user', true)",
         (str(row["id"]),),
     )
-    _append_event(connection, row["id"], "AUTHENTICATION_SUCCEEDED", {"session_id": session["id"]})
+    _append_event(connection, row["id"], "AUTHENTICATION_SUCCEEDED", {
+        "session_id": session["id"],
+        "client_ip": client_ip,
+        "user_agent": user_agent,
+        "expires_at": expires_at.isoformat(),
+        "absolute_expires_at": absolute_at.isoformat(),
+    })
     response.set_cookie(SESSION_COOKIE, token, httponly=True, secure=COOKIE_SECURE, samesite="lax", path="/")
     response.set_cookie(CSRF_COOKIE, csrf, httponly=False, secure=COOKIE_SECURE, samesite="lax", path="/")
     principal = Principal(row["id"], session["id"], row["name"], row["email"], row["account_type"], row["must_change_password"], _roles(connection, row["id"]))
@@ -215,8 +284,19 @@ def me(principal: Principal = Depends(principal_from_request)):
 
 @router.post("/logout", status_code=204)
 def logout(response: Response, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
-    connection.execute("UPDATE login_sessions SET revoked_at=CURRENT_TIMESTAMP, revoked_by=%s WHERE id=%s", (principal.user_id, principal.session_id))
-    _append_event(connection, principal.user_id, "SESSION_REVOKED", {"session_id": principal.session_id, "scope": "current"})
+    session = connection.execute(
+        """UPDATE login_sessions SET revoked_at=CURRENT_TIMESTAMP, revoked_by=%s
+             WHERE id=%s
+         RETURNING id, client_ip, user_agent, date_created, last_seen_at,
+                   expires_at, absolute_expires_at, revoked_at""",
+        (principal.user_id, principal.session_id),
+    ).fetchone()
+    _append_event(connection, principal.user_id, "SESSION_REVOKED", {
+        **_session_snapshot(session),
+        "revocation_scope": "current",
+        "revocation_reason": "logout",
+        "sessions_revoked": 1,
+    })
     response.delete_cookie(SESSION_COOKIE, path="/")
     response.delete_cookie(CSRF_COOKIE, path="/")
     response.status_code = status.HTTP_204_NO_CONTENT
@@ -240,8 +320,18 @@ def change_password(payload: ChangePasswordRequest, principal: Principal = Depen
         "UPDATE user_credentials SET password_hash=%s, must_change_password=false, temporary_expires_at=NULL, password_changed_at=CURRENT_TIMESTAMP, date_updated=CURRENT_TIMESTAMP WHERE user_id=%s",
         (new_hash, principal.user_id),
     )
-    connection.execute("UPDATE login_sessions SET revoked_at=CURRENT_TIMESTAMP, revoked_by=%s WHERE user_id=%s AND id<>%s AND revoked_at IS NULL", (principal.user_id, principal.user_id, principal.session_id))
-    _append_event(connection, principal.user_id, "PASSWORD_CHANGED", {"other_sessions_revoked": True})
+    other_sessions = connection.execute(
+        """UPDATE login_sessions SET revoked_at=CURRENT_TIMESTAMP, revoked_by=%s
+             WHERE user_id=%s AND id<>%s AND revoked_at IS NULL
+         RETURNING id, client_ip, user_agent, date_created, last_seen_at,
+                   expires_at, absolute_expires_at, revoked_at""",
+        (principal.user_id, principal.user_id, principal.session_id),
+    ).fetchall()
+    _append_event(connection, principal.user_id, "PASSWORD_CHANGED", {
+        "revocation_reason": "password_changed",
+        "sessions_revoked": len(other_sessions),
+        "sessions": [_session_snapshot(session) for session in other_sessions],
+    })
     return Response(status_code=204)
 
 
@@ -270,15 +360,29 @@ def revoke_session(session_id: int, principal: Principal = Depends(principal_fro
         raise HTTPException(status_code=404, detail="session not found")
     if target["user_id"] != principal.user_id and not principal.is_system_administrator:
         raise HTTPException(status_code=403, detail="system administrator role required")
-    connection.execute("UPDATE login_sessions SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP), revoked_by=%s WHERE id=%s", (principal.user_id, session_id))
-    _append_event(connection, target["user_id"], "SESSION_REVOKED", {"session_id": session_id, "revoked_by": principal.user_id})
+    session = connection.execute(
+        """UPDATE login_sessions
+              SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP), revoked_by=%s
+            WHERE id=%s
+        RETURNING id, client_ip, user_agent, date_created, last_seen_at,
+                  expires_at, absolute_expires_at, revoked_at""",
+        (principal.user_id, session_id),
+    ).fetchone()
+    _append_event(connection, target["user_id"], "SESSION_REVOKED", {
+        **_session_snapshot(session),
+        "revocation_scope": "individual",
+        "revocation_reason": "administrator_revocation" if target["user_id"] != principal.user_id else "user_revocation",
+        "sessions_revoked": 1,
+    })
     return Response(status_code=204)
 
 
 @router.delete("/users/{user_id}/sessions", status_code=204, dependencies=[Depends(require_system_administrator)])
 def revoke_user_sessions(user_id: int, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
-    connection.execute("UPDATE login_sessions SET revoked_at=CURRENT_TIMESTAMP, revoked_by=%s WHERE user_id=%s AND revoked_at IS NULL", (principal.user_id, user_id))
-    _append_event(connection, user_id, "SESSION_REVOKED", {"scope": "all", "revoked_by": principal.user_id})
+    revoke_sessions_for_user(
+        connection, user_id, revoked_by=principal.user_id,
+        reason="administrator_revocation",
+    )
     return Response(status_code=204)
 
 
@@ -303,9 +407,12 @@ def issue_temporary_password(user_id: int, principal: Principal = Depends(princi
           locked_until=NULL, date_updated=CURRENT_TIMESTAMP
         """, (user_id, password_hash, temporary_expires_at)
     )
-    connection.execute(
-        "UPDATE login_sessions SET revoked_at=CURRENT_TIMESTAMP, revoked_by=%s WHERE user_id=%s AND revoked_at IS NULL",
-        (principal.user_id, user_id),
+    revoked = revoke_sessions_for_user(
+        connection, user_id, revoked_by=principal.user_id, reason="password_reset",
     )
-    _append_event(connection, user_id, "PASSWORD_RESET", {"temporary": True, "expires_at": temporary_expires_at.isoformat()})
+    _append_event(connection, user_id, "PASSWORD_RESET", {
+        "temporary": True,
+        "expires_at": temporary_expires_at.isoformat(),
+        "sessions_revoked": revoked,
+    })
     return {"temporary_password": password, "expires_at": temporary_expires_at}

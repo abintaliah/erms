@@ -54,7 +54,7 @@ and client description. A user can revoke their own sessions. Members of the
 force logout all sessions for a user. Destructive actions require confirmation.
 
 Login sessions are transient operational security state rather than the durable
-authentication ledger. The planned session-cleanup worker will audit terminal
+authentication ledger. The session-cleanup worker audits terminal
 session details and remove expired or long-revoked rows after a configurable
 retention period. See the
 [operational tools catalogue](operations.md#5-login-session-cleanup) and the

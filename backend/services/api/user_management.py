@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from psycopg import Connection
 
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
@@ -22,6 +22,7 @@ from .schemas import (
     UserUpdate,
 )
 from .search import search_rows
+from .authentication import revoke_sessions_for_user
 
 
 router = APIRouter(prefix="/api/v1")
@@ -94,12 +95,6 @@ def update_org_unit(
     )
 
 
-@router.delete("/org-units/{org_unit_id}", status_code=204, tags=["org units"])
-def deactivate_org_unit(org_unit_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
-    _change_lifecycle(connection, "org_units", org_unit_id, version, active=False, date_field="date_deactivated")
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
 @router.post("/org-units/{org_unit_id}/deactivate", response_model=OrgUnitRead, tags=["org units"])
 def explicitly_deactivate_org_unit(org_unit_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     return _change_lifecycle(connection, "org_units", org_unit_id, version, active=False, date_field="date_deactivated")
@@ -160,31 +155,62 @@ def update_user(
     return update_row(connection, "users", user_id, payload.model_dump(exclude_unset=True), version)
 
 
-def _set_user_lifecycle(connection: Connection, request: Request, user_id: int, version: int, *, active: bool):
-    changed = _change_lifecycle(connection, "users", user_id, version, active=active, date_field="date_deactivated")
-    if not active:
+def _set_user_lifecycle(
+    connection: Connection,
+    request: Request,
+    user_id: int,
+    version: int,
+    *,
+    action: str,
+):
+    current = get_or_404(connection, "users", user_id)
+    transitions = {
+        "activate": ({"inactive"}, "active", None),
+        "deactivate": ({"active", "suspended"}, "inactive", "user_deactivated"),
+        "suspend": ({"active"}, "suspended", "user_suspended"),
+        "unsuspend": ({"suspended"}, "active", None),
+    }
+    allowed, target_status, revocation_reason = transitions[action]
+    if current["status"] not in allowed:
+        raise HTTPException(
+            status_code=409,
+            detail=f"cannot {action} a user whose status is {current['status']}",
+        )
+    values = {"status": target_status}
+    if target_status == "inactive":
+        values["date_deactivated"] = None
+    elif target_status in {"active", "suspended"}:
+        values["date_deactivated"] = None
+    changed = update_row(connection, "users", user_id, values, version)
+    if revocation_reason:
         principal = getattr(request.state, "principal", None)
-        connection.execute(
-            "UPDATE login_sessions SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP), revoked_by=%s WHERE user_id=%s AND revoked_at IS NULL",
-            (principal.user_id if principal else None, user_id),
+        revoke_sessions_for_user(
+            connection,
+            user_id,
+            revoked_by=principal.user_id if principal else None,
+            reason=revocation_reason,
         )
     return changed
 
 
-@router.delete("/users/{user_id}", status_code=204, tags=["users"])
-def deactivate_user(request: Request, user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
-    _set_user_lifecycle(connection, request, user_id, version, active=False)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
 @router.post("/users/{user_id}/deactivate", response_model=UserRead, tags=["users"])
 def explicitly_deactivate_user(request: Request, user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
-    return _set_user_lifecycle(connection, request, user_id, version, active=False)
+    return _set_user_lifecycle(connection, request, user_id, version, action="deactivate")
 
 
 @router.post("/users/{user_id}/activate", response_model=UserRead, tags=["users"])
 def activate_user(request: Request, user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
-    return _set_user_lifecycle(connection, request, user_id, version, active=True)
+    return _set_user_lifecycle(connection, request, user_id, version, action="activate")
+
+
+@router.post("/users/{user_id}/suspend", response_model=UserRead, tags=["users"])
+def suspend_user(request: Request, user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    return _set_user_lifecycle(connection, request, user_id, version, action="suspend")
+
+
+@router.post("/users/{user_id}/unsuspend", response_model=UserRead, tags=["users"])
+def unsuspend_user(request: Request, user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    return _set_user_lifecycle(connection, request, user_id, version, action="unsuspend")
 
 
 @router.get(
@@ -241,12 +267,6 @@ def update_role(
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     return update_row(connection, "roles", role_id, payload.model_dump(exclude_unset=True), version)
-
-
-@router.delete("/roles/{role_id}", status_code=204, tags=["roles"])
-def deactivate_role(role_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
-    _change_lifecycle(connection, "roles", role_id, version, active=False, date_field="date_deactivated")
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/roles/{role_id}/deactivate", response_model=RoleRead, tags=["roles"])

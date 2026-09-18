@@ -7,6 +7,31 @@ import pytest
 from frontend.webui.api_client import ApiError, ErmsApiClient
 
 
+def test_api_client_bounds_concurrent_page_requests():
+    active = 0
+    maximum_active = 0
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal active, maximum_active
+        active += 1
+        maximum_active = max(maximum_active, active)
+        await asyncio.sleep(0.01)
+        active -= 1
+        return httpx.Response(200, json={"ok": True})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await asyncio.gather(*(
+                client.request("GET", f"/request/{index}") for index in range(20)
+            ))
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert maximum_active == 4
+
+
 def test_search_builds_controlled_or_grammar():
     captured = {}
 

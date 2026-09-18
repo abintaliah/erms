@@ -450,8 +450,6 @@ class UserUpdate(ApiModel):
     email: NonBlankString | None = None
     external_id: NonBlankString | None = None
     account_type: Literal["human", "service"] | None = None
-    status: Literal["active", "inactive", "suspended"] | None = None
-    date_deactivated: datetime | None = None
 
 
 class UserRead(ApiModel):
@@ -552,7 +550,6 @@ class RoleRead(ApiModel):
 class UserRoleAssignmentCreate(ApiModel):
     user_id: int
     role_id: int
-    assigned_by: int | None = None
     valid_from: datetime | None = None
     valid_until: datetime | None = None
 
@@ -570,7 +567,6 @@ class UserRoleAssignmentCreate(ApiModel):
 class UserRoleAssignmentUpdate(ApiModel):
     user_id: int | None = None
     role_id: int | None = None
-    assigned_by: int | None = None
     valid_from: datetime | None = None
     valid_until: datetime | None = None
 
@@ -579,7 +575,6 @@ class UserRoleAssignmentRead(ApiModel):
     id: int
     user_id: int
     role_id: int
-    assigned_by: int | None
     date_assigned: datetime
     valid_from: datetime
     valid_until: datetime | None
