@@ -42,6 +42,10 @@ beneath their containing aggregation. Digital components are not tree nodes;
 the record summary shows their count and the existing record interface provides
 access to them.
 
+Opening an aggregation leads to its dedicated details page. That page provides
+a context-aware Back action consistent with the Record Detail page, returning
+to the originating Dashboard or Aggregations view.
+
 Branch classifications, terminal classifications, aggregations, and records
 use distinct hierarchy, label, folder, and document icons. Closed aggregations
 are marked in the tree.

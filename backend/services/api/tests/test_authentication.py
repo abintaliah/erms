@@ -109,6 +109,19 @@ def test_service_account_is_non_interactive_and_cannot_receive_password(client: 
 def test_system_administrator_can_list_and_revoke_sessions(client: TestClient):
     sessions = client.get("/api/v1/auth/sessions")
     assert sessions.status_code == 200
+    bounded = client.get(
+        "/api/v1/auth/sessions", params={"user_id": 1, "limit": 1, "offset": 0},
+    )
+    assert bounded.status_code == 200
+    assert len(bounded.json()) == 1
+    assert bounded.json()[0]["user_id"] == 1
+    page = client.get(
+        "/api/v1/auth/sessions/page",
+        params={"user_id": 1, "limit": 5, "sort_by": "date_created", "descending": True},
+    )
+    assert page.status_code == 200, page.text
+    assert page.json()["total"] == 1
+    assert page.json()["items"][0]["user_id"] == 1
     current = next(row for row in sessions.json() if row["is_current"])
     assert current["status"] == "active"
     response = client.delete(f"/api/v1/auth/sessions/{current['id']}")

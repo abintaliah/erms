@@ -1,4 +1,5 @@
 from io import BytesIO
+import inspect
 from types import SimpleNamespace
 
 import pytest
@@ -23,6 +24,7 @@ from frontend.webui.app import (
     form_payload,
     format_timestamp,
     filter_membership_rows,
+    index,
     user_avatar,
     relationship_options,
 )
@@ -33,6 +35,7 @@ from frontend.webui.config import (
     dashboard_favourite_item_limit,
     dashboard_recent_days,
     dashboard_recent_item_limit,
+    user_details_session_limit,
 )
 from frontend.webui.app import favourite_preview
 
@@ -145,6 +148,13 @@ def test_dashboard_favourite_configuration_defaults_to_five(monkeypatch):
     assert dashboard_favourite_item_limit() == 5
 
 
+def test_user_details_session_limit_defaults_to_five_and_is_configurable(monkeypatch):
+    monkeypatch.delenv("USER_DETAILS_SESSION_LIMIT", raising=False)
+    assert user_details_session_limit() == 5
+    monkeypatch.setenv("USER_DETAILS_SESSION_LIMIT", "8")
+    assert user_details_session_limit() == 8
+
+
 def test_membership_filters_identity_status_and_overlapping_validity():
     rows = [
         {
@@ -207,6 +217,12 @@ def test_record_detail_header_keeps_controls_visible_beside_long_titles():
     assert "no-wrap" in RECORD_DETAIL_HEADER_CLASSES
     assert "grow" in RECORD_DETAIL_TITLE_CLASSES
     assert "min-w-0" in RECORD_DETAIL_TITLE_CLASSES
+
+
+def test_record_detail_aggregation_navigation_uses_click_handler_not_route_link():
+    source = inspect.getsource(index)
+    assert "on_click=open_containing_aggregation" in source
+    assert "ui.link(aggregation_label, target=open_containing_aggregation)" not in source
 
 
 def test_favourite_click_handler_stops_propagation_inside_function():

@@ -53,3 +53,7 @@ def dashboard_favourite_item_limit() -> int:
 
 def classification_recent_selection_limit() -> int:
     return _positive_integer("CLASSIFICATION_RECENT_SELECTION_LIMIT", 4)
+
+
+def user_details_session_limit() -> int:
+    return _positive_integer("USER_DETAILS_SESSION_LIMIT", 5)

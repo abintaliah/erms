@@ -539,7 +539,8 @@ Test fixtures must include:
 6. Implement root-aggregation, child-aggregation, and record nodes.
 7. Implement synthetic continuation, loading, empty, retry, and filtering
    states.
-8. Implement concise aggregation and record details with existing navigation.
+8. Implement concise in-browser summaries with navigation to the dedicated
+   Aggregation and Record Detail pages.
 9. Add UI regression and scale-oriented tests.
 10. Update user-facing and API documentation after implementation.
 

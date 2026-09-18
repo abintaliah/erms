@@ -9,7 +9,7 @@ from typing import Any
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from psycopg import Connection
 
 from .config import boolean_environment, integer_environment
@@ -336,8 +336,21 @@ def change_password(payload: ChangePasswordRequest, principal: Principal = Depen
 
 
 @router.get("/sessions", response_model=list[LoginSessionRead])
-def list_sessions(principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
+def list_sessions(
+    user_id: int | None = None,
+    limit: int | None = Query(None, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    principal: Principal = Depends(principal_from_request),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
     admin = principal.is_system_administrator
+    if user_id is not None and user_id != principal.user_id and not admin:
+        raise HTTPException(status_code=403, detail="system administrator role required")
+    target_user_id = user_id if user_id is not None else (None if admin else principal.user_id)
+    pagination_sql = "" if limit is None else " LIMIT %s OFFSET %s"
+    parameters: list[Any] = [principal.session_id, target_user_id, target_user_id]
+    if limit is not None:
+        parameters.extend((limit, offset))
     return list(connection.execute(
         """
         SELECT s.id, s.user_id, u.name AS user_name, u.email AS user_email, u.account_type,
@@ -348,9 +361,63 @@ def list_sessions(principal: Principal = Depends(principal_from_request), connec
                     WHEN s.expires_at <= CURRENT_TIMESTAMP OR s.absolute_expires_at <= CURRENT_TIMESTAMP THEN 'expired'
                     ELSE 'active' END AS status
         FROM login_sessions s JOIN users u ON u.id=s.user_id
-        WHERE (%s OR s.user_id=%s) ORDER BY s.date_created DESC
-        """, (principal.session_id, admin, principal.user_id)
+        WHERE (%s::bigint IS NULL OR s.user_id=%s) ORDER BY s.date_created DESC
+        """ + pagination_sql, parameters
     ).fetchall())
+
+
+@router.get("/sessions/page")
+def page_sessions(
+    user_id: int,
+    limit: int = Query(5, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    query: str = Query("", max_length=200),
+    session_status: str = Query("all", pattern="^(all|active|expired|revoked)$"),
+    sort_by: str = Query("date_created", pattern="^(date_created|last_seen_at|expires_at|status|client_ip)$"),
+    descending: bool = True,
+    principal: Principal = Depends(principal_from_request),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    if user_id != principal.user_id and not principal.is_system_administrator:
+        raise HTTPException(status_code=403, detail="system administrator role required")
+    sort_columns = {
+        "date_created": "date_created", "last_seen_at": "last_seen_at",
+        "expires_at": "expires_at", "status": "status", "client_ip": "client_ip",
+    }
+    normalized_query = query.strip()
+    filters = ["user_id=%s"]
+    parameters: list[Any] = [user_id]
+    if normalized_query:
+        filters.append(
+            "(COALESCE(client_ip,'') ILIKE %s OR COALESCE(user_agent,'') ILIKE %s)"
+        )
+        parameters.extend((f"%{normalized_query}%", f"%{normalized_query}%"))
+    if session_status != "all":
+        filters.append("status=%s")
+        parameters.append(session_status)
+    source = """
+        SELECT s.id, s.user_id, u.name AS user_name, u.email AS user_email, u.account_type,
+               s.date_created, s.last_seen_at, s.expires_at, s.absolute_expires_at,
+               s.revoked_at, host(s.client_ip) AS client_ip, s.user_agent,
+               (s.id=%s) AS is_current,
+               CASE WHEN s.revoked_at IS NOT NULL THEN 'revoked'
+                    WHEN s.expires_at <= CURRENT_TIMESTAMP OR s.absolute_expires_at <= CURRENT_TIMESTAMP THEN 'expired'
+                    ELSE 'active' END AS status
+          FROM login_sessions s JOIN users u ON u.id=s.user_id
+    """
+    where_sql = " AND ".join(filters)
+    base_parameters = [principal.session_id, *parameters]
+    total = connection.execute(
+        f"SELECT count(*) AS total FROM ({source}) session_source WHERE {where_sql}",
+        base_parameters,
+    ).fetchone()["total"]
+    direction = "DESC" if descending else "ASC"
+    items = list(connection.execute(
+        f"SELECT * FROM ({source}) session_source WHERE {where_sql} "
+        f"ORDER BY {sort_columns[sort_by]} {direction}, id {direction} LIMIT %s OFFSET %s",
+        [*base_parameters, limit, offset],
+    ).fetchall())
+    return {"items": items, "total": int(total), "limit": limit, "offset": offset}
 
 
 @router.delete("/sessions/{session_id}", status_code=204)

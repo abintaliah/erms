@@ -37,7 +37,7 @@ defaults:
 - `WEBUI_STORAGE_SECRET` encrypts per-user authentication storage and must be
   changed outside local development
 - `DASHBOARD_FAVOURITE_ITEM_LIMIT` defaults to `5` and controls how many
-  aggregation favourites and record favourites appear in each Dashboard preview
+  favourites appear in each Dashboard and entity-listing preview
 - `DASHBOARD_RECENT_ITEM_LIMIT` defaults to `4` and controls how many items are
   shown in each personal recent-activity category
 - `DASHBOARD_RECENT_DAYS` defaults to `30` and excludes activity older than that
@@ -45,6 +45,8 @@ defaults:
 - `CLASSIFICATION_RECENT_SELECTION_LIMIT` defaults to `4` and controls how many
   of the signed-in user's recently selected classifications are promoted in the
   aggregation classification selector.
+- `USER_DETAILS_SESSION_LIMIT` defaults to `5` and controls the bounded page
+  size of the filterable, sortable login-session table on User details.
 
 Dashboard recent activity is attributed through the immutable audit event's
 `actor_user_id`. Created and updated cards display the matching event's
@@ -76,6 +78,13 @@ for its behavior. The Aggregations page also provides a cursor-paginated,
 lazy-loaded browser from published classification schemes through root and
 child aggregations to records, with concise details shown beside the tree. See
 [`../../docs/aggregation-classification-browser.md`](../../docs/aggregation-classification-browser.md).
+Records open on a dedicated details page containing record metadata, actions,
+and the complete Digital Components interface without an additional dialog.
+See [`../../docs/record-details.md`](../../docs/record-details.md).
+The Organization Structure section includes a lazy organization-unit, role, and
+user browser with persistent tree state, cross-entity search, browse-enabled
+lookup controls, and a dedicated user details view. See
+[`../../docs/organization-structure-browser.md`](../../docs/organization-structure-browser.md).
 The selected-classification pane exposes deactivate,
 reactivate, and delete actions. Delete is enabled only for an unused leaf in an
 active, unpublished scheme; otherwise inline guidance explains the blocking

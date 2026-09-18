@@ -129,3 +129,81 @@ def test_browse_filters_immediate_collection_and_rejects_branch_aggregations(cli
 
     rejected = client.get(f"/api/v1/browse/classifications/{branch['id']}/aggregations")
     assert rejected.status_code == 409
+
+
+def test_organization_browser_is_lazy_bounded_and_reports_assignment_context(client: TestClient):
+    root = client.post("/api/v1/org-units", json={"code": "OB", "name": "Organization Browser"}).json()
+    child = client.post("/api/v1/org-units", json={
+        "parent_org_unit_id": root["id"], "code": "OB-C", "name": "Child Unit",
+    }).json()
+    role = client.post("/api/v1/roles", json={
+        "org_unit_id": child["id"], "code": "OB-R", "name": "Browser Role",
+    }).json()
+    person = client.post("/api/v1/users", json={
+        "name": "Browse Person", "email": "browse.person@example.test",
+        "account_type": "person",
+    }).json()
+    assignment = client.post("/api/v1/user-role-assignments", json={
+        "user_id": person["id"], "role_id": role["id"],
+    }).json()
+
+    roots = client.get("/api/v1/browse/organization/roots")
+    assert roots.status_code == 200, roots.text
+    root_node = next(item for item in roots.json() if item["id"] == root["id"])
+    assert root_node["child_org_unit_count"] == 1
+    assert "roles" not in root_node
+
+    root_children = client.get(
+        f"/api/v1/browse/organization/org-units/{root['id']}/children"
+    )
+    assert [item["id"] for item in root_children.json()["org_units"]] == [child["id"]]
+    assert root_children.json()["roles"] == []
+
+    child_children = client.get(
+        f"/api/v1/browse/organization/org-units/{child['id']}/children"
+    )
+    assert [item["id"] for item in child_children.json()["roles"]] == [role["id"]]
+
+    users = client.get(f"/api/v1/browse/organization/roles/{role['id']}/users")
+    assert users.status_code == 200, users.text
+    assert users.json()[0]["id"] == person["id"]
+    assert users.json()[0]["assignment_id"] == assignment["id"]
+    assert users.json()[0]["assignment_validity"] == "current"
+
+    role_summary = client.get(f"/api/v1/browse/organization/roles/{role['id']}/summary")
+    assert role_summary.json()["assigned_user_count"] == 1
+    assert role_summary.json()["current_assignment_count"] == 1
+
+    found = client.get("/api/v1/browse/organization/search", params={"query": "Browse Person"})
+    user_result = next(
+        item for item in found.json()
+        if item["type"] == "user" and item["id"] == person["id"]
+    )
+    assert user_result["org_unit_path"] == [root["id"], child["id"]]
+    assert user_result["role_id"] == role["id"]
+
+    role_result = client.get(
+        "/api/v1/browse/organization/search",
+        params={"query": "Browser Role", "entity_type": "role", "status": "active"},
+    ).json()[0]
+    assert role_result["org_unit_path"] == [root["id"], child["id"]]
+
+    hidden = client.get(
+        "/api/v1/browse/organization/search",
+        params={"query": "Browser Role", "entity_type": "role", "status": "inactive"},
+    )
+    assert hidden.status_code == 200
+    assert hidden.json() == []
+
+
+def test_organization_unit_selector_mode_can_omit_roles(client: TestClient):
+    unit = client.post("/api/v1/org-units", json={"code": "SEL", "name": "Selector Unit"}).json()
+    client.post("/api/v1/roles", json={
+        "org_unit_id": unit["id"], "code": "SEL-R", "name": "Hidden Role",
+    })
+    response = client.get(
+        f"/api/v1/browse/organization/org-units/{unit['id']}/children",
+        params={"include_roles": False},
+    )
+    assert response.status_code == 200
+    assert response.json()["roles"] == []
