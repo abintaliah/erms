@@ -257,7 +257,14 @@ def test_application_shell_is_flat_and_uses_one_background():
     assert 'ui.label("Search results").classes("text-lg font-semibold")' in source
     assert '"Filter displayed results"' in source
     assert 'table.bind_filter_from(result_filter, "value")' in source
-    assert '"sortable": spec.key in {"aggregations", "records"}' in source
+    assert 'sortable_relationships = {"parent_org_unit_display", "org_unit_display"}' in source
+    assert 'not key.endswith("_display") or key in sortable_relationships' in source
+    assert '"Search code, name, or parent unit"' in source
+    assert '"Search code, name, or organization unit"' in source
+    assert '"Search name or email"' in source
+    assert '"All account types"' in source
+    assert '"w-full items-center gap-3 px-5 pt-2 pb-1 mb-2"' in source
+    assert ':rows-per-page-options="[10,25,50,100]"' in source
     assert '"Filter records"' in source
     assert 'record_table.bind_filter_from(contained_record_filter, "value")' in source
 

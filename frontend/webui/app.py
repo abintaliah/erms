@@ -3410,6 +3410,8 @@ def index() -> None:
                     ui.label("Search results").classes("text-lg font-semibold")
                     ui.badge(str(len(state["rows"])), color="blue-grey").props("outline")
             lifecycle_filter = None
+            account_type_filter = None
+            administration_filter = None
             visible_rows = state["rows"]
             result_filter = None
             if spec.key in {"aggregations", "records"}:
@@ -3428,25 +3430,51 @@ def index() -> None:
                 }
                 if spec.key == "users":
                     status_options["suspended"] = "Suspended"
-                with ui.row().classes("w-full items-center justify-end mb-2"):
+                filter_labels = {
+                    "org-units": "Search code, name, or parent unit",
+                    "roles": "Search code, name, or organization unit",
+                    "users": "Search name or email",
+                }
+                selected_lifecycle_filter = state.get("lifecycle_filter", "all")
+                if selected_lifecycle_filter not in status_options:
+                    selected_lifecycle_filter = "all"
+                    state["lifecycle_filter"] = "all"
+                with ui.row().classes(
+                    "w-full items-center gap-3 px-5 pt-2 pb-1 mb-2"
+                ):
+                    administration_filter = ui.input(
+                        filter_labels[spec.key],
+                        placeholder="Type to filter this table",
+                    ).props("outlined dense clearable debounce=250").classes("w-96 max-w-full")
+                    ui.space()
+                    if spec.key == "users":
+                        account_type_filter = ui.select(
+                            {"all": "All account types", "person": "Person", "service": "Service"},
+                            value=state.get("account_type_filter", "all"),
+                            label="Account type",
+                        ).props("outlined dense options-dense").classes("w-48")
                     lifecycle_filter = ui.select(
                         status_options,
-                        value=state.get("lifecycle_filter", "all"),
+                        value=selected_lifecycle_filter,
                         label="Status",
                     ).props("outlined dense options-dense").classes("w-48")
-                selected_status = lifecycle_filter.value
-                if selected_status != "all":
-                    visible_rows = [
-                        row for row in state["rows"]
-                        if row.get("effective_status", row.get("status")) == selected_status
-                    ]
+            sortable_relationships = {"parent_org_unit_display", "org_unit_display"}
+            for row in visible_rows:
+                for relationship_key in sortable_relationships:
+                    relationship = row.get(relationship_key) or {}
+                    row[f"_{relationship_key}_sort"] = " ".join(
+                        str(relationship.get(part) or "") for part in ("name", "code")
+                    ).strip().casefold()
             columns = [
                 {
                     "name": key,
                     "label": label,
-                    "field": key,
+                    "field": f"_{key}_sort" if key in sortable_relationships else key,
                     "align": "left",
-                    "sortable": spec.key in {"aggregations", "records"} and not key.endswith("_display"),
+                    "sortable": (
+                        key != "_avatar"
+                        and (not key.endswith("_display") or key in sortable_relationships)
+                    ),
                 }
                 for key, label in spec.columns
             ]
@@ -3454,20 +3482,59 @@ def index() -> None:
             if spec.key in {"aggregations", "records"}:
                 for row in visible_rows:
                     row["_is_favourite"] = favourite_state(spec.key, row["id"])
-            table = ui.table(columns=columns, rows=visible_rows, row_key="id", pagination=25).props("flat bordered separator=horizontal").classes("erms-page-table")
+            table = ui.table(
+                columns=columns,
+                rows=visible_rows,
+                row_key="id",
+                pagination={"rowsPerPage": 25},
+            ).props(
+                'flat bordered separator=horizontal :rows-per-page-options="[10,25,50,100]"'
+            ).classes("erms-page-table")
             if result_filter is not None:
                 table.bind_filter_from(result_filter, "value")
-            if lifecycle_filter is not None:
-                def apply_lifecycle_filter() -> None:
+            if administration_filter is not None:
+                def searchable_text(value: Any) -> str:
+                    if isinstance(value, dict):
+                        return " ".join(searchable_text(item) for item in value.values())
+                    if isinstance(value, (list, tuple)):
+                        return " ".join(searchable_text(item) for item in value)
+                    return "" if value is None else str(value)
+
+                def apply_administration_filters() -> None:
                     state["lifecycle_filter"] = lifecycle_filter.value
-                    selected = lifecycle_filter.value
-                    table.rows = state["rows"] if selected == "all" else [
+                    if account_type_filter is not None:
+                        state["account_type_filter"] = account_type_filter.value
+                    query = (administration_filter.value or "").strip().casefold()
+                    selected_status = lifecycle_filter.value
+                    selected_account_type = (
+                        account_type_filter.value if account_type_filter is not None else "all"
+                    )
+                    table.rows = [
                         row for row in state["rows"]
-                        if row.get("effective_status", row.get("status")) == selected
+                        if (
+                            selected_status == "all"
+                            or row.get("effective_status", row.get("status")) == selected_status
+                        )
+                        and (
+                            selected_account_type == "all"
+                            or row.get("account_type") == selected_account_type
+                        )
+                        and (
+                            not query
+                            or query in " ".join(
+                                searchable_text(row.get(key)).casefold()
+                                for key, _ in spec.columns
+                                if key != "_avatar"
+                            )
+                        )
                     ]
                     table.update()
 
-                lifecycle_filter.on_value_change(apply_lifecycle_filter)
+                administration_filter.on_value_change(apply_administration_filters)
+                lifecycle_filter.on_value_change(apply_administration_filters)
+                if account_type_filter is not None:
+                    account_type_filter.on_value_change(apply_administration_filters)
+                apply_administration_filters()
             add_timestamp_slots(
                 table, [key for key, _ in spec.columns if key.startswith("date_")]
             )
@@ -3505,16 +3572,16 @@ def index() -> None:
                 }.get(key, "link")
                 relationship_template = """
                     <q-td :props="props">
-                      <div v-if="props.value" class="row items-center no-wrap q-gutter-sm">
+                      <div v-if="props.row.__FIELD__" class="row items-center no-wrap q-gutter-sm">
                         <q-avatar size="30px" color="blue-1" text-color="primary" icon="__ICON__" />
                         <div class="column">
-                          <span class="text-weight-medium relationship-cell-name">{{ props.value.name }}</span>
-                          <q-badge v-if="props.value.code" outline color="primary" :label="props.value.code" class="self-start" />
+                          <span class="text-weight-medium relationship-cell-name">{{ props.row.__FIELD__.name }}</span>
+                          <q-badge v-if="props.row.__FIELD__.code" outline color="primary" :label="props.row.__FIELD__.code" class="self-start" />
                         </div>
                       </div>
                       <span v-else class="text-grey-5">—</span>
                     </q-td>
-                """.replace("__ICON__", relationship_icon)
+                """.replace("__ICON__", relationship_icon).replace("__FIELD__", key)
                 table.add_slot(f"body-cell-{key}", relationship_template)
             if any(key == "effective_status" for key, _ in spec.columns):
                 table.add_slot("body-cell-effective_status", '''
