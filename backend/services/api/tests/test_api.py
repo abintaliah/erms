@@ -27,6 +27,29 @@ def test_health(client: TestClient):
     assert response.json() == {"status": "ok"}
 
 
+def test_event_history_operations_are_discovered_from_audit_data(client: TestClient):
+    response = client.get("/api/v1/event-history/operations")
+
+    assert response.status_code == 200
+    operations = response.json()
+    assert operations == sorted(set(operations))
+    assert "CREATE" in operations
+    assert "AUTHENTICATION_SUCCEEDED" in operations
+
+
+def test_event_history_filter_options_are_discovered_from_audit_data(client: TestClient):
+    response = client.get("/api/v1/event-history/filter-options")
+
+    assert response.status_code == 200
+    options = response.json()
+    assert set(options) == {"entity_types", "operations", "sources", "actor_types"}
+    assert "user" in options["entity_types"]
+    assert "CREATE" in options["operations"]
+    assert "AUTHENTICATION_SUCCEEDED" in options["operations"]
+    for values in options.values():
+        assert values == sorted(set(values))
+
+
 def test_aggregation_crud_and_hierarchy(client: TestClient, aggregation: dict):
     child_response = client.post(
         "/api/v1/aggregations",

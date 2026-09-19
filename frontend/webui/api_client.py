@@ -210,6 +210,12 @@ class ErmsApiClient:
             "GET", f"/api/v1/{resource}/{entity_id}/history", params={"limit": limit}
         )
 
+    async def event_history_operations(self) -> list[str]:
+        return await self.request("GET", "/api/v1/event-history/operations")
+
+    async def event_history_filter_options(self) -> dict[str, list[str]]:
+        return await self.request("GET", "/api/v1/event-history/filter-options")
+
     async def search_request(self, resource: str, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.request("POST", f"/api/v1/{resource}/search", json=payload)
 

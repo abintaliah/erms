@@ -79,6 +79,48 @@ def test_classification_search_uses_literal_case_insensitive_containment():
     }
 
 
+def test_event_history_operations_uses_authoritative_filter_endpoint():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        return httpx.Response(200, json=["AUTHENTICATION_SUCCEEDED", "CREATE"])
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.event_history_operations()
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise()) == ["AUTHENTICATION_SUCCEEDED", "CREATE"]
+    assert captured["path"] == "/api/v1/event-history/operations"
+
+
+def test_event_history_filter_options_uses_authoritative_filter_endpoint():
+    captured = {}
+    expected = {
+        "entity_types": ["aggregation", "user"],
+        "operations": ["AUTHENTICATION_SUCCEEDED", "CREATE"],
+        "sources": ["api", "web_ui"],
+        "actor_types": ["automated_process", "user"],
+    }
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        return httpx.Response(200, json=expected)
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.event_history_filter_options()
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise()) == expected
+    assert captured["path"] == "/api/v1/event-history/filter-options"
+
+
 def test_browse_page_preserves_opaque_cursor_and_scoped_filter():
     captured = {}
 

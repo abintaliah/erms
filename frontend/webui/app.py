@@ -28,6 +28,7 @@ from .entities import ENTITIES, EntitySpec, FieldSpec
 
 app.add_static_files("/static/pdfjs", Path(__file__).with_name("static") / "pdfjs")
 app.add_static_files("/static/brand", Path(__file__).with_name("static") / "brand")
+app.add_static_files("/static/login", Path(__file__).with_name("static") / "login")
 
 CLASSIFICATION_WORKSPACE_SEARCH_FIELDS = ("code", "title", "description", "keywords")
 CLASSIFICATION_SELECTOR_SEARCH_FIELDS = ("code", "title", "description", "keywords")
@@ -598,10 +599,16 @@ def index() -> None:
            NiceGUI's reconnect machinery, but suppress its duplicate popup. */
         #popup { display: none !important; }
         .erms-header {
+            position: fixed; overflow: hidden;
             background: #f4f6f8; color: var(--erms-ink);
             border-bottom: 1px solid var(--erms-border); box-shadow: none !important;
             min-height: 54px; padding: 0 18px;
         }
+        .wathiq-header-network {
+            position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%;
+            pointer-events: none; background: transparent;
+        }
+        .erms-header > :not(.wathiq-header-network) { position: relative; z-index: 1; }
         .erms-footer {
             min-height: 34px; padding: 0 18px;
             background: #f4f6f8; color: #687386;
@@ -648,9 +655,17 @@ def index() -> None:
             margin: 0 !important; padding: 0 !important;
         }
         .wathiq-login-card {
+            position: relative; z-index: 2;
             width: min(680px, calc(100vw - 32px)); max-width: none !important;
             padding: 0 !important; gap: 0 !important; overflow: hidden;
             border: 1px solid var(--erms-border); border-radius: 18px;
+        }
+        .wathiq-login-network {
+            position: fixed; z-index: 1; inset: 0; width: 100vw; height: 100vh;
+            pointer-events: none;
+            background:
+                linear-gradient(135deg, rgba(245, 249, 251, .50), rgba(219, 237, 247, .22)),
+                #eaf2f6;
         }
         .wathiq-login-brand-panel {
             width: 270px; min-height: 430px; padding: 34px;
@@ -667,7 +682,6 @@ def index() -> None:
         @media (max-width: 640px) {
             .wathiq-login-brand-panel { display: none !important; }
             .wathiq-login-form { width: 100%; min-height: auto; padding: 30px 24px; }
-        }
         }
         .erms-nav-heading {
             color: var(--erms-blue-deep); font-size: .67rem; font-weight: 700;
@@ -803,6 +817,10 @@ def index() -> None:
     """)
 
     with ui.header().classes("erms-header items-center gap-3"):
+        header_network = ui.element("canvas").classes(
+            "wathiq-network-canvas wathiq-header-network"
+        ).props("aria-hidden=true")
+        header_network.set_visibility(False)
         with ui.row().classes("erms-brand items-center no-wrap").props("aria-label='Wathiq'"):
             ui.image("/static/brand/wathiq-mark.svg?v=2").classes("erms-brand-mark").props(
                 "fit=contain alt='Wathiq mark'"
@@ -1206,6 +1224,7 @@ def index() -> None:
         )
         current_user_last_login.text = "First sign-in"
         current_user_roles.clear()
+        header_network.set_visibility(False)
         navigation_state["trail"] = []
         app.storage.user.pop("navigation_trail", None)
         clear_authenticated_view()
@@ -3742,6 +3761,7 @@ def index() -> None:
 
     def populate_user_menu(principal: dict[str, Any]) -> None:
         drawer.show()
+        header_network.set_visibility(True)
         auth_state["principal"] = principal
         user = principal["user"]
         current_user_name.text = user["name"]
@@ -4418,22 +4438,18 @@ def index() -> None:
                     ui.label("Filter events").classes("font-semibold")
                     with ui.grid(columns=4).classes("w-full gap-3"):
                         type_filter = ui.select(
-                            {
-                                "aggregation": "Aggregation", "record": "Record",
-                                "digital_component": "Digital component", "org_unit": "Organization unit",
-                                "user": "User", "role": "Role", "user_role_assignment": "Role assignment",
-                                "classification_scheme": "Classification scheme",
-                                "classification": "Classification",
-                                "classification_retention_rule": "Classification retention rule",
-                                "aggregation_retention_rule": "Aggregation retention rule",
-                            }, label="Entity type", clearable=True,
-                        ).props("outlined dense").classes("w-full")
+                            {}, label="Entity type", clearable=True,
+                        ).props("outlined dense use-input options-dense").classes("w-full")
                         operation_filter = ui.select(
-                            ["CREATE", "UPDATE", "DELETE", "CONTENT_UPLOADED", "CONTENT_REPLACED", "CONTENT_DELETED", "CONTENT_DOWNLOADED"],
+                            [],
                             label="Operation", clearable=True,
-                        ).props("outlined dense use-input").classes("w-full")
-                        source_filter = ui.input("Source").props("outlined dense clearable").classes("w-full")
-                        actor_filter = ui.input("Actor type").props("outlined dense clearable").classes("w-full")
+                        ).props("outlined dense use-input options-dense").classes("w-full")
+                        source_filter = ui.select(
+                            [], label="Source", clearable=True,
+                        ).props("outlined dense use-input options-dense").classes("w-full")
+                        actor_filter = ui.select(
+                            [], label="Actor type", clearable=True,
+                        ).props("outlined dense use-input options-dense").classes("w-full")
                         from_filter = ui.input("From").props("outlined dense type=datetime-local").classes("w-full")
                         until_filter = ui.input("Until").props("outlined dense type=datetime-local").classes("w-full")
                         entity_id_filter = ui.number("Entity ID", min=1, format="%.0f").props("outlined dense clearable").classes("w-full")
@@ -4450,14 +4466,35 @@ def index() -> None:
 
         page = {"offset": 0, "size": 50, "total": 0}
 
+        try:
+            filter_options = await api.event_history_filter_options()
+            type_filter.options = {
+                value: value.replace("_", " ").title()
+                for value in filter_options["entity_types"]
+            }
+            operation_filter.options = filter_options["operations"]
+            source_filter.options = filter_options["sources"]
+            actor_filter.options = filter_options["actor_types"]
+            for control in (
+                type_filter, operation_filter, source_filter, actor_filter,
+            ):
+                control.update()
+        except ApiError as error:
+            if error.status_code != 401:
+                ui.notify(
+                    f"Could not load audit operation filters: {error_message(error)}",
+                    color="warning",
+                    close_button=True,
+                )
+
         async def load_audit_events() -> None:
             refresh_button.props("loading disable")
             conditions: list[dict[str, Any]] = []
             for field, operator, value in (
                 ("entity_type", "eq", type_filter.value),
                 ("operation", "eq", operation_filter.value),
-                ("source", "eq", (source_filter.value or "").strip()),
-                ("actor_type", "eq", (actor_filter.value or "").strip()),
+                ("source", "eq", source_filter.value),
+                ("actor_type", "eq", actor_filter.value),
                 ("entity_id", "eq", int(entity_id_filter.value) if entity_id_filter.value else None),
                 ("correlation_id", "eq", (correlation_filter.value or "").strip()),
                 ("occurred_at", "gte", from_filter.value),
@@ -5778,7 +5815,18 @@ def index() -> None:
                 filters_button = ui.button("Filters", icon="filter_list").props("flat dense no-caps")
                 async def refresh_browser() -> None:
                     browser["children"].clear()
-                    browser["roots"] = [{**item, "type": "org_unit"} for item in await api.organization_roots()]
+                    try:
+                        roots = await api.organization_roots()
+                    except ApiError as error:
+                        # The shared 401 handler has already cleared protected UI
+                        # and opened the sign-in dialog. Do not continue rendering
+                        # this page or surface a redundant event-handler traceback.
+                        if error.status_code == 401:
+                            return
+                        raise
+                    browser["roots"] = [
+                        {**item, "type": "org_unit"} for item in roots
+                    ]
                     await restore_expanded(browser["roots"])
                     render_tree()
                     if browser.get("selected"):
@@ -5833,7 +5881,15 @@ def index() -> None:
                         on_click=confirm_browser_selection,
                     ).props("unelevated no-caps color=primary")
                     selection_confirm_button.disable()
-        browser["roots"] = [{**item, "type": "org_unit"} for item in await api.organization_roots()]
+        try:
+            roots = await api.organization_roots()
+        except ApiError as error:
+            # Session expiry and development reloads can race with a navigation
+            # click. The API client has already presented sign-in for a 401.
+            if error.status_code == 401:
+                return
+            raise
+        browser["roots"] = [{**item, "type": "org_unit"} for item in roots]
         def remember_scroll(event: Any) -> None:
             try:
                 browser["scroll_top"] = float(event.args)
@@ -6986,47 +7042,53 @@ def index() -> None:
     search_button.on("click", lambda: load_rows())
     search_input.on("keydown.enter", lambda: load_rows())
     login_dialog = ui.dialog().props("persistent")
-    with login_dialog, ui.card().classes("wathiq-login-card"):
-        with ui.row().classes("w-full items-stretch no-wrap gap-0"):
-            with ui.column().classes(
-                "wathiq-login-brand-panel shrink-0 justify-between gap-0"
-            ):
-                with ui.column().classes("gap-6"):
-                    with ui.row().classes("items-center gap-3 no-wrap"):
-                        ui.image("/static/brand/wathiq-mark.svg?v=2").classes(
-                            "wathiq-login-mark"
-                        ).props("fit=contain alt='Wathiq mark'")
-                        ui.label("wathiq").classes("wathiq-login-word")
-                    with ui.column().classes("gap-2"):
-                        ui.label("Your records.\nYour evidence.\nIn order.").classes(
-                            "text-2xl font-semibold leading-tight whitespace-pre-line"
-                        )
-                        ui.label(
-                            "Secure access to the Sharjah Archives records management workspace."
-                        ).classes("text-sm leading-5 text-slate-600")
-                ui.label(
-                    "Reliable stewardship\nAccountable governance\nTrusted access"
-                ).classes("text-xs leading-5 text-slate-500 whitespace-pre-line")
-            with ui.column().classes("wathiq-login-form gap-3"):
-                ui.label("Sign in").classes("text-2xl font-semibold")
-                ui.label("Use your organization credentials to continue.").classes(
-                    "text-sm text-slate-500 mb-2"
-                )
-                login_email = ui.input("Email address").props(
-                    "outlined autocomplete=username"
-                ).classes("w-full")
-                login_password = ui.input(
-                    "Password", password=True, password_toggle_button=True
-                ).props("outlined autocomplete=current-password").classes("w-full")
-                login_error = ui.label().classes(
-                    "wathiq-login-error text-negative text-sm"
-                )
-                login_submit = ui.button("Continue to wathiq", icon="login").props(
-                    "unelevated no-caps"
-                ).classes("w-full")
-                ui.label("Need help? Contact your system administrator.").classes(
-                    "w-full text-center text-xs text-slate-400 mt-1"
-                )
+    with login_dialog:
+        ui.element("canvas").classes(
+            "wathiq-network-canvas wathiq-login-network"
+        ).props(
+            "aria-label='Slowly moving connected-node background'"
+        )
+        with ui.card().classes("wathiq-login-card"):
+            with ui.row().classes("w-full items-stretch no-wrap gap-0"):
+                with ui.column().classes(
+                    "wathiq-login-brand-panel shrink-0 justify-between gap-0"
+                ):
+                    with ui.column().classes("gap-6"):
+                        with ui.row().classes("items-center gap-3 no-wrap"):
+                            ui.image("/static/brand/wathiq-mark.svg?v=2").classes(
+                                "wathiq-login-mark"
+                            ).props("fit=contain alt='Wathiq mark'")
+                            ui.label("wathiq").classes("wathiq-login-word")
+                        with ui.column().classes("gap-2"):
+                            ui.label("Your records.\nYour evidence.\nIn order.").classes(
+                                "text-2xl font-semibold leading-tight whitespace-pre-line"
+                            )
+                            ui.label(
+                                "Secure access to the Sharjah Archives records management workspace."
+                            ).classes("text-sm leading-5 text-slate-600")
+                    ui.label(
+                        "Reliable stewardship\nAccountable governance\nTrusted access"
+                    ).classes("text-xs leading-5 text-slate-500 whitespace-pre-line")
+                with ui.column().classes("wathiq-login-form gap-3"):
+                    ui.label("Sign in").classes("text-2xl font-semibold")
+                    ui.label("Use your organization credentials to continue.").classes(
+                        "text-sm text-slate-500 mb-2"
+                    )
+                    login_email = ui.input("Email address").props(
+                        "outlined autocomplete=username"
+                    ).classes("w-full")
+                    login_password = ui.input(
+                        "Password", password=True, password_toggle_button=True
+                    ).props("outlined autocomplete=current-password").classes("w-full")
+                    login_error = ui.label().classes(
+                        "wathiq-login-error text-negative text-sm"
+                    )
+                    login_submit = ui.button("Continue to wathiq", icon="login").props(
+                        "unelevated no-caps"
+                    ).classes("w-full")
+                    ui.label("Need help? Contact your system administrator.").classes(
+                        "w-full text-center text-xs text-slate-400 mt-1"
+                    )
 
         async def submit_login() -> None:
             login_error.text = ""
@@ -7069,8 +7131,19 @@ def index() -> None:
     api.set_unauthorized_handler(handle_unauthorized)
 
     async def initialize_authenticated_ui() -> None:
-        # NiceGUI adds body HTML dynamically, where script tags are inert.
-        # Dynamic import executes the self-hosted module in the live page.
+        # Create a real script node and wait for its load event. NiceGUI inserts
+        # add_head_html content dynamically, where ordinary script tags are inert.
+        await ui.run_javascript(
+            "new Promise((resolve, reject) => {"
+            "if (window.startWathiqLoginNetwork) { resolve(true); return; }"
+            "const script = document.createElement('script');"
+            "script.src = '/static/login/network-background.js?v=5';"
+            "script.onload = () => resolve(true);"
+            "script.onerror = () => reject(new Error('Login animation failed to load'));"
+            "document.head.appendChild(script);"
+            "})",
+            timeout=15,
+        )
         await ui.run_javascript(
             "import('/static/pdfjs/erms-viewer.mjs').then(() => true)", timeout=15,
         )
@@ -7101,6 +7174,10 @@ def index() -> None:
         set_connection_status(True)
         drawer.hide()
         login_dialog.open()
+        await ui.run_javascript(
+            "window.startWathiqLoginNetwork?.(); true",
+            timeout=5,
+        )
 
     ui.timer(0.05, initialize_authenticated_ui, once=True)
 

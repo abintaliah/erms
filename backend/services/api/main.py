@@ -915,6 +915,55 @@ def search_event_history(
 
 
 @app.get(
+    "/api/v1/event-history/operations",
+    response_model=list[str],
+    tags=["event history"],
+)
+def list_event_history_operations(
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    """Return every operation represented in the immutable audit history."""
+    return _distinct_event_history_values(connection, "operation")
+
+
+def _distinct_event_history_values(
+    connection: Connection, column: str,
+) -> list[str]:
+    """Return sorted nonblank values for a trusted event-history column."""
+    if column not in {"entity_type", "operation", "source", "actor_type"}:
+        raise ValueError("unsupported event-history filter column")
+    return [
+        row[column]
+        for row in connection.execute(
+            f"""
+            SELECT DISTINCT {column}
+              FROM event_history
+             WHERE {column} IS NOT NULL
+               AND btrim({column}) <> ''
+             ORDER BY {column}
+            """
+        ).fetchall()
+    ]
+
+
+@app.get(
+    "/api/v1/event-history/filter-options",
+    response_model=dict[str, list[str]],
+    tags=["event history"],
+)
+def list_event_history_filter_options(
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    """Return authoritative values for every categorical audit filter."""
+    return {
+        "entity_types": _distinct_event_history_values(connection, "entity_type"),
+        "operations": _distinct_event_history_values(connection, "operation"),
+        "sources": _distinct_event_history_values(connection, "source"),
+        "actor_types": _distinct_event_history_values(connection, "actor_type"),
+    }
+
+
+@app.get(
     "/api/v1/event-history/{event_id}",
     response_model=EventHistoryRead,
     tags=["event history"],
