@@ -21,6 +21,7 @@ BOOTSTRAP_ORG_UNIT_NAME = "Platform Administration"
 BOOTSTRAP_ROLE_NAME = "SYSTEM — System Administrator"
 BOOTSTRAP_USER_NAME = "Bootstrap Administrator"
 BOOTSTRAP_USER_EMAIL = "bootstrap@erms.local"
+SYSTEM_ADMIN_PROFILE = "SYS_ADMIN"
 TEMPORARY_PASSWORD_HOURS = 24
 
 
@@ -115,11 +116,12 @@ def bootstrap_administrator(
     ).fetchone()
     role = connection.execute(
         """
-        INSERT INTO roles (org_unit_id, code, name, description)
-        VALUES (%s, %s, %s, 'Reserved platform administration role')
+        INSERT INTO roles (org_unit_id, code, name, description, profile_id)
+        SELECT %s, %s, %s, 'Reserved platform administration role', id
+          FROM profiles WHERE code=%s
         RETURNING id
         """,
-        (org_unit["id"], SYSTEM_ADMIN_ROLE, BOOTSTRAP_ROLE_NAME),
+        (org_unit["id"], SYSTEM_ADMIN_ROLE, BOOTSTRAP_ROLE_NAME, SYSTEM_ADMIN_PROFILE),
     ).fetchone()
     connection.execute(
         "INSERT INTO user_role_assignments (user_id, role_id) VALUES (%s, %s)",
@@ -211,11 +213,12 @@ def set_temporary_password(
         if not role:
             role = connection.execute(
                 """
-                INSERT INTO roles (org_unit_id,code,name,description)
-                VALUES (%s,%s,%s,'Reserved platform administration role')
+                INSERT INTO roles (org_unit_id,code,name,description,profile_id)
+                SELECT %s,%s,%s,'Reserved platform administration role',id
+                  FROM profiles WHERE code=%s
                 RETURNING id
                 """,
-                (org["id"], SYSTEM_ADMIN_ROLE, BOOTSTRAP_ROLE_NAME),
+                (org["id"], SYSTEM_ADMIN_ROLE, BOOTSTRAP_ROLE_NAME, SYSTEM_ADMIN_PROFILE),
             ).fetchone()
         connection.execute(
             """

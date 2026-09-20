@@ -20,7 +20,7 @@ BEGIN
     END IF;
 
     PERFORM set_config('app.actor_type', 'automated_process', true),
-            set_config('app.event_source', 'administrative_tool', true),
+            set_config('app.event_source', 'seeding', true),
             set_config(
                 'app.change_reason',
                 'Seed the General Classification Scheme with realistic administrative functions and retention rules',

@@ -3,14 +3,27 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import inspect
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from nicegui import app, background_tasks, context, events, ui
 
 from .api_client import ApiError, ErmsApiClient
+from .capabilities import (
+    capability_allowed,
+    can_navigate,
+    can_open_organization_detail,
+    dashboard_administration_resources,
+)
+from .acl_editor import dependents_of, permission_closure
+from .authorization_ui import (
+    GATE_LABELS, OPERATIONS, acl_source_label, aggregation_reference_label,
+    authorization_code_label, decision_code_label, operation_label, gate_detail, ordered_permission_catalogue,
+    privilege_help_text, privilege_matches_search, security_level_label,
+)
 from .config import (
     api_url,
     dashboard_favourite_item_limit,
@@ -45,6 +58,29 @@ RECORD_DETAIL_TITLE_CLASSES = "gap-0 grow min-w-0"
 NAVIGATION_TRAIL_LIMIT = 20
 NAVIGATION_VISIBLE_LIMIT = 5
 STOP_PROPAGATION_CLICK_HANDLER = "(event) => { event.stopPropagation(); emit(); }"
+
+SECURITY_EVENT_HELP = {
+    "AUTHORIZATION_DENIED": "An operation was refused because one or more authorization gates did not pass.",
+    "AUTHENTICATION_FAILED": "A sign-in attempt failed. Repeated failures can indicate an account or security problem.",
+    "ACCOUNT_LOCKED": "An account was locked after reaching the configured failed sign-in threshold.",
+    "INFORMATION_GOVERNANCE_BYPASS_USED": "A qualifying governance role bypassed the resource ACL; privilege and clearance checks still applied.",
+    "ACCESS_EXPLANATION_VIEWED": "An authorized examiner inspected why another person was allowed or denied access.",
+    "SECURITY_LEVEL_CHANGED": "A resource security level changed.",
+    "SECURITY_LEVEL_UPGRADED": "A resource was raised to a more restrictive security level.",
+    "SECURITY_LEVEL_DOWNGRADED": "A resource was lowered to a less restrictive security level.",
+    "ACL_REPLACED": "A resource's local access-control list was replaced.",
+    "DEFAULT_CHILD_AGGREGATION_ACL_REPLACED": "The default ACL inherited by child aggregations changed.",
+    "DEFAULT_CHILD_RECORD_ACL_REPLACED": "The default ACL inherited by child records changed.",
+    "PROFILE_PRIVILEGES_REPLACED": "The complete privilege set attached to a profile changed.",
+    "PROFILE_ASSIGNED": "A role was assigned a different authorization profile.",
+    "GOVERNANCE_ROLE_CHANGED": "A role's information-governance designation changed.",
+}
+
+AUTHORIZATION_DENIAL_HELP = (
+    "These are operations refused by the authorization policy. A rise can indicate a missing "
+    "profile privilege, expired assignment, insufficient clearance, missing ACL permission, "
+    "an inactive account or organization relationship, or repeated unauthorized activity."
+)
 
 
 def navigation_entry_identity(entry: dict[str, Any]) -> tuple[str, int | None]:
@@ -271,6 +307,7 @@ def buffer_upload_batch(event: events.MultiUploadEventArguments) -> list[tuple[b
 def render_component_cards(
     rows: list[dict[str, Any]], on_move, on_remove, on_history=None,
     on_view=None, on_download=None, *, readonly: bool = False,
+    capabilities: dict[str, bool] | None = None,
 ) -> None:
     for index, component in enumerate(rows):
         status = component.get("content_status", "pending")
@@ -291,21 +328,21 @@ def render_component_cards(
                     with ui.row().classes("gap-0 no-wrap"):
                         if on_view is not None:
                             ui.button(icon="visibility", on_click=lambda _, item=component: on_view(item)).props(
-                                "flat round dense" + (" disable" if status != "available" else "")
-                            ).tooltip("View document")
+                                "flat round dense" + (" disable" if status != "available" or not capability_allowed(capabilities, "view_component") else "")
+                            ).tooltip("View document" if capability_allowed(capabilities, "view_component") else "Your effective roles do not grant component viewing")
                         if on_download is not None:
                             ui.button(icon="download", on_click=lambda _, item=component: on_download(item)).props(
-                                "flat round dense" + (" disable" if status != "available" else "")
-                            ).tooltip("Download original")
+                                "flat round dense" + (" disable" if status != "available" or not capability_allowed(capabilities, "download_component") else "")
+                            ).tooltip("Download original" if capability_allowed(capabilities, "download_component") else "Your effective roles do not grant component downloading")
                         ui.button(icon="arrow_upward", on_click=lambda _, item=component: on_move(item, -1)).props(
-                            "flat round dense" + (" disable" if readonly or index == 0 else "")
+                            "flat round dense" + (" disable" if readonly or not capability_allowed(capabilities, "reorder_components") or index == 0 else "")
                         ).tooltip("Move earlier")
                         ui.button(icon="arrow_downward", on_click=lambda _, item=component: on_move(item, 1)).props(
-                            "flat round dense" + (" disable" if readonly or index == len(rows) - 1 else "")
+                            "flat round dense" + (" disable" if readonly or not capability_allowed(capabilities, "reorder_components") or index == len(rows) - 1 else "")
                         ).tooltip("Move later")
                         ui.button(icon="delete_outline", color="negative", on_click=lambda _, item=component: on_remove(item)).props(
-                            "flat round dense" + (" disable" if readonly else "")
-                        ).tooltip("Remove component" if not readonly else "Closed records cannot be changed")
+                            "flat round dense" + (" disable" if readonly or not capability_allowed(capabilities, "remove_component") else "")
+                        ).tooltip("Remove component" if not readonly and capability_allowed(capabilities, "remove_component") else "This operation is unavailable under the current resource state or access policy")
                         if on_history is not None:
                             ui.button(icon="history", color="blue-grey", on_click=lambda _, item=component: on_history(item)).props("flat round dense").tooltip("Event history")
             with ui.row().classes("w-full items-center gap-2"):
@@ -392,6 +429,14 @@ def error_message(error: ApiError) -> str:
         return "This item changed after you opened it. Reload it before saving again."
     if error.status_code == 428:
         return "The item version is missing. Reload it and try again."
+    if isinstance(error.detail, dict):
+        messages = {
+            "insufficient_privilege": "You do not have the required system privilege for this action.",
+            "insufficient_resource_permission": "Your roles do not grant this action on the selected item.",
+            "insufficient_clearance": "Your active roles do not have sufficient security clearance.",
+        }
+        if error.detail.get("code") in messages:
+            return messages[error.detail["code"]]
     return error.message
 
 
@@ -519,6 +564,8 @@ def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | N
         return ui.textarea(field.label, value=value or "").props("outlined autogrow").classes("w-full")
     if field.kind == "int":
         return ui.number(field.label, value=value, format="%.0f").props("outlined").classes("w-full")
+    if field.kind == "bool":
+        return ui.checkbox(field.label, value=bool(value))
     if field.kind in {"lookup", "classification"}:
         return relationship_select(
             field.label, options or {}, value=value, required=field.required
@@ -616,6 +663,7 @@ def index() -> None:
         }
         .erms-footer-credit { font-size: .72rem; letter-spacing: .01em; }
         .erms-dashboard-card .erms-shared-control { display: none !important; }
+        .erms-shared-control:empty { display: none !important; }
         .erms-brand { gap: 8px; min-width: 0; }
         .erms-brand-mark { width: 28px; height: 33px; flex: 0 0 auto; }
         .erms-brand-name {
@@ -628,6 +676,11 @@ def index() -> None:
             overflow: visible !important;
         }
         .erms-drawer .q-drawer__content { overflow-x: visible !important; }
+        .erms-nav-scroll {
+            height: 100%; overflow-y: auto; overflow-x: hidden;
+            padding: 0 8px 24px; scrollbar-gutter: stable;
+            overscroll-behavior: contain;
+        }
         .erms-drawer-toggle {
             position: absolute !important; right: -13px; top: 18px; z-index: 20;
             width: 27px; height: 34px; min-width: 27px; min-height: 34px;
@@ -721,6 +774,85 @@ def index() -> None:
         .erms-card {
             background: var(--erms-surface); border: 1px solid var(--erms-border);
             border-radius: 14px; box-shadow: none;
+        }
+        .governance-overview-grid {
+            display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
+            width: 100%; gap: 14px; align-items: start;
+        }
+        .governance-purpose-card,
+        .governance-status-card {
+            width: 100%; min-height: 0; padding: 18px 20px;
+            border: 1px solid var(--erms-border); border-radius: 14px;
+        }
+        .governance-purpose-card { background: #ffffff; }
+        .governance-purpose-icon,
+        .governance-metric-icon {
+            display: flex; align-items: center; justify-content: center;
+            flex: 0 0 auto; color: var(--erms-blue); background: var(--erms-blue-soft);
+            border-radius: 10px;
+        }
+        .governance-purpose-icon { width: 38px; height: 38px; }
+        .governance-requirements-grid {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: 100%; gap: 7px 18px; margin-top: 8px;
+        }
+        .governance-status-card { color: #3f4b5d; }
+        .governance-status-critical { background: #fff4f2; border-color: #f1c7c1; color: #8f312d; }
+        .governance-status-warning { background: #fff9e9; border-color: #efd99b; color: #765718; }
+        .governance-status-healthy { background: #f0faf4; border-color: #bce1c9; color: #23633a; }
+        .governance-status-icon {
+            display: flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; flex: 0 0 32px; border-radius: 999px;
+            color: currentColor; background: rgba(255, 255, 255, .7);
+        }
+        .governance-metrics-row { width: 100%; gap: 10px; flex-wrap: wrap; }
+        .governance-metric-card {
+            width: 205px; min-height: 72px; padding: 12px 14px;
+            display: flex !important; flex-direction: row !important;
+            align-items: center; gap: 12px; border: 1px solid var(--erms-border);
+            background: #ffffff; border-radius: 12px;
+        }
+        .governance-metric-icon { width: 32px; height: 32px; }
+        .governance-empty-state {
+            width: 100%; min-height: 126px; padding: 18px;
+            align-items: center; justify-content: center; gap: 6px;
+            border: 1px dashed #ccd8e4; background: #fbfcfd; border-radius: 12px;
+        }
+        .governance-empty-inline {
+            width: 100%; padding: 18px; text-align: center; color: #718096;
+            border: 1px dashed #ccd8e4; background: #fbfcfd; border-radius: 12px;
+            font-size: .8rem;
+        }
+        .governance-table .q-table thead tr { background: #eef7fd; }
+        .governance-table .q-table th { color: #35546f; text-align: left; }
+        .governance-table .q-table td { text-align: left; }
+        .governance-table .q-table th:last-child,
+        .governance-table .q-table td:last-child { text-align: right; white-space: nowrap; }
+        .security-operations-table .q-table th:last-child,
+        .security-operations-table .q-table td:last-child { text-align: left; white-space: normal; }
+        .login-sessions-table .q-table th {
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        .login-sessions-table .q-table th > * {
+            flex-wrap: nowrap;
+        }
+        .login-sessions-table .q-table__sort-icon {
+            flex: 0 0 auto;
+        }
+        .erms-profiles-table .q-table { table-layout: fixed; width: 100%; }
+        .erms-profiles-table .q-table th,
+        .erms-profiles-table .q-table td { overflow: hidden; }
+        .erms-profiles-table .profile-description-cell {
+            white-space: normal; overflow-wrap: anywhere; line-height: 1.35;
+        }
+        @media (max-width: 900px) {
+            .governance-overview-grid { grid-template-columns: 1fr; }
+            .governance-purpose-card, .governance-status-card { min-height: auto; }
+        }
+        @media (max-width: 560px) {
+            .governance-requirements-grid { grid-template-columns: 1fr; }
+            .governance-metric-card { width: 100%; }
         }
         .q-card { border-radius: 14px; }
         .erms-content .q-card { box-shadow: none !important; }
@@ -876,6 +1008,7 @@ def index() -> None:
 
     drawer_links: list[tuple[Any, str, str]] = []
     drawer_headings: list[Any] = []
+    drawer_sections: list[tuple[Any, tuple[str, ...]]] = []
 
     def drawer_link(
         label: str, icon: str, *, navigation_key: str, extra_classes: str = "",
@@ -897,33 +1030,55 @@ def index() -> None:
         with drawer_toggle_button:
             drawer_toggle_tooltip = ui.tooltip("Collapse navigation")
         navigation: dict[str, Any] = {}
-        dashboard_navigation = drawer_link(
-            "Dashboard", "dashboard", navigation_key="dashboard", extra_classes="mt-4",
-        )
-        for heading, entries in (
-            ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
-            ("ORGANIZATION STRUCTURE", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
-        ):
-            drawer_headings.append(
-                ui.label(heading).classes("erms-nav-heading px-4 pt-5 pb-2")
+        with ui.column().classes("erms-nav-scroll w-full gap-0 no-wrap"):
+            dashboard_navigation = drawer_link(
+                "Dashboard", "dashboard", navigation_key="dashboard", extra_classes="mt-4",
             )
-            if heading == "ORGANIZATION STRUCTURE":
-                organization_browser_navigation = drawer_link(
-                    "Browse", "lan", navigation_key="organization-browser",
+            for heading, entries in (
+                ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
+                ("ORGANIZATION STRUCTURE", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
+            ):
+                heading_control = ui.label(heading).classes(
+                    "erms-nav-heading px-4 pt-5 pb-2"
                 )
-            for key, icon in entries:
-                navigation[key] = drawer_link(
-                    ENTITIES[key].label, icon, navigation_key=key,
-                )
-        drawer_headings.append(
-            ui.label("SYSTEM ADMINISTRATION").classes("erms-nav-heading px-4 pt-5 pb-2")
-        )
-        audit_navigation = drawer_link(
-            "Audit trail", "manage_history", navigation_key="audit-trail",
-        )
-        sessions_navigation = drawer_link(
-            "Login sessions", "devices", navigation_key="login-sessions",
-        )
+                drawer_headings.append(heading_control)
+                section_keys = tuple(key for key, _ in entries)
+                if heading == "ORGANIZATION STRUCTURE":
+                    organization_browser_navigation = drawer_link(
+                        "Browse", "lan", navigation_key="organization-browser",
+                    )
+                    section_keys = ("organization-browser", *section_keys)
+                drawer_sections.append((heading_control, section_keys))
+                for key, icon in entries:
+                    navigation[key] = drawer_link(
+                        ENTITIES[key].label, icon, navigation_key=key,
+                    )
+            system_heading = ui.label("SYSTEM ADMINISTRATION").classes(
+                "erms-nav-heading px-4 pt-5 pb-2"
+            )
+            drawer_headings.append(system_heading)
+            drawer_sections.append((system_heading, (
+                "audit-trail", "login-sessions", "security-operations",
+                "security-levels", "profiles", "governance-custody",
+            )))
+            audit_navigation = drawer_link(
+                "Audit trail", "manage_history", navigation_key="audit-trail",
+            )
+            sessions_navigation = drawer_link(
+                "Login sessions", "devices", navigation_key="login-sessions",
+            )
+            security_operations_navigation = drawer_link(
+                "Security operations", "monitor_heart", navigation_key="security-operations",
+            )
+            navigation["security-levels"] = drawer_link(
+                "Security levels", "security", navigation_key="security-levels",
+            )
+            navigation["profiles"] = drawer_link(
+                "Profiles", "admin_panel_settings", navigation_key="profiles",
+            )
+            custody_navigation = drawer_link(
+                "Governance custody", "shield_person", navigation_key="governance-custody",
+            )
 
     def set_active_drawer_link(page: str) -> None:
         navigation_key = {
@@ -944,6 +1099,23 @@ def index() -> None:
             button.update()
 
     drawer_collapsed = False
+
+    def refresh_drawer_visibility(privileges: set[str] | None = None) -> None:
+        granted = privileges
+        if granted is None:
+            granted = set(
+                (auth_state.get("principal") or {}).get("global_privileges", [])
+            )
+        link_visibility = {
+            key: can_navigate(key, granted) for _, _, key in drawer_links
+        }
+        for button, _, key in drawer_links:
+            button.set_visibility(link_visibility[key])
+        for heading, section_keys in drawer_sections:
+            heading.set_visibility(
+                not drawer_collapsed
+                and any(link_visibility.get(key, False) for key in section_keys)
+            )
 
     def toggle_navigation_drawer() -> None:
         nonlocal drawer_collapsed
@@ -970,12 +1142,11 @@ def index() -> None:
                 add="aria-label='Collapse navigation' icon=chevron_left",
             )
             drawer_toggle_tooltip.text = "Collapse navigation"
-            for heading in drawer_headings:
-                heading.set_visibility(True)
             for button, label, _ in drawer_links:
                 button.text = label
                 button.classes(add="justify-start px-4", remove="justify-center px-0")
                 button.update()
+            refresh_drawer_visibility()
         drawer.update()
         drawer_toggle_button.update()
 
@@ -1036,6 +1207,8 @@ def index() -> None:
             "organization-browser": "lan",
             "audit-trail": "manage_history",
             "login-sessions": "devices",
+            "governance-custody": "shield_person",
+            "security-operations": "monitor_heart",
         }.get(page)
         if icon_name:
             page_title_icon.name = icon_name
@@ -1180,6 +1353,10 @@ def index() -> None:
             await select_audit_trail()
         elif page == "login-sessions":
             await select_login_sessions()
+        elif page == "governance-custody":
+            await select_governance_custody()
+        elif page == "security-operations":
+            await select_security_operations()
         elif page == "aggregation-details" and entity_id is not None:
             await open_aggregation(await api.get("aggregations", entity_id))
         elif page == "record-details" and entity_id is not None:
@@ -1327,6 +1504,23 @@ def index() -> None:
         if isinstance(value, (dict, list)):
             return json.dumps(value, ensure_ascii=False, sort_keys=True)
         return str(value)
+
+    def event_reference_value(event: dict[str, Any], side: str, field: str, value: Any) -> str:
+        """Prefer the immutable readable identity captured with a new audit event."""
+        references = (
+            (event.get("metadata") or {})
+            .get("reference_snapshots", {})
+            .get(side, {})
+        )
+        snapshot = references.get(field) or {}
+        if not snapshot:
+            return event_value(value)
+        primary = snapshot.get("code") or snapshot.get("name") or snapshot.get("title")
+        secondary = snapshot.get("title") or snapshot.get("name") or snapshot.get("email")
+        if secondary == primary:
+            secondary = None
+        identity = " — ".join(str(part) for part in (primary, secondary) if part)
+        return identity or event_value(value)
 
     def event_entity_identity(event: dict[str, Any]) -> tuple[str, str]:
         entity_type = event["entity_type"]
@@ -1486,7 +1680,11 @@ def index() -> None:
                 if changed:
                     ui.label("Field changes").classes("font-semibold")
                     change_rows = [
-                        {"field": field.replace("_", " ").title(), "before": event_value(before.get(field)), "after": event_value(after.get(field))}
+                        {
+                            "field": field.replace("_", " ").title(),
+                            "before": event_reference_value(event, "before", field, before.get(field)),
+                            "after": event_reference_value(event, "after", field, after.get(field)),
+                        }
                         for field in changed
                     ]
                     change_table = ui.table(
@@ -1583,7 +1781,9 @@ def index() -> None:
 
     async def show_components(record: dict[str, Any], *, container: Any | None = None) -> None:
         try:
-            aggregations = await api.list("aggregations")
+            aggregations, component_capabilities = await asyncio.gather(
+                api.list("aggregations"), api.resource_capabilities("records", record["id"]),
+            )
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
             return
@@ -1744,6 +1944,7 @@ def index() -> None:
                         current_rows, move_component, remove_component,
                         lambda item: show_entity_history("digital-components", item),
                         view_component, download_component, readonly=readonly,
+                        capabilities=component_capabilities,
                     )
 
         async def refresh_components() -> None:
@@ -1808,8 +2009,12 @@ def index() -> None:
                                 f"Closed by {closure['aggregation_number']} — {closure['title']}. "
                                 "Files may still be viewed or downloaded."
                             ).classes("text-sm text-amber-800")
-                else:
+                elif component_capabilities.get("add_component"):
                     uploader_control["uploader"] = component_uploader(uploaded)
+                else:
+                    with ui.row().classes("w-full items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3"):
+                        ui.icon("lock", color="blue-grey")
+                        ui.label("Adding digital components is unavailable under your effective privileges, clearance, and resource ACL.").classes("text-sm text-slate-600")
                 with ui.element("div").classes("component-list w-full mt-3"):
                     component_area = ui.element("div").classes("component-grid w-full")
 
@@ -1827,6 +2032,575 @@ def index() -> None:
                 await render_component_section(standalone=False)
         if dialog is not None:
             dialog.open()
+
+    async def show_acl_editor(
+        resource: str, entity_id: int, *, scope: str = "resource",
+        on_saved: Callable[[], Any] | None = None,
+    ) -> None:
+        """Edit a complete ACL atomically; inherited and dormant sets stay visually distinct."""
+        resource_type = "record" if resource == "records" or scope == "record" else "aggregation"
+        try:
+            catalogue = await api.permissions_catalogue(resource_type)
+            roles = await api.list("roles", limit=500)
+            if scope == "resource":
+                acl = await api.resource_acl(resource, entity_id)
+                displayed = acl["override_acl"]
+                version = acl["resource_acl_version"]
+            else:
+                child_type = "record" if scope == "record" else "aggregation"
+                acl = await api.child_acl(entity_id, child_type)
+                displayed = acl.get("custom_acl", acl.get("effective_acl", []))
+                version = acl["version"]
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+
+        source_aggregation: dict[str, Any] | None = None
+        edited_aggregation: dict[str, Any] | None = None
+        if resource_type == "aggregation" and scope == "resource":
+            try:
+                edited_aggregation = await api.get("aggregations", entity_id)
+            except ApiError:
+                edited_aggregation = None
+        source_aggregation_id = acl.get("source_resource_id") or acl.get("effective_acl_source_id")
+        if source_aggregation_id:
+            try:
+                source_aggregation = await api.get("aggregations", int(source_aggregation_id))
+            except (ApiError, TypeError, ValueError):
+                source_aggregation = None
+
+        options = {
+            item["code"]: item["name"]
+            for item in ordered_permission_catalogue(catalogue, resource_type)
+        }
+        role_options = {item["id"]: f"{item['code']} — {item['name']}" for item in roles}
+        principals: list[dict[str, Any]] = [dict(item) for item in displayed]
+        dialog_title = (
+            "Default child aggregation ACL"
+            if scope == "aggregation"
+            else "Default child record ACL"
+            if scope == "record"
+            else "Access control list"
+        )
+        dialog = ui.dialog()
+        with dialog, ui.card().classes("max-h-[92vh] p-0 gap-0").style(
+            "width: min(1050px, 90vw); max-width: none"
+        ):
+            with ui.row().classes("w-full items-center px-5 py-4 border-b border-slate-200"):
+                ui.icon("policy", color="primary")
+                ui.label(dialog_title).classes("text-xl font-semibold grow")
+                ui.button(icon="close", on_click=dialog.close).props("flat round dense")
+            with ui.element("div").classes(
+                "w-full h-[680px] max-h-[calc(92vh-142px)] overflow-y-auto overflow-x-hidden px-5 py-4"
+            ):
+                if scope == "resource" and acl.get("inherit_acl_from_parent") is not None:
+                    with ui.row().classes("w-full items-start gap-3 rounded-lg border border-blue-100 bg-blue-50 p-3"):
+                        ui.icon("account_tree", color="primary")
+                        with ui.column().classes("gap-0 grow"):
+                            ui.label(f"Effective source: {acl_source_label(acl)}").classes("font-semibold text-slate-800")
+                            if source_aggregation is not None:
+                                ui.label(aggregation_reference_label(source_aggregation)).classes("text-sm text-slate-700")
+                            ui.label(
+                                "A root aggregation has no parent ACL, so this ACL is necessarily local."
+                                if edited_aggregation is not None and edited_aggregation.get("parent_aggregation_id") is None else
+                                "Inherited access is evaluated live. A local override remains dormant until inheritance is disabled."
+                            ).classes("text-xs text-slate-600")
+
+                        if source_aggregation is not None:
+                            async def open_editor_acl_source() -> None:
+                                dialog.close()
+                                await open_aggregation(source_aggregation)
+
+                            ui.button("Open", icon="open_in_new", on_click=open_editor_acl_source).props(
+                                "flat dense no-caps"
+                            )
+                    inherit = ui.switch("Inherit ACL from parent", value=acl["inherit_acl_from_parent"])
+                    if edited_aggregation is not None and edited_aggregation.get("parent_aggregation_id") is None:
+                        inherit.set_enabled(False)
+                        inherit.tooltip("A root aggregation has no parent ACL to inherit from")
+                        ui.label(
+                            "This is a root aggregation, so its ACL must be defined locally."
+                        ).classes("text-xs text-slate-500 ml-2")
+                    if acl.get("override_acl_is_dormant"):
+                        ui.label("The local override shown below is dormant while inheritance is enabled.").classes("text-xs text-slate-500")
+                else:
+                    inherit = None
+                if scope == "aggregation":
+                    mode = ui.select(
+                        {"mirror_resource_acl": "Mirror this aggregation's effective resource ACL", "custom": "Use custom default ACL"},
+                        value=acl["mode"], label="Default child aggregation ACL mode",
+                    ).classes("w-full mt-3")
+                    ui.label("Mirror is a live reference. The custom default ACL is retained dormant when mirror mode is active.").classes("text-xs text-slate-500")
+                else:
+                    mode = None
+                state_banner = ui.column().classes("w-full mt-3")
+                editor = ui.column().classes("w-full gap-3 mt-4")
+                editor_controls: list[Any] = []
+                permission_controls: dict[int, dict[str, Any]] = {}
+
+                def is_dormant() -> bool:
+                    if inherit is not None:
+                        return bool(inherit.value)
+                    if mode is not None:
+                        return mode.value == "mirror_resource_acl"
+                    return False
+
+                def activate_local_acl() -> None:
+                    if inherit is not None:
+                        inherit.value = False
+                        inherit.update()
+                    elif mode is not None:
+                        mode.value = "custom"
+                        mode.update()
+                    render_acl_state()
+                    render_principals()
+
+                def render_acl_state() -> None:
+                    state_banner.clear()
+                    with state_banner:
+                        if is_dormant():
+                            with ui.card().classes("w-full shadow-none border border-amber-200 bg-amber-50 p-3"):
+                                with ui.row().classes("w-full items-start gap-3"):
+                                    ui.icon("visibility_off", color="amber-9")
+                                    with ui.column().classes("gap-0 grow"):
+                                        ui.label(
+                                            "Dormant local ACL — not currently used"
+                                            if inherit is not None else
+                                            "Dormant custom default ACL — not currently used"
+                                        ).classes("font-semibold text-amber-950")
+                                        ui.label(
+                                            "Effective access comes from the parent while inheritance is enabled. "
+                                            "The retained local ACL below cannot be edited and has no effect."
+                                            if inherit is not None else
+                                            "Child aggregations currently mirror this aggregation's effective ACL. "
+                                            "The retained custom default ACL below cannot be edited and has no effect."
+                                        ).classes("text-xs text-amber-900")
+                                    ui.button(
+                                        "Use local ACL" if inherit is not None else "Use custom default ACL",
+                                        icon="edit", on_click=activate_local_acl,
+                                    ).props("outline no-caps color=amber-10")
+                        else:
+                            with ui.row().classes("w-full items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3"):
+                                ui.icon("check_circle", color="positive")
+                                ui.label(
+                                    "This local ACL is active and changes here affect effective access."
+                                    if scope == "resource" else
+                                    "This custom default ACL is active and changes affect inheriting children."
+                                ).classes("text-sm font-medium text-green-900")
+
+                def render_principals() -> None:
+                    editor.clear()
+                    editor_controls.clear()
+                    permission_controls.clear()
+                    with editor:
+                        with ui.row().classes("w-full items-center gap-2"):
+                            ui.label(
+                                f"{len(principals)} principal{'s' if len(principals) != 1 else ''}"
+                            ).classes("text-sm text-slate-500 grow")
+                            add_role_button = ui.button("Add role", icon="person_add", on_click=add_role).props("outline no-caps")
+                            editor_controls.append(add_role_button)
+                            if not any(item["principal_type"] == "everyone" for item in principals):
+                                add_everyone_button = ui.button(
+                                    "Add Everyone", icon="groups",
+                                    on_click=lambda: (
+                                        principals.insert(0, {"principal_type": "everyone", "role_id": None, "permission_codes": []}),
+                                        render_principals(),
+                                    ),
+                                ).props("outline no-caps")
+                                editor_controls.append(add_everyone_button)
+
+                        with ui.row().classes("w-full items-center gap-2 text-slate-500"):
+                            ui.icon("groups", size="17px")
+                            ui.label(
+                                "Everyone represents all authenticated users; global privilege and security-clearance gates still apply."
+                            ).classes("text-xs")
+
+                        ui.label(
+                            "Select permissions by principal. Required prerequisites are selected automatically."
+                        ).classes("text-xs text-slate-500 mb-2")
+                        matrix = ui.element("div").classes(
+                            "w-full overflow-auto rounded-xl border border-slate-200 bg-white"
+                        ).style("height: 300px")
+                        matrix_width = 310 + (len(options) * 132)
+                        with matrix:
+                            with ui.column().classes("gap-0").style(f"min-width: {matrix_width}px"):
+                                with ui.row().classes(
+                                    "w-full gap-0 no-wrap border-b border-slate-200 bg-slate-50"
+                                ).style("position: sticky; top: 0; z-index: 30"):
+                                    with ui.element("div").classes(
+                                        "w-[310px] shrink-0 self-stretch px-3 py-3 bg-slate-50 border-r border-slate-200"
+                                    ).style("position: sticky; left: 0; z-index: 35"):
+                                        ui.label("Principal").classes("text-xs font-semibold uppercase tracking-wide text-slate-500")
+                                    for code, name in options.items():
+                                        with ui.element("div").classes(
+                                            "w-[132px] shrink-0 self-stretch px-2 py-3 border-r border-slate-200 text-center"
+                                        ):
+                                            ui.label(operation_label(code)).classes(
+                                                "text-xs font-semibold leading-tight text-slate-600"
+                                            ).tooltip(name)
+
+                                if not principals:
+                                    ui.label(
+                                        "No principals are present. Add a role or Everyone to grant resource permissions."
+                                    ).classes("m-5 text-sm text-slate-500")
+
+                                for index, principal in enumerate(principals):
+                                    selected = set(principal.get("permission_codes", []))
+                                    row_controls: dict[str, Any] = {}
+                                    permission_controls[id(principal)] = row_controls
+                                    with ui.row().classes(
+                                        "w-full gap-0 no-wrap border-b border-slate-100 last:border-b-0 hover:bg-blue-50/30"
+                                    ):
+                                        with ui.element("div").classes(
+                                            "w-[310px] shrink-0 min-h-[62px] bg-white border-r border-slate-200 px-2 py-1"
+                                        ).style("position: sticky; left: 0; z-index: 20"):
+                                            with ui.row().classes("w-full no-wrap items-center gap-2"):
+                                                ui.icon(
+                                                    "groups" if principal["principal_type"] == "everyone" else "badge",
+                                                    color="primary", size="20px",
+                                                )
+                                                if principal["principal_type"] == "everyone":
+                                                    with ui.column().classes("gap-0 grow min-w-0"):
+                                                        ui.label("Everyone").classes("font-semibold")
+                                                        ui.label("All authenticated users").classes("text-xs text-slate-500")
+                                                else:
+                                                    role_picker = ui.select(
+                                                        role_options, value=principal.get("role_id"),
+                                                    ).props(
+                                                        "dense outlined options-dense use-input input-debounce=0"
+                                                    ).classes("grow min-w-0")
+                                                    role_picker.on_value_change(
+                                                        lambda event, item=principal: item.update(role_id=event.value)
+                                                    )
+                                                    editor_controls.append(role_picker)
+                                                    browse_role_button = ui.button(
+                                                        icon="account_tree",
+                                                        on_click=lambda _, control=role_picker: show_organization_structure(
+                                                            selection_mode="role", target_control=control,
+                                                        ),
+                                                    ).props(
+                                                        "flat round dense aria-label='Browse roles'"
+                                                    ).tooltip("Browse organization structure for a role")
+                                                    editor_controls.append(browse_role_button)
+                                                remove_button = ui.button(
+                                                    icon="delete_outline", color="negative",
+                                                    on_click=lambda _, i=index: (principals.pop(i), render_principals()),
+                                                ).props("flat round dense").tooltip("Remove principal")
+                                                editor_controls.append(remove_button)
+
+                                        for code in options:
+                                            with ui.element("div").classes(
+                                                "w-[132px] shrink-0 min-h-[62px] border-r border-slate-100 flex items-center justify-center"
+                                            ):
+                                                checkbox = ui.checkbox(value=code in selected).props("dense")
+                                                checkbox.tooltip(options[code])
+                                                row_controls[code] = checkbox
+                                                editor_controls.append(checkbox)
+
+                                                def update_permission(
+                                                    event: Any, item=principal, permission=code,
+                                                ) -> None:
+                                                    current = set(item.get("permission_codes", []))
+                                                    if bool(event.value):
+                                                        updated = permission_closure(current | {permission})
+                                                        added = updated - current - {permission}
+                                                        if added:
+                                                            ui.notify(
+                                                                "Required prerequisite permissions were added",
+                                                                color="info",
+                                                            )
+                                                    else:
+                                                        removed_dependents = dependents_of(permission, current)
+                                                        updated = current - {permission} - removed_dependents
+                                                        if removed_dependents:
+                                                            ui.notify(
+                                                                "Dependent permissions were also removed",
+                                                                color="info",
+                                                            )
+                                                    item["permission_codes"] = sorted(updated)
+                                                    for permission_code, control in permission_controls.get(id(item), {}).items():
+                                                        expected = permission_code in updated
+                                                        if bool(control.value) != expected:
+                                                            control.value = expected
+                                                            control.update()
+
+                                                checkbox.on_value_change(update_permission)
+
+                def add_role() -> None:
+                    if any(
+                        item["principal_type"] == "role" and item.get("role_id") is None
+                        for item in principals
+                    ):
+                        ui.notify("Select the blank role before adding another", color="warning")
+                        return
+                    principals.append({"principal_type": "role", "role_id": None, "permission_codes": []})
+                    render_principals()
+
+                def apply_editor_state() -> None:
+                    dormant = is_dormant()
+                    editor.classes(replace="w-full gap-3 mt-4 " + ("opacity-55" if dormant else ""))
+                    for control in editor_controls:
+                        control.set_enabled(not dormant)
+
+                original_render_principals = render_principals
+                def render_principals() -> None:
+                    original_render_principals()
+                    apply_editor_state()
+
+                if inherit is not None:
+                    inherit.on_value_change(lambda _: (render_acl_state(), render_principals()))
+                if mode is not None:
+                    mode.on_value_change(lambda _: (render_acl_state(), render_principals()))
+                render_acl_state()
+                render_principals()
+                reason = ui.input("Reason for access change").classes("w-full mt-4")
+
+            async def save_acl() -> None:
+                if any(
+                    item["principal_type"] == "role" and item.get("role_id") is None
+                    for item in principals
+                ):
+                    ui.notify("Select a role for every role row before saving", color="warning")
+                    return
+                if not reason.value or not str(reason.value).strip():
+                    ui.notify("A reason is required", color="warning"); return
+                payload: dict[str, Any] = {"version": version, "grants": principals, "reason": str(reason.value).strip()}
+                if inherit is not None: payload["inherit_acl_from_parent"] = inherit.value
+                if mode is not None: payload["mode"] = mode.value
+                async def apply_change() -> None:
+                    try:
+                        if scope == "resource": await api.replace_resource_acl(resource, entity_id, payload)
+                        else: await api.replace_child_acl(entity_id, "record" if scope == "record" else "aggregation", payload)
+                        dialog.close(); ui.notify("Access control list updated", color="positive")
+                        if on_saved:
+                            result = on_saved()
+                            if inspect.isawaitable(result): await result
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+                try:
+                    if scope == "resource":
+                        await apply_change(); return
+                    impact = await api.preview_child_acl(
+                        entity_id, "record" if scope == "record" else "aggregation", payload,
+                    )
+                    confirmation = ui.dialog()
+                    with confirmation, ui.card().classes("w-[520px] max-w-full"):
+                        ui.label("Apply inherited access change?").classes("text-lg font-semibold")
+                        ui.label(
+                            f"This changes {impact['added_grants']} grants added and "
+                            f"{impact['removed_grants']} removed across "
+                            f"{impact.get('affected_aggregation_count', 0)} inheriting aggregations and "
+                            f"{impact.get('affected_record_count', 0)} inheriting records. "
+                            f"Up to {impact['potentially_affected_user_count']} users may be affected."
+                        ).classes("text-sm text-slate-600")
+                        with ui.row().classes("w-full justify-end gap-2"):
+                            ui.button("Cancel", on_click=confirmation.close).props("flat no-caps")
+                            async def confirm_apply() -> None:
+                                confirmation.close(); await apply_change()
+                            ui.button("Apply change", icon="check", on_click=confirm_apply).props("unelevated no-caps")
+                    confirmation.open()
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+            with ui.row().classes("w-full justify-end gap-2 px-5 py-4 border-t border-slate-200"):
+                ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                ui.button("Save ACL", icon="save", on_click=save_acl).props("unelevated no-caps")
+        dialog.open()
+
+    async def show_access_explanation(resource_type: str, entity_id: int) -> None:
+        """Explain every authorization gate without treating the UI as an enforcement boundary."""
+        privileges = set((auth_state.get("principal") or {}).get("global_privileges", []))
+        can_examine_others = "authorization.explain" in privileges
+        users: list[dict[str, Any]] = []
+        if can_examine_others:
+            try:
+                users = await api.explainable_users()
+            except ApiError:
+                can_examine_others = False
+        operations = {code: operation_label(code) for code in OPERATIONS[resource_type]}
+        dialog = ui.dialog()
+        result_host: Any = None
+        explanation_request = {"sequence": 0}
+        with dialog, ui.card().classes("w-[820px] max-w-[95vw] max-h-[90vh] p-0 gap-0"):
+            with ui.row().classes("w-full items-center border-b border-slate-200 px-5 py-4"):
+                ui.icon("fact_check", color="primary")
+                with ui.column().classes("gap-0 grow"):
+                    ui.label("Access explanation").classes("text-xl font-semibold")
+                    ui.label("Shows which policy gates and roles contribute to the decision.").classes("text-xs text-slate-500")
+                ui.button(icon="close", on_click=dialog.close).props("flat round dense aria-label='Close access explanation'")
+            with ui.row().classes("w-full items-end gap-3 px-5 pt-4"):
+                operation = ui.select(operations, value=OPERATIONS[resource_type][0], label="Operation").props("outlined").classes("grow")
+                user = None
+                if can_examine_others:
+                    user = ui.select(
+                        {item["id"]: f"{item['name']} — {item.get('email') or 'no email'}" for item in users},
+                        label="Explain for another user (optional)", clearable=True,
+                    ).props("outlined use-input").classes("grow")
+                run = ui.button("Explain", icon="play_arrow").props("unelevated no-caps")
+            result_host = ui.scroll_area().classes("w-full h-[520px] px-5 py-4")
+
+            async def load_explanation() -> None:
+                explanation_request["sequence"] += 1
+                request_sequence = explanation_request["sequence"]
+                selected_operation = operation.value
+                try:
+                    result = await api.explain_access({
+                        "resource_type": resource_type, "resource_id": entity_id,
+                        "operation": selected_operation,
+                        **({"user_id": user.value} if user is not None and user.value else {}),
+                    })
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True); return
+                if (
+                    request_sequence != explanation_request["sequence"]
+                    or selected_operation != operation.value
+                ):
+                    return
+                source_aggregation: dict[str, Any] | None = None
+                source_aggregation_id = result.get("acl", {}).get("source_resource_id")
+                if source_aggregation_id:
+                    try:
+                        source_aggregation = await api.get("aggregations", int(source_aggregation_id))
+                    except (ApiError, TypeError, ValueError):
+                        # A source ancestor can legitimately be hidden by the same
+                        # authorization policy this dialog is explaining.
+                        source_aggregation = None
+                result_host.clear()
+                roles = {item["role_id"]: item for item in result["subject"]["effective_roles"]}
+                with result_host:
+                    with ui.row().classes(
+                        "w-full items-center gap-3 rounded-xl border p-4 " +
+                        ("border-green-200 bg-green-50" if result["allowed"] else "border-red-200 bg-red-50")
+                    ):
+                        ui.icon("check_circle" if result["allowed"] else "cancel", color="positive" if result["allowed"] else "negative", size="28px")
+                        with ui.column().classes("gap-0 grow"):
+                            ui.label("Allowed" if result["allowed"] else "Denied").classes("text-lg font-semibold")
+                            ui.label(str(result["decision_code"]).replace("_", " ").title()).classes("text-sm text-slate-600")
+                    ui.label("Decision gates").classes("text-base font-semibold mt-4")
+                    for gate in result["gates"]:
+                        with ui.row().classes("w-full items-start gap-3 py-2 border-b border-slate-100"):
+                            ui.icon("check_circle" if gate["passed"] else "cancel", color="positive" if gate["passed"] else "negative")
+                            with ui.column().classes("gap-0 grow"):
+                                ui.label(GATE_LABELS.get(gate["gate"], gate["gate"].replace("_", " ").title())).classes("font-medium")
+                                ui.label(gate_detail(gate)).classes("text-xs text-slate-500")
+                    ui.label("Contributing context").classes("text-base font-semibold mt-4")
+                    with ui.grid(columns=2).classes("w-full gap-3"):
+                        with ui.column().classes("gap-0 rounded-lg border border-slate-200 p-3"):
+                            ui.label("Effective clearance").classes(
+                                "text-xs font-semibold uppercase tracking-wide text-slate-500"
+                            )
+                            ui.label(
+                                security_level_label(result.get("effective_security_level"))
+                            ).classes("text-sm font-medium text-slate-800")
+                        with ui.column().classes("gap-0 rounded-lg border border-slate-200 p-3"):
+                            ui.label("Required clearance").classes(
+                                "text-xs font-semibold uppercase tracking-wide text-slate-500"
+                            )
+                            ui.label(
+                                security_level_label(result.get("required_security_level"))
+                            ).classes("text-sm font-medium text-slate-800")
+                    with ui.column().classes("w-full gap-1 rounded-lg border border-slate-200 bg-slate-50 p-3"):
+                        ui.label("ACL source").classes("text-xs font-semibold uppercase tracking-wide text-slate-500")
+                        ui.label(
+                            acl_source_label(result.get("acl", {}))
+                        ).classes("text-sm font-medium text-slate-800")
+                        if source_aggregation is not None:
+                            with ui.row().classes("w-full items-center gap-2"):
+                                ui.icon("folder", color="primary", size="18px")
+                                ui.label(
+                                    aggregation_reference_label(source_aggregation)
+                                ).classes("text-sm text-slate-700 grow")
+
+                                async def open_acl_source() -> None:
+                                    dialog.close()
+                                    await open_aggregation(source_aggregation)
+
+                                ui.button("Open", icon="open_in_new", on_click=open_acl_source).props(
+                                    "flat dense no-caps"
+                                )
+                        elif source_aggregation_id:
+                            ui.label(
+                                f"Aggregation reference #{source_aggregation_id} · details hidden by access policy"
+                            ).classes("text-xs text-slate-500")
+                    contributors = result["contributors"]
+
+                    def contributor_heading(title: str, code: str, icon: str) -> None:
+                        with ui.row().classes("w-full items-start gap-3"):
+                            ui.icon(icon, color="primary", size="20px").classes("mt-1")
+                            with ui.column().classes("gap-0 grow min-w-0"):
+                                ui.label(title).classes("text-sm font-semibold text-slate-800")
+                                ui.label(code).classes("text-xs font-mono text-slate-400")
+
+                    def contributor_role(role_id: int, *, clearance: bool = False) -> None:
+                        role = roles.get(role_id, {})
+                        with ui.row().classes("w-full items-center gap-2 pl-8"):
+                            ui.icon("badge", color="blue-grey-5", size="16px")
+                            ui.label(
+                                f"{role.get('role_code', 'Role')} — "
+                                f"{role.get('role_name', role_id)}"
+                            ).classes("text-sm text-slate-700")
+                            if clearance:
+                                ui.label(
+                                    f"{role.get('security_level_code', '—')} · "
+                                    f"level {role.get('clearance', '—')}"
+                                ).classes("text-xs text-slate-400")
+
+                    privilege_role_ids = contributors.get("privilege_role_ids", [])
+                    if privilege_role_ids:
+                        with ui.column().classes("w-full gap-1 rounded-lg border border-slate-200 p-3"):
+                            required_privilege = result["required_privilege"]
+                            contributor_heading(
+                                f"Global privilege: {authorization_code_label(required_privilege)}",
+                                required_privilege, "key",
+                            )
+                            for role_id in privilege_role_ids:
+                                contributor_role(role_id)
+
+                    clearance_role_ids = contributors.get("clearance_role_ids", [])
+                    if clearance_role_ids:
+                        with ui.column().classes("w-full gap-1 rounded-lg border border-slate-200 p-3"):
+                            contributor_heading(
+                                f"Security clearance: level {result.get('required_clearance', '—')} required",
+                                "Maximum clearance across effective roles", "verified_user",
+                            )
+                            for role_id in clearance_role_ids:
+                                contributor_role(role_id, clearance=True)
+
+                    everyone_permissions = contributors.get("everyone_permissions", [])
+                    acl_roles = contributors.get("acl_role_ids_by_permission", {})
+                    for permission in dict.fromkeys([*everyone_permissions, *acl_roles.keys()]):
+                        role_ids = acl_roles.get(permission, [])
+                        if permission not in everyone_permissions and not role_ids:
+                            continue
+                        with ui.column().classes("w-full gap-1 rounded-lg border border-slate-200 p-3"):
+                            contributor_heading(
+                                f"ACL permission: {authorization_code_label(permission)}",
+                                permission, "policy",
+                            )
+                            if permission in everyone_permissions:
+                                with ui.row().classes("w-full items-center gap-2 pl-8"):
+                                    ui.icon("groups", color="blue-grey-5", size="16px")
+                                    ui.label("Everyone — all authenticated users").classes("text-sm text-slate-700")
+                            for role_id in role_ids:
+                                contributor_role(role_id)
+
+                    bypass_role_ids = contributors.get("governance_bypass_role_ids", [])
+                    if bypass_role_ids:
+                        with ui.column().classes("w-full gap-1 rounded-lg border border-amber-200 bg-amber-50 p-3"):
+                            contributor_heading(
+                                "Information-governance ACL bypass",
+                                "The ACL gate was bypassed; privilege and clearance gates still apply.",
+                                "admin_panel_settings",
+                            )
+                            for role_id in bypass_role_ids:
+                                contributor_role(role_id)
+                    if result["acl"].get("dormant_override_grants"):
+                        ui.label("A dormant local ACL override is retained but does not affect this decision.").classes("text-xs text-amber-800 bg-amber-50 rounded p-2 mt-2")
+            run.on("click", load_explanation)
+            operation.on_value_change(lambda _: load_explanation())
+            if user is not None:
+                user.on_value_change(lambda _: load_explanation())
+        dialog.open()
+        await load_explanation()
 
     async def show_record_details(record: dict[str, Any]) -> None:
         """Navigate to the dedicated details page for a record."""
@@ -1850,6 +2624,8 @@ def index() -> None:
         try:
             fetched = await api.get("records", record_id)
             record = (await decorate_for_spec(ENTITIES["records"], [fetched]))[0]
+            security_level = await api.get("security-levels", record["security_level_id"])
+            capabilities = await api.resource_capabilities("records", record_id)
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
             return
@@ -1922,13 +2698,14 @@ def index() -> None:
                         ui.label(record["record_number"]).classes("text-sm text-slate-500 font-medium mt-1")
                     favourite_button("records", record["id"])
                     ui.button("Back", icon="arrow_back", on_click=leave_record_page).props("flat no-caps color=blue-grey-8")
-                    if not record.get("_effectively_closed"):
+                    if not record.get("_effectively_closed") and capabilities.get("modify_metadata"):
                         ui.button(
                             "Edit metadata", icon="edit",
                             on_click=lambda: open_editor(
                                 record, on_saved=refresh_record_view, resource_key="records",
                             ),
                         ).props("outline no-caps color=primary")
+                    if not record.get("_effectively_closed") and capabilities.get("delete"):
                         ui.button(
                             "Delete", icon="delete_outline", color="negative",
                             on_click=confirm_delete_record,
@@ -1937,6 +2714,17 @@ def index() -> None:
                         "Event history", icon="history",
                         on_click=lambda: show_entity_history("records", record),
                     ).props("flat no-caps")
+                    ui.button(
+                        "Why this access?", icon="fact_check",
+                        on_click=lambda: show_access_explanation("record", record["id"]),
+                    ).props("flat no-caps").tooltip("Explain the authorization decision gate by gate")
+                    if capabilities.get("manage_acl"):
+                        ui.button(
+                            "Access", icon="policy",
+                            on_click=lambda: show_acl_editor(
+                                "records", record["id"], on_saved=lambda: refresh_record_view(),
+                            ),
+                        ).props("flat no-caps")
                 ui.separator()
                 with ui.column().classes("w-full px-5 py-4 gap-4"):
                     if record.get("_effectively_closed"):
@@ -1952,6 +2740,7 @@ def index() -> None:
                     with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
                         for label, value in (
                             ("Record status", "Read-only" if record.get("_effectively_closed") else "Active"),
+                            ("Security level", f"{security_level['code']} — {security_level['name']}"),
                             ("Originated", format_timestamp(record.get("date_originated"))),
                             ("Created", format_timestamp(record.get("date_created"))),
                             ("Containing aggregation", record.get("aggregation_display")),
@@ -2030,8 +2819,11 @@ def index() -> None:
                 })
             return result
         if spec.key == "roles":
-            units = await api.list("org-units")
+            units, profiles = await asyncio.gather(
+                api.list("org-units"), api.profile_references(),
+            )
             by_id = {item["id"]: item for item in units}
+            profiles_by_id = {item["id"]: item for item in profiles}
             decorated = decorate_relationship_rows(spec.key, rows, units)
             result = []
             for item in decorated:
@@ -2039,6 +2831,9 @@ def index() -> None:
                 effective = item.get("status") == "active" and source is None
                 result.append({
                     **item,
+                    "profile_display": relationship_cell(
+                        profiles_by_id.get(item.get("profile_id"))
+                    ),
                     "effective_status": "active" if effective else "inactive",
                     "_inactive_reason": (
                         "Role is directly inactive" if item.get("status") == "inactive"
@@ -2090,7 +2885,9 @@ def index() -> None:
         spec = ENTITIES["records"]
         try:
             draft = await api.create_record_draft()
-            aggregations = await api.list("aggregations")
+            aggregations, security_levels = await asyncio.gather(
+                api.list("aggregations"), api.list("security-levels")
+            )
             aggregations_by_id = {item["id"]: item for item in aggregations}
             aggregations = [
                 item for item in aggregations
@@ -2224,13 +3021,45 @@ def index() -> None:
                 ui.label("Record details").classes("text-base font-semibold mt-4 mb-2")
                 with ui.grid(columns=2).classes("w-full gap-3"):
                     for field in spec.fields:
-                        options = relationship_options(aggregations, field.lookup_label_fields) if field.lookup_resource else None
-                        controls[field.name] = field_input(field, options=options)
+                        lookup_rows = (
+                            aggregations if field.lookup_resource == "aggregations"
+                            else security_levels if field.lookup_resource == "security-levels"
+                            else []
+                        )
+                        options = relationship_options(lookup_rows, field.lookup_label_fields) if field.lookup_resource else None
+                        initial_value = None
+                        if field.name == "security_level_id" and security_levels:
+                            initial_value = min(
+                                security_levels, key=lambda item: (item["level_number"], item["id"])
+                            )["id"]
+                        controls[field.name] = field_input(field, value=initial_value, options=options)
                         if field.name == "aggregation_id" and target_aggregation_id is not None:
                             controls[field.name].value = target_aggregation_id
                             controls[field.name].disable()
                         if field.kind == "textarea":
                             controls[field.name].classes("col-span-2")
+                    def constrain_record_security_levels() -> None:
+                        aggregation = aggregations_by_id.get(controls["aggregation_id"].value)
+                        if not aggregation:
+                            return
+                        parent_level = next(
+                            (item for item in security_levels if item["id"] == aggregation.get("security_level_id")),
+                            None,
+                        )
+                        if not parent_level:
+                            return
+                        allowed = [
+                            item for item in security_levels
+                            if item["level_number"] <= parent_level["level_number"]
+                        ]
+                        controls["security_level_id"].options = relationship_options(
+                            allowed, ("code", "name")
+                        )
+                        controls["security_level_id"].update()
+                    controls["aggregation_id"].on_value_change(
+                        lambda _: constrain_record_security_levels()
+                    )
+                    constrain_record_security_levels()
                 with ui.row().classes("w-full items-center mt-5 mb-2"):
                     with ui.column().classes("gap-0"):
                         ui.label("Digital components").classes("text-base font-semibold")
@@ -2268,16 +3097,28 @@ def index() -> None:
         }.get(state["resource"], state["resource"])
         spec = ENTITIES[resolved_resource]
         creating = row is None
+        effective_locked_fields = set(locked_fields or set())
         if row and spec.key in {"aggregations", "records"} and row.get("_effectively_closed"):
             ui.notify(
                 f"Closed {spec.singular} metadata cannot be changed",
                 color="warning",
             )
             return
+        if row and spec.key == "aggregations" and row.get("date_closed") is None:
+            try:
+                editor_capabilities = await api.resource_capabilities(
+                    "aggregations", row["id"]
+                )
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+                return
+            if not editor_capabilities.get("close"):
+                effective_locked_fields.add("date_closed")
         if creating and spec.key == "records":
             await open_record_draft_editor()
             return
         lookup_options: dict[str, dict[int, str]] = {}
+        lookup_rows_by_field: dict[str, list[dict[str, Any]]] = {}
         retention_rule: dict[str, Any] | None = None
         try:
             if row and spec.key == "classifications":
@@ -2289,12 +3130,17 @@ def index() -> None:
             for field in spec.fields:
                 if not field.lookup_resource:
                     continue
-                lookup_rows = await api.list(
-                    field.lookup_resource,
-                    **({"eligible": True} if field.kind == "classification" else {}),
+                lookup_rows = (
+                    await api.profile_references()
+                    if field.lookup_resource == "profiles"
+                    else await api.list(
+                        field.lookup_resource,
+                        **({"eligible": True} if field.kind == "classification" else {}),
+                    )
                 )
                 if row and field.lookup_resource == spec.key:
                     lookup_rows = [item for item in lookup_rows if item["id"] != row["id"]]
+                lookup_rows_by_field[field.name] = lookup_rows
                 if field.kind == "classification":
                     hierarchy_rows = await api.list("classifications")
                     recent = await api.recent_classifications(
@@ -2443,11 +3289,67 @@ def index() -> None:
                         "current_period_years", "intermediate_period_years",
                         "final_disposition", "instructions",
                     } else row
+                    initial_value = (
+                        (initial_values or {}).get(field.name)
+                        if creating else source.get(field.name) if source else None
+                    )
+                    if creating and field.name == "security_level_id" and initial_value is None:
+                        available_levels = lookup_rows_by_field.get(field.name, [])
+                        if spec.key == "aggregations" and (initial_values or {}).get("parent_aggregation_id"):
+                            parent = next(
+                                (item for item in lookup_rows_by_field.get("parent_aggregation_id", [])
+                                 if item["id"] == (initial_values or {}).get("parent_aggregation_id")),
+                                None,
+                            )
+                            initial_value = parent.get("security_level_id") if parent else None
+                        if initial_value is None and available_levels:
+                            initial_value = min(
+                                available_levels, key=lambda item: (item["level_number"], item["id"])
+                            )["id"]
+                    if creating and field.name == "profile_id" and initial_value is None:
+                        available_profiles = lookup_rows_by_field.get(field.name, [])
+                        compatibility = next(
+                            (item for item in available_profiles if item.get("code") == "ALL_PRIVS"),
+                            None,
+                        )
+                        initial_value = compatibility["id"] if compatibility else None
                     controls[field.name] = field_input(
                         field,
-                        (initial_values or {}).get(field.name) if creating else source.get(field.name) if source else None,
+                        initial_value,
                         lookup_options.get(field.name),
                     )
+                    if spec.key == "roles" and field.name == "profile_id":
+                        profiles_by_id = {
+                            item["id"]: item
+                            for item in lookup_rows_by_field.get(field.name, [])
+                        }
+                        with ui.row().classes(
+                            "w-full items-start gap-2 rounded-lg border border-amber-200 "
+                            "bg-amber-50 px-3 py-2 -mt-2"
+                        ) as all_privileges_warning:
+                            ui.icon("warning_amber", color="amber-9", size="20px").classes(
+                                "mt-0.5 shrink-0"
+                            )
+                            ui.label(
+                                "This profile grants every currently defined system privilege. "
+                                "A role with it has unrestricted system capabilities, subject to "
+                                "security clearance and resource ACL checks. Use a purpose-specific "
+                                "profile before production. This warning does not prevent saving."
+                            ).classes("text-xs leading-5 text-amber-10")
+
+                        def update_all_privileges_warning() -> None:
+                            all_privileges_warning.set_visibility(
+                                bool(
+                                    profiles_by_id.get(controls["profile_id"].value, {}).get(
+                                        "grants_all_privileges"
+                                    )
+                                )
+                            )
+
+                        controls["profile_id"].on_value_change(
+                            lambda _: update_all_privileges_warning()
+                        )
+                        update_all_privileges_warning()
                     if field.lookup_resource in {"org-units", "roles", "users"}:
                         selector_mode = {
                             "org-units": "org_unit", "roles": "role", "users": "user",
@@ -2458,8 +3360,20 @@ def index() -> None:
                                 selection_mode=mode, target_control=control,
                             ),
                         ).props("flat dense no-caps color=primary").classes("self-start -mt-2")
-                    if field.name in (locked_fields or set()):
+                    if field.name in effective_locked_fields:
                         controls[field.name].disable()
+                        if spec.key == "aggregations" and field.name == "date_closed":
+                            ui.label(
+                                "Closing an aggregation requires the aggregation.close privilege."
+                            ).classes("text-xs leading-5 text-slate-500 -mt-2")
+                    if spec.key == "profiles" and field.name == "code" and not creating:
+                        controls[field.name].disable()
+                    if spec.key == "roles" and field.name == "is_information_governance":
+                        ui.label(
+                            "Information-governance roles may bypass resource ACLs for governed content. "
+                            "They still require global privileges, sufficient clearance, effective assignments, "
+                            "and compliance with every other integrity control."
+                        ).classes("text-xs leading-5 text-slate-500 -mt-2")
                     if (
                         spec.key == "classification-schemes"
                         and field.name == "date_published"
@@ -2487,6 +3401,58 @@ def index() -> None:
                                 on_click=lambda control=controls[field.name]: browse_classification_tree(control),
                             ).props("outline dense no-caps color=primary").classes("self-start")
 
+            if spec.key == "aggregations" and "security_level_id" in controls:
+                all_levels = lookup_rows_by_field.get("security_level_id", [])
+                parents = lookup_rows_by_field.get("parent_aggregation_id", [])
+
+                def constrain_aggregation_security_levels() -> None:
+                    parent_control = controls.get("parent_aggregation_id")
+                    parent_id = parent_control.value if parent_control else None
+                    parent = next((item for item in parents if item["id"] == parent_id), None)
+                    maximum = next(
+                        (item["level_number"] for item in all_levels
+                         if parent and item["id"] == parent.get("security_level_id")),
+                        None,
+                    )
+                    permitted = [
+                        item for item in all_levels
+                        if maximum is None or item["level_number"] <= maximum
+                    ]
+                    security_control = controls["security_level_id"]
+                    security_field = next(
+                        field for field in spec.fields if field.name == "security_level_id"
+                    )
+                    security_control.options = relationship_options(
+                        permitted, security_field.lookup_label_fields
+                    )
+                    if security_control.value not in security_control.options:
+                        security_control.value = parent.get("security_level_id") if parent else (
+                            min(permitted, key=lambda item: (item["level_number"], item["id"]))["id"]
+                            if permitted else None
+                        )
+                    security_control.update()
+
+                if controls.get("parent_aggregation_id"):
+                    controls["parent_aggregation_id"].on_value_change(
+                        lambda _: constrain_aggregation_security_levels()
+                    )
+                constrain_aggregation_security_levels()
+
+            security_change_reason = None
+            if not creating and spec.key in {"aggregations", "records", "roles"}:
+                security_change_reason = ui.textarea(
+                    "Reason for sensitive authorization changes" if spec.key == "roles" else "Reason for lowering the security level",
+                    placeholder=(
+                        "Required for profile, governance-status, or clearance reductions"
+                        if spec.key == "roles" else "Required only when selecting a lower level"
+                    ),
+                ).props("outlined autogrow").classes("w-full")
+            profile_change_reason = None
+            if not creating and spec.key == "profiles":
+                profile_change_reason = ui.textarea(
+                    "Reason for changing this profile", placeholder="Required",
+                ).props("outlined autogrow").classes("w-full")
+
             async def save() -> None:
                 try:
                     payload = form_payload(spec, controls, creating=creating)
@@ -2513,7 +3479,36 @@ def index() -> None:
                     if creating:
                         saved = await api.create(spec.key, payload)
                     else:
-                        saved = await api.update(spec.key, row["id"], row["version"], payload)
+                        if spec.key == "profiles":
+                            payload.pop("code", None)
+                        change_reason = None
+                        if security_change_reason is not None and "security_level_id" in payload:
+                            levels = lookup_rows_by_field.get("security_level_id", [])
+                            level_numbers = {item["id"]: item["level_number"] for item in levels}
+                            old_number = level_numbers.get(row.get("security_level_id"))
+                            new_number = level_numbers.get(payload.get("security_level_id"))
+                            if old_number is not None and new_number is not None and new_number < old_number:
+                                change_reason = (security_change_reason.value or "").strip()
+                                if not change_reason:
+                                    raise ValueError("A reason is required when lowering the security level")
+                        if spec.key == "roles" and any(
+                            payload.get(name) != row.get(name)
+                            for name in ("profile_id", "is_information_governance")
+                            if name in payload
+                        ):
+                            change_reason = (security_change_reason.value or "").strip()
+                            if not change_reason:
+                                raise ValueError(
+                                    "A reason is required when changing a role's profile or governance status"
+                                )
+                        if profile_change_reason is not None:
+                            change_reason = (profile_change_reason.value or "").strip()
+                            if not change_reason:
+                                raise ValueError("A reason is required when changing a profile")
+                        saved = await api.update(
+                            spec.key, row["id"], row["version"], payload,
+                            change_reason=change_reason,
+                        )
                         if spec.key == "classifications" and rule_payload is not None:
                             await api.put_classification_retention_rule(
                                 row["id"], rule_payload,
@@ -2848,6 +3843,8 @@ def index() -> None:
             all_aggregations = await api.list("aggregations")
             by_id = {item["id"]: item for item in all_aggregations}
             current = by_id.get(aggregation["id"], aggregation)
+            security_level = await api.get("security-levels", current["security_level_id"])
+            capabilities = await api.resource_capabilities("aggregations", current["id"])
             closure = effective_closure(current, by_id)
             ancestors = []
             seen = {current["id"]}
@@ -2880,13 +3877,15 @@ def index() -> None:
             for record in records:
                 record["_effectively_closed"] = closure is not None
             state["aggregation_detail"] = current
-            if closure is None:
+            if closure is None and capabilities.get("add_child"):
                 add_button.text = "Add child aggregation"
                 add_button.update()
                 add_button.set_visibility(True)
-                add_record_button.set_visibility(True)
             else:
                 add_button.set_visibility(False)
+            if closure is None and capabilities.get("add_record"):
+                add_record_button.set_visibility(True)
+            else:
                 add_record_button.set_visibility(False)
             search_bar.set_visibility(False)
             aggregation_mode_bar.set_visibility(False)
@@ -2907,6 +3906,18 @@ def index() -> None:
                         ui.notify("Aggregation reopened", color="positive")
                         await load_recent(ENTITIES["aggregations"])
                         await open_aggregation(reopened)
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+
+                async def close_current() -> None:
+                    try:
+                        closed = await api.update(
+                            "aggregations", current["id"], current["version"],
+                            {"date_closed": datetime.now(timezone.utc).isoformat()},
+                        )
+                        ui.notify("Aggregation closed", color="positive")
+                        await load_recent(ENTITIES["aggregations"])
+                        await open_aggregation(closed)
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True)
 
@@ -3043,6 +4054,33 @@ def index() -> None:
                             ui.button(
                                 "Back", icon="arrow_back", on_click=leave_aggregation_page,
                             ).props("flat dense no-caps")
+                        if closure:
+                            with ui.row().classes(
+                                "w-full items-center gap-3 rounded-xl border border-amber-200 "
+                                "bg-amber-50 px-4 py-3"
+                            ):
+                                ui.icon("lock", color="amber-8").classes("shrink-0")
+                                with ui.column().classes("gap-0 grow min-w-0"):
+                                    if closure["id"] == current["id"]:
+                                        ui.label("Closed directly").classes(
+                                            "text-sm font-semibold text-amber-900"
+                                        )
+                                    else:
+                                        ui.label("Closed by an ancestor aggregation").classes(
+                                            "text-sm font-semibold text-amber-900"
+                                        )
+                                        ui.label(
+                                            f"{closure['aggregation_number']} — {closure['title']}"
+                                        ).classes("text-xs text-amber-800 truncate")
+                                    ui.label(
+                                        format_timestamp(closure.get("date_closed"))
+                                    ).classes("text-xs text-amber-700")
+                                if closure["id"] == current["id"] and capabilities.get("reopen"):
+                                    ui.button(
+                                        "Reopen", icon="lock_open", on_click=reopen_current,
+                                    ).props("flat dense no-caps color=primary").tooltip(
+                                        "Clear the closure date; all other metadata remains unchanged"
+                                    )
                         if current.get("description"):
                             with ui.column().classes("w-full gap-1 rounded-xl bg-slate-50 px-4 py-3"):
                                 ui.label("DESCRIPTION").classes("detail-field-label")
@@ -3050,6 +4088,7 @@ def index() -> None:
                         with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
                             aggregation_metadata = (
                                 ("Status", "Closed" if closure else "Open"),
+                                ("Security level", f"{security_level['code']} — {security_level['name']}"),
                                 ("Date opened", format_timestamp(current.get("date_opened"))),
                                 ("Classification", " › ".join(
                                     f"{item['code']} — {item['title']}" for item in classification_path
@@ -3066,7 +4105,14 @@ def index() -> None:
                                     else:
                                         ui.label(str(value or "—")).classes("detail-field-value")
                         with ui.row().classes("w-full justify-end"):
-                            if closure is None:
+                            if closure is None and capabilities.get("close"):
+                                ui.button(
+                                    "Close", icon="lock",
+                                    on_click=close_current,
+                                ).props("flat dense no-caps").tooltip(
+                                    "Close this aggregation using the current date and time"
+                                )
+                            if closure is None and capabilities.get("delete"):
                                 delete_button = ui.button(
                                     "Delete", icon="delete_outline", color="negative",
                                     on_click=confirm_delete_current,
@@ -3076,6 +4122,7 @@ def index() -> None:
                                     delete_button.tooltip(
                                         "Remove or move all child aggregations and records before deleting"
                                     )
+                            if closure is None and capabilities.get("modify_metadata"):
                                 ui.button(
                                     "Edit metadata", icon="edit",
                                     on_click=lambda: open_editor(
@@ -3087,24 +4134,29 @@ def index() -> None:
                                 "Event history", icon="history",
                                 on_click=lambda: show_entity_history("aggregations", current),
                             ).props("flat dense no-caps")
-                    if closure:
-                        with ui.card().classes("shadow-none border border-amber-200 bg-amber-50 min-w-[230px]"):
-                            with ui.row().classes("items-center gap-2"):
-                                ui.icon("lock", color="amber-8")
-                                ui.label("Closed").classes("font-semibold text-amber-900")
-                            if closure["id"] == current["id"]:
-                                ui.label("Closed directly").classes("text-xs text-amber-800")
+                            ui.button(
+                                "Why this access?", icon="fact_check",
+                                on_click=lambda: show_access_explanation("aggregation", current["id"]),
+                            ).props("flat dense no-caps").tooltip(
+                                "Explain the authorization decision gate by gate"
+                            )
+                            if capabilities.get("manage_acl"):
                                 ui.button(
-                                    "Reopen aggregation", icon="lock_open",
-                                    on_click=reopen_current,
-                                ).props("flat dense no-caps color=primary").tooltip(
-                                    "Clear the closure date; all other metadata remains unchanged"
+                                    "Access", icon="policy",
+                                    on_click=lambda: show_acl_editor(
+                                        "aggregations", current["id"], on_saved=lambda: open_aggregation(current),
+                                    ),
+                                ).props("flat dense no-caps")
+                                ui.button(
+                                    "Child defaults", icon="account_tree",
+                                ).props("flat dense no-caps").on(
+                                    "click", lambda: show_acl_editor("aggregations", current["id"], scope="aggregation")
                                 )
-                            else:
-                                ui.label(
-                                    f"Inherited from {closure['aggregation_number']} — {closure['title']}"
-                                ).classes("text-xs text-amber-800")
-                            ui.label(format_timestamp(closure.get("date_closed"))).classes("text-xs text-amber-700")
+                                ui.button(
+                                    "Record defaults", icon="description",
+                                ).props("flat dense no-caps").on(
+                                    "click", lambda: show_acl_editor("aggregations", current["id"], scope="record")
+                                )
                     if effective_rule:
                         with ui.card().classes(
                             "retention-card shadow-none p-5 gap-4 flex-1 min-w-[360px] max-w-[560px]"
@@ -3387,6 +4439,117 @@ def index() -> None:
 
         render_preview()
 
+    async def show_profile_privilege_editor(profile: dict[str, Any]) -> None:
+        try:
+            all_privileges, selected, impact = await asyncio.gather(
+                api.list("privileges"), api.profile_privileges(profile["id"]),
+                api.profile_impact(profile["id"]),
+            )
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+        selected_ids = {item["id"] for item in selected}
+        dialog = ui.dialog()
+        controls: dict[int, Any] = {}
+        privilege_entries: list[tuple[dict[str, Any], Any]] = []
+        category_sections: dict[str, tuple[Any, list[tuple[dict[str, Any], Any]]]] = {}
+        with dialog, ui.card().classes("w-[760px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)]"):
+            ui.label(f"Privileges — {profile['name']}").classes("text-xl font-semibold")
+            ui.label(
+                f"Changes affect {impact['role_count']} role(s) and {impact['user_count']} assigned user(s)."
+            ).classes("text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2")
+            privilege_search = ui.input(
+                "Find privileges",
+                placeholder="Search by code, name, or description",
+            ).props("outlined dense clearable debounce=200").classes("w-full")
+            with ui.column().classes("w-full gap-2 overflow-y-auto max-h-[55vh]"):
+                current_category = None
+                for privilege in all_privileges:
+                    if privilege["category"] != current_category:
+                        current_category = privilege["category"]
+                        category_label = ui.label(
+                            current_category.replace("_", " ").upper()
+                        ).classes(
+                            "text-xs tracking-wider text-slate-500 font-semibold mt-2"
+                        )
+                        category_sections[current_category] = (category_label, [])
+                    with ui.row().classes("w-full items-start") as privilege_entry:
+                        with ui.column().classes("w-full gap-0"):
+                            controls[privilege["id"]] = ui.checkbox(
+                                f"{privilege['name']} ({privilege['code']})",
+                                value=privilege["id"] in selected_ids,
+                            )
+                            ui.label(
+                                privilege_help_text(
+                                    privilege["code"], privilege.get("description")
+                                )
+                            ).classes(
+                                "text-xs leading-5 text-slate-500 pl-10 -mt-1 pr-2"
+                            )
+                    entry = (privilege, privilege_entry)
+                    privilege_entries.append(entry)
+                    category_sections[current_category][1].append(entry)
+
+            def filter_privileges() -> None:
+                query = privilege_search.value or ""
+                for privilege, entry_element in privilege_entries:
+                    entry_element.set_visibility(privilege_matches_search(privilege, query))
+                for _, (category_label, entries) in category_sections.items():
+                    category_label.set_visibility(
+                        any(privilege_matches_search(privilege, query) for privilege, _ in entries)
+                    )
+
+            privilege_search.on_value_change(lambda _: filter_privileges())
+            with ui.row().classes(
+                "w-full items-start gap-2 rounded-lg border border-amber-200 "
+                "bg-amber-50 px-3 py-2"
+            ) as unrestricted_profile_warning:
+                ui.icon("warning_amber", color="amber-9", size="20px").classes(
+                    "mt-0.5 shrink-0"
+                )
+                ui.label(
+                    "This profile contains every defined privilege. Assigning it to a role "
+                    "gives that role unrestricted system capabilities, subject to security "
+                    "clearance and resource ACL checks. Use purpose-specific profiles before "
+                    "production. This warning does not prevent saving."
+                ).classes("text-xs leading-5 text-amber-10")
+
+            def update_unrestricted_profile_warning() -> None:
+                unrestricted_profile_warning.set_visibility(
+                    bool(controls) and all(control.value for control in controls.values())
+                )
+
+            for privilege_control in controls.values():
+                privilege_control.on_value_change(
+                    lambda _: update_unrestricted_profile_warning()
+                )
+            update_unrestricted_profile_warning()
+            reason = ui.textarea("Reason for changing this profile", placeholder="Required").props(
+                "outlined autogrow"
+            ).classes("w-full")
+
+            async def save_privileges() -> None:
+                change_reason = (reason.value or "").strip()
+                if not change_reason:
+                    ui.notify("A reason is required", color="warning")
+                    return
+                try:
+                    await api.replace_profile_privileges(
+                        profile["id"], profile["version"],
+                        [identifier for identifier, control in controls.items() if control.value],
+                        reason=change_reason,
+                    )
+                    dialog.close()
+                    ui.notify("Profile privileges saved", color="positive")
+                    await select_entity("profiles")
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                ui.button("Save privileges", icon="save", on_click=save_privileges).props("unelevated no-caps")
+        dialog.open()
+
     def render_table(spec: EntitySpec) -> None:
         table_container.clear()
         with table_container:
@@ -3458,7 +4621,7 @@ def index() -> None:
                         value=selected_lifecycle_filter,
                         label="Status",
                     ).props("outlined dense options-dense").classes("w-48")
-            sortable_relationships = {"parent_org_unit_display", "org_unit_display"}
+            sortable_relationships = {"parent_org_unit_display", "org_unit_display", "profile_display"}
             for row in visible_rows:
                 for relationship_key in sortable_relationships:
                     relationship = row.get(relationship_key) or {}
@@ -3479,6 +4642,17 @@ def index() -> None:
                 for key, label in spec.columns
             ]
             columns.append({"name": "actions", "label": "", "field": "actions", "align": "right"})
+            if spec.key == "profiles":
+                profile_widths = {
+                    "code": "width: 150px",
+                    "name": "width: 230px",
+                    "description": "width: auto",
+                    "is_system": "width: 110px",
+                    "actions": "width: 150px",
+                }
+                for column in columns:
+                    column["style"] = profile_widths.get(column["name"], "")
+                    column["headerStyle"] = profile_widths.get(column["name"], "")
             if spec.key in {"aggregations", "records"}:
                 for row in visible_rows:
                     row["_is_favourite"] = favourite_state(spec.key, row["id"])
@@ -3489,7 +4663,10 @@ def index() -> None:
                 pagination={"rowsPerPage": 25},
             ).props(
                 'flat bordered separator=horizontal :rows-per-page-options="[10,25,50,100]"'
-            ).classes("erms-page-table")
+            ).classes(
+                "erms-page-table erms-profiles-table"
+                if spec.key == "profiles" else "erms-page-table"
+            )
             if result_filter is not None:
                 table.bind_filter_from(result_filter, "value")
             if administration_filter is not None:
@@ -3551,6 +4728,34 @@ def index() -> None:
                       <span>{{ props.value === 'person' ? 'Person' : 'Service' }}</span>
                     </q-td>
                 ''')
+            if spec.key == "profiles":
+                table.add_slot("body-cell-name", '''
+                    <q-td :props="props">
+                      <div class="ellipsis">{{ props.value }}</div>
+                      <q-tooltip>{{ props.value }}</q-tooltip>
+                    </q-td>
+                ''')
+                table.add_slot("body-cell-description", '''
+                    <q-td :props="props" class="profile-description-cell">
+                      {{ props.value || '—' }}
+                      <q-tooltip>{{ props.value || 'No description' }}</q-tooltip>
+                    </q-td>
+                ''')
+                table.add_slot("body-cell-is_system", '''
+                    <q-td :props="props">
+                      <q-badge
+                        :color="props.value ? 'blue-grey-7' : 'grey-5'"
+                        :label="props.value ? 'Built-in' : 'Custom'"
+                        outline
+                      >
+                        <q-tooltip>
+                          {{ props.value
+                            ? 'Supplied by Wathiq. It cannot be deleted and its code cannot be renamed.'
+                            : 'Created by your organization.' }}
+                        </q-tooltip>
+                      </q-badge>
+                    </q-td>
+                ''')
             for key, _ in spec.columns:
                 if not key.endswith("_display"):
                     continue
@@ -3569,6 +4774,7 @@ def index() -> None:
                     "org_unit_display": "corporate_fare",
                     "aggregation_display": "folder",
                     "scheme_display": "account_tree",
+                    "profile_display": "admin_panel_settings",
                 }.get(key, "link")
                 relationship_template = """
                     <q-td :props="props">
@@ -3582,6 +4788,11 @@ def index() -> None:
                       <span v-else class="text-grey-5">—</span>
                     </q-td>
                 """.replace("__ICON__", relationship_icon).replace("__FIELD__", key)
+                if key == "profile_display":
+                    relationship_template = relationship_template.replace(
+                        '<q-badge v-if="props.row.__FIELD__.code" outline color="primary" :label="props.row.__FIELD__.code" class="self-start" />'.replace("__FIELD__", key),
+                        '<q-badge v-if="props.row.profile_display.code" outline :color="props.row.profile_display.code === \'ALL_PRIVS\' ? \'warning\' : \'primary\'" :label="props.row.profile_display.code === \'ALL_PRIVS\' ? \'Compatibility profile\' : props.row.profile_display.code" class="self-start"><q-tooltip v-if="props.row.profile_display.code === \'ALL_PRIVS\'">Review and replace with a purpose-specific profile</q-tooltip></q-badge>',
+                    )
                 table.add_slot(f"body-cell-{key}", relationship_template)
             if any(key == "effective_status" for key, _ in spec.columns):
                 table.add_slot("body-cell-effective_status", '''
@@ -3605,13 +4816,16 @@ def index() -> None:
                 closed_label = f"Closed {spec.singular} metadata cannot be changed"
                 buttons = '<q-btn flat round dense :icon="props.row._is_favourite ? \'favorite\' : \'favorite_border\'" :color="props.row._is_favourite ? \'red\' : \'primary\'" :aria-label="props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\'" @click.stop="$parent.$emit(\'toggle_favourite\', props.row)"><q-tooltip>{{ props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\' }}</q-tooltip></q-btn>'
                 buttons += f'<q-btn flat round dense icon="edit" color="primary" :disable="props.row._effectively_closed" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>{{{{ props.row._effectively_closed ? \'{closed_label}\' : \'Edit\' }}}}</q-tooltip></q-btn>'
+            elif spec.key in {"privileges", "permissions"}:
+                buttons = ''
             else:
                 buttons = '<q-btn flat round dense icon="edit" color="primary" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>Edit</q-tooltip></q-btn>'
             if spec.key == "org-units":
                 buttons = '<q-btn flat round dense icon="open_in_new" color="primary" @click="$parent.$emit(\'open_org_unit\', props.row)"><q-tooltip>Open organization unit</q-tooltip></q-btn>' + buttons
             if spec.key == "roles":
                 buttons = '<q-btn flat round dense icon="open_in_new" color="primary" @click="$parent.$emit(\'open_role\', props.row)"><q-tooltip>Open role</q-tooltip></q-btn>' + buttons
-            buttons += '<q-btn flat round dense icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn>'
+            if spec.key not in {"privileges", "permissions"}:
+                buttons += '<q-btn flat round dense icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn>'
             if spec.key == "records":
                 buttons += '<q-btn flat round dense icon="attach_file" color="secondary" @click="$parent.$emit(\'components\', props.row)"><q-tooltip>Digital components</q-tooltip></q-btn>'
             if spec.key == "aggregations":
@@ -3619,6 +4833,8 @@ def index() -> None:
                 buttons += '<q-btn v-if="props.row._directly_closed" flat round dense icon="lock_open" color="primary" @click="$parent.$emit(\'reopen\', props.row)"><q-tooltip>Reopen aggregation</q-tooltip></q-btn>'
             if spec.key in {"users", "roles"}:
                 buttons += '<q-btn flat round dense icon="group" color="secondary" @click="$parent.$emit(\'memberships\', props.row)"><q-tooltip>Role assignments</q-tooltip></q-btn>'
+            if spec.key == "profiles":
+                buttons += '<q-btn flat round dense icon="key" color="secondary" @click="$parent.$emit(\'profile_privileges\', props.row)"><q-tooltip>Manage privileges</q-tooltip></q-btn>'
             if spec.key == "users":
                 buttons = '<q-btn flat round dense icon="open_in_new" color="primary" @click="$parent.$emit(\'open_user\', props.row)"><q-tooltip>Open user</q-tooltip></q-btn>' + buttons
                 buttons += '<q-btn flat round dense icon="password" color="orange" @click="$parent.$emit(\'temporary_password\', props.row)"><q-tooltip>Issue temporary password</q-tooltip></q-btn>'
@@ -3632,6 +4848,8 @@ def index() -> None:
             table.add_slot("body-cell-actions", f'<q-td :props="props">{buttons}</q-td>')
             table.on("edit", lambda event: open_editor(event.args))
             table.on("history", lambda event, resource=spec.key: show_entity_history(resource, event.args))
+            if spec.key == "profiles":
+                table.on("profile_privileges", lambda event: show_profile_privilege_editor(event.args))
             if spec.key == "org-units":
                 table.on("open_org_unit", lambda event: select_organization_unit_details(event.args["id"]))
             if spec.key == "roles":
@@ -3830,6 +5048,8 @@ def index() -> None:
         drawer.show()
         header_network.set_visibility(True)
         auth_state["principal"] = principal
+        privileges = set(principal.get("global_privileges", []))
+        refresh_drawer_visibility(privileges)
         user = principal["user"]
         current_user_name.text = user["name"]
         current_user_email.text = user.get("email") or user["account_type"].title()
@@ -3854,10 +5074,23 @@ def index() -> None:
                         ui.label(role["org_unit"]["name"]).classes("text-xs text-slate-400 line-clamp-1")
 
     async def show_change_password() -> None:
+        forced_change = bool(
+            (auth_state.get("principal") or {}).get("must_change_password")
+        )
         dialog = ui.dialog().props("persistent")
         with dialog, ui.card().classes("w-[480px] max-w-full"):
-            ui.label("Change password").classes("text-xl font-semibold")
-            current = ui.input("Current password", password=True, password_toggle_button=True).props("outlined").classes("w-full")
+            ui.label(
+                "Set a new password" if forced_change else "Change password"
+            ).classes("text-xl font-semibold")
+            if forced_change:
+                ui.label(
+                    "Your temporary password must be replaced before you can continue."
+                ).classes("text-sm text-slate-500")
+            current = ui.input(
+                "Temporary password" if forced_change else "Current password",
+                password=True,
+                password_toggle_button=True,
+            ).props("outlined autocomplete=current-password").classes("w-full")
             new = ui.input("New password", password=True, password_toggle_button=True).props("outlined").classes("w-full")
             confirm = ui.input("Confirm new password", password=True).props("outlined").classes("w-full")
 
@@ -3874,10 +5107,26 @@ def index() -> None:
                 except ApiError as error:
                     ui.notify(error_message(error), color="negative", close_button=True)
 
+            async def return_to_sign_in() -> None:
+                # A forced-change session is deliberately restricted. Let the
+                # person abandon it safely when the temporary password is no
+                # longer available, instead of trapping them in this dialog.
+                dialog.close()
+                await sign_out()
+
             with ui.row().classes("w-full justify-end"):
-                if not (auth_state.get("principal") or {}).get("must_change_password"):
+                if forced_change:
+                    ui.button(
+                        "Back to sign in", icon="arrow_back",
+                        on_click=return_to_sign_in,
+                    ).props("flat no-caps")
+                else:
                     ui.button("Cancel", on_click=dialog.close).props("flat")
-                ui.button("Change password", icon="password", on_click=save_password).props("unelevated")
+                ui.button(
+                    "Set new password" if forced_change else "Change password",
+                    icon="password",
+                    on_click=save_password,
+                ).props("unelevated")
         dialog.open()
 
     async def sign_out() -> None:
@@ -3919,7 +5168,9 @@ def index() -> None:
             except ApiError as error:
                 ui.notify(error_message(error), color="negative")
                 return
-            is_admin = any(role["code"].lower() == "system-administrator" for role in auth_state["principal"]["roles"])
+            is_admin = "identity.sessions.administer" in set(
+                auth_state["principal"].get("global_privileges", [])
+            )
             for row in rows:
                 row["can_revoke_all"] = is_admin
                 row["_user_avatar"] = user_avatar({
@@ -3960,16 +5211,16 @@ def index() -> None:
                     ui.button("Refresh", icon="refresh", on_click=load_sessions).props("flat no-caps")
                 table = ui.table(
                     columns=[
-                        {"name": "user_name", "label": "User", "field": "user_name", "align": "left"},
-                        {"name": "status", "label": "Status", "field": "status", "align": "left"},
-                        {"name": "date_created", "label": "Signed in", "field": "date_created", "align": "left"},
-                        {"name": "last_seen_at", "label": "Last activity", "field": "last_seen_at", "align": "left"},
-                        {"name": "expires_at", "label": "Expires", "field": "expires_at", "align": "left"},
-                        {"name": "client_ip", "label": "IP address", "field": "client_ip", "align": "left"},
-                        {"name": "user_agent", "label": "Client", "field": "user_agent", "align": "left"},
+                        {"name": "user_name", "label": "User", "field": "user_name", "align": "left", "sortable": True},
+                        {"name": "status", "label": "Status", "field": "status", "align": "left", "sortable": True},
+                        {"name": "date_created", "label": "Signed in", "field": "date_created", "align": "left", "sortable": True},
+                        {"name": "last_seen_at", "label": "Last activity", "field": "last_seen_at", "align": "left", "sortable": True},
+                        {"name": "expires_at", "label": "Expires", "field": "expires_at", "align": "left", "sortable": True},
+                        {"name": "client_ip", "label": "IP address", "field": "client_ip", "align": "left", "sortable": True},
+                        {"name": "user_agent", "label": "Client", "field": "user_agent", "align": "left", "sortable": True},
                         {"name": "actions", "label": "", "field": "actions", "align": "right"},
                     ], rows=rows, row_key="id", pagination=25,
-                ).props("flat bordered wrap-cells").classes("w-full")
+                ).props("flat bordered wrap-cells").classes("w-full governance-table login-sessions-table")
                 add_timestamp_slots(table, ["date_created", "last_seen_at", "expires_at"])
                 table.add_slot("body-cell-user_name", '''
                     <q-td :props="props">
@@ -3990,8 +5241,29 @@ def index() -> None:
                 ''')
                 table.add_slot("body-cell-actions", '''
                     <q-td :props="props">
-                      <q-btn v-if="props.row.status === 'active'" flat round dense color="negative" icon="logout" @click="$parent.$emit('revoke', props.row)"><q-tooltip>Force logout this session</q-tooltip></q-btn>
-                      <q-btn v-if="props.row.status === 'active' && props.row.can_revoke_all" flat round dense color="negative" icon="phonelink_erase" @click="$parent.$emit('revoke_all', props.row)"><q-tooltip>Force logout all sessions for this user</q-tooltip></q-btn>
+                      <q-btn-dropdown
+                        v-if="props.row.status === 'active'"
+                        outline dense no-caps color="negative" icon="logout"
+                        label="Force sign-out"
+                      >
+                        <q-list style="min-width: 245px">
+                          <q-item clickable v-close-popup @click="$parent.$emit('revoke', props.row)">
+                            <q-item-section avatar><q-icon name="logout" color="negative" /></q-item-section>
+                            <q-item-section>
+                              <q-item-label>This session</q-item-label>
+                              <q-item-label caption>End only this login session</q-item-label>
+                            </q-item-section>
+                          </q-item>
+                          <q-separator v-if="props.row.can_revoke_all" />
+                          <q-item v-if="props.row.can_revoke_all" clickable v-close-popup @click="$parent.$emit('revoke_all', props.row)">
+                            <q-item-section avatar><q-icon name="devices_off" color="negative" /></q-item-section>
+                            <q-item-section>
+                              <q-item-label>All sessions for this user</q-item-label>
+                              <q-item-label caption>End every active login for this account</q-item-label>
+                            </q-item-section>
+                          </q-item>
+                        </q-list>
+                      </q-btn-dropdown>
                     </q-td>
                 ''')
 
@@ -4058,7 +5330,7 @@ def index() -> None:
                 async def confirm_revoke(row: dict[str, Any], *, all_for_user: bool = False) -> None:
                     confirmation = ui.dialog()
                     with confirmation, ui.card().classes("w-[460px] max-w-full"):
-                        ui.label("Force logout?").classes("text-xl font-semibold")
+                        ui.label("Force sign-out?").classes("text-xl font-semibold")
                         scope = "all active sessions for" if all_for_user else "this session for"
                         ui.label(f"This will immediately revoke {scope} {row['user_name']}.").classes("text-sm text-slate-600")
 
@@ -4082,7 +5354,7 @@ def index() -> None:
 
                         with ui.row().classes("w-full justify-end"):
                             ui.button("Cancel", on_click=confirmation.close).props("flat")
-                            ui.button("Force logout", icon="logout", color="negative", on_click=proceed).props("unelevated no-caps")
+                            ui.button("Force sign-out", icon="logout", color="negative", on_click=proceed).props("unelevated no-caps")
                     confirmation.open()
 
                 async def revoke(event) -> None:
@@ -4146,18 +5418,26 @@ def index() -> None:
                     ui.label("Loading dashboard…").classes("text-slate-500")
 
             try:
+                privileges = set(auth_state["principal"].get("global_privileges", []))
+                can_classify = "classifications.administer" in privileges
+                can_organize = "organization.administer" in privileges
+                can_administer_users = "identity.users.administer" in privileges
+
+                async def available(value: Any) -> Any:
+                    return value
+
                 count_resources = [
-                    "aggregations", "records", "classification-schemes",
-                    "classifications", "org-units", "roles", "users", "event-history",
+                    "aggregations", "records",
                 ]
+                count_resources += list(dashboard_administration_resources(privileges))
                 count_results, scheme_rows, scheme_classification_counts, inactive_result, unclassified_result, favourites = await asyncio.gather(
                     asyncio.gather(*(api.count(resource) for resource in count_resources)),
-                    api.list("classification-schemes"),
-                    api.request("GET", "/api/v1/classification-schemes/classification-counts"),
+                    api.list("classification-schemes") if can_classify else available([]),
+                    api.request("GET", "/api/v1/classification-schemes/classification-counts") if can_classify else available([]),
                     api.search_request("classifications", {
                         "where": {"field": "date_deactivated", "operator": "is_not_null"},
                         "limit": 1,
-                    }),
+                    }) if can_classify else available({"total": 0}),
                     api.search_request("aggregations", {
                         "where": {"and": [
                             {"field": "parent_aggregation_id", "operator": "is_null"},
@@ -4167,27 +5447,42 @@ def index() -> None:
                     }),
                     reload_favourites(),
                 )
-                current_user_id = auth_state["principal"]["user"]["id"]
                 recent_limit = dashboard_recent_item_limit()
                 recent_days = dashboard_recent_days()
                 recent_since = datetime.now(timezone.utc) - timedelta(days=recent_days)
+                # A dashboard must remain useful while a local API process is
+                # being restarted during an upgrade.  Older API processes do
+                # not yet expose this optional, self-only activity endpoint;
+                # the overview and favourites must not become a "Not Found"
+                # page as a result.  Other errors are still surfaced normally.
+                try:
+                    activity = await api.my_recent_activity(
+                        limit=recent_limit, since=recent_since,
+                    )
+                except ApiError as error:
+                    if error.status_code != 404:
+                        raise
+                    activity = []
+
+                async def activity_rows(entity_type: str, operation: str) -> list[dict[str, Any]]:
+                    resource = "aggregations" if entity_type == "aggregation" else "records"
+                    entries = [item for item in activity if item["entity_type"] == entity_type
+                               and item["operation"] == operation]
+                    rows = await asyncio.gather(
+                        *(api.get(resource, entry["entity_id"]) for entry in entries),
+                        return_exceptions=True,
+                    )
+                    return [
+                        {**row, "_activity_at": entry["occurred_at"]}
+                        for entry, row in zip(entries, rows)
+                        if isinstance(row, dict)
+                    ]
+
                 recent_results = await asyncio.gather(
-                    api.recently_created(
-                        "aggregations", limit=recent_limit,
-                        actor_user_id=current_user_id, since=recent_since,
-                    ),
-                    api.recently_updated(
-                        "aggregations", limit=recent_limit,
-                        actor_user_id=current_user_id, since=recent_since,
-                    ),
-                    api.recently_created(
-                        "records", limit=recent_limit,
-                        actor_user_id=current_user_id, since=recent_since,
-                    ),
-                    api.recently_updated(
-                        "records", limit=recent_limit,
-                        actor_user_id=current_user_id, since=recent_since,
-                    ),
+                    activity_rows("aggregation", "CREATE"),
+                    activity_rows("aggregation", "UPDATE"),
+                    activity_rows("record", "CREATE"),
+                    activity_rows("record", "UPDATE"),
                 )
                 counts = dict(zip(count_resources, count_results))
                 branch_count = sum(int(row["branch_count"]) for row in scheme_classification_counts)
@@ -4257,26 +5552,34 @@ def index() -> None:
                     ui.space()
                     ui.button("Refresh", icon="refresh", on_click=load_dashboard).props("flat dense no-caps color=primary")
                 with ui.grid(columns=4).classes("w-full gap-3"):
-                    overview_cards = (
+                    overview_cards = [
                         ("aggregations", "Aggregations", "folder", None, lambda: select_entity("aggregations")),
                         ("records", "Records", "description", None, lambda: select_entity("records")),
-                        (
+                    ]
+                    if can_classify:
+                        overview_cards.extend((
+                            (
                             "classification-schemes", "Classification schemes", "account_tree",
                             f"{published_scheme_count} published · {draft_scheme_count} draft · "
                             f"{inactive_scheme_count} inactive",
                             select_classification_workspace,
-                        ),
-                        (
+                            ), (
                             "classifications", "Classifications", "schema",
                             f"{branch_count} branches · {terminal_count} terminals\n"
                             f"{assignable_terminal_count} assignable terminals · "
                             f"{draft_terminal_count} draft terminals",
                             select_classification_workspace,
-                        ),
-                        ("org-units", "Organization units", "corporate_fare", None, lambda: select_entity("org-units")),
-                        ("roles", "Roles", "badge", None, lambda: select_entity("roles")),
-                        ("users", "Users", "group", None, lambda: select_entity("users")),
-                    )
+                            ),
+                        ))
+                    if can_organize:
+                        overview_cards.extend((
+                            ("org-units", "Organization units", "corporate_fare", None, lambda: select_entity("org-units")),
+                            ("roles", "Roles", "badge", None, lambda: select_entity("roles")),
+                        ))
+                    if can_administer_users:
+                        overview_cards.append(
+                            ("users", "Users", "group", None, lambda: select_entity("users")),
+                        )
                     for resource, label, icon, detail, handler in overview_cards:
                         with ui.card().classes("dashboard-stat cursor-pointer p-4 gap-2").on(
                             "click", lambda _, action=handler: action()
@@ -4654,7 +5957,7 @@ def index() -> None:
         set_aggregation_mode_controls("browse")
         search_bar.set_visibility(False)
         guidance.text = "Browse published classification schemes, governed aggregations, and their records."
-        add_button.set_visibility(True)
+        add_button.set_visibility(key != "privileges")
         add_button.text = "Add"
         add_button.update()
         add_record_button.set_visibility(False)
@@ -5193,6 +6496,61 @@ def index() -> None:
         guidance.text = "Large collections are search-first to avoid loading unbounded result sets."
         render_table(ENTITIES["aggregations"])
 
+    async def confirm_identity_deletion(
+        resource: str, item: dict[str, Any], *, label: str, on_deleted: Callable[[], Any],
+    ) -> None:
+        """Explain the server's deletion analysis and require a reason."""
+        try:
+            report = await api.deletion_preflight(resource, item["id"])
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+        dialog = ui.dialog().props("persistent")
+        with dialog, ui.card().classes("w-[620px] max-w-full gap-4 p-5"):
+            ui.label(f"Permanently delete {label}?").classes("text-xl font-semibold")
+            ui.label(item.get("name") or item.get("code") or str(item["id"])).classes("font-medium")
+            if report["blockers"]:
+                ui.label("Deletion is currently blocked").classes("text-negative font-semibold")
+                for blocker in report["blockers"]:
+                    with ui.row().classes("items-start gap-2"):
+                        ui.icon("block", color="negative").classes("mt-0.5")
+                        with ui.column().classes("gap-0 grow"):
+                            ui.label(blocker["message"]).classes("text-sm")
+                            details = blocker.get("details") or {}
+                            if details:
+                                ui.label(" · ".join(f"{key.replace('_', ' ').title()}: {value}" for key, value in details.items())).classes("text-xs text-slate-500")
+                ui.label("Resolve every blocker and run the preflight again. There is no force-delete override.").classes("text-xs text-slate-500")
+                ui.button("Close", on_click=dialog.close).props("flat no-caps").classes("self-end")
+            else:
+                cascades = {key: value for key, value in report.get("cascades", {}).items() if value}
+                ui.label("The live entity cannot be restored. Immutable audit history will remain.").classes("text-sm text-slate-600")
+                if cascades:
+                    ui.label("Data removed automatically").classes("text-sm font-semibold")
+                    ui.label(" · ".join(f"{key.replace('_', ' ').title()}: {value}" for key, value in cascades.items())).classes("text-sm text-slate-600")
+                reason = ui.textarea("Reason for permanent deletion").props("outlined autogrow counter maxlength=2000").classes("w-full")
+
+                async def remove() -> None:
+                    change_reason = (reason.value or "").strip()
+                    if not change_reason:
+                        ui.notify("A deletion reason is required", color="warning")
+                        return
+                    try:
+                        await api.delete(resource, item["id"], report["entity_version"], reason=change_reason)
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+                        dialog.close()
+                        return
+                    dialog.close()
+                    ui.notify(f"{label.title()} permanently deleted", color="positive")
+                    result = on_deleted()
+                    if inspect.isawaitable(result):
+                        await result
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button("Delete permanently", icon="delete_forever", color="negative", on_click=remove).props("unelevated no-caps")
+        dialog.open()
+
     async def select_organization_unit_details(org_unit_id: int) -> None:
         register_navigation("org-unit-details", f"Organization unit #{org_unit_id}", entity_id=org_unit_id)
         show_authenticated_view()
@@ -5238,6 +6596,13 @@ def index() -> None:
                     ui.button("Edit", icon="edit", on_click=lambda: open_editor(unit, on_saved=refresh, resource_key="org-units")).props("flat no-caps")
                     ui.button("History", icon="history", on_click=lambda: show_entity_history("org-units", unit)).props("flat no-caps")
                     ui.button("Activate" if unit["status"] == "inactive" else "Deactivate", icon="toggle_on" if unit["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline no-caps")
+                    ui.button(
+                        "Delete", icon="delete_outline", color="negative",
+                        on_click=lambda: confirm_identity_deletion(
+                            "org-units", unit, label="organization unit",
+                            on_deleted=lambda: select_entity("org-units"),
+                        ),
+                    ).props("flat no-caps")
                 with ui.grid(columns=3).classes("w-full gap-4"):
                     for label, value in (
                         ("Direct status", unit.get("status")), ("Effective status", unit.get("effective_status")),
@@ -5299,9 +6664,22 @@ def index() -> None:
                     ui.button("User assignments", icon="group", on_click=lambda: show_memberships(role, for_user=False)).props("flat no-caps")
                     ui.button("History", icon="history", on_click=lambda: show_entity_history("roles", role)).props("flat no-caps")
                     ui.button("Activate" if role["status"] == "inactive" else "Deactivate", icon="toggle_on" if role["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline no-caps")
+                    ui.button(
+                        "Delete", icon="delete_outline", color="negative",
+                        on_click=lambda: confirm_identity_deletion(
+                            "roles", role, label="role", on_deleted=lambda: select_entity("roles"),
+                        ),
+                    ).props("flat no-caps")
                 with ui.grid(columns=3).classes("w-full gap-4"):
                     for label, value in (
                         ("Direct status", role.get("status")), ("Effective status", role.get("effective_status")),
+                        ("Security clearance", " — ".join(filter(None, (
+                            role.get("security_level_code"), role.get("security_level_name"),
+                        )))),
+                        ("Assigned profile", " — ".join(filter(None, (
+                            role.get("profile_code"), role.get("profile_name"),
+                        )))),
+                        ("Information governance", "Yes" if role.get("is_information_governance") else "No"),
                         ("Organization unit", role.get("org_unit_name")),
                         ("Supervising role", role.get("supervisor_role_name")),
                         ("Supervised roles", role.get("subordinate_role_count")),
@@ -5313,6 +6691,16 @@ def index() -> None:
                         guidance_text = {
                             "Direct status": "Set directly on this role, without considering its organization structure.",
                             "Effective status": "Also includes inactivity inherited from its organization unit or any ancestor unit.",
+                            "Assigned profile": (
+                                "All privileges is a migration compatibility profile. Replace it with a purpose-specific profile "
+                                "when this role's duties have been reviewed."
+                                if role.get("profile_code") == "ALL_PRIVS" else
+                                "The role receives its global capabilities from exactly this one profile."
+                            ),
+                            "Information governance": (
+                                "This role may bypass resource ACLs only. Global privileges, its own security clearance, "
+                                "effective assignment, closure rules, and other integrity controls still apply."
+                            ),
                         }.get(label)
                         with ui.column().classes("gap-0 border-b border-slate-100 pb-1.5"):
                             ui.label(label.upper()).classes("text-xs text-slate-400")
@@ -5402,6 +6790,12 @@ def index() -> None:
                             ui.button("Role assignments", icon="group", on_click=lambda: show_memberships(person, for_user=True)).props("flat no-caps")
                             ui.button("Temporary password", icon="password", on_click=issue_password).props("flat no-caps color=orange")
                             ui.button("History", icon="history", on_click=lambda: show_entity_history("users", person)).props("flat no-caps")
+                            ui.button(
+                                "Delete", icon="delete_outline", color="negative",
+                                on_click=lambda: confirm_identity_deletion(
+                                    "users", person, label="user", on_deleted=lambda: select_entity("users"),
+                                ),
+                            ).props("flat no-caps")
                     with ui.row().classes("w-full justify-end gap-2"):
                         if person["status"] == "inactive":
                             ui.button("Activate", icon="toggle_on", on_click=lambda: change_status("activate")).props("outline no-caps color=positive")
@@ -5812,7 +7206,10 @@ def index() -> None:
                                     ui.label(str(value).title() if label in {"Effective status", "Direct status", "Account status", "Account type", "Assignment validity"} else str(value)).classes("text-sm font-medium text-right")
                                 if guidance_text:
                                     ui.label(guidance_text).classes("w-full text-[10px] leading-3 text-slate-400")
-                    if not is_selector:
+                    privileges = set(
+                        (auth_state.get("principal") or {}).get("global_privileges", [])
+                    )
+                    if not is_selector and can_open_organization_detail(node["type"], privileges):
                         action_label = f"Open {node['type'].replace('_', ' ')}"
                         ui.button(
                             action_label.title(), icon="open_in_new",
@@ -6013,6 +7410,536 @@ def index() -> None:
         if is_selector:
             dialog.open()
 
+    async def select_governance_custody() -> None:
+        register_navigation("governance-custody", "Governance custody")
+        show_authenticated_view()
+        state.update(resource="governance-custody", rows=[], searched=True)
+        title.text = "Governance custody"
+        subtitle.text = "Checks that someone can always manage and recover access to protected records"
+        search_bar.set_visibility(False); aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False); add_record_button.set_visibility(False)
+        guidance.text = ""
+        table_container.clear()
+        try:
+            report = await api.governance_custody()
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True); return
+        highest_level = report.get("highest_security_level")
+        warning = next(iter(report.get("warnings", [])), None)
+        custodian_count = report["highest_clearance_custodian_count"]
+        qualifying_roles = [
+            item for item in report["governance_roles"]
+            if item["qualifies_for_universal_custody"]
+        ]
+        qualifying_assignments = [
+            item for item in report["assignments"]
+            if item["effective_for_universal_custody"]
+        ]
+        assignments_needing_attention = [
+            item for item in report["assignments"]
+            if not item["effective_for_universal_custody"]
+        ]
+        qualifying_roles_by_id = {item["id"]: item for item in qualifying_roles}
+        with table_container, ui.column().classes("w-full p-5 gap-4"):
+            with ui.element("div").classes("governance-overview-grid"):
+                with ui.card().classes("governance-purpose-card shadow-none"):
+                    with ui.row().classes("w-full items-start gap-3 no-wrap"):
+                        with ui.element("div").classes("governance-purpose-icon"):
+                            ui.icon("policy", size="21px")
+                        with ui.column().classes("gap-1 grow min-w-0"):
+                            ui.label("What this page checks").classes("text-base font-semibold")
+                            ui.label(
+                                "At least one active person must be able to manage information at the "
+                                "highest security level."
+                            ).classes("text-sm text-slate-600 leading-relaxed")
+                            with ui.element("div").classes("governance-requirements-grid"):
+                                for requirement in (
+                                    "Governance role enabled",
+                                    "Highest clearance held",
+                                    "Required profile privileges",
+                                    "Current role assignment",
+                                ):
+                                    with ui.row().classes("items-center gap-2 no-wrap"):
+                                        ui.icon("check", color="positive", size="16px")
+                                        ui.label(requirement).classes("text-xs text-slate-600")
+                            ui.label(
+                                "The system blocks relevant changes that would remove the final custodian. "
+                                "Keeping at least two is recommended organizational policy."
+                            ).classes("text-xs text-slate-500 mt-1")
+                critical = bool(warning and warning["severity"] == "critical")
+                status_classes = (
+                    "governance-status-card governance-status-critical"
+                    if critical else
+                    "governance-status-card governance-status-warning"
+                    if warning else
+                    "governance-status-card governance-status-healthy"
+                )
+                with ui.card().classes(f"{status_classes} shadow-none"):
+                    with ui.row().classes("w-full items-start gap-3 no-wrap"):
+                        with ui.element("div").classes("governance-status-icon"):
+                            ui.icon("priority_high" if warning else "check", size="18px")
+                        with ui.column().classes("gap-1 grow min-w-0"):
+                            ui.label(
+                                "Custody gap detected" if critical else
+                                "Custody resilience needs attention" if warning else
+                                "Custody coverage is healthy"
+                            ).classes("text-base font-semibold")
+                            ui.label(
+                                "No person currently meets every requirement. Configure a qualifying role "
+                                "and assignment."
+                                if critical else
+                                "Only one person currently qualifies. Add a second custodian to reduce "
+                                "operational risk."
+                                if warning else
+                                f"{custodian_count} active "
+                                f"{'person' if custodian_count == 1 else 'people'} currently qualify across "
+                                f"{len(qualifying_roles)} governance "
+                                f"{'role' if len(qualifying_roles) == 1 else 'roles'} and "
+                                f"{len(qualifying_assignments)} current "
+                                f"{'assignment' if len(qualifying_assignments) == 1 else 'assignments'}."
+                            ).classes("text-sm leading-relaxed")
+            with ui.row().classes("governance-metrics-row"):
+                for value, label, icon in (
+                    (custodian_count, "Universal custodians", "person"),
+                    (len(qualifying_roles), "Qualifying roles", "badge"),
+                    (len(qualifying_assignments), "Qualifying assignments", "group"),
+                ):
+                    with ui.card().classes("governance-metric-card shadow-none"):
+                        with ui.element("div").classes("governance-metric-icon"):
+                            ui.icon(icon, size="18px")
+                        with ui.column().classes("gap-0"):
+                            ui.label(str(value)).classes("text-2xl font-semibold leading-none")
+                            ui.label(label).classes("text-xs text-slate-500 mt-1")
+            with ui.row().classes("w-full items-end gap-3 mt-1"):
+                with ui.column().classes("gap-0 grow"):
+                    ui.label(f"Universal custodians ({custodian_count})").classes(
+                        "text-base font-semibold"
+                    )
+                    ui.label(
+                        "Active people whose current assignments provide organization-wide custody "
+                        "at the highest configured security level. Each row is a qualifying assignment; "
+                        "a person with more than one qualifying role may appear more than once."
+                    ).classes("text-xs text-slate-500")
+                if highest_level:
+                    ui.badge(
+                        f"Required clearance: {highest_level['code']} — {highest_level['name']} "
+                        f"(level {highest_level['level_number']})"
+                    ).props("outline color=primary")
+            if qualifying_assignments:
+                custodian_rows = [
+                    {
+                        **item,
+                        "person": item["user_name"],
+                        "email": item.get("user_email") or "—",
+                        "avatar": user_avatar({
+                            "id": item["user_id"],
+                            "name": item["user_name"],
+                            "email": item.get("user_email"),
+                        }),
+                        "role": f"{item['role_code']} — {item['role_name']}",
+                        "clearance": (
+                            f"{qualifying_roles_by_id[item['role_id']]['security_level_code']} — "
+                            f"{qualifying_roles_by_id[item['role_id']]['security_level_name']}"
+                        ),
+                        "valid_from_display": format_timestamp(item["valid_from"]),
+                        "valid_until_display": (
+                            format_timestamp(item["valid_until"]) if item.get("valid_until") else "No expiry"
+                        ),
+                    }
+                    for item in qualifying_assignments
+                ]
+                custodian_table = ui.table(
+                    columns=[
+                        {"name": "person", "label": "Person", "field": "person", "sortable": True, "align": "left"},
+                        {"name": "email", "label": "Email", "field": "email", "sortable": True, "align": "left"},
+                        {"name": "role", "label": "Qualifying role", "field": "role", "sortable": True, "align": "left"},
+                        {"name": "clearance", "label": "Clearance", "field": "clearance", "sortable": True, "align": "left"},
+                        {"name": "valid_from_display", "label": "Valid from", "field": "valid_from_display", "sortable": True, "align": "left"},
+                        {"name": "valid_until_display", "label": "Assignment valid until", "field": "valid_until_display", "sortable": True, "align": "left"},
+                        {"name": "actions", "label": "", "field": "actions", "align": "right"},
+                    ],
+                    rows=custodian_rows,
+                    pagination={"rowsPerPage": 5},
+                ).props("flat bordered rows-per-page-options='[5,10,25]'").classes(
+                    "w-full governance-table"
+                )
+                custodian_table.add_slot("body-cell-person", """
+                    <q-td :props="props">
+                      <div class="row items-center no-wrap q-gutter-sm">
+                        <q-avatar size="36px"
+                          :style="{ backgroundColor: props.row.avatar.color, color: 'white' }">
+                          {{ props.row.avatar.initials }}
+                        </q-avatar>
+                        <span>{{ props.row.person }}</span>
+                      </div>
+                    </q-td>
+                """)
+                custodian_table.add_slot("body-cell-actions", """
+                    <q-td :props="props">
+                      <q-btn flat dense no-caps icon="person" color="primary" label="Open user"
+                        @click="$parent.$emit('open_user', props.row)" />
+                      <q-btn flat dense no-caps icon="badge" color="primary" label="Open role"
+                        @click="$parent.$emit('open_role', props.row)" />
+                    </q-td>
+                """)
+                custodian_table.on(
+                    "open_user", lambda event: select_user_details(event.args["user_id"])
+                )
+                custodian_table.on(
+                    "open_role", lambda event: select_role_details(event.args["role_id"])
+                )
+            else:
+                ui.label(
+                    "No active person currently meets every universal-custody requirement."
+                ).classes("governance-empty-inline")
+            with ui.row().classes("w-full items-center gap-3"):
+                with ui.column().classes("gap-0 grow"):
+                    ui.label("Information-governance roles").classes("text-base font-semibold")
+                    ui.label(
+                        "Qualifying roles provide custody; other listed roles show what is still missing."
+                    ).classes("text-xs text-slate-500")
+                ui.button(
+                    "Open roles", icon="open_in_new", on_click=lambda: select_entity("roles"),
+                ).props("flat dense no-caps")
+            if not report["governance_roles"]:
+                with ui.card().classes("governance-empty-state shadow-none"):
+                    ui.icon("verified_user", color="blue-grey-4", size="28px")
+                    ui.label("No information-governance roles are configured").classes(
+                        "text-sm font-semibold text-slate-700"
+                    )
+                    ui.label(
+                        "Designate the appropriate records-management role, give it the required "
+                        "profile and highest clearance, then assign an active person."
+                    ).classes("text-xs text-slate-500 text-center")
+                    with ui.row().classes("gap-2 mt-1"):
+                        ui.button(
+                            "Configure a role", icon="badge",
+                            on_click=lambda: select_entity("roles"),
+                        ).props("outline dense no-caps")
+                        ui.button(
+                            "Review profiles", icon="admin_panel_settings",
+                            on_click=lambda: select_entity("profiles"),
+                        ).props("flat dense no-caps")
+            else:
+                for role in report["governance_roles"]:
+                    with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-2"):
+                        with ui.row().classes("w-full items-center gap-3 no-wrap"):
+                            ui.icon("verified_user", color="primary")
+                            with ui.column().classes("gap-0 grow min-w-0"):
+                                ui.label(f"{role['code']} — {role['name']}").classes("font-semibold")
+                                ui.label(
+                                    f"Profile: {role['profile_code']} — {role['profile_name']}"
+                                ).classes("text-xs text-slate-500")
+                            ui.badge(
+                                "Qualifies for universal custody"
+                                if role["qualifies_for_universal_custody"] else
+                                "Does not qualify",
+                                color="positive" if role["qualifies_for_universal_custody"] else "warning",
+                            ).props("outline")
+                            ui.button(
+                                "Open role", icon="open_in_new",
+                                on_click=lambda _, identifier=role["id"]: select_role_details(identifier),
+                            ).props("flat dense no-caps")
+                        with ui.row().classes("w-full items-center gap-2 flex-wrap"):
+                            ui.badge(
+                                f"{role['security_level_code']} — {role['security_level_name']} "
+                                f"(level {role['level_number']})",
+                                color="positive" if role["is_highest_clearance"] else "blue-grey",
+                            ).props("outline")
+                            ui.badge(
+                                "Role and organization active" if role["effective"] else "Role or organization inactive",
+                                color="positive" if role["effective"] else "negative",
+                            ).props("outline")
+                            ui.badge(
+                                "All custody privileges present"
+                                if role["has_required_custody_privileges"] else
+                                f"{len(role['missing_custody_privilege_codes'])} custody privileges missing",
+                                color="positive" if role["has_required_custody_privileges"] else "negative",
+                            ).props("outline")
+                            for count, label, explanation in (
+                                (
+                                    role["current_assignee_count"], "Current assignments",
+                                    "Assignments whose validity dates include the present time.",
+                                ),
+                                (
+                                    role["effective_assignee_count"],
+                                    "Active people in an active role",
+                                    "Current assignments where the account, role, and organization hierarchy are active.",
+                                ),
+                                (
+                                    role["universal_custodian_count"], "Universal custodians",
+                                    "Active person accounts whose qualifying role also has every required privilege and the highest security clearance.",
+                                ),
+                            ):
+                                ui.label(f"{label}: {count}").classes(
+                                    "text-xs text-slate-500 cursor-help"
+                                ).tooltip(explanation)
+                        if role["missing_custody_privilege_codes"]:
+                            missing = ", ".join(role["missing_custody_privilege_codes"])
+                            ui.label(f"Missing privileges: {missing}").classes(
+                                "text-xs font-mono text-red-700 break-all"
+                            )
+
+            if assignments_needing_attention:
+                with ui.row().classes("w-full items-center gap-3 mt-1"):
+                    with ui.column().classes("gap-0 grow"):
+                        ui.label("Assignments needing attention").classes("text-base font-semibold")
+                        ui.label(
+                            "Only assignments that do not currently provide universal custody are listed here."
+                        ).classes("text-xs text-slate-500")
+                    if highest_level:
+                        ui.label(
+                            f"Highest configured level: {highest_level['code']} — "
+                            f"{highest_level['name']} (level {highest_level['level_number']})"
+                        ).classes("text-xs text-slate-500")
+                reason_labels = {
+                    "service_account": "Service account",
+                    "user_inactive": "User inactive",
+                    "user_suspended": "User suspended",
+                    "assignment_not_current": "Assignment not current",
+                    "role_or_organization_inactive": "Role or organization inactive",
+                    "role_not_universal_custody_qualified": "Role does not meet universal-custody requirements",
+                }
+                assignment_rows = []
+                for item in assignments_needing_attention:
+                    assignment_rows.append({
+                        **item,
+                        "person": item["user_name"],
+                        "role": f"{item['role_code']} — {item['role_name']}",
+                        "custody_status": "; ".join(
+                            reason_labels.get(reason, reason.replace("_", " ").title())
+                            for reason in item["ineffective_reasons"]
+                        ),
+                    })
+                assignment_table = ui.table(
+                    columns=[
+                        {"name": "person", "label": "Person", "field": "person", "sortable": True, "align": "left"},
+                        {"name": "role", "label": "Role", "field": "role", "sortable": True, "align": "left"},
+                        {"name": "custody_status", "label": "Custody status", "field": "custody_status", "sortable": True, "align": "left"},
+                        {"name": "actions", "label": "", "field": "actions", "align": "right"},
+                    ],
+                    rows=assignment_rows,
+                    pagination={"rowsPerPage": 5},
+                ).props("flat bordered rows-per-page-options='[5,10,25]'").classes(
+                    "w-full governance-table"
+                )
+                assignment_table.add_slot("body-cell-actions", """
+                    <q-td :props="props">
+                      <q-btn flat round dense icon="open_in_new" color="primary"
+                        @click="$parent.$emit('open_user', props.row)">
+                        <q-tooltip>Open user</q-tooltip>
+                      </q-btn>
+                    </q-td>
+                """)
+                assignment_table.on(
+                    "open_user", lambda event: select_user_details(event.args["user_id"])
+                )
+
+    async def select_security_operations() -> None:
+        register_navigation("security-operations", "Security operations")
+        show_authenticated_view()
+        state.update(resource="security-operations", rows=[], searched=True)
+        title.text = "Security operations"; subtitle.text = "Sanitized security signals and access-continuity checks"
+        search_bar.set_visibility(False); aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False); add_record_button.set_visibility(False); guidance.text = ""
+        table_container.clear()
+        privileges = set((auth_state.get("principal") or {}).get("global_privileges", []))
+        with table_container, ui.column().classes("w-full p-5 gap-5"):
+            with ui.row().classes("w-full items-center gap-3"):
+                ui.icon("monitor_heart", color="primary", size="30px")
+                with ui.column().classes("gap-0 grow"):
+                    window_title = ui.label("Last 24 hours").classes("text-xl font-semibold")
+                    ui.label("Aggregated signals contain no protected resource snapshots or request bodies.").classes("text-sm text-slate-500")
+                period = ui.select(
+                    {"24h": "Last 24 hours", "week": "Last week", "month": "Last month", "custom": "Custom"},
+                    value="24h", label="Period",
+                ).props("outlined dense options-dense").classes("w-44")
+                refresh = ui.button("Refresh", icon="refresh").props("outline no-caps")
+            custom_range = ui.row().classes("w-full items-end gap-3")
+            with custom_range:
+                range_start = ui.input("From").props("outlined dense type=date").classes("w-52")
+                range_end = ui.input("Through").props("outlined dense type=date").classes("w-52")
+                apply_range = ui.button("Apply range", icon="date_range").props("unelevated no-caps")
+            custom_range.set_visibility(False)
+            content = ui.column().classes("w-full gap-5")
+
+        def custom_iso(value: str | None, *, end: bool) -> str | None:
+            if not value:
+                return None
+            parsed = datetime.fromisoformat(value).astimezone()
+            if end:
+                parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+            else:
+                parsed = parsed.replace(hour=0, minute=0, second=0, microsecond=0)
+            return parsed.isoformat()
+
+        async def load_security_operations() -> None:
+            mode = period.value or "24h"
+            hours = {"24h": 24, "week": 24 * 7, "month": 24 * 30}.get(mode, 24)
+            if mode == "custom" and (not range_start.value or not range_end.value):
+                ui.notify("Select both dates for the custom range", color="warning")
+                return
+            summary = await api.security_summary(
+                hours=hours,
+                start_at=custom_iso(range_start.value, end=False) if mode == "custom" else None,
+                end_at=custom_iso(range_end.value, end=True) if mode == "custom" else None,
+            )
+            reconciliation = None
+            if "authorization.administer" in privileges:
+                reconciliation = await api.security_reconciliation()
+            window_title.text = {
+                "24h": "Last 24 hours", "week": "Last week", "month": "Last month",
+                "custom": f"{range_start.value} through {range_end.value}",
+            }[mode]
+            content.clear()
+            with content:
+                full_privilege_roles = summary.get("full_privilege_roles", [])
+                if full_privilege_roles:
+                    with ui.card().classes(
+                        "w-full shadow-none border border-amber-300 bg-amber-50 p-4 gap-3"
+                    ):
+                        with ui.row().classes("w-full items-start gap-3"):
+                            ui.icon("warning_amber", color="amber-9", size="26px").classes(
+                                "mt-0.5 shrink-0"
+                            )
+                            with ui.column().classes("gap-1 grow"):
+                                ui.label(
+                                    "Roles have profiles containing every system privilege"
+                                ).classes("font-semibold text-amber-10")
+                                ui.label(
+                                    "Each role below is assigned a profile that currently contains "
+                                    "every defined privilege. The built-in All privileges profile exists "
+                                    "for initial setup and testing, but a custom profile can create the "
+                                    "same risk. Before production use, replace these assignments with "
+                                    "purpose-specific profiles containing only what each role needs. "
+                                    "This is a policy warning; the system does not block the assignment."
+                                ).classes("text-sm leading-6 text-amber-10")
+                        with ui.column().classes("w-full gap-1 pl-9"):
+                            for affected_role in full_privilege_roles:
+                                with ui.row().classes("w-full items-center gap-2"):
+                                    ui.icon("badge", size="18px").classes("text-amber-9")
+                                    ui.label(
+                                        f'{affected_role["code"]} — {affected_role["name"]}'
+                                    ).classes("grow text-sm font-medium")
+                                    ui.badge(
+                                        f'{affected_role["profile_code"]} — '
+                                        f'{affected_role["profile_name"]}',
+                                        color=(
+                                            "warning" if affected_role["is_builtin_bootstrap_profile"]
+                                            else "amber-8"
+                                        ),
+                                    ).props("outline")
+                                    ui.badge(
+                                        affected_role["status"].replace("_", " ").title(),
+                                        color="warning",
+                                    ).props("outline")
+                                    if "organization.administer" in privileges:
+                                        ui.button(
+                                            "Open role", icon="open_in_new",
+                                            on_click=lambda _, role_id=affected_role["id"]: select_role_details(role_id),
+                                        ).props("flat dense no-caps color=primary")
+
+                with ui.grid(columns=2).classes("w-full gap-4"):
+                    for value, label, icon, help_text in (
+                        (summary["total_security_events"], "Security events", "security", "Recognized authentication, authorization, clearance, ACL, profile and governance-policy events in this period."),
+                        (summary["total_denials"], "Authorization denials", "gpp_bad", AUTHORIZATION_DENIAL_HELP),
+                    ):
+                        with ui.card().classes("shadow-none border border-slate-200 p-4 gap-1"):
+                            with ui.row().classes("items-center gap-3"):
+                                ui.icon(icon, color="primary")
+                                ui.label(str(value)).classes("text-3xl font-semibold")
+                            ui.label(label).classes("font-medium")
+                            ui.label(help_text).classes("text-sm text-slate-500")
+
+                ui.label("Event signals").classes("text-lg font-semibold")
+                ui.label("Counts by security operation, with the most recent occurrence in the selected period.").classes("text-sm text-slate-500 -mt-4")
+                if not summary["event_counts"]:
+                    ui.label("No security events in this period.").classes("text-sm text-slate-400")
+                for item in summary["event_counts"]:
+                    with ui.grid(columns="minmax(220px, 1fr) minmax(320px, 2fr) 80px 170px").classes("w-full items-center gap-3 border-b border-slate-100 py-3"):
+                        ui.label(item["operation"].replace("_", " ").title()).classes("font-medium")
+                        ui.label(SECURITY_EVENT_HELP.get(item["operation"], "Security-relevant activity recorded in the audit history.")).classes("text-sm text-slate-500")
+                        with ui.row().classes("w-full justify-center"):
+                            ui.badge(str(item["count"]), color="primary").props("outline")
+                        ui.label(format_timestamp(item["last_seen_at"])).classes("text-xs text-slate-500 text-right")
+
+                ui.label("Recent security events").classes("text-lg font-semibold mt-2")
+                ui.label(
+                    "The most recent security-related events in the selected period, including "
+                    "the account involved, the affected item, and the authorization decision "
+                    "when one was recorded. Details you are not authorized to view remain hidden."
+                ).classes("text-sm text-slate-500 -mt-4")
+                event_rows = [{
+                    **item,
+                    "actor": item.get("actor_name") or item.get("actor_email") or item.get("actor_type"),
+                    "when": format_timestamp(item["occurred_at"]),
+                    "signal": item["operation"].replace("_", " ").title(),
+                    "decision": decision_code_label(item.get("decision_code")),
+                } for item in summary.get("recent_events", [])]
+                event_table = ui.table(
+                    columns=[
+                        {"name": "when", "label": "When", "field": "when", "sortable": True, "align": "left"},
+                        {"name": "signal", "label": "Event", "field": "signal", "sortable": True, "align": "left"},
+                        {"name": "actor", "label": "Account / actor", "field": "actor", "sortable": True, "align": "left"},
+                        {"name": "entity_label", "label": "Target", "field": "entity_label", "sortable": True, "align": "left"},
+                        {"name": "decision", "label": "Decision", "field": "decision", "sortable": True, "align": "left"},
+                    ], rows=event_rows, pagination={"rowsPerPage": 10}, row_key="id",
+                ).props("flat bordered rows-per-page-options='[10,25,50]'").classes(
+                    "w-full governance-table security-operations-table"
+                )
+                event_table.add_slot("body-cell-decision", '''
+                    <q-td :props="props">
+                      <span>{{ props.value }}</span>
+                      <q-tooltip v-if="props.row.decision_code">
+                        Technical code: {{ props.row.decision_code }}
+                      </q-tooltip>
+                    </q-td>
+                ''')
+
+                ui.label("Denial monitoring").classes("text-lg font-semibold mt-2")
+                ui.label(AUTHORIZATION_DENIAL_HELP).classes("text-sm text-slate-500 -mt-4")
+                if not summary["denial_groups"]:
+                    ui.label("No authorization denials occurred in this period.").classes("text-sm text-positive")
+                for item in summary["denial_groups"]:
+                    with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-1"):
+                        with ui.row().classes("w-full items-center gap-3"):
+                            ui.label(item["decision_code"].replace("_", " ").title()).classes("font-medium")
+                            ui.label(item["required_privilege"]).classes("grow text-sm text-slate-500")
+                            ui.badge(str(item["count"]), color="negative").props("outline")
+                        ui.label("Review the recent events above or open the Audit trail to inspect individual events. Details you are not authorized to view remain hidden.").classes("text-sm text-slate-500")
+
+                if reconciliation is not None:
+                    ui.separator()
+                    ui.label("Administrative access and security-level consistency").classes("text-lg font-semibold")
+                    ui.label(
+                        "Checks that at least one active person can still manage authorization "
+                        "settings, and that no child aggregation or record has a higher security "
+                        "level than its parent. Details about governance custodians remain on the "
+                        "Governance custody page."
+                    ).classes("text-sm text-slate-500 -mt-4")
+                    hierarchy_count = reconciliation["hierarchy_violation_count"]
+                    with ui.row().classes("w-full items-center gap-3 rounded-lg border p-3 " + ("border-red-200 bg-red-50" if hierarchy_count else "border-green-200 bg-green-50")):
+                        ui.icon("warning" if hierarchy_count else "check_circle", color="negative" if hierarchy_count else "positive")
+                        ui.label(f"{hierarchy_count} security hierarchy violation{'s' if hierarchy_count != 1 else ''}").classes("font-semibold grow")
+                        ui.label("Requires investigation" if hierarchy_count else "No invalid parent-child levels found").classes("text-sm text-slate-600")
+                    for finding in reconciliation["findings"]:
+                        if "governance_custodian" in finding["code"] or finding["code"] == "security_hierarchy_violation":
+                            continue
+                        with ui.row().classes("w-full items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"):
+                            ui.icon("warning", color="negative" if finding["severity"] == "critical" else "amber-8")
+                            ui.label(finding["code"].replace("_", " ").title()).classes("font-semibold grow")
+                            ui.badge(finding["severity"], color="negative" if finding["severity"] == "critical" else "warning")
+
+        def change_period() -> None:
+            custom_range.set_visibility(period.value == "custom")
+            if period.value != "custom":
+                background_tasks.create(load_security_operations())
+
+        period.on_value_change(change_period)
+        refresh.on("click", load_security_operations)
+        apply_range.on("click", load_security_operations)
+        await load_security_operations()
+
     async def select_entity(key: str) -> None:
         register_navigation(key, ENTITIES[key].label)
         show_authenticated_view()
@@ -6029,7 +7956,7 @@ def index() -> None:
             and not (key == "aggregations" and state.get("aggregation_mode") == "browse")
         )
         guidance.text = "Large collections are search-first to avoid loading unbounded result sets." if spec.search_first else ""
-        add_button.set_visibility(True)
+        add_button.set_visibility(key not in {"privileges", "permissions"})
         add_button.text = "Add"
         add_button.update()
         add_record_button.set_visibility(False)
@@ -7065,6 +8992,8 @@ def index() -> None:
     organization_browser_navigation.on("click", show_organization_structure)
     audit_navigation.on("click", select_audit_trail)
     sessions_navigation.on("click", lambda: select_login_sessions())
+    security_operations_navigation.on("click", select_security_operations)
+    custody_navigation.on("click", select_governance_custody)
     change_password_menu.on("click", show_change_password)
     sign_out_menu.on("click", sign_out)
 
@@ -7169,13 +9098,18 @@ def index() -> None:
                 populate_user_menu(principal)
                 navigation_state["trail"] = []
                 app.storage.user.pop("navigation_trail", None)
-                await reload_favourites()
                 login_password.value = ""
                 login_dialog.close()
                 if principal["must_change_password"]:
+                    # Until the password is replaced, FastAPI intentionally
+                    # rejects every endpoint except /auth/me, change-password,
+                    # and logout.  Do not make ordinary application requests
+                    # (such as favourites) before showing this dialog.
+                    drawer.hide()
                     with table_container:
                         await show_change_password()
                 else:
+                    await reload_favourites()
                     await select_dashboard()
             except ApiError as error:
                 login_error.text = error_message(error)
@@ -7220,11 +9154,15 @@ def index() -> None:
             try:
                 principal = await api.me()
                 populate_user_menu(principal)
-                await reload_favourites()
                 if principal["must_change_password"]:
+                    drawer.hide()
                     with table_container:
                         await show_change_password()
-                elif navigation_state["trail"]:
+                else:
+                    await reload_favourites()
+                if principal["must_change_password"]:
+                    return
+                if navigation_state["trail"]:
                     navigation_state["restoring"] = True
                     try:
                         await restore_navigation_entry(navigation_state["trail"][-1])

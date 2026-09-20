@@ -64,7 +64,8 @@ SELECT 1 / CASE WHEN EXISTS (
           AND operation = 'CONTENT_UPLOADED'
           AND before_state IS NULL
           AND after_state IS NULL
-          AND metadata = '{"size_in_bytes": 5}'::jsonb
+          AND metadata @> '{"size_in_bytes": 5}'::jsonb
+          AND metadata #>> '{reference_snapshots,entity,name}' = 'hello.txt'
     ) THEN 1 ELSE 0 END;
 
 ROLLBACK;

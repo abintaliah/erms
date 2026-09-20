@@ -9,6 +9,7 @@ from psycopg import Connection, sql
 from pydantic import TypeAdapter, ValidationError
 
 from .schemas import SearchExpression, SearchRequest
+from .crud import redact_hidden_relationships
 
 
 MAX_SEARCH_DEPTH = 5
@@ -51,16 +52,18 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "date_created": DATETIME,
         "date_opened": DATETIME,
         "date_closed": NULLABLE_DATETIME,
+        "security_level_id": INTEGER,
     },
     "records": {
         "id": INTEGER,
         "version": INTEGER,
-        "aggregation_id": INTEGER,
+        "aggregation_id": NULLABLE_INTEGER,
         "record_number": TEXT,
         "title": TEXT,
         "description": NULLABLE_TEXT,
         "date_created": DATETIME,
         "date_originated": DATETIME,
+        "security_level_id": INTEGER,
     },
     "digital_components": {
         "id": INTEGER,
@@ -127,6 +130,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "status": TEXT,
         "date_created": DATETIME,
         "date_deactivated": NULLABLE_DATETIME,
+        "security_level_id": INTEGER,
     },
     "user_role_assignments": {
         "id": INTEGER,
@@ -301,13 +305,27 @@ def search_rows(
     request: SearchRequest,
 ) -> dict[str, Any]:
     fields = SEARCH_FIELDS[table]
-    where_clause = sql.SQL("")
+    visibility = {
+        "aggregations": sql.SQL("current_user_can_view_aggregation(id)"),
+        "records": sql.SQL("current_user_can_view_record(id)"),
+        "digital_components": sql.SQL(
+            "EXISTS (SELECT 1 FROM records visible_record WHERE visible_record.id=record_id "
+            "AND current_user_can_list_record_components(visible_record.id))"
+        ),
+    }.get(table)
+    clauses: list[sql.Composable] = []
     parameters: list[Any] = []
     if request.where is not None:
         expression, parameters = _compile_expression(
             request.where, fields, depth=1, condition_counter=[0]
         )
-        where_clause = sql.SQL(" WHERE ") + expression
+        clauses.append(expression)
+    if visibility is not None:
+        clauses.append(visibility)
+    where_clause = (
+        sql.SQL(" WHERE ") + sql.SQL(" AND ").join(clauses)
+        if clauses else sql.SQL("")
+    )
 
     sort_fields: list[tuple[str, str]] = []
     for item in request.sort:
@@ -321,7 +339,11 @@ def search_rows(
     elif "id" not in {field for field, _ in sort_fields}:
         sort_fields.append(("id", "asc"))
 
-    table_identifier = sql.Identifier(table)
+    table_identifier = sql.Identifier({
+        "event_history": "authorized_event_history",
+        "aggregations": "authorized_aggregations_for_search",
+        "records": "authorized_records_for_search",
+    }.get(table, table))
     count_query = sql.SQL("SELECT count(*) AS total FROM {}{}").format(
         table_identifier, where_clause
     )
@@ -341,6 +363,7 @@ def search_rows(
             result_query, [*parameters, request.limit, request.offset]
         ).fetchall()
     )
+    items = redact_hidden_relationships(connection, table, items)
     return {
         "items": items,
         "total": total,

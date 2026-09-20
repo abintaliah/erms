@@ -1,4 +1,3 @@
-\set ON_ERROR_STOP on
 
 BEGIN;
 
@@ -32,7 +31,9 @@ BEGIN
     IF create_event.before_state IS NOT NULL
        OR create_event.after_state ->> 'title' <> 'Audited aggregation'
        OR create_event.source <> 'database'
-       OR create_event.actor_type <> 'automated_process' THEN
+       OR create_event.actor_type <> 'automated_process'
+       OR create_event.metadata #>> '{reference_snapshots,after,classification_id,code}' <> 'AUDIT-01'
+       OR create_event.metadata #>> '{reference_snapshots,entity,code}' <> 'AUDIT-AGG-001' THEN
         RAISE EXCEPTION 'CREATE history event is incorrect';
     END IF;
 

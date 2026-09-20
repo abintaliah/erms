@@ -1,8 +1,8 @@
 # User management subsystem
 
 The user management subsystem models people, organizational structure,
-organizational roles, and temporal assignments of users to roles. It does not
-provide authentication or authorization.
+organizational roles, and temporal assignments of users to roles. Authentication
+and authorization are integrated subsystems with separate policy boundaries.
 
 ## Design boundaries
 
@@ -12,12 +12,12 @@ provide authentication or authorization.
 - A role may be supervised by another role in any organizational unit.
 - Users acquire one or more roles through temporal assignments.
 - Users do not receive privileges or ACL permissions directly.
-- Credentials, profiles, privileges, and permissions are intentionally deferred.
+- Credentials remain separate from the person row. Profiles, privileges,
+  security clearances, and resource permissions are assigned through roles.
 
-The future authorization subsystem will introduce profiles as named collections
-of system privileges. Profiles and resource ACL entries will be assigned to
-roles only. A user's effective access will be derived through active role
-assignments.
+Profiles are named collections of global privileges. Profiles and resource ACL
+entries are assigned to roles only. A user's effective access is derived through
+current assignments to effective roles.
 
 ## Users
 
@@ -140,11 +140,32 @@ Rows remain available for historical references. Deleting a role assignment
 removes the assignment itself, while its immutable before-state remains in
 event history.
 
-The REST `DELETE` operations for users, roles, and organizational units are not
-currently exposed. Permanent deletion will be implemented only after the RBAC
-authorization subsystem can enforce access-continuity and dependency rules.
-`DELETE` will then mean permanent deletion exclusively; it will never be an
-alias for deactivation.
+`DELETE /api/v1/users/{id}`, `DELETE /api/v1/roles/{id}`, and
+`DELETE /api/v1/org-units/{id}` permanently remove an eligible live row.
+They never mean deactivation. Each request requires `If-Match` and a non-blank
+`X-Change-Reason`; the entity may be active, inactive, or suspended.
+
+Each entity also exposes `GET .../{id}/deletion-preflight`. The response includes
+the entity version, whether deletion is allowed, every known blocker, dependency
+counts, and data that will cascade. Execution repeats the same analysis under a
+transaction-scoped authorization-continuity advisory lock plus a target-row
+lock, so a preflight result is advisory rather than an authorization token. The
+advisory lock coordinates only participating continuity mutations; it does not
+lock whole tables or block unrelated writes.
+
+User deletion is blocked for self-deletion, removal of the last effective
+authorization administrator, or loss of the last effective highest-clearance
+human governance custodian while protected resources exist. Role deletion is
+blocked for the reserved system-administrator role, supervised roles, any live
+resource ACL or default-child ACL reference, and the same continuity failures.
+Organizational-unit deletion is blocked for `SYSTEM`, child units, or owned
+roles. There is no force or recursive override.
+
+Eligible user deletion cascades credentials, sessions, assignments, drafts,
+favourites, and classification preferences. Eligible role deletion cascades
+assignments. Organizational-unit deletion does not recursively delete anything.
+Immutable event history remains, including the final entity before-state and a
+security-safe summary of transient session data removed with a user.
 
 ### Users
 

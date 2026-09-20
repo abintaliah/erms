@@ -121,6 +121,51 @@ def test_event_history_filter_options_uses_authoritative_filter_endpoint():
     assert captured["path"] == "/api/v1/event-history/filter-options"
 
 
+def test_my_recent_activity_uses_the_self_only_endpoint():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json=[])
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.my_recent_activity(limit=5)
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise()) == []
+    assert captured == {
+        "path": "/api/v1/auth/me/recent-activity",
+        "params": {"limit": "5"},
+    }
+
+
+def test_resource_acl_normalizes_the_real_api_source_contract():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/records/19/permissions"
+        return httpx.Response(200, json={
+            "inherit_acl_from_parent": True,
+            "effective_acl_source": "parent_default",
+            "effective_acl_source_id": 184,
+            "effective_acl": [], "override_acl": [],
+            "override_acl_is_dormant": True, "resource_acl_version": 3,
+        })
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.resource_acl("records", 19)
+        finally:
+            await client.close()
+
+    result = asyncio.run(exercise())
+    assert result["source"] == "parent_default"
+    assert result["source_resource_id"] == 184
+
+
 def test_browse_page_preserves_opaque_cursor_and_scoped_filter():
     captured = {}
 
@@ -324,6 +369,35 @@ def test_recently_created_uses_date_sort():
     assert captured["sort"] == [{"field": "date_created", "direction": "desc"}]
 
 
+def test_recently_updated_uses_self_activity_without_audit_access():
+    requests = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request.url.path)
+        if request.url.path == "/api/v1/auth/me/recent-activity":
+            return httpx.Response(200, json=[{
+                "entity_type": "record", "entity_id": 11,
+                "operation": "UPDATE", "occurred_at": "2026-09-20T08:00:00Z",
+            }])
+        assert request.url.path == "/api/v1/records/11"
+        return httpx.Response(200, json={"id": 11, "title": "Visible record"})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.recently_updated("records")
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise()) == [{
+        "id": 11, "title": "Visible record",
+        "_activity_at": "2026-09-20T08:00:00Z",
+    }]
+    assert requests == [
+        "/api/v1/auth/me/recent-activity", "/api/v1/records/11",
+    ]
+
+
 @pytest.mark.parametrize(
     ("method_name", "operation"),
     (("recently_created", "CREATE"), ("recently_updated", "UPDATE")),
@@ -502,3 +576,49 @@ def test_entity_history_uses_read_only_timeline_route():
         "path": "/api/v1/records/42/history",
         "limit": "200",
     }
+
+
+def test_authorization_ui_client_uses_explanation_and_custody_endpoints():
+    seen = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path))
+        return httpx.Response(200, json=[] if request.url.path.endswith("explainable-users") else {})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.explain_access({"resource_type": "record", "resource_id": 1, "operation": "record.view"})
+            await client.explainable_users()
+            await client.governance_custody()
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert seen == [
+        ("POST", "/api/v1/authorization/explain"),
+        ("GET", "/api/v1/authorization/explainable-users"),
+        ("GET", "/api/v1/authorization/governance-custody"),
+    ]
+
+
+def test_security_operations_client_routes_are_read_only():
+    seen = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path, dict(request.url.params)))
+        return httpx.Response(200, json={})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.security_summary(hours=48)
+            await client.security_reconciliation()
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert seen == [
+        ("GET", "/api/v1/security-operations/summary", {"hours": "48"}),
+        ("GET", "/api/v1/security-operations/reconciliation", {}),
+    ]

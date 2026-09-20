@@ -1,5 +1,56 @@
 -- Test-only fixture: turn the freshly bootstrapped database into the state that
 -- existed immediately before migration 001.
+DROP FUNCTION IF EXISTS current_user_can_record_operation(bigint,text,text);
+DROP FUNCTION IF EXISTS current_user_can_aggregation_operation(bigint,text,text);
+DROP FUNCTION IF EXISTS user_can_record_operation(bigint,bigint,text,text);
+DROP FUNCTION IF EXISTS user_can_aggregation_operation(bigint,bigint,text,text);
+DROP FUNCTION IF EXISTS user_has_governance_clearance(bigint,bigint);
+DROP VIEW IF EXISTS authorized_event_history;
+DROP VIEW IF EXISTS authorized_records_for_search;
+DROP VIEW IF EXISTS authorized_aggregations_for_search;
+DROP FUNCTION IF EXISTS current_user_can_view_event_resource(text,bigint,jsonb,jsonb);
+DROP FUNCTION IF EXISTS current_user_can_list_record_components(bigint);
+DROP FUNCTION IF EXISTS current_user_can_view_record(bigint);
+DROP FUNCTION IF EXISTS current_user_can_view_aggregation(bigint);
+DROP FUNCTION IF EXISTS current_user_id();
+DROP FUNCTION IF EXISTS user_can_view_record(bigint,bigint);
+DROP FUNCTION IF EXISTS user_has_record_permission(bigint,bigint,text);
+DROP FUNCTION IF EXISTS user_can_view_aggregation(bigint,bigint);
+DROP FUNCTION IF EXISTS user_has_aggregation_permission(bigint,bigint,text);
+DROP FUNCTION IF EXISTS user_has_global_privilege(bigint,text);
+DROP TABLE IF EXISTS record_acl_grants;
+DROP TABLE IF EXISTS aggregation_child_record_acl_defaults;
+DROP TABLE IF EXISTS aggregation_child_aggregation_acl_defaults;
+DROP TABLE IF EXISTS aggregation_acl_grants;
+DROP TABLE IF EXISTS permission_dependencies;
+DROP TABLE IF EXISTS permissions;
+DROP TRIGGER IF EXISTS aggregations_initialize_acls ON aggregations;
+DROP TRIGGER IF EXISTS records_initialize_acls ON records;
+DROP TRIGGER IF EXISTS aggregations_normalize_acl_inheritance ON aggregations;
+DROP FUNCTION IF EXISTS initialize_resource_acls();
+DROP FUNCTION IF EXISTS normalize_aggregation_acl_inheritance();
+DROP FUNCTION IF EXISTS validate_acl_dependencies();
+DROP FUNCTION IF EXISTS validate_acl_permission_type();
+DROP FUNCTION IF EXISTS validate_acl_role_clearance();
+ALTER TABLE aggregations
+    DROP CONSTRAINT IF EXISTS aggregations_root_acl_inheritance_valid,
+    DROP CONSTRAINT IF EXISTS aggregations_acl_versions_positive,
+    DROP CONSTRAINT IF EXISTS aggregations_child_acl_mode_valid,
+    DROP COLUMN IF EXISTS inherit_acl_from_parent,
+    DROP COLUMN IF EXISTS default_child_aggregation_acl_mode,
+    DROP COLUMN IF EXISTS resource_acl_version,
+    DROP COLUMN IF EXISTS child_aggregation_acl_version,
+    DROP COLUMN IF EXISTS child_record_acl_version;
+ALTER TABLE records
+    DROP COLUMN IF EXISTS inherit_acl_from_parent,
+    DROP COLUMN IF EXISTS resource_acl_version;
+ALTER TABLE roles
+    DROP CONSTRAINT IF EXISTS roles_everyone_code_reserved,
+    DROP CONSTRAINT IF EXISTS roles_everyone_name_reserved;
+DELETE FROM schema_migrations WHERE version='035_enforce_resource_read_authorization';
+DELETE FROM schema_migrations WHERE version='036_enforce_resource_mutation_authorization';
+DELETE FROM schema_migrations WHERE version='037_enforce_draft_component_authorization';
+DELETE FROM schema_migrations WHERE version='034_add_resource_acl_inheritance';
 DROP TABLE IF EXISTS user_favourite_records;
 DROP TABLE IF EXISTS user_favourite_aggregations;
 DELETE FROM schema_migrations WHERE version IN (
@@ -63,9 +114,11 @@ DELETE FROM schema_migrations WHERE version IN (
     '015_reclassify_lifecycle_normalization_events',
     '016_snapshot_role_assignment_parties',
     '017_rename_system_accounts_to_service',
-    '018_rename_system_actor_to_automated_process'
+    '018_rename_system_actor_to_automated_process',
+    '043_add_event_reference_snapshots'
 );
 DROP TRIGGER IF EXISTS event_history_populate_relationship_snapshot ON event_history;
+DROP TRIGGER IF EXISTS event_history_populate_reference_snapshots ON event_history;
 DROP FUNCTION IF EXISTS populate_event_relationship_snapshot();
 DROP TRIGGER IF EXISTS event_history_populate_actor_snapshot ON event_history;
 DROP FUNCTION IF EXISTS populate_event_actor_snapshot();
@@ -117,6 +170,15 @@ ALTER TABLE digital_components
 DELETE FROM schema_migrations WHERE version = '003_add_content_storage_and_entity_versions';
 
 DROP TABLE IF EXISTS user_role_assignments;
+DROP TABLE IF EXISTS profile_privileges;
+DROP TABLE IF EXISTS privilege_dependencies;
+ALTER TABLE IF EXISTS roles DROP CONSTRAINT IF EXISTS roles_profile_fk;
+ALTER TABLE IF EXISTS roles DROP COLUMN IF EXISTS profile_id;
+ALTER TABLE IF EXISTS roles DROP COLUMN IF EXISTS is_information_governance;
+DROP TABLE IF EXISTS profiles;
+DROP TABLE IF EXISTS privileges;
+DROP FUNCTION IF EXISTS touch_authorization_catalogue();
+DELETE FROM schema_migrations WHERE version='033_add_privileges_profiles_and_role_authorization';
 DROP TABLE IF EXISTS roles;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS org_units;
@@ -129,7 +191,15 @@ DELETE FROM schema_migrations WHERE version = '002_add_user_management';
 DROP TRIGGER IF EXISTS aggregations_record_history ON aggregations;
 DROP TRIGGER IF EXISTS records_record_history ON records;
 DROP TRIGGER IF EXISTS digital_components_record_history ON digital_components;
+DROP TRIGGER IF EXISTS security_levels_record_history ON security_levels;
 DROP FUNCTION IF EXISTS record_entity_history();
 DROP TABLE IF EXISTS event_history;
 DROP FUNCTION IF EXISTS reject_event_history_mutation();
+DROP FUNCTION IF EXISTS populate_event_reference_snapshots();
+DROP FUNCTION IF EXISTS event_entity_identity_snapshot(text, bigint);
+DROP FUNCTION IF EXISTS event_state_reference_snapshots(jsonb);
+DROP FUNCTION IF EXISTS event_reference_identity(text, bigint);
 DELETE FROM schema_migrations WHERE version = '001_add_event_history';
+DROP FUNCTION IF EXISTS current_user_owns_open_draft(bigint);
+DROP FUNCTION IF EXISTS current_user_can_record_component_operation(bigint,text,text);
+DROP FUNCTION IF EXISTS user_has_destination_record_permission(bigint,bigint,text);

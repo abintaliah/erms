@@ -97,6 +97,17 @@ class ErmsApiClient:
     async def me(self) -> dict[str, Any]:
         return await self.request("GET", "/api/v1/auth/me")
 
+    async def my_recent_activity(
+        self, *, limit: int = 6, since: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"limit": limit}
+        if since is not None:
+            params["since"] = since.isoformat()
+        return await self.request("GET", "/api/v1/auth/me/recent-activity", params=params)
+
+    async def profile_references(self) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/profiles/reference", params={"limit": 500})
+
     async def logout(self) -> None:
         await self.request("POST", "/api/v1/auth/logout")
 
@@ -210,6 +221,57 @@ class ErmsApiClient:
             "GET", f"/api/v1/{resource}/{entity_id}/history", params={"limit": limit}
         )
 
+    async def permissions_catalogue(self, resource_type: str) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/permissions", params={"resource_type": resource_type})
+
+    async def explain_access(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", "/api/v1/authorization/explain", json=payload)
+
+    async def explainable_users(self) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/authorization/explainable-users")
+
+    async def governance_custody(self) -> dict[str, Any]:
+        return await self.request("GET", "/api/v1/authorization/governance-custody")
+
+    async def security_summary(
+        self, *, hours: int = 24, start_at: str | None = None, end_at: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"hours": hours}
+        if start_at:
+            params["start_at"] = start_at
+        if end_at:
+            params["end_at"] = end_at
+        return await self.request("GET", "/api/v1/security-operations/summary", params=params)
+
+    async def security_reconciliation(self) -> dict[str, Any]:
+        return await self.request("GET", "/api/v1/security-operations/reconciliation")
+
+    async def resource_acl(self, resource: str, entity_id: int) -> dict[str, Any]:
+        result = await self.request("GET", f"/api/v1/{resource}/{entity_id}/permissions")
+        # Normalize the resource endpoint's explicit effective-source names to
+        # the common source keys consumed by ACL presentation components.
+        result["source"] = result.get("effective_acl_source")
+        result["source_resource_id"] = result.get("effective_acl_source_id")
+        return result
+
+    async def resource_capabilities(self, resource: str, entity_id: int) -> dict[str, bool]:
+        response = await self.request(
+            "GET", f"/api/v1/{resource}/{entity_id}/capabilities",
+        )
+        return response["capabilities"]
+
+    async def replace_resource_acl(self, resource: str, entity_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("PUT", f"/api/v1/{resource}/{entity_id}/permissions", json=payload)
+
+    async def child_acl(self, aggregation_id: int, child_type: str) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/aggregations/{aggregation_id}/default-child-{child_type}-permissions")
+
+    async def replace_child_acl(self, aggregation_id: int, child_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("PUT", f"/api/v1/aggregations/{aggregation_id}/default-child-{child_type}-permissions", json=payload)
+
+    async def preview_child_acl(self, aggregation_id: int, child_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/aggregations/{aggregation_id}/default-child-{child_type}-permissions/preview", json=payload)
+
     async def event_history_operations(self) -> list[str]:
         return await self.request("GET", "/api/v1/event-history/operations")
 
@@ -288,6 +350,34 @@ class ErmsApiClient:
             if isinstance(result, dict)
         ]
 
+    async def _recent_entities_from_my_activity(
+        self,
+        resource: str,
+        operation: str,
+        limit: int,
+        since: datetime | str | None = None,
+    ) -> list[dict[str, Any]]:
+        entity_type = {"aggregations": "aggregation", "records": "record"}[resource]
+        parsed_since = (
+            since if isinstance(since, datetime)
+            else datetime.fromisoformat(since.replace("Z", "+00:00")) if since
+            else None
+        )
+        activity = await self.my_recent_activity(limit=limit, since=parsed_since)
+        entries = [
+            item for item in activity
+            if item["entity_type"] == entity_type and item["operation"] == operation
+        ][:limit]
+        results = await asyncio.gather(
+            *(self.get(resource, entry["entity_id"]) for entry in entries),
+            return_exceptions=True,
+        )
+        return [
+            {**result, "_activity_at": entry["occurred_at"]}
+            for entry, result in zip(entries, results)
+            if isinstance(result, dict)
+        ]
+
     async def recently_created(
         self, resource: str, *, limit: int = 6, actor_user_id: int | None = None,
         since: datetime | str | None = None,
@@ -306,26 +396,78 @@ class ErmsApiClient:
         self, resource: str, *, limit: int = 6, actor_user_id: int | None = None,
         since: datetime | str | None = None,
     ) -> list[dict[str, Any]]:
-        return await self._recent_entities_from_events(
-            resource, "UPDATE", actor_user_id, limit, since,
-        )
+        if actor_user_id is not None:
+            return await self._recent_entities_from_events(
+                resource, "UPDATE", actor_user_id, limit, since,
+            )
+        if resource in {"aggregations", "records"}:
+            return await self._recent_entities_from_my_activity(
+                resource, "UPDATE", limit, since,
+            )
+        result = await self.search_request(resource, {
+            "sort": [{"field": "date_updated", "direction": "desc"}],
+            "limit": limit,
+        })
+        return result["items"]
 
     async def create(self, resource: str, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.request("POST", f"/api/v1/{resource}", json=payload)
 
-    async def update(self, resource: str, entity_id: int, version: int, payload: dict[str, Any]) -> dict[str, Any]:
+    async def update(
+        self, resource: str, entity_id: int, version: int, payload: dict[str, Any],
+        *, change_reason: str | None = None,
+    ) -> dict[str, Any]:
+        headers = {"If-Match": str(version)}
+        if change_reason:
+            headers["X-Change-Reason"] = change_reason
         return await self.request(
             "PATCH",
             f"/api/v1/{resource}/{entity_id}",
             json=payload,
-            headers={"If-Match": str(version)},
+            headers=headers,
         )
 
-    async def delete(self, resource: str, entity_id: int, version: int) -> None:
+    async def delete(
+        self, resource: str, entity_id: int, version: int, *, reason: str | None = None,
+    ) -> None:
+        headers = {"If-Match": str(version)}
+        if reason:
+            headers["X-Change-Reason"] = reason
         await self.request(
             "DELETE",
             f"/api/v1/{resource}/{entity_id}",
-            headers={"If-Match": str(version)},
+            headers=headers,
+        )
+
+    async def deletion_preflight(self, resource: str, entity_id: int) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/{resource}/{entity_id}/deletion-preflight")
+
+    async def preview_security_level_change(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request(
+            "POST", "/api/v1/security-level-changes/preview", json=payload,
+        )
+
+    async def apply_security_level_change(
+        self, payload: dict[str, Any], *, reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", "/api/v1/security-level-changes/apply", json=payload,
+            headers={"X-Change-Reason": reason},
+        )
+
+    async def profile_privileges(self, profile_id: int) -> list[dict[str, Any]]:
+        return await self.request("GET", f"/api/v1/profiles/{profile_id}/privileges")
+
+    async def profile_impact(self, profile_id: int) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/profiles/{profile_id}/impact")
+
+    async def replace_profile_privileges(
+        self, profile_id: int, version: int, privilege_ids: list[int], *, reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "PUT", f"/api/v1/profiles/{profile_id}/privileges",
+            json={"privilege_ids": privilege_ids},
+            headers={"If-Match": str(version), "X-Change-Reason": reason},
         )
 
     async def set_active(

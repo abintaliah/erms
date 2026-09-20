@@ -23,6 +23,7 @@ from frontend.webui.app import (
     component_file_icon,
     decorate_relationship_rows,
     display_value,
+    error_message,
     format_file_size,
     form_payload,
     format_timestamp,
@@ -33,6 +34,7 @@ from frontend.webui.app import (
     append_navigation_entry,
     visible_navigation_indices,
 )
+from frontend.webui.api_client import ApiError
 from frontend.webui.app import native_preview_kind
 from frontend.webui.entities import ENTITIES
 from frontend.webui.config import (
@@ -61,7 +63,8 @@ class Control:
 def test_first_class_navigation_excludes_digital_components():
     assert tuple(ENTITIES) == (
         "aggregations", "records", "classification-schemes", "classifications",
-        "org-units", "users", "roles",
+        "org-units", "users", "roles", "security-levels", "profiles", "privileges",
+        "permissions",
     )
     assert ENTITIES["aggregations"].search_first
     assert ENTITIES["records"].search_first
@@ -78,11 +81,13 @@ def test_form_payload_converts_ids_and_omits_empty_create_fields():
         "title": Control("Annual report"),
         "description": Control(""),
         "date_originated": Control(""),
+        "security_level_id": Control(1.0),
     }
     assert form_payload(spec, controls, creating=True) == {
         "aggregation_id": 12,
         "record_number": "REC-12",
         "title": "Annual report",
+        "security_level_id": 1,
     }
 
 
@@ -252,12 +257,16 @@ def test_application_shell_is_flat_and_uses_one_background():
     assert ".erms-page-table .q-table thead tr { background: #eef7fd; }" in source
     assert ".erms-page-table .q-table tbody td" in source
     assert 'classes("erms-page-table")' in source
+    assert ".login-sessions-table .q-table th" in source
+    assert "white-space: nowrap" in source
+    assert '"label": "Signed in", "field": "date_created", "align": "left", "sortable": True' in source
+    assert 'label="Force sign-out"' in source
     assert 'ui.row().classes("w-full items-center no-wrap gap-4")' in source
     assert 'ui.row().classes("items-center no-wrap gap-2 flex-none")' in source
     assert 'ui.label("Search results").classes("text-lg font-semibold")' in source
     assert '"Filter displayed results"' in source
     assert 'table.bind_filter_from(result_filter, "value")' in source
-    assert 'sortable_relationships = {"parent_org_unit_display", "org_unit_display"}' in source
+    assert 'sortable_relationships = {"parent_org_unit_display", "org_unit_display", "profile_display"}' in source
     assert 'not key.endswith("_display") or key in sortable_relationships' in source
     assert '"Search code, name, or parent unit"' in source
     assert '"Search code, name, or organization unit"' in source
@@ -340,6 +349,51 @@ def test_navigation_drawer_collapses_to_clickable_icon_rail():
     assert "background: #fff4d7 !important; color: #174b72 !important;" in source
     assert "def set_active_drawer_link(page: str)" in source
     assert 'button.props(add="aria-current=page")' in source
+
+
+def test_navigation_links_scroll_independently_when_the_drawer_is_taller_than_the_viewport():
+    source = inspect.getsource(index)
+    assert 'ui.column().classes("erms-nav-scroll w-full gap-0 no-wrap")' in source
+    assert ".erms-nav-scroll" in source
+    assert "height: 100%; overflow-y: auto; overflow-x: hidden;" in source
+
+
+def test_empty_navigation_sections_are_hidden_with_their_links():
+    source = inspect.getsource(index)
+    assert "drawer_sections: list[tuple[Any, tuple[str, ...]]]" in source
+    assert "any(link_visibility.get(key, False) for key in section_keys)" in source
+    assert "refresh_drawer_visibility(privileges)" in source
+    assert "not drawer_collapsed" in source
+
+
+def test_governance_custody_page_explains_qualification_and_empty_configuration():
+    source = inspect.getsource(index)
+    assert "Checks that someone can always manage and recover access to protected records" in source
+    assert "At least one active person must be able to manage information" in source
+    assert "Governance role enabled" in source
+    assert "Highest clearance held" in source
+    assert "Required profile privileges" in source
+    assert "Current role assignment" in source
+    assert "No information-governance roles are configured" in source
+    assert "governance-overview-grid" in source
+    assert "governance-metrics-row" in source
+    assert "governance-empty-state" in source
+    assert "Universal custodians (" in source
+    assert "governance-table" in source
+    assert '"person", "label": "Person"' in source
+    assert 'label="Open user"' in source
+    assert 'label="Open role"' in source
+    assert "valid_from_display" in source
+    assert "valid_until_display" in source
+    assert "qualifies_for_universal_custody" in source
+    assert "effective_for_universal_custody" in source
+    assert "Assignments needing attention" in source
+    assert "All governance-role assignments" not in source
+    assert '"Current assignments"' in source
+    assert "Assignments whose validity dates include the present time." in source
+    assert "account, role, and organization hierarchy are active" in source
+    assert "highest security clearance" in source
+    assert 'pagination={"rowsPerPage": 5}' in source
     assert "def set_page_title_icon(page: str)" in source
     assert 'page_title_icon = ui.icon("dashboard")' in source
     assert "page_title_icon = ui.icon()" not in source
@@ -393,6 +447,32 @@ def test_navigation_drawer_collapses_to_clickable_icon_rail():
     assert "ui.tooltip(label)" in source
 
 
+def test_forced_password_change_precedes_authenticated_data_loading():
+    source = inspect.getsource(index)
+    login_flow = source[
+        source.index("async def submit_login()"):
+        source.index('login_submit.on("click", submit_login)')
+    ]
+    assert login_flow.index('if principal["must_change_password"]:') < login_flow.index(
+        "await reload_favourites()"
+    )
+    assert "Your temporary password must be replaced before you can continue." in source
+    assert '"Set new password" if forced_change else "Change password"' in source
+    assert '"Back to sign in", icon="arrow_back"' in source
+    assert "dialog.close()\n                await sign_out()" in source
+
+
+def test_structured_api_errors_prefer_the_accessible_message():
+    error = ApiError(422, {
+        "code": "aggregation_dates_out_of_order",
+        "message": "The aggregation's closing date cannot be earlier than its opening date.",
+        "technical_detail": 'new row violates check constraint "aggregations_dates_in_order"',
+    })
+    assert error_message(error) == (
+        "The aggregation's closing date cannot be earlier than its opening date."
+    )
+
+
 def test_aggregation_browser_load_more_preserves_the_previous_last_child_anchor():
     source = inspect.getsource(index)
     assert 'browse_item_dom_id(current["items"][-1])' in source
@@ -414,6 +494,12 @@ def test_organization_browser_selectors_have_persistent_confirmation_action():
     assert "organization-browser-selected" in source
     assert "organization_node_dom_id(node)" in source
     assert "persist(); render_tree(); await render_summary(node)" not in source
+
+
+def test_organization_browser_hides_detail_links_without_destination_privilege():
+    source = inspect.getsource(index)
+    assert 'can_open_organization_detail(node["type"], privileges)' in source
+    assert '(auth_state.get("principal") or {}).get("global_privileges", [])' in source
 
 
 def test_browsed_relationship_selection_adds_option_and_value_atomically():

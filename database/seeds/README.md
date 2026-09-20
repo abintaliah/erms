@@ -5,6 +5,9 @@ are not schema migrations and must not insert rows into `schema_migrations`.
 Apply them explicitly with `psql`, after the canonical schema and required
 migrations have been installed.
 
+Every event-history row produced by a canonical seed uses source `seeding`.
+The source `migration` is reserved exclusively for genuine database upgrades.
+
 The canonical classification-scheme seeds are:
 
 - `002_seed_ewa_functional_classification_scheme.sql`, formerly introduced by

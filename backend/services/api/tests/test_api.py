@@ -90,6 +90,25 @@ def test_aggregation_crud_and_hierarchy(client: TestClient, aggregation: dict):
     assert client.get(f"/api/v1/aggregations/{child['id']}").status_code == 404
 
 
+def test_aggregation_date_constraint_has_an_accessible_primary_message(
+    client: TestClient,
+    aggregation: dict,
+):
+    response = client.patch(
+        f"/api/v1/aggregations/{aggregation['id']}",
+        json={"date_closed": "2000-01-01T00:00:00Z"},
+        headers={"If-Match": str(aggregation["version"])},
+    )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["code"] == "closure_before_opening"
+    assert detail["message"] == (
+        "This aggregation cannot be closed before its opening date. Choose a closing date "
+        "that is the same as or later than the opening date."
+    )
+    assert detail["date_opened"].replace("+00:00", "Z") == aggregation["date_opened"]
+
+
 def test_aggregation_number_must_be_unique(client: TestClient, aggregation: dict):
     response = client.post(
         "/api/v1/aggregations",
@@ -600,7 +619,12 @@ def test_api_change_creates_correlated_history(client: TestClient):
     assert event["before_state"] is None
     assert event["after_state"]["title"] == "Audited item"
     assert "title" in event["changed_fields"]
-    assert event["metadata"] == {}
+    assert event["metadata"]["reference_snapshots"]["after"]["classification_id"] == {
+        "id": 1, "code": "TEST-01", "title": "Test Classification",
+    }
+    assert event["metadata"]["reference_snapshots"]["entity"] == {
+        "id": aggregation["id"], "code": "AUDIT-001", "title": "Audited item",
+    }
 
 
 def test_event_source_is_controlled(client: TestClient):

@@ -14,11 +14,19 @@ from psycopg import Connection
 
 from .config import boolean_environment, integer_environment
 from .database import get_connection
-from .schemas import ChangePasswordRequest, LoginRequest, LoginSessionRead, PrincipalRead
+from .authorization_policy import (
+    load_policy_context,
+    require_identity_sessions_admin,
+)
+from .schemas import (
+    ChangePasswordRequest, LoginRequest, LoginSessionRead, PrincipalRead,
+    SelfRecentActivityRead,
+)
 
 
 SESSION_COOKIE = "erms_session"
 CSRF_COOKIE = "erms_csrf"
+# Provisioning identifier only; runtime authorization never grants by role name.
 SYSTEM_ADMIN_ROLE = "system-administrator"
 IDLE_MINUTES = integer_environment("AUTH_SESSION_IDLE_MINUTES", 30, minimum=1)
 ABSOLUTE_HOURS = integer_environment("AUTH_SESSION_ABSOLUTE_HOURS", 12, minimum=1)
@@ -38,11 +46,6 @@ class Principal:
     account_type: str
     must_change_password: bool
     roles: list[dict[str, Any]]
-
-    @property
-    def is_system_administrator(self) -> bool:
-        return any(role["code"].lower() == SYSTEM_ADMIN_ROLE for role in self.roles)
-
 
 def hash_secret(value: str) -> bytes:
     return hashlib.sha256(value.encode("utf-8")).digest()
@@ -112,12 +115,6 @@ def principal_from_request(request: Request) -> Principal:
     principal = getattr(request.state, "principal", None)
     if principal is None:
         raise HTTPException(status_code=401, detail="authentication required")
-    return principal
-
-
-def require_system_administrator(principal: Principal = Depends(principal_from_request)) -> Principal:
-    if not principal.is_system_administrator:
-        raise HTTPException(status_code=403, detail="system administrator role required")
     return principal
 
 
@@ -286,12 +283,18 @@ def _previous_login_at(connection: Connection, principal: Principal) -> datetime
 
 
 def principal_response(principal: Principal, connection: Connection) -> dict[str, Any]:
+    policy = load_policy_context(connection, principal)
     return {
         "user": {"id": principal.user_id, "name": principal.name, "email": principal.email, "account_type": principal.account_type},
         "roles": principal.roles,
         "session": {"id": principal.session_id},
         "must_change_password": principal.must_change_password,
         "previous_login_at": _previous_login_at(connection, principal),
+        "global_privileges": sorted({
+            privilege
+            for role in policy.effective_roles
+            for privilege in role.privileges
+        }),
     }
 
 
@@ -301,6 +304,53 @@ def me(
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     return principal_response(principal, connection)
+
+
+@router.get("/me/recent-activity", response_model=list[SelfRecentActivityRead])
+def my_recent_activity(
+    limit: int = Query(6, ge=1, le=50),
+    since: datetime | None = None,
+    principal: Principal = Depends(principal_from_request),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    """Return only the caller's own recent governed-resource work.
+
+    This is not an audit-trail endpoint: it contains no audit snapshots,
+    reasons, other actors, or resources the caller can no longer view.
+    """
+    return list(connection.execute(
+        """WITH matching_events AS (
+               SELECT event.entity_type, event.entity_id, event.operation,
+                      event.occurred_at,
+                      row_number() OVER (
+                          PARTITION BY event.entity_type, event.operation
+                          ORDER BY event.occurred_at DESC, event.id DESC
+                      ) AS position
+                 FROM event_history AS event
+                WHERE event.actor_user_id=%s
+                  AND event.entity_type IN ('aggregation','record')
+                  AND event.operation IN ('CREATE','UPDATE')
+                  AND (%s::timestamptz IS NULL OR event.occurred_at >= %s)
+                  AND (
+                      (event.entity_type='aggregation' AND EXISTS (
+                          SELECT 1 FROM aggregations resource
+                           WHERE resource.id=event.entity_id
+                             AND current_user_can_view_aggregation(resource.id)
+                      ))
+                      OR
+                      (event.entity_type='record' AND EXISTS (
+                          SELECT 1 FROM records resource
+                           WHERE resource.id=event.entity_id
+                             AND current_user_can_view_record(resource.id)
+                      ))
+                  )
+           )
+           SELECT entity_type, entity_id, operation, occurred_at
+             FROM matching_events
+            WHERE position <= %s
+            ORDER BY occurred_at DESC, entity_type, entity_id""",
+        (principal.user_id, since, since, limit),
+    ).fetchall())
 
 
 @router.post("/logout", status_code=204)
@@ -356,7 +406,10 @@ def change_password(payload: ChangePasswordRequest, principal: Principal = Depen
     return Response(status_code=204)
 
 
-@router.get("/sessions", response_model=list[LoginSessionRead])
+@router.get(
+    "/sessions", response_model=list[LoginSessionRead],
+    dependencies=[Depends(require_identity_sessions_admin)],
+)
 def list_sessions(
     user_id: int | None = None,
     limit: int | None = Query(None, ge=1, le=500),
@@ -364,10 +417,7 @@ def list_sessions(
     principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    admin = principal.is_system_administrator
-    if user_id is not None and user_id != principal.user_id and not admin:
-        raise HTTPException(status_code=403, detail="system administrator role required")
-    target_user_id = user_id if user_id is not None else (None if admin else principal.user_id)
+    target_user_id = user_id
     pagination_sql = "" if limit is None else " LIMIT %s OFFSET %s"
     parameters: list[Any] = [principal.session_id, target_user_id, target_user_id]
     if limit is not None:
@@ -387,7 +437,7 @@ def list_sessions(
     ).fetchall())
 
 
-@router.get("/sessions/page")
+@router.get("/sessions/page", dependencies=[Depends(require_identity_sessions_admin)])
 def page_sessions(
     user_id: int,
     limit: int = Query(5, ge=1, le=100),
@@ -399,8 +449,6 @@ def page_sessions(
     principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    if user_id != principal.user_id and not principal.is_system_administrator:
-        raise HTTPException(status_code=403, detail="system administrator role required")
     sort_columns = {
         "date_created": "date_created", "last_seen_at": "last_seen_at",
         "expires_at": "expires_at", "status": "status", "client_ip": "client_ip",
@@ -442,12 +490,12 @@ def page_sessions(
 
 
 @router.delete("/sessions/{session_id}", status_code=204)
-def revoke_session(session_id: int, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
+def revoke_session(session_id: int, request: Request, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
     target = connection.execute("SELECT user_id FROM login_sessions WHERE id=%s", (session_id,)).fetchone()
     if not target:
         raise HTTPException(status_code=404, detail="session not found")
-    if target["user_id"] != principal.user_id and not principal.is_system_administrator:
-        raise HTTPException(status_code=403, detail="system administrator role required")
+    if target["user_id"] != principal.user_id:
+        require_identity_sessions_admin(request)
     session = connection.execute(
         """UPDATE login_sessions
               SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP), revoked_by=%s
@@ -465,7 +513,7 @@ def revoke_session(session_id: int, principal: Principal = Depends(principal_fro
     return Response(status_code=204)
 
 
-@router.delete("/users/{user_id}/sessions", status_code=204, dependencies=[Depends(require_system_administrator)])
+@router.delete("/users/{user_id}/sessions", status_code=204, dependencies=[Depends(require_identity_sessions_admin)])
 def revoke_user_sessions(user_id: int, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
     revoke_sessions_for_user(
         connection, user_id, revoked_by=principal.user_id,
@@ -474,7 +522,7 @@ def revoke_user_sessions(user_id: int, principal: Principal = Depends(principal_
     return Response(status_code=204)
 
 
-@router.post("/users/{user_id}/temporary-password", dependencies=[Depends(require_system_administrator)])
+@router.post("/users/{user_id}/temporary-password", dependencies=[Depends(require_identity_sessions_admin)])
 def issue_temporary_password(user_id: int, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
     user = connection.execute("SELECT id, email, account_type FROM users WHERE id=%s", (user_id,)).fetchone()
     if not user:

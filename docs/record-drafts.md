@@ -27,13 +27,19 @@ no partial authoritative record remains.
 
 ## Authorization boundary
 
-`record_drafts.owner_user_id` is nullable until authentication supplies an
-application user. Once authentication is introduced, every draft endpoint must
-require draft ownership (or an administrative draft privilege). Committing a
-draft should require the record-create privilege for its selected aggregation.
-Operations on an already committed record remain separate permissions, such as
-component add, reorder, replace, and remove; they are not implicitly granted by
-record-create.
+Every draft endpoint requires both draft ownership and the current
+`record.create` global privilege. The draft metadata and its staged components
+form one in-progress record-creation package: `record.create` therefore permits
+the owner to edit the draft, stage, remove, and reorder its files, and commit the
+package. Committing also requires `aggregation.add_record` on the selected
+destination aggregation and all applicable clearance and closure checks.
+
+`record.component.add` is deliberately **not** required to stage files or commit
+them as part of a new record. Once commit succeeds, the creation boundary ends.
+Subsequent metadata changes require `record.modify`, and subsequent component
+addition, reorder, replacement, or removal requires its matching
+`record.component.*` global privilege and resource permission. `record.create`
+does not grant any of those post-commit operations.
 
 ## Component ordering
 

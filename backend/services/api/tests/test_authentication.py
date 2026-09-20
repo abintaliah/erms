@@ -153,6 +153,16 @@ def test_system_administrator_can_list_and_revoke_sessions(client: TestClient):
 
 
 def test_deactivating_user_revokes_sessions_and_prevents_authentication(client: TestClient):
+    # Preserve authorization-administration continuity while exercising the
+    # session-revocation semantics of deactivating the signed-in account.
+    backup = client.post(
+        "/api/v1/users",
+        json={"name": "Backup Administrator", "email": "backup-admin@test.invalid"},
+    ).json()
+    assigned = client.post(
+        "/api/v1/user-role-assignments", json={"user_id": backup["id"], "role_id": 1},
+    )
+    assert assigned.status_code == 201
     current = client.get("/api/v1/users/1").json()
     response = client.post(
         "/api/v1/users/1/deactivate",
@@ -311,11 +321,12 @@ def test_empty_database_can_bootstrap_one_interactive_administrator(client: Test
             """
             SELECT u.name, u.email, u.account_type, u.external_id,
                    c.password_hash, c.must_change_password, c.temporary_expires_at,
-                   r.code AS role_code, ou.code AS org_unit_code
+                   r.code AS role_code, p.code AS profile_code, ou.code AS org_unit_code
             FROM users AS u
             JOIN user_credentials AS c ON c.user_id = u.id
             JOIN user_role_assignments AS a ON a.user_id = u.id
             JOIN roles AS r ON r.id = a.role_id
+            JOIN profiles AS p ON p.id = r.profile_id
             JOIN org_units AS ou ON ou.id = r.org_unit_id
             WHERE u.id = %s
             """,
@@ -336,6 +347,7 @@ def test_empty_database_can_bootstrap_one_interactive_administrator(client: Test
     assert stored["must_change_password"] is True
     assert stored["temporary_expires_at"] == result.expires_at
     assert stored["role_code"] == "system-administrator"
+    assert stored["profile_code"] == "SYS_ADMIN"
     assert stored["org_unit_code"] == BOOTSTRAP_ORG_UNIT_CODE
     assert PasswordHasher().verify(stored["password_hash"], result.temporary_password)
     assert len(events) == 4
