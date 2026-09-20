@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly DATABASE_URL="$1"
+readonly SCHEMA_FILE="$2"
+readonly CLEAN_DATABASE="erms_security_schema_clean"
+readonly CLEAN_URL="${DATABASE_URL%/*}/${CLEAN_DATABASE}"
+readonly TEMPORARY_DIRECTORY="$(mktemp -d)"
+
+cleanup_parity() {
+    dropdb --if-exists --force --maintenance-db="${DATABASE_URL}" "${CLEAN_DATABASE}" >/dev/null 2>&1 || true
+    rm -rf "${TEMPORARY_DIRECTORY}"
+}
+trap cleanup_parity EXIT
+
+createdb --maintenance-db="${DATABASE_URL}" "${CLEAN_DATABASE}"
+psql "${CLEAN_URL}" --set ON_ERROR_STOP=on --file "${SCHEMA_FILE}" >/dev/null
+
+read -r -d '' SIGNATURE_SQL <<'SQL' || true
+SELECT 'column|' || table_name || '|' || ordinal_position || '|' || column_name || '|' ||
+       data_type || '|' || is_nullable
+FROM information_schema.columns
+WHERE table_schema='public'
+  AND (table_name IN ('security_levels','privileges','profiles','profile_privileges','privilege_dependencies') OR (
+       table_name IN ('aggregations','records','roles','record_drafts')
+       AND column_name IN ('security_level_id','profile_id','is_information_governance')))
+UNION ALL
+SELECT 'constraint|' || c.relname || '|' || con.conname || '|' || pg_get_constraintdef(con.oid, true)
+FROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid
+JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='public'
+  AND c.relname IN ('security_levels','privileges','profiles','profile_privileges','privilege_dependencies','aggregations','records','roles','record_drafts')
+  AND (c.relname IN ('security_levels','privileges','profiles','profile_privileges','privilege_dependencies')
+       OR con.conname LIKE '%security_level%' OR con.conname LIKE '%profile%')
+UNION ALL
+SELECT 'index|' || tablename || '|' || indexname || '|' || indexdef
+FROM pg_indexes
+WHERE schemaname='public'
+  AND tablename IN ('security_levels','privileges','profiles','profile_privileges','privilege_dependencies','aggregations','records','roles','record_drafts')
+  AND (tablename IN ('security_levels','privileges','profiles','profile_privileges','privilege_dependencies')
+       OR indexname LIKE '%security_level%' OR indexname LIKE '%profile%' OR indexname LIKE '%governance%')
+UNION ALL
+SELECT 'trigger|' || c.relname || '|' || t.tgname || '|' || pg_get_triggerdef(t.oid, true)
+FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE NOT t.tgisinternal AND n.nspname='public'
+  AND c.relname IN ('security_levels','privileges','profiles','profile_privileges','aggregations','records','roles')
+  AND (c.relname IN ('security_levels','privileges','profiles','profile_privileges')
+       OR t.tgname LIKE '%security_level%' OR t.tgname LIKE '%profile%')
+UNION ALL
+SELECT 'function|' || p.proname || '|' || pg_get_functiondef(p.oid)
+FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+WHERE n.nspname='public'
+  AND p.proname IN ('default_role_profile','touch_authorization_catalogue')
+ORDER BY 1;
+SQL
+
+psql "${DATABASE_URL}" -At --set ON_ERROR_STOP=on --command "${SIGNATURE_SQL}" \
+    >"${TEMPORARY_DIRECTORY}/upgraded.txt"
+psql "${CLEAN_URL}" -At --set ON_ERROR_STOP=on --command "${SIGNATURE_SQL}" \
+    >"${TEMPORARY_DIRECTORY}/clean.txt"
+diff -u "${TEMPORARY_DIRECTORY}/upgraded.txt" "${TEMPORARY_DIRECTORY}/clean.txt"
+echo "Security schema parity check passed."

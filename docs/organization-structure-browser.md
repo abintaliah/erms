@@ -105,9 +105,12 @@ The browser uses these bounded endpoints under `/api/v1/browse/organization`:
 - `GET /api/v1/auth/sessions/page` for bounded User-detail session pages
 
 Branch endpoints accept a maximum of 100 results. Search accepts `entity_type`
-and `status`; role users accept assignment `validity`. Authorization filtering
-must be added to all six endpoints when the authorization subsystem is
-introduced.
+and `status`; role users accept assignment `validity`. All six organization
+browser endpoints require the `organization.browse` global privilege. This
+permits read-only exploration of the hierarchy and concise summaries; it does
+not permit opening or administering the full Organization Unit, Role, or User
+pages. Those destinations continue to require `organization.administer` or
+`identity.users.administer`, as appropriate.
 
 ## Verification
 

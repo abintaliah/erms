@@ -52,6 +52,27 @@ The `event_history` table contains:
 Snapshots are JSON objects so historical events remain understandable as the
 relational schemas evolve.
 
+### Referenced-entity identity snapshots
+
+Numeric foreign keys remain in `before_state`, `after_state`, and domain-event
+metadata for technical traceability. For events created after migration 043,
+the database also writes readable identities under
+`metadata.reference_snapshots`. Recognized references include profiles,
+security levels, classifications and schemes, aggregations, records, roles,
+users, and organization units. A snapshot contains the stable information a
+person needs to identify the referenced item, such as its code and name/title
+or a person's name and email address.
+
+Snapshots are captured when the event is inserted. They do not change when the
+referenced row is later renamed or deleted. The Audit Trail uses them to show,
+for example, `ALL_PRIVS — All privileges` instead of only `Profile ID 1`.
+Domain events also snapshot the affected entity itself when it still exists.
+
+Migration 043 intentionally does **not** backfill older events. Reconstructing
+past identities from current rows could misrepresent what was true when an old
+event occurred. Older events therefore continue to show their original numeric
+references when no reliable historical identity is available.
+
 ## Operations and snapshots
 
 ### CREATE
@@ -108,8 +129,13 @@ database - change executed directly without API request context
 ```
 
 Approved values also include `bulk_import`, `scheduled_job`,
-`background_worker`, `integration`, `migration`, `administrative_tool`, `cli`,
+`background_worker`, `integration`, `migration`, `seeding`, `administrative_tool`, `cli`,
 `oidc_sync`, and `directory_sync`.
+
+`migration` is reserved for upgrading an existing database's schema or data to
+a newer application version. `seeding` identifies optional reference,
+demonstration, or test data loaded after the current schema is installed. Seed
+utilities must not describe their events as migrations.
 
 NiceGUI sends `X-Event-Source: web_ui` on every API request. FastAPI validates
 this header against the controlled list and defaults an absent header to `api`.

@@ -13,6 +13,18 @@ complete current schema. It uses standard SQL and does not depend on `psql`
 include commands or separate migration files. Do not execute individual
 migration files when initializing a new database.
 
+`schema.sql`, every migration, every seed, and every database test fixture must
+contain PostgreSQL SQL only. Client-specific meta-commands such as `\\i`,
+`\\ir`, `\\set`, and `\\copy` are prohibited. Command-line clients may still
+be configured externally (for example, `psql -v ON_ERROR_STOP=1`).
+
+## Seed data
+
+Schema creation, schema migration, and seed data are separate workflows.
+`schema.sql` never invokes a seed. Apply an optional script from
+`database/seeds/` explicitly, and only after the database is on the latest
+canonical schema. Seed scripts do not record schema migration versions.
+
 The schema deliberately contains no shared default password. Once the empty
 schema has been loaded, create its one-time bootstrap administrator with:
 
@@ -96,17 +108,11 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/020_backfill_legacy_root_classification.sql
 
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
-  -f database/migrations/021_seed_ewa_functional_classification_scheme.sql
-
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/022_govern_classification_scheme_deletion.sql
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/023_govern_classification_lifecycle.sql
-
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
-  -f database/migrations/024_seed_general_classification_scheme.sql
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
   -f database/migrations/026_add_classification_browser_indexes.sql
@@ -119,7 +125,48 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/030_remove_assignment_attribution_and_prepare_user_deletion.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/031_rename_human_accounts_to_person.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/032_add_security_levels.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/033_add_privileges_profiles_and_role_authorization.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/034_add_resource_acl_inheritance.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/035_enforce_resource_read_authorization.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/036_enforce_resource_mutation_authorization.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/037_enforce_draft_component_authorization.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/038_add_security_operations_indexes.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/039_shorten_builtin_profile_codes.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/040_add_information_governance_profiles.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/041_grant_governance_security_level_administration.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/042_add_organization_browse_privilege.sql
 ```
+
+The historical files numbered 021 and 024 are retained only for databases
+whose migration history already includes those legacy seed migrations. Do not
+use them to seed new databases. Their canonical replacements live under
+`database/seeds/` and are run explicitly after `schema.sql`.
 
 The `-1` option wraps the migration in one transaction. Migration 001 is safe
 to apply to the current development database where the event-history objects
@@ -129,6 +176,18 @@ organizational units, roles, temporal role assignments, hierarchy safeguards,
 searchable indexes, and event-history triggers.
 Migration 003 adds PostgreSQL-backed digital-component content storage and
 database-managed optimistic-concurrency versions for all mutable entities.
+
+Migration 033 seeds the immutable global-privilege catalogue and reserved
+profiles, safely backfills one profile for every role, and adds the
+information-governance role flag without yet enforcing privileges on business
+routes.
+
+Migration 034 installs the aggregation and record permission catalogue,
+deferred permission-dependency enforcement, FK-safe role/Everyone ACL grants,
+resource overrides, live child defaults, mirror/custom aggregation-default
+modes, inheritance flags, optimistic ACL versions, default Everyone/all
+initialization, and audit triggers. Everyone remains synthetic and is never a
+role row.
 
 Migration 023 adds classification deactivation and immutable per-classification
 first-use provenance. Assignment marks the terminal and every ancestor as
@@ -152,6 +211,27 @@ Migration 030 removes the redundant client-supplied role-assignment actor,
 prepares assignment and draft ownership for eventual governed deletion, and
 adds the revoked-session cleanup index. The migration contains its own
 transaction.
+Migration 031 renames the interactive account type from `human` to `person`.
+Migration 032 creates the security-level catalogue, seeds the approved General,
+Restricted, Secret, and Top Secret levels, backfills mandatory role,
+aggregation, and record references to General, and enforces the aggregation
+container security invariant.
+Migration 033 installs global privileges, single-profile role assignments,
+effective-role policy data, information-governance role metadata, and the
+approved compatibility profiles. Migration 034 installs resource permission
+catalogues, aggregation and record ACL grants, live child inheritance,
+synthetic Everyone grants, permission dependencies, and ACL concurrency
+versions. Migration 035 installs the set-based visibility predicates and safe
+search/audit projections used to enforce non-disclosing reads, protected
+relationships, digital-component metadata access, and audit redaction.
+Migration 036 adds the transaction-time aggregation and record operation
+predicates used for operation-specific mutation, dual-sided move, security
+change, and ACL-management authorization. Migration 037 adds private draft
+ownership, component-operation predicates, commit-time reauthorization, and
+the narrowly scoped transaction context used for audited record-placement
+corrections into effectively closed aggregations. See the corresponding
+`security-authorization-phase-2.md` through `security-authorization-phase-9.md`
+documents under `docs/`.
 Migration 004 adds transactional record drafts. Migration 005 adds local
 credentials, database-backed login sessions, and the original person/system
 account types.
@@ -235,8 +315,8 @@ It imports `examples/fileplans/mutamathilah.xml` as draft unless the XML supplie
 `date_published`. It maps `title_en` to the title and preserves the Arabic scheme
 name and classification `title_ar` in description fields. It refuses collisions,
 validates expected counts and deferred constraints, verifies all audit events,
-and records `025_seed_mutamathilah_classification_scheme` only after the entire
-transaction succeeds.
+and records the seed identifier in event metadata. It does not read or write
+`schema_migrations`; repeat execution detects the already imported scheme.
 
 ## Tests
 

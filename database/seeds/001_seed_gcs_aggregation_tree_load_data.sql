@@ -49,7 +49,7 @@ BEGIN
 
     PERFORM set_config('app.actor_type', 'automated_process', true),
             set_config('app.actor_name', 'GCS classification-tree seed', true),
-            set_config('app.event_source', 'migration', true),
+            set_config('app.event_source', 'seeding', true),
             set_config(
                 'app.change_reason',
                 'Create deterministic realistic GCS aggregation and record data for classification-tree load testing',
@@ -101,12 +101,12 @@ BEGIN
         classification.id,
         format('GCS-SEED-D-%s', lpad(generated.sequence_no::text, 4, '0')),
         CASE generated.sequence_no % 8
-            WHEN 0 THEN format('%s — Annual Programme %s', classification.title, 2022 + generated.sequence_no % 5)
+            WHEN 0 THEN format('%s — Annual Programme %s', classification.title, 2021 + generated.sequence_no % 5)
             WHEN 1 THEN format('%s — Operational Case Series %s', classification.title, lpad(generated.sequence_no::text, 3, '0'))
             WHEN 2 THEN format('%s — Review and Approval Cycle %s', classification.title, 1 + generated.sequence_no % 12)
             WHEN 3 THEN format('%s — Governance and Assurance File %s', classification.title, 2023 + generated.sequence_no % 4)
             WHEN 4 THEN format('%s — Service Delivery Portfolio %s', classification.title, lpad(generated.sequence_no::text, 3, '0'))
-            WHEN 5 THEN format('%s — Planning and Monitoring Series %s', classification.title, 2022 + generated.sequence_no % 5)
+            WHEN 5 THEN format('%s — Planning and Monitoring Series %s', classification.title, 2021 + generated.sequence_no % 5)
             WHEN 6 THEN format('%s — Compliance Evidence Set %s', classification.title, lpad(generated.sequence_no::text, 3, '0'))
             ELSE format('%s — Management Working File %s', classification.title, lpad(generated.sequence_no::text, 3, '0'))
         END,
@@ -114,10 +114,10 @@ BEGIN
             '%s This aggregation groups the authoritative plans, approvals, correspondence, evidence and outcomes for %s, maintained as a coherent business file for the %s cycle.',
             classification.description,
             lower(classification.title),
-            2022 + generated.sequence_no % 5
+            2021 + generated.sequence_no % 5
         ),
         make_timestamptz(
-            2022 + generated.sequence_no % 5,
+            2021 + generated.sequence_no % 5,
             1 + generated.sequence_no % 12,
             1 + generated.sequence_no % 24,
             9 + generated.sequence_no % 8,
@@ -126,7 +126,7 @@ BEGIN
             'Asia/Dubai'
         ),
         make_timestamptz(
-            2022 + generated.sequence_no % 5,
+            2021 + generated.sequence_no % 5,
             1 + generated.sequence_no % 12,
             1 + generated.sequence_no % 24,
             9 + generated.sequence_no % 8,
@@ -162,7 +162,7 @@ BEGIN
             lpad(generated.sequence_no::text, 3, '0')
         ),
         make_timestamptz(
-            2024 + generated.sequence_no % 3,
+            2023 + generated.sequence_no % 3,
             1 + generated.sequence_no % 12,
             1 + generated.sequence_no % 24,
             8 + generated.sequence_no % 9,
@@ -171,7 +171,7 @@ BEGIN
             'Asia/Dubai'
         ),
         make_timestamptz(
-            2024 + generated.sequence_no % 3,
+            2023 + generated.sequence_no % 3,
             1 + generated.sequence_no % 12,
             1 + generated.sequence_no % 24,
             8 + generated.sequence_no % 9,
@@ -224,7 +224,7 @@ BEGIN
             lower(aggregation.classification_title)
         ),
         make_timestamptz(
-            2022 + generated.sequence_no % 5,
+            2021 + generated.sequence_no % 5,
             1 + generated.sequence_no % 12,
             1 + generated.sequence_no % 24,
             9 + generated.sequence_no % 8,
@@ -233,7 +233,7 @@ BEGIN
             'Asia/Dubai'
         ),
         make_timestamptz(
-            2022 + generated.sequence_no % 5,
+            2021 + generated.sequence_no % 5,
             1 + generated.sequence_no % 12,
             1 + generated.sequence_no % 24,
             9 + generated.sequence_no % 8,
@@ -266,7 +266,7 @@ BEGIN
             aggregation.title
         ),
         make_timestamptz(
-            2024 + generated.sequence_no % 3,
+            2023 + generated.sequence_no % 3,
             1 + generated.sequence_no % 12,
             1 + generated.sequence_no % 24,
             8 + generated.sequence_no % 9,
@@ -275,7 +275,7 @@ BEGIN
             'Asia/Dubai'
         ),
         make_timestamptz(
-            2024 + generated.sequence_no % 3,
+            2023 + generated.sequence_no % 3,
             1 + generated.sequence_no % 12,
             1 + generated.sequence_no % 24,
             8 + generated.sequence_no % 9,

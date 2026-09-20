@@ -73,7 +73,8 @@ def test_org_unit_crud_hierarchy_and_global_uniqueness(
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()] == [child["id"]]
 
-    assert client.delete(f"/api/v1/org-units/{child['id']}", headers={"If-Match": str(child["version"])}).status_code == 405
+    missing_reason = client.delete(f"/api/v1/org-units/{child['id']}", headers={"If-Match": str(child["version"])})
+    assert missing_reason.status_code == 422
     deactivated = client.post(
         f"/api/v1/org-units/{child['id']}/deactivate",
         headers={"If-Match": str(child["version"])},
@@ -106,7 +107,8 @@ def test_user_crud_neutral_name_and_explicit_lifecycle(client: TestClient, user:
     )
     assert duplicate_email.status_code == 409
 
-    assert client.delete(f"/api/v1/users/{user['id']}", headers={"If-Match": str(response.json()["version"])}).status_code == 405
+    missing_reason = client.delete(f"/api/v1/users/{user['id']}", headers={"If-Match": str(response.json()["version"])})
+    assert missing_reason.status_code == 422
     deactivated = client.post(
         f"/api/v1/users/{user['id']}/deactivate",
         headers={"If-Match": str(response.json()["version"])},
@@ -115,14 +117,14 @@ def test_user_crud_neutral_name_and_explicit_lifecycle(client: TestClient, user:
     assert deactivated["date_deactivated"] is not None
 
 
-def test_role_delete_is_not_exposed_before_permanent_deletion_is_implemented(
+def test_role_permanent_delete_requires_reason(
     client: TestClient, role: dict,
 ):
     response = client.delete(
         f"/api/v1/roles/{role['id']}",
         headers={"If-Match": str(role["version"])},
     )
-    assert response.status_code == 405
+    assert response.status_code == 422
     assert client.get(f"/api/v1/roles/{role['id']}").status_code == 200
 
 

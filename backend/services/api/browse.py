@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from psycopg import Connection
 
 from .database import get_connection
+from .authorization_policy import require_organization_browse
 from .schemas import (
     AggregationRead,
     BrowseAggregationNode,
@@ -65,7 +66,12 @@ ROLE_NODE_SQL = """
     )
     SELECT role.id, role.org_unit_id, role.supervisor_role_id, role.code,
            role.name, role.description, role.status, role.date_created,
-           role.date_deactivated, role.version,
+           role.date_deactivated, role.version, role.security_level_id,
+           role.profile_id, role.is_information_governance,
+           profile.code AS profile_code, profile.name AS profile_name,
+           security.code AS security_level_code,
+           security.name AS security_level_name,
+           security.level_number AS security_level_number,
            unit.code AS org_unit_code, unit.name AS org_unit_name,
            supervisor.code AS supervisor_role_code,
            supervisor.name AS supervisor_role_name,
@@ -84,6 +90,8 @@ ROLE_NODE_SQL = """
            ) AS current_assignment_count
       FROM roles role
       JOIN org_units unit ON unit.id=role.org_unit_id
+      JOIN security_levels security ON security.id=role.security_level_id
+      JOIN profiles profile ON profile.id=role.profile_id
  LEFT JOIN roles supervisor ON supervisor.id=role.supervisor_role_id
 """
 
@@ -166,33 +174,43 @@ CLASSIFICATION_SOURCE = """
              WHERE child.parent_classification_id = c.id) AS child_classification_count,
            (SELECT count(*) FROM aggregations aggregation
              WHERE aggregation.classification_id = c.id
-               AND aggregation.parent_aggregation_id IS NULL) AS root_aggregation_count
+               AND aggregation.parent_aggregation_id IS NULL
+               AND current_user_can_view_aggregation(aggregation.id)) AS root_aggregation_count
       FROM classifications c
 """
 
 AGGREGATION_SOURCE = """
-    SELECT a.id, a.parent_aggregation_id, a.classification_id,
+    SELECT a.id,
+           CASE WHEN a.parent_aggregation_id IS NULL OR current_user_can_view_aggregation(a.parent_aggregation_id)
+                THEN a.parent_aggregation_id END AS parent_aggregation_id,
+           a.classification_id,
            classification.code AS classification_code,
            classification.title AS classification_title,
            a.aggregation_number, a.title, a.description, a.date_created,
            a.date_opened, a.date_closed,
            (SELECT count(*) FROM aggregations child
-             WHERE child.parent_aggregation_id = a.id) AS child_aggregation_count,
+             WHERE child.parent_aggregation_id = a.id
+               AND current_user_can_view_aggregation(child.id)) AS child_aggregation_count,
            (SELECT count(*) FROM records record
-             WHERE record.aggregation_id = a.id) AS record_count
+             WHERE record.aggregation_id = a.id
+               AND current_user_can_view_record(record.id)) AS record_count
       FROM aggregations a
  LEFT JOIN classifications classification ON classification.id = a.classification_id
+     WHERE current_user_can_view_aggregation(a.id)
 """
 
 RECORD_SOURCE = """
-    SELECT r.id, r.aggregation_id, owner.aggregation_number,
-           owner.title AS aggregation_title,
+    SELECT r.id,
+           CASE WHEN current_user_can_view_aggregation(r.aggregation_id) THEN r.aggregation_id END AS aggregation_id,
+           CASE WHEN current_user_can_view_aggregation(r.aggregation_id) THEN owner.aggregation_number END AS aggregation_number,
+           CASE WHEN current_user_can_view_aggregation(r.aggregation_id) THEN owner.title END AS aggregation_title,
            r.record_number, r.title, r.description,
            r.date_created, r.date_originated,
            (SELECT count(*) FROM digital_components component
              WHERE component.record_id = r.id) AS digital_component_count
       FROM records r
       JOIN aggregations owner ON owner.id = r.aggregation_id
+     WHERE current_user_can_view_record(r.id)
 """
 
 
@@ -265,7 +283,7 @@ def browse_classification_aggregations(
         raise HTTPException(status_code=409, detail="only terminal classifications govern aggregations")
     return _page(
         connection, scope=f"classification:{classification_id}:aggregations",
-        source_sql=AGGREGATION_SOURCE + " WHERE a.classification_id=%s AND a.parent_aggregation_id IS NULL",
+        source_sql=AGGREGATION_SOURCE + " AND a.classification_id=%s AND a.parent_aggregation_id IS NULL",
         parameters=[classification_id], key_column="aggregation_number", query=query,
         query_columns=("aggregation_number", "title"), limit=limit, cursor=cursor,
     )
@@ -280,11 +298,11 @@ def browse_aggregation_children(
     query: str = Query("", max_length=200),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    if connection.execute("SELECT 1 FROM aggregations WHERE id=%s", (aggregation_id,)).fetchone() is None:
+    if connection.execute("SELECT 1 FROM aggregations WHERE id=%s AND current_user_can_view_aggregation(id)", (aggregation_id,)).fetchone() is None:
         raise HTTPException(status_code=404, detail="aggregation not found")
     return _page(
         connection, scope=f"aggregation:{aggregation_id}:children",
-        source_sql=AGGREGATION_SOURCE + " WHERE a.parent_aggregation_id=%s",
+        source_sql=AGGREGATION_SOURCE + " AND a.parent_aggregation_id=%s",
         parameters=[aggregation_id], key_column="aggregation_number", query=query,
         query_columns=("aggregation_number", "title"), limit=limit, cursor=cursor,
     )
@@ -299,11 +317,11 @@ def browse_aggregation_records(
     query: str = Query("", max_length=200),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    if connection.execute("SELECT 1 FROM aggregations WHERE id=%s", (aggregation_id,)).fetchone() is None:
+    if connection.execute("SELECT 1 FROM aggregations WHERE id=%s AND current_user_can_view_aggregation(id)", (aggregation_id,)).fetchone() is None:
         raise HTTPException(status_code=404, detail="aggregation not found")
     return _page(
         connection, scope=f"aggregation:{aggregation_id}:records",
-        source_sql=RECORD_SOURCE + " WHERE r.aggregation_id=%s",
+        source_sql=RECORD_SOURCE + " AND r.aggregation_id=%s",
         parameters=[aggregation_id], key_column="record_number", query=query,
         query_columns=("record_number", "title"), limit=limit, cursor=cursor,
     )
@@ -336,6 +354,7 @@ def browse_record_summary(
 @router.get("/organization/roots", tags=["organization browser"])
 def browse_organization_roots(
     limit: int = Query(100, ge=1, le=100),
+    _authorization: Any = Depends(require_organization_browse),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     return list(connection.execute(
@@ -349,6 +368,7 @@ def browse_organization_roots(
 def browse_organization_children(
     org_unit_id: int, include_roles: bool = True,
     limit: int = Query(100, ge=1, le=100),
+    _authorization: Any = Depends(require_organization_browse),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     if connection.execute("SELECT 1 FROM org_units WHERE id=%s", (org_unit_id,)).fetchone() is None:
@@ -372,6 +392,7 @@ def browse_organization_children(
 def browse_role_users(
     role_id: int, validity: Literal["all", "current", "future", "expired"] = "all",
     limit: int = Query(100, ge=1, le=100),
+    _authorization: Any = Depends(require_organization_browse),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     role = connection.execute("SELECT id FROM roles WHERE id=%s", (role_id,)).fetchone()
@@ -406,7 +427,9 @@ def browse_role_users(
 
 @router.get("/organization/org-units/{org_unit_id}/summary", tags=["organization browser"])
 def browse_org_unit_summary(
-    org_unit_id: int, connection: Connection = Depends(get_connection, scope="function"),
+    org_unit_id: int,
+    _authorization: Any = Depends(require_organization_browse),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     row = connection.execute(
         f"SELECT * FROM ({ORG_UNIT_NODE_SQL}) source WHERE id=%s", (org_unit_id,),
@@ -424,7 +447,9 @@ def browse_org_unit_summary(
 
 @router.get("/organization/roles/{role_id}/summary", tags=["organization browser"])
 def browse_role_summary(
-    role_id: int, connection: Connection = Depends(get_connection, scope="function"),
+    role_id: int,
+    _authorization: Any = Depends(require_organization_browse),
+    connection: Connection = Depends(get_connection, scope="function"),
 ):
     row = connection.execute(
         f"SELECT * FROM ({ROLE_NODE_SQL}) source WHERE id=%s", (role_id,),
@@ -445,6 +470,7 @@ def search_organization_structure(
     entity_type: Literal["all", "org_unit", "role", "user"] = "all",
     status: Literal["all", "active", "inactive", "suspended"] = "all",
     limit: int = Query(50, ge=1, le=100),
+    _authorization: Any = Depends(require_organization_browse),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     pattern = f"%{query.strip()}%"

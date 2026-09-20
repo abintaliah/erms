@@ -26,13 +26,13 @@ ENTITIES = {
     "aggregations": EntitySpec(
         "aggregations", "Aggregations", "aggregation",
         (("aggregation_number", "Number"), ("title", "Title"), ("date_opened", "Opened"), ("date_closed", "Closed")),
-        (FieldSpec("parent_aggregation_id", "Parent aggregation", "lookup", lookup_resource="aggregations", lookup_label_fields=("aggregation_number", "title")), FieldSpec("classification_id", "Classification", "classification", lookup_resource="classifications", lookup_label_fields=("code", "title")), FieldSpec("aggregation_number", "Aggregation number", required=True), FieldSpec("title", "Title", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("date_opened", "Date opened", "datetime"), FieldSpec("date_closed", "Date closed", "datetime")),
+        (FieldSpec("parent_aggregation_id", "Parent aggregation", "lookup", lookup_resource="aggregations", lookup_label_fields=("aggregation_number", "title")), FieldSpec("classification_id", "Classification", "classification", lookup_resource="classifications", lookup_label_fields=("code", "title")), FieldSpec("security_level_id", "Security level", "lookup", True, "security-levels", ("code", "name")), FieldSpec("aggregation_number", "Aggregation number", required=True), FieldSpec("title", "Title", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("date_opened", "Date opened", "datetime"), FieldSpec("date_closed", "Date closed", "datetime")),
         True, ("aggregation_number", "title", "description"),
     ),
     "records": EntitySpec(
         "records", "Records", "record",
         (("record_number", "Number"), ("title", "Title"), ("aggregation_display", "Aggregation"), ("date_originated", "Originated")),
-        (FieldSpec("aggregation_id", "Aggregation", "lookup", True, "aggregations", ("aggregation_number", "title")), FieldSpec("record_number", "Record number", required=True), FieldSpec("title", "Title", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("date_originated", "Date originated", "datetime")),
+        (FieldSpec("aggregation_id", "Aggregation", "lookup", True, "aggregations", ("aggregation_number", "title")), FieldSpec("security_level_id", "Security level", "lookup", True, "security-levels", ("code", "name")), FieldSpec("record_number", "Record number", required=True), FieldSpec("title", "Title", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("date_originated", "Date originated", "datetime")),
         True, ("record_number", "title", "description"),
     ),
     "classification-schemes": EntitySpec(
@@ -70,7 +70,27 @@ ENTITIES = {
     ),
     "roles": EntitySpec(
         "roles", "Roles", "role",
-        (("code", "Code"), ("name", "Name"), ("org_unit_display", "Organization unit"), ("effective_status", "Status")),
-        (FieldSpec("org_unit_id", "Organization unit", "lookup", True, "org-units", ("code", "name")), FieldSpec("supervisor_role_id", "Supervising role", "lookup", False, "roles", ("code", "name")), FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea")),
+        (("code", "Code"), ("name", "Name"), ("org_unit_display", "Organization unit"), ("profile_display", "Profile"), ("effective_status", "Status")),
+        (FieldSpec("org_unit_id", "Organization unit", "lookup", True, "org-units", ("code", "name")), FieldSpec("supervisor_role_id", "Supervising role", "lookup", False, "roles", ("code", "name")), FieldSpec("security_level_id", "Security clearance", "lookup", True, "security-levels", ("code", "name")), FieldSpec("profile_id", "Profile", "lookup", True, "profiles", ("code", "name")), FieldSpec("is_information_governance", "Information-governance role", "bool"), FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea")),
+    ),
+    "security-levels": EntitySpec(
+        "security-levels", "Security levels", "security level",
+        (("code", "Code"), ("name", "Name"), ("level_number", "Level"), ("prevents_disposition", "Prevents disposition")),
+        (FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("level_number", "Level number", "int", True), FieldSpec("prevents_disposition", "Prevents disposition", "bool")),
+    ),
+    "profiles": EntitySpec(
+        "profiles", "Profiles", "profile",
+        (("code", "Code"), ("name", "Name"), ("description", "Description"), ("is_system", "Built-in")),
+        (FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea")),
+    ),
+    "privileges": EntitySpec(
+        "privileges", "Privileges", "privilege",
+        (("code", "Code"), ("name", "Name"), ("category", "Category"), ("is_reserved", "Reserved")),
+        (),
+    ),
+    "permissions": EntitySpec(
+        "permissions", "Permissions", "permission",
+        (("resource_type", "Resource type"), ("code", "Code"), ("name", "Name"), ("description", "Description")),
+        (),
     ),
 }

@@ -24,6 +24,7 @@ from .schemas import (
     SearchResponse,
 )
 from .search import search_rows
+from .authorization_policy import require_audit_view, require_classifications_admin
 
 
 router = APIRouter(prefix="/api/v1")
@@ -43,7 +44,7 @@ def _required_reason(value: str | None) -> str:
     return value.strip()
 
 
-@router.post("/classification-schemes", response_model=ClassificationSchemeRead, status_code=201, tags=["classification schemes"])
+@router.post("/classification-schemes", response_model=ClassificationSchemeRead, status_code=201, tags=["classification schemes"], dependencies=[Depends(require_classifications_admin)])
 def create_scheme(payload: ClassificationSchemeCreate, connection: Connection = Depends(get_connection, scope="function")):
     return create_row(connection, "classification_schemes", payload.model_dump(exclude_none=True))
 
@@ -97,6 +98,7 @@ def search_schemes(payload: SearchRequest, connection: Connection = Depends(get_
     "/classification-schemes/classification-counts",
     response_model=list[ClassificationSchemeClassificationCounts],
     tags=["classification schemes"],
+    dependencies=[Depends(require_classifications_admin)],
 )
 def classification_counts_by_scheme(
     connection: Connection = Depends(get_connection, scope="function"),
@@ -131,7 +133,7 @@ def get_scheme(scheme_id: int, connection: Connection = Depends(get_connection, 
     return get_or_404(connection, "classification_schemes", scheme_id)
 
 
-@router.patch("/classification-schemes/{scheme_id}", response_model=ClassificationSchemeRead, tags=["classification schemes"])
+@router.patch("/classification-schemes/{scheme_id}", response_model=ClassificationSchemeRead, tags=["classification schemes"], dependencies=[Depends(require_classifications_admin)])
 def update_scheme(
     scheme_id: int, payload: ClassificationSchemeUpdate,
     version: int = Depends(expected_version),
@@ -140,7 +142,7 @@ def update_scheme(
     return update_row(connection, "classification_schemes", scheme_id, payload.model_dump(exclude_unset=True), version)
 
 
-@router.post("/classification-schemes/{scheme_id}/publish", response_model=ClassificationSchemeRead, tags=["classification schemes"])
+@router.post("/classification-schemes/{scheme_id}/publish", response_model=ClassificationSchemeRead, tags=["classification schemes"], dependencies=[Depends(require_classifications_admin)])
 def publish_scheme(
     scheme_id: int, version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
@@ -155,7 +157,7 @@ def publish_scheme(
     return row
 
 
-@router.post("/classification-schemes/{scheme_id}/unpublish", response_model=ClassificationSchemeRead, tags=["classification schemes"])
+@router.post("/classification-schemes/{scheme_id}/unpublish", response_model=ClassificationSchemeRead, tags=["classification schemes"], dependencies=[Depends(require_classifications_admin)])
 def unpublish_scheme(
     scheme_id: int, version: int = Depends(expected_version),
     reason: str | None = Header(None, alias="X-Change-Reason"),
@@ -186,7 +188,7 @@ def unpublish_scheme(
     raise HTTPException(status_code=409, detail="classification scheme is already unpublished")
 
 
-@router.post("/classification-schemes/{scheme_id}/deactivate", response_model=ClassificationSchemeRead, tags=["classification schemes"])
+@router.post("/classification-schemes/{scheme_id}/deactivate", response_model=ClassificationSchemeRead, tags=["classification schemes"], dependencies=[Depends(require_classifications_admin)])
 def deactivate_scheme(
     scheme_id: int, version: int = Depends(expected_version),
     reason: str | None = Header(None, alias="X-Change-Reason"),
@@ -203,7 +205,7 @@ def deactivate_scheme(
     return row
 
 
-@router.post("/classification-schemes/{scheme_id}/reactivate", response_model=ClassificationSchemeRead, tags=["classification schemes"])
+@router.post("/classification-schemes/{scheme_id}/reactivate", response_model=ClassificationSchemeRead, tags=["classification schemes"], dependencies=[Depends(require_classifications_admin)])
 def reactivate_scheme(
     scheme_id: int, version: int = Depends(expected_version),
     reason: str | None = Header(None, alias="X-Change-Reason"),
@@ -213,7 +215,7 @@ def reactivate_scheme(
     return update_row(connection, "classification_schemes", scheme_id, {"date_deactivated": None}, version)
 
 
-@router.delete("/classification-schemes/{scheme_id}", status_code=204, tags=["classification schemes"])
+@router.delete("/classification-schemes/{scheme_id}", status_code=204, tags=["classification schemes"], dependencies=[Depends(require_classifications_admin)])
 def delete_scheme(
     scheme_id: int, version: int = Depends(expected_version),
     reason: str | None = Header(None, alias="X-Change-Reason"),
@@ -224,12 +226,12 @@ def delete_scheme(
     return Response(status_code=204)
 
 
-@router.get("/classification-schemes/{scheme_id}/history", response_model=list[EventHistoryRead], tags=["event history"])
+@router.get("/classification-schemes/{scheme_id}/history", response_model=list[EventHistoryRead], tags=["event history"], dependencies=[Depends(require_audit_view)])
 def scheme_history(scheme_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return _history(connection, "classification_scheme", scheme_id)
 
 
-@router.post("/classifications", response_model=ClassificationRead, status_code=201, tags=["classifications"])
+@router.post("/classifications", response_model=ClassificationRead, status_code=201, tags=["classifications"], dependencies=[Depends(require_classifications_admin)])
 def create_classification(payload: ClassificationCreate, connection: Connection = Depends(get_connection, scope="function")):
     values = payload.model_dump(exclude={"retention_rule"}, exclude_none=True)
     classification = create_row(connection, "classifications", values)
@@ -312,7 +314,7 @@ def classification_path(classification_id: int, connection: Connection = Depends
     return list(rows)
 
 
-@router.patch("/classifications/{classification_id}", response_model=ClassificationRead, tags=["classifications"])
+@router.patch("/classifications/{classification_id}", response_model=ClassificationRead, tags=["classifications"], dependencies=[Depends(require_classifications_admin)])
 def update_classification(
     classification_id: int, payload: ClassificationUpdate,
     version: int = Depends(expected_version),
@@ -321,7 +323,7 @@ def update_classification(
     return update_row(connection, "classifications", classification_id, payload.model_dump(exclude_unset=True), version)
 
 
-@router.delete("/classifications/{classification_id}", status_code=204, tags=["classifications"])
+@router.delete("/classifications/{classification_id}", status_code=204, tags=["classifications"], dependencies=[Depends(require_classifications_admin)])
 def delete_classification(
     classification_id: int, version: int = Depends(expected_version),
     reason: str | None = Header(None, alias="X-Change-Reason"),
@@ -332,7 +334,7 @@ def delete_classification(
     return Response(status_code=204)
 
 
-@router.post("/classifications/{classification_id}/deactivate", response_model=ClassificationRead, tags=["classifications"])
+@router.post("/classifications/{classification_id}/deactivate", response_model=ClassificationRead, tags=["classifications"], dependencies=[Depends(require_classifications_admin)])
 def deactivate_classification(
     classification_id: int, version: int = Depends(expected_version),
     reason: str | None = Header(None, alias="X-Change-Reason"),
@@ -355,7 +357,7 @@ def deactivate_classification(
     return row
 
 
-@router.post("/classifications/{classification_id}/reactivate", response_model=ClassificationRead, tags=["classifications"])
+@router.post("/classifications/{classification_id}/reactivate", response_model=ClassificationRead, tags=["classifications"], dependencies=[Depends(require_classifications_admin)])
 def reactivate_classification(
     classification_id: int, version: int = Depends(expected_version),
     reason: str | None = Header(None, alias="X-Change-Reason"),
@@ -368,7 +370,7 @@ def reactivate_classification(
     return update_row(connection, "classifications", classification_id, {"date_deactivated": None}, version)
 
 
-@router.get("/classifications/{classification_id}/history", response_model=list[EventHistoryRead], tags=["event history"])
+@router.get("/classifications/{classification_id}/history", response_model=list[EventHistoryRead], tags=["event history"], dependencies=[Depends(require_audit_view)])
 def classification_history(classification_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return _history(connection, "classification", classification_id)
 
@@ -379,7 +381,7 @@ def get_classification_rule(classification_id: int, connection: Connection = Dep
     return connection.execute("SELECT * FROM classification_retention_rules WHERE classification_id=%s", (classification_id,)).fetchone()
 
 
-@router.put("/classifications/{classification_id}/retention-rule", response_model=ClassificationRetentionRuleRead, tags=["retention rules"])
+@router.put("/classifications/{classification_id}/retention-rule", response_model=ClassificationRetentionRuleRead, tags=["retention rules"], dependencies=[Depends(require_classifications_admin)])
 def put_classification_rule(
     classification_id: int, payload: RetentionRuleInput,
     version: int | None = Query(None, ge=1),
@@ -394,7 +396,7 @@ def put_classification_rule(
     return update_row(connection, "classification_retention_rules", current["id"], payload.model_dump(), version)
 
 
-@router.delete("/classifications/{classification_id}/retention-rule", status_code=204, tags=["retention rules"])
+@router.delete("/classifications/{classification_id}/retention-rule", status_code=204, tags=["retention rules"], dependencies=[Depends(require_classifications_admin)])
 def delete_classification_rule(
     classification_id: int, version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),

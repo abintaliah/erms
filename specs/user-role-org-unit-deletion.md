@@ -1,6 +1,6 @@
 # User, Role, and Organizational-Unit Deletion — Technical Specification
 
-**Status:** Draft for discussion  
+**Status:** Implemented and verified in Security and Authorization Phase 12
 **Project:** ERMS  
 **Prepared:** 17 September 2026  
 **Revision:** 0.3 — authentication and session lifecycle extracted
@@ -97,7 +97,9 @@ deletion is not a blocker.
    receive access through roles. Direct user-specific aggregation or record
    ACLs must not be introduced.
 8. Every deletion decision must be evaluated transactionally against current
-   database state.
+   database state. Execution uses the shared transaction-scoped authorization-
+   continuity advisory lock and a target-row lock; it must not take broad table
+   locks.
 9. Login sessions are transient security state. Immutable authentication events,
    not retained session rows, are the durable authentication audit trail.
 
@@ -533,15 +535,18 @@ following:
 - all database-backed tests run against a newly created disposable PostgreSQL
   database that is removed cleanly after the test run.
 
-## 16. Deferred decisions
+## 16. Authorization decisions resolved before implementation
 
-The following details belong to the future authorization specification and are
-not decided here:
+The following details were resolved by the approved Security and Authorization
+Subsystem specification before this deletion feature was implemented:
 
-- the complete RBAC permission and ACL schema;
-- the exact definition of read, manage, recovery, and administrative access;
-- the controlled emergency or break-glass recovery mechanism; and
-- the performance strategy for access-continuity analysis on large repositories.
+- the complete pure-RBAC privilege, permission, and live-inheritance ACL schema;
+- continuity through effective authorization administrators and highest-
+  clearance human information-governance custodians;
+- a separately reviewed break-glass design, which remains unimplemented and is
+  not a deletion override; and
+- uncached transactional continuity analysis, backed by operational monitoring
+  and reconciliation.
 
 Those decisions must preserve the pure-RBAC and no-inaccessible-content
 requirements established by this specification.

@@ -25,6 +25,7 @@ from .audit_context import (
 from .authentication import CSRF_COOKIE, SESSION_COOKIE, hash_secret, resolve_principal, router as authentication_router
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .concurrency import expected_version
+from .continuity_lock import acquire_continuity_shared_lock
 from .config import integer_environment
 from .content_storage import configured_storage, inspect_upload
 from .database import close_pool, get_connection, open_pool, pool
@@ -44,15 +45,30 @@ from .schemas import (
     RecordDraftRead,
     RecordDraftUpdate,
     RecordRead,
+    RecordPlacementCorrection,
     RecordUpdate,
     SearchRequest,
     SearchResponse,
+    ResourceCapabilitiesRead,
 )
 from .search import search_rows
+from .security_level_events import append_security_level_event, validate_security_level_change
+from .resource_authorization import (
+    audit_governance_view_if_used, lock_visible_resource, operation_allowed, require_clearance_for_level,
+    require_closed_placement_correction, require_component_operation,
+    require_destination_record_permission, require_draft_owner, require_global,
+    require_resource_operation,
+)
 from .user_management import router as user_management_router
 from .classification_management import router as classification_management_router
 from .browse import router as browse_router
 from .favourites import router as favourites_router
+from .security_levels import router as security_levels_router
+from .authorization_admin import router as authorization_admin_router
+from .resource_acls import router as resource_acl_router
+from .governance_authorization import router as governance_authorization_router
+from .security_operations import router as security_operations_router
+from .authorization_policy import load_policy_context, require_audit_view
 
 
 @asynccontextmanager
@@ -75,10 +91,15 @@ app.include_router(authentication_router)
 app.include_router(classification_management_router)
 app.include_router(browse_router)
 app.include_router(favourites_router)
+app.include_router(security_levels_router)
+app.include_router(authorization_admin_router)
+app.include_router(resource_acl_router)
+app.include_router(governance_authorization_router)
+app.include_router(security_operations_router)
 
 EVENT_SOURCES = {
     "api", "web_ui", "bulk_import", "background_worker", "scheduled_job",
-    "integration", "migration", "administrative_tool", "cli", "oidc_sync",
+    "integration", "migration", "seeding", "administrative_tool", "cli", "oidc_sync",
     "directory_sync",
 }
 
@@ -130,6 +151,10 @@ async def audit_request_context(request: Request, call_next):
         try:
             with pool.connection() as authentication_connection:
                 principal = resolve_principal(authentication_connection, session_token)
+                request.state.policy_context = (
+                    load_policy_context(authentication_connection, principal)
+                    if principal else None
+                )
         except PoolTimeout:
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -153,6 +178,8 @@ async def audit_request_context(request: Request, call_next):
         if not csrf or not secrets.compare_digest(hash_secret(csrf), hash_secret(request.cookies.get(CSRF_COOKIE, ""))):
             return JSONResponse(status_code=403, content={"detail": "CSRF validation failed"})
     request.state.principal = principal
+    if not hasattr(request.state, "policy_context"):
+        request.state.policy_context = None
     actor_token = actor_type_context.set("user" if principal else "anonymous")
     actor_user_token = actor_user_id_context.set(str(principal.user_id) if principal else "")
     actor_name_token = actor_name_context.set(principal.name if principal else "")
@@ -178,14 +205,65 @@ async def audit_request_context(request: Request, call_next):
 @app.exception_handler(psycopg.Error)
 async def database_error_handler(_, exception: psycopg.Error):
     sqlstate = exception.sqlstate
+    constraint_messages = {
+        "aggregations_dates_in_order": (
+            "aggregation_dates_out_of_order",
+            "The aggregation's closing date cannot be earlier than its opening date.",
+        ),
+        "org_units_dates_in_order": (
+            "organization_unit_dates_out_of_order",
+            "The organization unit's deactivation date cannot be earlier than its creation date.",
+        ),
+        "users_dates_in_order": (
+            "user_dates_out_of_order",
+            "The account's deactivation date cannot be earlier than its creation date.",
+        ),
+        "roles_dates_in_order": (
+            "role_dates_out_of_order",
+            "The role's deactivation date cannot be earlier than its creation date.",
+        ),
+        "user_role_assignments_dates_in_order": (
+            "assignment_dates_out_of_order",
+            "The assignment's end date cannot be earlier than its start date.",
+        ),
+        "classification_schemes_dates_in_order": (
+            "classification_scheme_dates_out_of_order",
+            "The classification scheme's dates are not in a valid chronological order.",
+        ),
+        "classifications_dates_in_order": (
+            "classification_dates_out_of_order",
+            "The classification's deactivation date cannot be earlier than its creation date.",
+        ),
+    }
+    constraint_name = exception.diag.constraint_name
+    friendly_constraint = constraint_messages.get(constraint_name or "")
     if isinstance(exception, PoolTimeout):
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         detail = "database connection pool is busy; retry shortly"
     elif sqlstate in {"23503", "23505", "P0001"}:
         status_code = status.HTTP_409_CONFLICT
-        detail = exception.diag.message_primary or "database constraint violated"
+        primary = exception.diag.message_primary or "database constraint violated"
+        detail = (
+            {
+                "code": "security_hierarchy_violation",
+                "message": "The security level conflicts with the containing aggregation",
+                "context": exception.diag.message_detail,
+            }
+            if primary == "security_hierarchy_violation"
+            else primary
+        )
+    elif friendly_constraint:
+        status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+        code, message = friendly_constraint
+        detail = {
+            "code": code,
+            "message": message,
+            "technical_detail": exception.diag.message_primary
+            or f"database constraint {constraint_name} was violated",
+            "constraint": constraint_name,
+        }
     elif isinstance(exception, (psycopg.IntegrityError, psycopg.DataError)):
-        status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+        status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
         detail = exception.diag.message_primary or "database constraint violated"
     else:
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -212,6 +290,20 @@ def create_aggregation(
     payload: AggregationCreate,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    acquire_continuity_shared_lock(connection)
+    if payload.parent_aggregation_id is None:
+        level_id = payload.security_level_id or connection.execute(
+            "SELECT lowest_security_level_id() AS id"
+        ).fetchone()["id"]
+        require_global(connection, "aggregation.create_root")
+        require_clearance_for_level(connection, level_id)
+    else:
+        parent = require_resource_operation(
+            connection, "aggregation", payload.parent_aggregation_id,
+            "aggregation.create_child", "aggregation.add_child",
+        )
+        level_id = payload.security_level_id or parent["security_level_id"]
+        require_clearance_for_level(connection, level_id)
     return create_row(connection, "aggregations", payload.model_dump())
 
 
@@ -222,6 +314,11 @@ def list_aggregations(
     offset: int = Query(default=0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    if parent_aggregation_id is not None and connection.execute(
+        "SELECT 1 FROM aggregations WHERE id=%s AND current_user_can_view_aggregation(id)",
+        (parent_aggregation_id,),
+    ).fetchone() is None:
+        return []
     return list_rows(
         connection,
         "aggregations",
@@ -245,29 +342,126 @@ def search_aggregations(
 
 @app.get("/api/v1/aggregations/{aggregation_id}", response_model=AggregationRead, tags=["aggregations"])
 def get_aggregation(aggregation_id: int, connection: Connection = Depends(get_connection, scope="function")):
-    return get_or_404(connection, "aggregations", aggregation_id)
+    aggregation = get_or_404(connection, "aggregations", aggregation_id)
+    audit_governance_view_if_used(connection, "aggregation", aggregation)
+    return aggregation
+
+
+@app.get("/api/v1/aggregations/{aggregation_id}/capabilities", response_model=ResourceCapabilitiesRead, tags=["authorization"])
+def get_aggregation_capabilities(
+    aggregation_id: int,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    resource = get_or_404(connection, "aggregations", aggregation_id)
+    mappings = {
+        "modify_metadata": ("aggregation.modify", "aggregation.modify_metadata"),
+        "delete": ("aggregation.delete", "aggregation.delete"),
+        "close": ("aggregation.close", "aggregation.close"),
+        "reopen": ("aggregation.reopen", "aggregation.reopen"),
+        "move": ("aggregation.move", "aggregation.move"),
+        "reclassify": ("aggregation.reclassify", "aggregation.reclassify"),
+        "change_security_level": ("aggregation.security_level.change", "aggregation.security_level.change"),
+        "manage_acl": ("aggregation.acl.manage", "aggregation.acl.manage"),
+        "add_child": ("aggregation.create_child", "aggregation.add_child"),
+        "add_record": ("record.create", "aggregation.add_record"),
+    }
+    capabilities = {name: operation_allowed(connection, "aggregation", aggregation_id, *policy)
+                    for name, policy in mappings.items()}
+    capabilities["view"] = True
+    capabilities["close"] = capabilities["close"] and resource["date_closed"] is None
+    capabilities["reopen"] = capabilities["reopen"] and resource["date_closed"] is not None
+    return {"resource_type": "aggregation", "resource_id": aggregation_id,
+            "capabilities": capabilities}
 
 
 @app.patch("/api/v1/aggregations/{aggregation_id}", response_model=AggregationRead, tags=["aggregations"])
 def update_aggregation(
     aggregation_id: int,
     payload: AggregationUpdate,
+    request: Request,
     version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return update_row(
+    existing = lock_visible_resource(connection, "aggregation", aggregation_id)
+    fields = payload.model_fields_set
+    metadata_fields = {"aggregation_number", "title", "description", "date_opened"}
+    if fields & metadata_fields:
+        require_resource_operation(
+            connection, "aggregation", aggregation_id,
+            "aggregation.modify", "aggregation.modify_metadata",
+        )
+    if "parent_aggregation_id" in fields and payload.parent_aggregation_id != existing["parent_aggregation_id"]:
+        require_resource_operation(connection, "aggregation", aggregation_id, "aggregation.move", "aggregation.move")
+        if payload.parent_aggregation_id is None:
+            require_global(connection, "aggregation.create_root")
+        else:
+            require_resource_operation(connection, "aggregation", payload.parent_aggregation_id,
+                                       "aggregation.move", "aggregation.receive_child")
+    if "classification_id" in fields and payload.classification_id != existing["classification_id"]:
+        require_resource_operation(connection, "aggregation", aggregation_id,
+                                   "aggregation.reclassify", "aggregation.reclassify")
+    if "date_closed" in fields and payload.date_closed != existing["date_closed"]:
+        privilege = "aggregation.close" if payload.date_closed is not None else "aggregation.reopen"
+        require_resource_operation(connection, "aggregation", aggregation_id, privilege, privilege)
+        if (
+            payload.date_closed is not None
+            and existing["date_closed"] is None
+            and payload.date_closed < existing["date_opened"]
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "closure_before_opening",
+                    "message": (
+                        "This aggregation cannot be closed before its opening date. "
+                        "Choose a closing date that is the same as or later than the opening date."
+                    ),
+                    "date_opened": existing["date_opened"].isoformat(),
+                    "requested_date_closed": payload.date_closed.isoformat(),
+                },
+            )
+    if "security_level_id" in fields and payload.security_level_id != existing["security_level_id"]:
+        require_resource_operation(connection, "aggregation", aggregation_id,
+                                   "aggregation.security_level.change", "aggregation.security_level.change")
+        require_clearance_for_level(connection, payload.security_level_id)
+    new_level_id = payload.security_level_id if "security_level_id" in payload.model_fields_set else None
+    reason, old_number, new_number = validate_security_level_change(
+        connection, request, existing["security_level_id"], new_level_id
+    )
+    if new_level_id is not None and new_number < old_number:
+        require_global(connection, "security.resource.downgrade")
+    updated = update_row(
         connection, "aggregations", aggregation_id, payload.model_dump(exclude_unset=True), version
     )
+    append_security_level_event(
+        connection, entity_type="aggregation", entity_id=aggregation_id,
+        old_security_level_id=existing["security_level_id"], new_security_level_id=new_level_id,
+        old_level_number=old_number, new_level_number=new_number, reason=reason,
+    )
+    return updated
 
 
 @app.delete("/api/v1/aggregations/{aggregation_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["aggregations"])
 def delete_aggregation(aggregation_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    require_resource_operation(connection, "aggregation", aggregation_id,
+                               "aggregation.delete", "aggregation.delete")
     delete_row(connection, "aggregations", aggregation_id, version)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.post("/api/v1/records", response_model=RecordRead, status_code=status.HTTP_201_CREATED, tags=["records"])
 def create_record(payload: RecordCreate, connection: Connection = Depends(get_connection, scope="function")):
+    acquire_continuity_shared_lock(connection)
+    if connection.execute(
+        "SELECT 1 FROM aggregations WHERE id=%s", (payload.aggregation_id,),
+    ).fetchone() is None:
+        raise HTTPException(status_code=409, detail="referenced aggregation does not exist")
+    require_resource_operation(connection, "aggregation", payload.aggregation_id,
+                               "record.create", "aggregation.add_record")
+    level_id = payload.security_level_id or connection.execute(
+        "SELECT lowest_security_level_id() AS id"
+    ).fetchone()["id"]
+    require_clearance_for_level(connection, level_id)
     return create_row(connection, "records", payload.model_dump())
 
 
@@ -278,6 +472,11 @@ def list_records(
     offset: int = Query(default=0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    if aggregation_id is not None and connection.execute(
+        "SELECT 1 FROM aggregations WHERE id=%s AND current_user_can_view_aggregation(id)",
+        (aggregation_id,),
+    ).fetchone() is None:
+        return []
     return list_rows(
         connection,
         "records",
@@ -301,26 +500,154 @@ def search_records(
 
 @app.get("/api/v1/records/{record_id}", response_model=RecordRead, tags=["records"])
 def get_record(record_id: int, connection: Connection = Depends(get_connection, scope="function")):
-    return get_or_404(connection, "records", record_id)
+    record = get_or_404(connection, "records", record_id)
+    audit_governance_view_if_used(connection, "record", record)
+    return record
+
+
+@app.get("/api/v1/records/{record_id}/capabilities", response_model=ResourceCapabilitiesRead, tags=["authorization"])
+def get_record_capabilities(
+    record_id: int,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    get_or_404(connection, "records", record_id)
+    component_metadata = connection.execute(
+        "SELECT current_user_can_list_record_components(%s) AS allowed", (record_id,),
+    ).fetchone()["allowed"]
+    mappings = {
+        "modify_metadata": ("record.modify", "record.modify_metadata"),
+        "delete": ("record.delete", "record.delete"),
+        "move": ("record.move", "record.move"),
+        "change_security_level": ("record.security_level.change", "record.security_level.change"),
+        "manage_acl": ("record.acl.manage", "record.acl.manage"),
+        "view_component": ("record.component.view", "record.component.view"),
+        "download_component": ("record.component.download", "record.component.download"),
+        "add_component": ("record.component.add", "record.component.add"),
+        "replace_component": ("record.component.replace", "record.component.replace"),
+        "remove_component": ("record.component.remove", "record.component.remove"),
+        "reorder_components": ("record.component.reorder", "record.component.reorder"),
+    }
+    capabilities = {name: operation_allowed(connection, "record", record_id, *policy)
+                    for name, policy in mappings.items()}
+    capabilities.update({"view": True, "list_components": component_metadata,
+                         "share_component": False, "print_component": False})
+    return {"resource_type": "record", "resource_id": record_id,
+            "capabilities": capabilities}
 
 
 @app.patch("/api/v1/records/{record_id}", response_model=RecordRead, tags=["records"])
 def update_record(
     record_id: int,
     payload: RecordUpdate,
+    request: Request,
     version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return update_row(connection, "records", record_id, payload.model_dump(exclude_unset=True), version)
+    existing = lock_visible_resource(connection, "record", record_id)
+    fields = payload.model_fields_set
+    metadata_fields = {"record_number", "title", "description", "date_originated"}
+    if fields & metadata_fields:
+        require_resource_operation(
+            connection, "record", record_id, "record.modify", "record.modify_metadata",
+        )
+    if "aggregation_id" in fields and payload.aggregation_id != existing["aggregation_id"]:
+        require_resource_operation(connection, "record", record_id, "record.move", "record.move")
+        require_resource_operation(connection, "aggregation", payload.aggregation_id,
+                                   "record.move", "aggregation.receive_record")
+    if "security_level_id" in fields and payload.security_level_id != existing["security_level_id"]:
+        require_resource_operation(connection, "record", record_id,
+                                   "record.security_level.change", "record.security_level.change")
+        require_clearance_for_level(connection, payload.security_level_id)
+    new_level_id = payload.security_level_id if "security_level_id" in payload.model_fields_set else None
+    reason, old_number, new_number = validate_security_level_change(
+        connection, request, existing["security_level_id"], new_level_id
+    )
+    if new_level_id is not None and new_number < old_number:
+        require_global(connection, "security.resource.downgrade")
+    updated = update_row(connection, "records", record_id, payload.model_dump(exclude_unset=True), version)
+    append_security_level_event(
+        connection, entity_type="record", entity_id=record_id,
+        old_security_level_id=existing["security_level_id"], new_security_level_id=new_level_id,
+        old_level_number=old_number, new_level_number=new_number, reason=reason,
+    )
+    return updated
 
 
 @app.delete("/api/v1/records/{record_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["records"])
 def delete_record(record_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    require_resource_operation(connection, "record", record_id, "record.delete", "record.delete")
     delete_row(connection, "records", record_id, version)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+def _effective_closure(connection: Connection, aggregation_id: int) -> dict | None:
+    return connection.execute(
+        """WITH RECURSIVE ancestry AS (
+             SELECT id,parent_aggregation_id,date_closed,0 AS depth FROM aggregations WHERE id=%s
+             UNION ALL SELECT parent.id,parent.parent_aggregation_id,parent.date_closed,child.depth+1
+             FROM aggregations parent JOIN ancestry child ON child.parent_aggregation_id=parent.id)
+           SELECT id,date_closed FROM ancestry WHERE date_closed IS NOT NULL ORDER BY depth LIMIT 1""",
+        (aggregation_id,),
+    ).fetchone()
+
+
+def _governance_basis(connection: Connection, security_level_ids: list[int]) -> list[dict]:
+    return list(connection.execute(
+        """SELECT DISTINCT role.id,role.code,role.name,level.level_number
+           FROM user_role_assignments assignment JOIN roles role ON role.id=assignment.role_id
+           JOIN security_levels level ON level.id=role.security_level_id
+           JOIN security_levels required ON required.id=ANY(%s)
+           WHERE assignment.user_id=current_user_id() AND role.is_information_governance
+             AND assignment.valid_from<=CURRENT_TIMESTAMP
+             AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+             AND role_effectively_active(role.id) AND level.level_number>=required.level_number
+           ORDER BY role.id""", (security_level_ids,),
+    ).fetchall())
+
+
+@app.post("/api/v1/records/{record_id}/correct-placement", response_model=RecordRead, tags=["records"])
+def correct_record_placement(
+    record_id: int, payload: RecordPlacementCorrection, request: Request,
+    version: int = Depends(expected_version),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    source = require_resource_operation(connection, "record", record_id, "record.move", "record.move")
+    reason = request.headers.get("X-Change-Reason", "").strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail="X-Change-Reason is required")
+    destination = require_closed_placement_correction(
+        connection, payload.destination_aggregation_id, source["security_level_id"], "record.move",
+    )
+    closure = _effective_closure(connection, destination["id"])
+    if closure is None:
+        raise HTTPException(status_code=409, detail="destination is not effectively closed; use the ordinary move operation")
+    if source["aggregation_id"] == destination["id"]:
+        raise HTTPException(status_code=409, detail="record is already in the destination aggregation")
+    basis = _governance_basis(connection, [source["security_level_id"], destination["security_level_id"]])
+    connection.execute(
+        "SELECT set_config('app.closed_record_placement_correction','authorized',true), set_config('app.change_reason',%s,true)",
+        (reason,),
+    )
+    moved = update_row(connection, "records", record_id, {"aggregation_id": destination["id"]}, version)
+    connection.execute(
+        "SELECT append_domain_event('record',%s,'CLOSED_AGGREGATION_RECORD_CORRECTED',%s::jsonb,%s)",
+        (record_id, Jsonb({"source_aggregation_id": source["aggregation_id"],
+                          "destination_aggregation_id": destination["id"],
+                          "effective_closure_aggregation_id": closure["id"],
+                          "effective_closure_date": closure["date_closed"].isoformat(),
+                          "closure_date_unchanged": True,
+                          "authorization_basis": "information_governance",
+                          "governance_roles": basis}), reason),
+    )
+    return moved
+
+
 def _open_draft(connection: Connection, draft_id: int, *, lock: bool = False) -> dict:
+    # A draft, including its staged components, is the in-progress record
+    # creation package. Re-evaluate record.create on every operation so a
+    # privilege removed after the draft was opened takes effect immediately.
+    require_global(connection, "record.create")
+    require_draft_owner(connection, draft_id)
     suffix = " FOR UPDATE" if lock else ""
     draft = connection.execute(
         f"SELECT * FROM record_drafts WHERE id = %s{suffix}", (draft_id,)
@@ -336,7 +663,9 @@ def _open_draft(connection: Connection, draft_id: int, *, lock: bool = False) ->
 
 @app.post("/api/v1/record-drafts", response_model=RecordDraftRead, status_code=201, tags=["record drafts"])
 def create_record_draft(payload: RecordDraftCreate, connection: Connection = Depends(get_connection, scope="function")):
+    require_global(connection, "record.create")
     values = payload.model_dump(exclude_none=True)
+    values["owner_user_id"] = connection.execute("SELECT current_user_id() AS id").fetchone()["id"]
     if not values:
         return connection.execute("INSERT INTO record_drafts DEFAULT VALUES RETURNING *").fetchone()
     return create_row(connection, "record_drafts", values)
@@ -464,14 +793,25 @@ def commit_record_draft(draft_id: int, connection: Connection = Depends(get_conn
     missing = [name for name in ("aggregation_id", "record_number", "title") if not draft.get(name)]
     if missing:
         raise HTTPException(status_code=422, detail=f"draft is missing required fields: {', '.join(missing)}")
+    security_level_id = draft["security_level_id"]
+    if security_level_id is None:
+        security_level_id = connection.execute(
+            "SELECT id FROM security_levels ORDER BY level_number,id LIMIT 1"
+        ).fetchone()["id"]
+    require_resource_operation(
+        connection, "aggregation", draft["aggregation_id"],
+        "record.create", "aggregation.add_record",
+    )
+    require_clearance_for_level(connection, security_level_id)
+    components = connection.execute(
+        "SELECT * FROM record_draft_components WHERE draft_id = %s ORDER BY component_order FOR UPDATE", (draft_id,)
+    ).fetchall()
     record = create_row(connection, "records", {
         "aggregation_id": draft["aggregation_id"], "record_number": draft["record_number"],
         "title": draft["title"], "description": draft["description"],
         "date_originated": draft["date_originated"],
+        "security_level_id": security_level_id,
     })
-    components = connection.execute(
-        "SELECT * FROM record_draft_components WHERE draft_id = %s ORDER BY component_order FOR UPDATE", (draft_id,)
-    ).fetchall()
     incomplete = [item["file_name"] for item in components if item["content_status"] != "available"]
     if incomplete:
         raise HTTPException(status_code=409, detail="all draft component uploads must be complete")
@@ -493,6 +833,50 @@ def commit_record_draft(draft_id: int, connection: Connection = Depends(get_conn
     return record
 
 
+@app.post("/api/v1/record-drafts/{draft_id}/commit-placement-correction", response_model=RecordRead, status_code=201, tags=["record drafts"])
+def commit_record_draft_placement_correction(
+    draft_id: int,
+    request: Request,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    draft = _open_draft(connection, draft_id, lock=True)
+    if not draft.get("aggregation_id"):
+        raise HTTPException(status_code=422, detail="draft destination is required")
+    security_level_id = draft["security_level_id"]
+    if security_level_id is None:
+        security_level_id = connection.execute(
+            "SELECT id FROM security_levels ORDER BY level_number,id LIMIT 1"
+        ).fetchone()["id"]
+    reason = request.headers.get("X-Change-Reason", "").strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail="X-Change-Reason is required")
+    destination = require_closed_placement_correction(
+        connection, draft["aggregation_id"], security_level_id, "record.create",
+    )
+    closure = _effective_closure(connection, destination["id"])
+    if closure is None:
+        raise HTTPException(status_code=409, detail="destination is not effectively closed; use the ordinary commit operation")
+    basis = _governance_basis(connection, [security_level_id, destination["security_level_id"]])
+    connection.execute(
+        "SELECT set_config('app.closed_record_placement_correction','authorized',true), set_config('app.change_reason',%s,true)",
+        (reason,),
+    )
+    record = commit_record_draft(draft_id, connection)
+    connection.execute(
+        "SELECT append_domain_event('record',%s,'CLOSED_AGGREGATION_RECORD_CORRECTED',%s::jsonb,%s)",
+        (record["id"], Jsonb({
+            "source_aggregation_id": None,
+            "destination_aggregation_id": destination["id"],
+            "effective_closure_aggregation_id": closure["id"],
+            "effective_closure_date": closure["date_closed"].isoformat(),
+            "closure_date_unchanged": True,
+            "authorization_basis": "information_governance",
+            "governance_roles": basis,
+        }), reason),
+    )
+    return record
+
+
 @app.post(
     "/api/v1/digital-components",
     response_model=DigitalComponentRead,
@@ -503,6 +887,8 @@ def create_digital_component(
     payload: DigitalComponentCreate,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    require_resource_operation(connection, "record", payload.record_id,
+                               "record.component.add", "record.component.add")
     return create_row(connection, "digital_components", payload.model_dump())
 
 
@@ -559,6 +945,10 @@ def update_digital_component(
     version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    component, _ = require_component_operation(
+        connection, component_id, "record.component.replace", "record.component.replace")
+    if "record_id" in payload.model_fields_set and payload.record_id != component["record_id"]:
+        raise HTTPException(status_code=422, detail="moving digital components between records is not supported")
     return update_row(
         connection,
         "digital_components",
@@ -578,7 +968,8 @@ def delete_digital_component(
     version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    component = get_or_404(connection, "digital_components", component_id)
+    component, _ = require_component_operation(
+        connection, component_id, "record.component.remove", "record.component.remove")
     delete_row(connection, "digital_components", component_id, version)
     remaining = connection.execute(
         "SELECT id FROM digital_components WHERE record_id = %s ORDER BY component_order",
@@ -603,7 +994,8 @@ def reorder_digital_components(
     payload: ComponentReorderRequest,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    get_or_404(connection, "records", record_id)
+    require_resource_operation(connection, "record", record_id,
+                               "record.component.reorder", "record.component.reorder")
     _reorder_components(connection, "digital_components", "record_id", record_id, payload)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -664,7 +1056,8 @@ def upload_digital_component(
     date_originated: datetime | None = Form(default=None),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    get_or_404(connection, "records", record_id)
+    require_resource_operation(connection, "record", record_id,
+                               "record.component.add", "record.component.add")
     inspected = inspect_upload(file)
     mime_type = file.content_type or "application/octet-stream"
     component = create_row(
@@ -706,7 +1099,8 @@ def download_digital_component_content(
     request: Request,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    component = get_or_404(connection, "digital_components", component_id)
+    component, _ = require_component_operation(
+        connection, component_id, "record.component.download", "record.component.download")
     storage = configured_storage()
     location = storage.location(connection, component_id)
     if location is None:
@@ -747,7 +1141,8 @@ def view_digital_component_rendition(
     request: Request,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    component = get_or_404(connection, "digital_components", component_id)
+    component, _ = require_component_operation(
+        connection, component_id, "record.component.view", "record.component.view")
     storage = configured_storage()
     location = storage.location(connection, component_id)
     if location is None:
@@ -824,11 +1219,12 @@ def replace_digital_component_content(
     version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    mime_type = file.content_type or "application/octet-stream"
-    inspected = inspect_upload(file)
-    current = get_or_404(connection, "digital_components", component_id)
+    current, _ = require_component_operation(
+        connection, component_id, "record.component.replace", "record.component.replace")
     if current["version"] != version:
         return update_row(connection, "digital_components", component_id, {}, version)
+    mime_type = file.content_type or "application/octet-stream"
+    inspected = inspect_upload(file)
     uploaded = configured_storage().store_upload(connection, component_id, file)
     component = update_row(connection, "digital_components", component_id, {
         "file_name": file.filename or "unnamed",
@@ -858,6 +1254,8 @@ def delete_digital_component_content(
     version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    require_component_operation(
+        connection, component_id, "record.component.remove", "record.component.remove")
     configured_storage().delete(connection, component_id)
     component = update_row(connection, "digital_components", component_id, {
         "content_status": "deleted",
@@ -874,6 +1272,7 @@ def delete_digital_component_content(
     "/api/v1/event-history",
     response_model=list[EventHistoryRead],
     tags=["event history"],
+    dependencies=[Depends(require_audit_view)],
 )
 def list_event_history(
     entity_type: str | None = None,
@@ -906,6 +1305,7 @@ def list_event_history(
     "/api/v1/event-history/search",
     response_model=SearchResponse[EventHistoryRead],
     tags=["event history"],
+    dependencies=[Depends(require_audit_view)],
 )
 def search_event_history(
     payload: SearchRequest,
@@ -918,6 +1318,7 @@ def search_event_history(
     "/api/v1/event-history/operations",
     response_model=list[str],
     tags=["event history"],
+    dependencies=[Depends(require_audit_view)],
 )
 def list_event_history_operations(
     connection: Connection = Depends(get_connection, scope="function"),
@@ -950,6 +1351,7 @@ def _distinct_event_history_values(
     "/api/v1/event-history/filter-options",
     response_model=dict[str, list[str]],
     tags=["event history"],
+    dependencies=[Depends(require_audit_view)],
 )
 def list_event_history_filter_options(
     connection: Connection = Depends(get_connection, scope="function"),
@@ -967,6 +1369,7 @@ def list_event_history_filter_options(
     "/api/v1/event-history/{event_id}",
     response_model=EventHistoryRead,
     tags=["event history"],
+    dependencies=[Depends(require_audit_view)],
 )
 def get_event_history(event_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "event_history", event_id)
@@ -1001,6 +1404,17 @@ def get_aggregation_history(
     offset: int = Query(default=0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    live = connection.execute(
+        "SELECT 1 FROM aggregations WHERE id=%s AND current_user_can_view_aggregation(id)",
+        (aggregation_id,),
+    ).fetchone()
+    deleted = connection.execute(
+        "SELECT 1 FROM authorized_event_history WHERE entity_type='aggregation' AND entity_id=%s "
+        "AND operation='DELETE' AND user_has_global_privilege(current_user_id(),'audit.view')",
+        (aggregation_id,),
+    ).fetchone()
+    if live is None and deleted is None:
+        raise HTTPException(status_code=404, detail="aggregation not found")
     return _entity_history(connection, "aggregation", aggregation_id, limit, offset)
 
 
@@ -1015,6 +1429,16 @@ def get_record_history(
     offset: int = Query(default=0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    live = connection.execute(
+        "SELECT 1 FROM records WHERE id=%s AND current_user_can_view_record(id)", (record_id,),
+    ).fetchone()
+    deleted = connection.execute(
+        "SELECT 1 FROM authorized_event_history WHERE entity_type='record' AND entity_id=%s "
+        "AND operation='DELETE' AND user_has_global_privilege(current_user_id(),'audit.view')",
+        (record_id,),
+    ).fetchone()
+    if live is None and deleted is None:
+        raise HTTPException(status_code=404, detail="record not found")
     return _entity_history(connection, "record", record_id, limit, offset)
 
 
@@ -1029,4 +1453,5 @@ def get_digital_component_history(
     offset: int = Query(default=0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    get_or_404(connection, "digital_components", component_id)
     return _entity_history(connection, "digital_component", component_id, limit, offset)

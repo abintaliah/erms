@@ -17,6 +17,433 @@ class ApiModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class SecurityLevelCreate(ApiModel):
+    code: NonBlankString
+    name: NonBlankString
+    level_number: int = Field(ge=0)
+    prevents_disposition: bool = False
+
+
+class SecurityLevelUpdate(ApiModel):
+    code: NonBlankString | None = None
+    name: NonBlankString | None = None
+    level_number: int | None = Field(default=None, ge=0)
+    prevents_disposition: bool | None = None
+
+
+class SecurityLevelRead(SecurityLevelCreate):
+    id: int
+    date_created: datetime
+    date_updated: datetime
+    version: int
+
+
+class PrivilegeRead(ApiModel):
+    id: int
+    code: str
+    name: str
+    description: str
+    category: str
+    is_reserved: bool
+    date_created: datetime
+    date_updated: datetime
+    version: int
+
+
+class ProfileCreate(ApiModel):
+    code: NonBlankString
+    name: NonBlankString
+    description: str | None = None
+
+
+class ProfileUpdate(ApiModel):
+    name: NonBlankString | None = None
+    description: str | None = None
+
+
+class ProfileRead(ApiModel):
+    id: int
+    code: str
+    name: str
+    description: str | None
+    is_system: bool
+    date_created: datetime
+    date_updated: datetime
+    version: int
+
+
+class ProfileReferenceRead(ProfileRead):
+    grants_all_privileges: bool
+
+
+class ProfilePrivilegeReplace(ApiModel):
+    privilege_ids: list[int]
+
+
+class RoleProfileAssignment(ApiModel):
+    profile_id: int
+
+
+class PermissionRead(ApiModel):
+    id: int
+    code: str
+    name: str
+    description: str
+    resource_type: Literal["aggregation", "record"]
+    date_created: datetime
+
+
+class AclPrincipalGrant(ApiModel):
+    principal_type: Literal["role", "everyone"]
+    role_id: int | None = None
+    permission_codes: list[str]
+
+    @model_validator(mode="after")
+    def validate_principal(self):
+        if (self.principal_type == "role") != (self.role_id is not None):
+            raise ValueError("role_id is required only for role principals")
+        return self
+
+
+class AclReplace(ApiModel):
+    version: int = Field(gt=0)
+    grants: list[AclPrincipalGrant]
+    inherit_acl_from_parent: bool | None = None
+    initialize_override_from_inherited: bool = False
+    reason: NonBlankString
+
+
+class ChildAggregationAclReplace(ApiModel):
+    version: int = Field(gt=0)
+    mode: Literal["mirror_resource_acl", "custom"]
+    grants: list[AclPrincipalGrant]
+    initialize_custom_from_mirrored: bool = False
+    reason: NonBlankString
+
+
+class ChildRecordAclReplace(ApiModel):
+    version: int = Field(gt=0)
+    grants: list[AclPrincipalGrant]
+    reason: NonBlankString
+
+
+class AclPrincipalRead(ApiModel):
+    principal_type: Literal["role", "everyone"]
+    role_id: int | None
+    display_name: str
+    role_code: str | None
+    permission_codes: list[str]
+
+
+class ResourceAclRead(ApiModel):
+    inherit_acl_from_parent: bool
+    effective_acl: list[AclPrincipalRead]
+    effective_acl_source: str
+    effective_acl_source_id: int
+    override_acl: list[AclPrincipalRead]
+    override_acl_is_dormant: bool
+    resource_acl_version: int
+
+
+class ChildAggregationAclRead(ApiModel):
+    mode: Literal["mirror_resource_acl", "custom"]
+    effective_acl: list[AclPrincipalRead]
+    custom_acl: list[AclPrincipalRead]
+    custom_acl_is_dormant: bool
+    version: int
+    affected_aggregation_ids: list[int]
+    affected_aggregation_count: int
+    affected_record_count: int
+
+
+class ChildRecordAclRead(ApiModel):
+    effective_acl: list[AclPrincipalRead]
+    version: int
+    affected_record_count: int
+
+
+class AclChangePreviewRead(ApiModel):
+    added_grants: int
+    removed_grants: int
+    potentially_affected_user_count: int
+    affected_record_count: int
+    version: int
+
+
+class ChildAggregationAclChangePreviewRead(AclChangePreviewRead):
+    mode: Literal["mirror_resource_acl", "custom"]
+    affected_aggregation_ids: list[int]
+    affected_aggregation_count: int
+
+
+class ResourceCapabilitiesRead(ApiModel):
+    resource_type: Literal["aggregation", "record"]
+    resource_id: int
+    capabilities: dict[str, bool]
+
+
+class AuthorizationGateRead(ApiModel):
+    gate: str
+    passed: bool
+    code: str
+    detail: str | None
+
+
+class EffectiveAuthorizationRoleRead(ApiModel):
+    role_id: int
+    role_code: str
+    role_name: str
+    profile_id: int
+    profile_code: str
+    profile_name: str
+    security_level_id: int
+    security_level_code: str
+    clearance: int
+    is_information_governance: bool
+    privileges: list[str]
+
+
+class ExcludedAuthorizationRoleRead(ApiModel):
+    role_id: int
+    role_code: str
+    reason: str
+
+
+class AuthorizationSubjectRead(ApiModel):
+    user_id: int | None
+    effective_clearance: int | None
+    effective_roles: list[EffectiveAuthorizationRoleRead]
+    excluded_roles: list[ExcludedAuthorizationRoleRead]
+
+
+class EffectiveAclGrantRowRead(ApiModel):
+    id: int
+    principal_type: Literal["role", "everyone"]
+    role_id: int | None
+    role_code: str | None
+    role_name: str | None
+    permission_id: int
+    permission_code: str
+
+
+class AccessExplanationAclRead(ApiModel):
+    resource_type: Literal["aggregation", "record"]
+    source: str
+    source_resource_id: int
+    inherit_acl_from_parent: bool
+    effective_grants: list[EffectiveAclGrantRowRead]
+    dormant_override_grants: list[EffectiveAclGrantRowRead]
+
+
+class AccessContributorsRead(ApiModel):
+    privilege_role_ids: list[int]
+    clearance_role_ids: list[int]
+    acl_role_ids_by_permission: dict[str, list[int]]
+    everyone_permissions: list[str]
+    governance_bypass_role_ids: list[int]
+
+
+class AccessSecurityLevelRead(ApiModel):
+    id: int
+    code: str
+    name: str
+    level_number: int
+
+
+class AccessExplanationRead(ApiModel):
+    resource_type: Literal["aggregation", "record"]
+    resource_id: int
+    operation: str
+    selected_user_id: int
+    other_user_diagnostic: bool
+    allowed: bool
+    decision_code: str
+    gates: list[AuthorizationGateRead]
+    contributors: AccessContributorsRead
+    subject: AuthorizationSubjectRead
+    acl: AccessExplanationAclRead
+    required_privilege: str
+    required_permission: str
+    required_clearance: int | None
+    effective_security_level: AccessSecurityLevelRead | None
+    required_security_level: AccessSecurityLevelRead
+
+
+class ExplainableUserRead(ApiModel):
+    id: int
+    name: str
+    email: str | None
+    status: Literal["active", "inactive", "suspended"]
+
+
+class CustodySecurityLevelRead(ApiModel):
+    id: int
+    code: str
+    name: str
+    level_number: int
+
+
+class GovernanceRoleRead(ApiModel):
+    id: int
+    code: str
+    name: str
+    status: Literal["active", "inactive"]
+    profile_id: int
+    profile_code: str
+    profile_name: str
+    security_level_id: int
+    security_level_code: str
+    security_level_name: str
+    level_number: int
+    effective: bool
+    current_assignee_count: int
+    effective_assignee_count: int
+    universal_custodian_count: int
+    is_highest_clearance: bool
+    has_required_custody_privileges: bool
+    qualifies_for_universal_custody: bool
+    missing_custody_privilege_codes: list[str]
+
+
+class GovernanceAssignmentRead(ApiModel):
+    id: int
+    user_id: int
+    user_name: str
+    user_email: str | None
+    user_status: Literal["active", "inactive", "suspended"]
+    account_type: Literal["person", "service"]
+    role_id: int
+    role_code: str
+    role_name: str
+    valid_from: datetime
+    valid_until: datetime | None
+    role_effective: bool
+    effective: bool
+    effective_for_universal_custody: bool
+    ineffective_reasons: list[str]
+
+
+class GovernanceWarningRead(ApiModel):
+    code: str
+    severity: Literal["critical", "advisory"]
+
+
+class GovernanceCustodyRead(ApiModel):
+    security_levels: list[CustodySecurityLevelRead]
+    highest_security_level: CustodySecurityLevelRead | None
+    required_custody_privilege_codes: list[str]
+    governance_roles: list[GovernanceRoleRead]
+    assignments: list[GovernanceAssignmentRead]
+    highest_clearance_custodian_count: int
+    warnings: list[GovernanceWarningRead]
+
+
+class SecurityEventCountRead(ApiModel):
+    operation: str
+    count: int
+    last_seen_at: datetime
+
+
+class SecurityDenialGroupRead(ApiModel):
+    decision_code: str
+    required_privilege: str
+    count: int
+    last_seen_at: datetime
+
+
+class SecurityEventDetailRead(ApiModel):
+    id: int
+    occurred_at: datetime
+    operation: str
+    actor_user_id: int | None
+    actor_name: str | None
+    actor_email: str | None
+    actor_type: str
+    entity_type: str
+    entity_id: int
+    entity_label: str
+    decision_code: str | None
+    required_privilege: str | None
+    redacted: bool
+
+
+class FullPrivilegeProfileRoleRead(ApiModel):
+    id: int
+    code: str
+    name: str
+    status: str
+    profile_code: str
+    profile_name: str
+    is_builtin_bootstrap_profile: bool
+
+
+class SecurityOperationsSummaryRead(ApiModel):
+    window_start: datetime
+    window_end: datetime
+    window_hours: int
+    generated_at: datetime
+    event_counts: list[SecurityEventCountRead]
+    denial_groups: list[SecurityDenialGroupRead]
+    recent_events: list[SecurityEventDetailRead]
+    full_privilege_roles: list[FullPrivilegeProfileRoleRead]
+    total_security_events: int
+    total_denials: int
+
+
+class ContinuityPersonRead(ApiModel):
+    id: int
+    name: str
+    email: str | None
+
+
+class GovernanceCustodianRead(ContinuityPersonRead):
+    role_id: int
+    role_code: str
+    security_level_code: str
+
+
+class SecurityFindingRead(ApiModel):
+    code: str
+    severity: Literal["critical", "advisory"]
+    count: int | None = None
+
+
+class SecurityReconciliationRead(ApiModel):
+    generated_at: datetime
+    active_authorization_administrators: list[ContinuityPersonRead]
+    highest_clearance_governance_custodians: list[GovernanceCustodianRead]
+    hierarchy_violation_count: int
+    findings: list[SecurityFindingRead]
+
+
+class AclMoveRequest(ApiModel):
+    destination_aggregation_id: int
+    resource_version: int = Field(gt=0)
+    keep_current_access_as_override: bool = False
+    reason: NonBlankString
+
+
+class SecurityLevelChangePreviewRequest(ApiModel):
+    resource_type: Literal["aggregation", "record"]
+    resource_id: int
+    target_security_level_id: int
+    destination_aggregation_id: int | None = None
+    remedy: Literal["none", "raise_ancestors", "downgrade_subtree"] = "none"
+
+
+class SecurityLevelChangeApplyRequest(SecurityLevelChangePreviewRequest):
+    preview_token: str
+
+
+class SecurityLevelChangePreviewRead(ApiModel):
+    preview_token: str
+    conflict: bool
+    remedy: str
+    target_level_number: int
+    affected_aggregations: list[dict[str, Any]]
+    affected_records: list[dict[str, Any]]
+
+
 class AggregationCreate(ApiModel):
     parent_aggregation_id: int | None = None
     classification_id: int | None = None
@@ -25,6 +452,7 @@ class AggregationCreate(ApiModel):
     description: str | None = None
     date_opened: datetime | None = None
     date_closed: datetime | None = None
+    security_level_id: int | None = None
 
     @model_validator(mode="after")
     def validate_dates(self):
@@ -47,6 +475,7 @@ class AggregationUpdate(ApiModel):
     description: str | None = None
     date_opened: datetime | None = None
     date_closed: datetime | None = None
+    security_level_id: int | None = None
 
     @model_validator(mode="after")
     def validate_closed_date(self):
@@ -65,6 +494,12 @@ class AggregationRead(ApiModel):
     date_created: datetime
     date_opened: datetime
     date_closed: datetime | None
+    security_level_id: int
+    inherit_acl_from_parent: bool
+    default_child_aggregation_acl_mode: Literal["mirror_resource_acl", "custom"]
+    resource_acl_version: int
+    child_aggregation_acl_version: int
+    child_record_acl_version: int
     version: int
 
 
@@ -144,9 +579,9 @@ class BrowseAggregationNode(ApiModel):
 
 class BrowseRecordNode(ApiModel):
     id: int
-    aggregation_id: int
-    aggregation_number: str
-    aggregation_title: str
+    aggregation_id: int | None
+    aggregation_number: str | None
+    aggregation_title: str | None
     record_number: str
     title: str
     description: str | None
@@ -167,9 +602,9 @@ class FavouriteRecordRead(ApiModel):
     id: int
     record_number: str
     title: str
-    aggregation_id: int
-    aggregation_number: str
-    aggregation_title: str
+    aggregation_id: int | None
+    aggregation_number: str | None
+    aggregation_title: str | None
     date_favourited: datetime
 
 
@@ -276,6 +711,7 @@ class RecordCreate(ApiModel):
     title: NonBlankString
     description: str | None = None
     date_originated: datetime | None = None
+    security_level_id: int | None = None
 
 
 class RecordUpdate(ApiModel):
@@ -284,21 +720,30 @@ class RecordUpdate(ApiModel):
     title: NonBlankString | None = None
     description: str | None = None
     date_originated: datetime | None = None
+    security_level_id: int | None = None
+
+
+class RecordPlacementCorrection(ApiModel):
+    destination_aggregation_id: int
 
 
 class RecordRead(ApiModel):
     id: int
-    aggregation_id: int
+    aggregation_id: int | None
     record_number: str
     title: str
     description: str | None
     date_created: datetime
     date_originated: datetime
+    security_level_id: int
+    inherit_acl_from_parent: bool
+    resource_acl_version: int
     version: int
 
 
 class RecordDraftCreate(ApiModel):
     aggregation_id: int | None = None
+    security_level_id: int | None = None
     record_number: NonBlankString | None = None
     title: NonBlankString | None = None
     description: str | None = None
@@ -313,6 +758,7 @@ class RecordDraftRead(ApiModel):
     id: int
     owner_user_id: int | None
     aggregation_id: int | None
+    security_level_id: int | None
     record_number: str | None
     title: str | None
     description: str | None
@@ -410,6 +856,31 @@ class EventHistoryRead(ApiModel):
     metadata: dict[str, Any]
 
 
+class SelfRecentActivityRead(ApiModel):
+    """A deliberately small, self-only view of a person's own recent work."""
+
+    entity_type: Literal["aggregation", "record"]
+    entity_id: int
+    operation: Literal["CREATE", "UPDATE"]
+    occurred_at: datetime
+
+
+class DeletionBlocker(ApiModel):
+    code: str
+    message: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class DeletionPreflightRead(ApiModel):
+    entity_type: Literal["user", "role", "org_unit"]
+    entity_id: int
+    entity_version: int
+    allowed: bool
+    blockers: list[DeletionBlocker]
+    dependencies: dict[str, Any]
+    cascades: dict[str, int]
+
+
 class OrgUnitCreate(ApiModel):
     parent_org_unit_id: int | None = None
     code: NonBlankString
@@ -498,6 +969,7 @@ class PrincipalRead(ApiModel):
     session: PrincipalSessionRead
     must_change_password: bool
     previous_login_at: datetime | None
+    global_privileges: list[str]
 
 
 class LoginSessionRead(ApiModel):
@@ -523,6 +995,9 @@ class RoleCreate(ApiModel):
     code: NonBlankString
     name: NonBlankString
     description: str | None = None
+    security_level_id: int | None = None
+    profile_id: int | None = None
+    is_information_governance: bool = False
 
 
 class RoleUpdate(ApiModel):
@@ -533,6 +1008,9 @@ class RoleUpdate(ApiModel):
     description: str | None = None
     status: Literal["active", "inactive"] | None = None
     date_deactivated: datetime | None = None
+    security_level_id: int | None = None
+    profile_id: int | None = None
+    is_information_governance: bool | None = None
 
 
 class RoleRead(ApiModel):
@@ -545,6 +1023,9 @@ class RoleRead(ApiModel):
     status: Literal["active", "inactive"]
     date_created: datetime
     date_deactivated: datetime | None
+    security_level_id: int
+    profile_id: int
+    is_information_governance: bool
     version: int
 
 

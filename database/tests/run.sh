@@ -42,6 +42,7 @@ docker run \
     --detach \
     --rm \
     --name "${CONTAINER_NAME}" \
+    --tmpfs /var/lib/postgresql/data:rw,noexec,nosuid,size=1g \
     --env POSTGRES_USER="${POSTGRES_USER}" \
     --env POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
     --env POSTGRES_DB="${POSTGRES_DB}" \
@@ -124,6 +125,31 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${DATABASE_DIR}/migrations/031_rename_human_accounts_to_person.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/032_add_security_levels.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/033_add_privileges_profiles_and_role_authorization.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/034_add_resource_acl_inheritance.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/035_enforce_resource_read_authorization.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/036_enforce_resource_mutation_authorization.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/037_enforce_draft_component_authorization.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/038_add_security_operations_indexes.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/039_shorten_builtin_profile_codes.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/040_add_information_governance_profiles.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/041_grant_governance_security_level_administration.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/042_add_organization_browse_privilege.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/043_add_event_reference_snapshots.sql"
+"${SCRIPT_DIR}/check_security_schema_parity.sh" "${DATABASE_URL}" "${DATABASE_DIR}/schema.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${SCRIPT_DIR}/segmented_content_migration_after.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"
@@ -131,6 +157,7 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/user_managem
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/content_storage_and_concurrency.sql"
 env DATABASE_URL="${DATABASE_URL}" PYTHONPATH="${PROJECT_DIR}" \
     "${API_VENV}/bin/python" -m pytest "${API_DIR}/tests"
+"${SCRIPT_DIR}/backup_restore_authorization.sh" "${DATABASE_URL}" "${CONTAINER_NAME}"
 
 "${API_VENV}/bin/python" "${DATABASE_DIR}/seeds/import_mutamathilah.py" \
     --database-url "${DATABASE_URL}"
@@ -162,14 +189,14 @@ BEGIN
     END IF;
     SELECT count(DISTINCT correlation_id) INTO correlation_count
       FROM event_history
-     WHERE metadata->>'migration' = '025_seed_mutamathilah_classification_scheme';
+     WHERE metadata->>'seed' = '025_seed_mutamathilah_classification_scheme';
     IF correlation_count <> 1 THEN
         RAISE EXCEPTION 'Mutamathilah events do not share one correlation id';
     END IF;
     IF (
         SELECT count(*) FROM event_history
-        WHERE metadata->>'migration' = '025_seed_mutamathilah_classification_scheme'
-          AND source = 'migration'
+        WHERE metadata->>'seed' = '025_seed_mutamathilah_classification_scheme'
+          AND source = 'seeding'
           AND actor_type = 'automated_process'
     ) <> 600 THEN
         RAISE EXCEPTION 'Mutamathilah audit provenance count mismatch';

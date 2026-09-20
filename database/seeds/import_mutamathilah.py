@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 import psycopg
 
 
-MIGRATION_NAME = "025_seed_mutamathilah_classification_scheme"
+SEED_NAME = "025_seed_mutamathilah_classification_scheme"
 DEFAULT_XML = Path(__file__).resolve().parents[2] / "examples/fileplans/mutamathilah.xml"
 DISPOSITIONS = {
     "Destroy": "destruction",
@@ -96,7 +96,7 @@ def import_scheme(database_url: str, xml_path: Path) -> bool:
         "from the approved example XML file plan"
     )
     metadata = {
-        "migration": MIGRATION_NAME,
+        "seed": SEED_NAME,
         "operation": "xml_classification_scheme_seed",
         "basis": "greenfield example data explicitly approved by the user",
         "source_file": xml_path.name,
@@ -120,30 +120,21 @@ def import_scheme(database_url: str, xml_path: Path) -> bool:
 
     with psycopg.connect(database_url) as connection:
         with connection.transaction():
-            connection.execute(
-                """CREATE TABLE IF NOT EXISTS schema_migrations (
-                       version text PRIMARY KEY,
-                       applied_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
-                   )"""
-            )
-            if connection.execute(
-                "SELECT 1 FROM schema_migrations WHERE version=%s", (MIGRATION_NAME,)
-            ).fetchone():
-                return False
-
             collision = connection.execute(
                 """SELECT code, title FROM classification_schemes
                     WHERE lower(code)=lower(%s) OR lower(title)=lower(%s)""",
                 (scheme_code, scheme_title),
             ).fetchone()
             if collision:
+                if collision[0].lower() == scheme_code.lower() and collision[1].lower() == scheme_title.lower():
+                    return False
                 raise ValueError(
                     f"classification scheme collision: {collision[0]} — {collision[1]}"
                 )
 
             for setting, value in (
                 ("app.actor_type", "automated_process"),
-                ("app.event_source", "migration"),
+                ("app.event_source", "seeding"),
                 ("app.change_reason", reason),
                 ("app.correlation_id", correlation_id),
                 ("app.event_metadata", json.dumps(metadata, ensure_ascii=False)),
@@ -232,9 +223,6 @@ def import_scheme(database_url: str, xml_path: Path) -> bool:
                     f"got {audit_count}"
                 )
 
-            connection.execute(
-                "INSERT INTO schema_migrations(version) VALUES (%s)", (MIGRATION_NAME,)
-            )
     return True
 
 

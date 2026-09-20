@@ -17,11 +17,15 @@ def list_favourites(
     aggregations = connection.execute(
         """
         SELECT aggregation.id, aggregation.aggregation_number,
-               aggregation.title, aggregation.parent_aggregation_id,
+               aggregation.title,
+               CASE WHEN aggregation.parent_aggregation_id IS NULL
+                          OR current_user_can_view_aggregation(aggregation.parent_aggregation_id)
+                    THEN aggregation.parent_aggregation_id END AS parent_aggregation_id,
                favourite.date_created AS date_favourited
         FROM user_favourite_aggregations favourite
         JOIN aggregations aggregation ON aggregation.id = favourite.aggregation_id
         WHERE favourite.user_id = %s
+          AND current_user_can_view_aggregation(aggregation.id)
         ORDER BY favourite.date_created DESC, aggregation.id DESC
         """,
         (principal.user_id,),
@@ -29,13 +33,18 @@ def list_favourites(
     records = connection.execute(
         """
         SELECT record.id, record.record_number, record.title,
-               record.aggregation_id, aggregation.aggregation_number,
-               aggregation.title AS aggregation_title,
+               CASE WHEN current_user_can_view_aggregation(record.aggregation_id)
+                    THEN record.aggregation_id END AS aggregation_id,
+               CASE WHEN current_user_can_view_aggregation(record.aggregation_id)
+                    THEN aggregation.aggregation_number END AS aggregation_number,
+               CASE WHEN current_user_can_view_aggregation(record.aggregation_id)
+                    THEN aggregation.title END AS aggregation_title,
                favourite.date_created AS date_favourited
         FROM user_favourite_records favourite
         JOIN records record ON record.id = favourite.record_id
         JOIN aggregations aggregation ON aggregation.id = record.aggregation_id
         WHERE favourite.user_id = %s
+          AND current_user_can_view_record(record.id)
         ORDER BY favourite.date_created DESC, record.id DESC
         """,
         (principal.user_id,),
@@ -47,8 +56,12 @@ def _add_favourite(
     connection: Connection, principal: Principal, *, table: str,
     target_table: str, target_column: str, target_id: int,
 ) -> None:
+    visibility = (
+        "current_user_can_view_aggregation(id)" if target_table == "aggregations"
+        else "current_user_can_view_record(id)"
+    )
     exists = connection.execute(
-        f"SELECT 1 FROM {target_table} WHERE id = %s", (target_id,)
+        f"SELECT 1 FROM {target_table} WHERE id = %s AND {visibility}", (target_id,)
     ).fetchone()
     if exists is None:
         raise HTTPException(status_code=404, detail=f"{target_table[:-1]} not found")

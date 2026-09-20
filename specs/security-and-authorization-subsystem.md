@@ -313,6 +313,7 @@ The initial catalogue is:
 | `security_levels.administer` | Create and maintain the security-level catalogue |
 | `identity.users.administer` | Create, edit, activate, deactivate, suspend, unsuspend, issue temporary passwords for, and eventually delete users |
 | `identity.sessions.administer` | Inspect and revoke other users' login sessions |
+| `organization.browse` | Browse the organization hierarchy and view concise organizational-unit, role, and user summaries without receiving administration rights |
 | `organization.administer` | Create, edit, activate, deactivate, and eventually delete organizational units and roles; maintain role supervision and assignments |
 | `classifications.administer` | Create, edit, publish, unpublish, activate, deactivate, migrate, and delete classification schemes and classifications |
 | `audit.view` | View the system-wide audit trail and entity histories |
@@ -320,6 +321,12 @@ The initial catalogue is:
 `identity.users.administer` and `organization.administer` are deliberately
 separate. The old example `ADMINISTER_USERS` is too broad if it also silently
 controls roles and organizational units.
+
+`organization.browse` is deliberately separate from
+`organization.administer`. It controls disclosure through the read-only
+organization browser, while the full User page continues to require
+`identity.users.administer` and the full Role and Organization Unit pages
+continue to require `organization.administer`.
 
 #### Aggregations
 
@@ -397,7 +404,7 @@ capability can be exercised.
 ### 5.3 Compatibility profile and migration order
 
 The canonical privilege seed includes a protected profile with code
-`ALL_PRIVILEGES` and display name **All privileges**. It contains every
+`ALL_PRIVS` and display name **All privileges**. It contains every
 privilege present in the seeded privilege catalogue. Its purpose is migration
 and controlled compatibility, not the recommended long-term assignment for
 ordinary roles.
@@ -437,17 +444,20 @@ production-mode startup guard backed by the same query. Neither mechanism is a
 requirement: any readiness endpoint or operational report must return this as a
 warning, not a failing condition or startup barrier.
 
-### 5.4 Mandatory governance-custody profile
+### 5.4 Mandatory governance-custody profiles
 
-The canonical production setup must include an Information Governance Custodian
-profile containing the global privileges needed to discover, view, manage,
-classify, close/reopen, correct placement, and administer access to governed
-aggregations and records. It does not contain user, platform, or unrelated
-technical-administration privileges.
+The canonical production setup must include the built-in Information Governance
+Manager (`INFO_GOV_MGR`) and Information Governance Officer
+(`INFO_GOV_OFFICER`) profiles. Both contain the same global privileges needed to
+discover, view, manage, classify, close/reopen, correct placement, administer
+classification schemes and security levels, and administer access to governed aggregations and
+records. They do not contain user, platform, or unrelated technical-
+administration privileges. The distinct profiles allow later policy evolution
+without changing existing role assignments.
 
 At least one effective information-governance role must:
 
-- use this profile or an approved successor with the required custody
+- use either built-in governance profile or an approved successor with the required custody
   privileges;
 - have the highest configured security level;
 - belong to the designated information-governance office; and

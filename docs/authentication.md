@@ -113,6 +113,12 @@ only change the password, inspect their principal, or sign out until the
 password has been changed. The plaintext password is never placed in SQL,
 source control, `.env`, API responses, or event history.
 
+The forced password-change dialog provides **Back to sign in**. This signs out
+and revokes the restricted temporary session before returning to the login
+screen. It does not recover or reveal a forgotten temporary password; an
+administrator must issue a new temporary password through the supported reset
+workflow.
+
 The bootstrap login has `account_type = person`, despite its administrative
 name. In this model, `service` accounts are non-interactive identities for
 software and cannot log in with passwords. The bootstrap user's administrative
