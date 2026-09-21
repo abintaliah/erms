@@ -26,18 +26,27 @@ def _create_child(client: TestClient, parent_id: int, number: str) -> dict:
     return response.json()
 
 
-def test_catalogue_everyone_defaults_and_no_synthetic_role(client: TestClient, aggregation: dict, record: dict):
+def test_catalogue_organizational_defaults_and_no_synthetic_role(client: TestClient, aggregation: dict, record: dict):
     catalogue = client.get("/api/v1/permissions")
     assert catalogue.status_code == 200
     assert len(catalogue.json()) == 30
     aggregation_acl = client.get(f"/api/v1/aggregations/{aggregation['id']}/permissions").json()
     record_acl = client.get(f"/api/v1/records/{record['id']}/permissions").json()
     assert aggregation_acl["inherit_acl_from_parent"] is False
-    assert aggregation_acl["effective_acl"][0]["display_name"] == "Everyone"
-    assert len(aggregation_acl["effective_acl"][0]["permission_codes"]) == 14
+    aggregation_grants = {grant["principal_type"]: set(grant["permission_codes"]) for grant in aggregation_acl["effective_acl"]}
+    assert aggregation_grants["org_unit_members"] == {"aggregation.view", "aggregation.history.view"}
+    assert aggregation_grants["role"] == {
+        "aggregation.view", "aggregation.modify_metadata", "aggregation.add_child",
+        "aggregation.add_record", "aggregation.close", "aggregation.acl.manage",
+        "aggregation.history.view",
+    }
     assert record_acl["inherit_acl_from_parent"] is True
     assert record_acl["effective_acl_source"] == "parent_default"
-    assert len(record_acl["effective_acl"][0]["permission_codes"]) == 16
+    record_grants = {grant["principal_type"]: set(grant["permission_codes"]) for grant in record_acl["effective_acl"]}
+    assert record_grants["org_unit_members"] == {
+        "record.view", "record.component.list", "record.component.view",
+        "record.component.download",
+    }
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
         assert connection.execute("SELECT count(*) FROM roles WHERE lower(code)='everyone'").fetchone()[0] == 0
         with pytest.raises(psycopg.errors.CheckViolation):
@@ -73,7 +82,9 @@ def test_live_mirror_chain_custom_boundary_and_dormant_override(client: TestClie
 
     grandchild_acl = client.get(f"/api/v1/aggregations/{grandchild['id']}/permissions").json()
     assert grandchild_acl["override_acl_is_dormant"] is True
-    assert len(grandchild_acl["override_acl"][0]["permission_codes"]) == 14
+    dormant = {grant["principal_type"]: set(grant["permission_codes"]) for grant in grandchild_acl["override_acl"]}
+    assert dormant["org_unit_members"] == {"aggregation.view", "aggregation.history.view"}
+    assert len(dormant["role"]) == 7
 
     preview = client.post(f"/api/v1/aggregations/{child['id']}/default-child-aggregation-permissions/preview", json={
         "version": custom.json()["version"], "mode": "mirror_resource_acl",
@@ -144,6 +155,8 @@ def test_record_inheritance_override_and_parent_default_live_change(client: Test
 
 
 def test_orphan_prevention_rejects_without_governance_custodian(client: TestClient, aggregation: dict):
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        connection.execute("UPDATE roles SET is_information_governance=false WHERE id=1")
     acl = client.get(f"/api/v1/aggregations/{aggregation['id']}/permissions").json()
     denied = client.put(f"/api/v1/aggregations/{aggregation['id']}/permissions", json={
         "version": acl["resource_acl_version"], "grants": [_everyone("aggregation.view")],
@@ -184,7 +197,9 @@ def test_custom_template_is_retained_dormant_when_switching_back_to_mirror(clien
     body = mirrored.json()
     assert body["custom_acl_is_dormant"] is True
     assert set(body["custom_acl"][0]["permission_codes"]) == {"aggregation.view", "aggregation.history.view"}
-    assert len(body["effective_acl"][0]["permission_codes"]) == 14
+    effective = {grant["principal_type"]: set(grant["permission_codes"]) for grant in body["effective_acl"]}
+    assert effective["org_unit_members"] == {"aggregation.view", "aggregation.history.view"}
+    assert len(effective["role"]) == 7
 
 
 def test_move_can_follow_destination_or_atomically_keep_current_access(client: TestClient, aggregation: dict):

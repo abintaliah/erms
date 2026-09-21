@@ -189,5 +189,20 @@ def reconciliation(connection: Connection = Depends(get_connection, scope="funct
     if hierarchy_violations:
         problems.append({"code": "security_hierarchy_violation", "severity": "critical",
                          "count": hierarchy_violations})
+    ownership_rows = connection.execute(
+        """SELECT resource_type,count(*)::int AS count
+             FROM organizational_ownership_diagnostics
+            GROUP BY resource_type ORDER BY resource_type"""
+    ).fetchall()
+    ownership_by_type = {row["resource_type"]: row["count"] for row in ownership_rows}
+    ownership_violations = sum(ownership_by_type.values())
+    if ownership_violations:
+        problems.append({
+            "code": "organizational_ownership_invariant_violation",
+            "severity": "critical", "count": ownership_violations,
+        })
     return {"generated_at": datetime.now(timezone.utc), **continuity,
-            "hierarchy_violation_count": hierarchy_violations, "findings": problems}
+            "hierarchy_violation_count": hierarchy_violations,
+            "ownership_invariant_violation_count": ownership_violations,
+            "ownership_invariant_violations_by_type": ownership_by_type,
+            "findings": problems}

@@ -543,15 +543,16 @@ def relationship_select(
 
 
 def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | None = None):
+    display_label = f"{field.label} *" if field.required else field.label
     if field.kind == "account_type":
         return ui.select(
             {"person": "Person", "service": "Service"},
-            label=field.label, value=value or "person",
+            label=display_label, value=value or "person",
         ).props("outlined").classes("w-full")
     if field.kind == "classification_type":
         return ui.select(
             {False: "Branch — may contain children", True: "Terminal — assignable to root aggregations"},
-            label=field.label, value=False if value is None else value,
+            label=display_label, value=False if value is None else value,
         ).props("outlined").classes("w-full")
     if field.kind == "disposition":
         return ui.select({
@@ -559,21 +560,21 @@ def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | N
             "transfer_to_external_archive": "Permanent preservation — external archive",
             "selective_preservation": "Selective preservation",
             "retain_as_local_archives": "Retain as local archives",
-        }, label=field.label, value=value, clearable=True).props("outlined").classes("w-full")
+        }, label=display_label, value=value, clearable=True).props("outlined").classes("w-full")
     if field.kind == "textarea":
-        return ui.textarea(field.label, value=value or "").props("outlined autogrow").classes("w-full")
+        return ui.textarea(display_label, value=value or "").props("outlined autogrow").classes("w-full")
     if field.kind == "int":
-        return ui.number(field.label, value=value, format="%.0f").props("outlined").classes("w-full")
+        return ui.number(display_label, value=value, format="%.0f").props("outlined").classes("w-full")
     if field.kind == "bool":
-        return ui.checkbox(field.label, value=bool(value))
+        return ui.checkbox(display_label, value=bool(value))
     if field.kind in {"lookup", "classification"}:
         return relationship_select(
-            field.label, options or {}, value=value, required=field.required
+            display_label, options or {}, value=value, required=field.required
         )
     if field.kind == "datetime":
         rendered = str(value or "")[:16]
-        return ui.input(field.label, value=rendered).props("outlined type=datetime-local").classes("w-full")
-    return ui.input(field.label, value=value or "").props("outlined").classes("w-full")
+        return ui.input(display_label, value=rendered).props("outlined type=datetime-local").classes("w-full")
+    return ui.input(display_label, value=value or "").props("outlined").classes("w-full")
 
 
 def form_payload(spec: EntitySpec, controls: dict[str, Any], *, creating: bool) -> dict[str, Any]:
@@ -2057,11 +2058,20 @@ def index() -> None:
 
         source_aggregation: dict[str, Any] | None = None
         edited_aggregation: dict[str, Any] | None = None
-        if resource_type == "aggregation" and scope == "resource":
-            try:
+        owner_resource: dict[str, Any] | None = None
+        try:
+            if scope != "resource" or resource_type == "aggregation":
                 edited_aggregation = await api.get("aggregations", entity_id)
-            except ApiError:
-                edited_aggregation = None
+                owner_resource = edited_aggregation
+            else:
+                owner_resource = await api.get("records", entity_id)
+        except ApiError:
+            edited_aggregation = None
+            owner_resource = None
+        owner_name = (
+            owner_resource.get("owning_org_unit_name")
+            if owner_resource else "this resource's organizational unit"
+        )
         source_aggregation_id = acl.get("source_resource_id") or acl.get("effective_acl_source_id")
         if source_aggregation_id:
             try:
@@ -2208,11 +2218,33 @@ def index() -> None:
                                     ),
                                 ).props("outline no-caps")
                                 editor_controls.append(add_everyone_button)
+                            if not any(
+                                item["principal_type"] == "org_unit_members"
+                                for item in principals
+                            ):
+                                add_org_members_button = ui.button(
+                                    "Add all org unit members", icon="corporate_fare",
+                                    on_click=lambda: (
+                                        principals.insert(0, {
+                                            "principal_type": "org_unit_members",
+                                            "role_id": None,
+                                            "permission_codes": [],
+                                        }),
+                                        render_principals(),
+                                    ),
+                                ).props("outline no-caps")
+                                editor_controls.append(add_org_members_button)
 
                         with ui.row().classes("w-full items-center gap-2 text-slate-500"):
                             ui.icon("groups", size="17px")
                             ui.label(
                                 "Everyone represents all authenticated users; global privilege and security-clearance gates still apply."
+                            ).classes("text-xs")
+                        with ui.row().classes("w-full items-center gap-2 text-slate-500"):
+                            ui.icon("corporate_fare", size="17px")
+                            ui.label(
+                                f"All org unit members means everyone currently working in {owner_name}. "
+                                "Membership updates automatically when role assignments change."
                             ).classes("text-xs")
 
                         ui.label(
@@ -2241,7 +2273,7 @@ def index() -> None:
 
                                 if not principals:
                                     ui.label(
-                                        "No principals are present. Add a role or Everyone to grant resource permissions."
+                                        "No principals are present. Add a role, Everyone, or all org unit members to grant resource permissions."
                                     ).classes("m-5 text-sm text-slate-500")
 
                                 for index, principal in enumerate(principals):
@@ -2256,13 +2288,22 @@ def index() -> None:
                                         ).style("position: sticky; left: 0; z-index: 20"):
                                             with ui.row().classes("w-full no-wrap items-center gap-2"):
                                                 ui.icon(
-                                                    "groups" if principal["principal_type"] == "everyone" else "badge",
+                                                    {
+                                                        "everyone": "groups",
+                                                        "org_unit_members": "corporate_fare",
+                                                    }.get(principal["principal_type"], "badge"),
                                                     color="primary", size="20px",
                                                 )
                                                 if principal["principal_type"] == "everyone":
                                                     with ui.column().classes("gap-0 grow min-w-0"):
                                                         ui.label("Everyone").classes("font-semibold")
                                                         ui.label("All authenticated users").classes("text-xs text-slate-500")
+                                                elif principal["principal_type"] == "org_unit_members":
+                                                    with ui.column().classes("gap-0 grow min-w-0"):
+                                                        ui.label("All org unit members").classes("font-semibold")
+                                                        ui.label(
+                                                            f"Everyone currently working in {owner_name}"
+                                                        ).classes("text-xs text-slate-500")
                                                 else:
                                                     role_picker = ui.select(
                                                         role_options, value=principal.get("role_id"),
@@ -2566,10 +2607,24 @@ def index() -> None:
                                 contributor_role(role_id, clearance=True)
 
                     everyone_permissions = contributors.get("everyone_permissions", [])
+                    org_unit_member_permissions = contributors.get(
+                        "org_unit_member_permissions", []
+                    )
+                    org_unit_member_roles = contributors.get(
+                        "org_unit_member_role_ids_by_permission", {}
+                    )
                     acl_roles = contributors.get("acl_role_ids_by_permission", {})
-                    for permission in dict.fromkeys([*everyone_permissions, *acl_roles.keys()]):
+                    for permission in dict.fromkeys([
+                        *everyone_permissions,
+                        *org_unit_member_permissions,
+                        *acl_roles.keys(),
+                    ]):
                         role_ids = acl_roles.get(permission, [])
-                        if permission not in everyone_permissions and not role_ids:
+                        if (
+                            permission not in everyone_permissions
+                            and permission not in org_unit_member_permissions
+                            and not role_ids
+                        ):
                             continue
                         with ui.column().classes("w-full gap-1 rounded-lg border border-slate-200 p-3"):
                             contributor_heading(
@@ -2580,6 +2635,15 @@ def index() -> None:
                                 with ui.row().classes("w-full items-center gap-2 pl-8"):
                                     ui.icon("groups", color="blue-grey-5", size="16px")
                                     ui.label("Everyone — all authenticated users").classes("text-sm text-slate-700")
+                            if permission in org_unit_member_permissions:
+                                with ui.column().classes("w-full gap-1 pl-8"):
+                                    with ui.row().classes("w-full items-center gap-2"):
+                                        ui.icon("corporate_fare", color="blue-grey-5", size="16px")
+                                        ui.label(
+                                            "All org unit members — matched through the resource owner"
+                                        ).classes("text-sm text-slate-700")
+                                    for role_id in org_unit_member_roles.get(permission, []):
+                                        contributor_role(role_id)
                             for role_id in role_ids:
                                 contributor_role(role_id)
 
@@ -2601,6 +2665,169 @@ def index() -> None:
                 user.on_value_change(lambda _: load_explanation())
         dialog.open()
         await load_explanation()
+
+    async def show_governed_move(
+        resource: str, item: dict[str, Any], on_saved,
+    ) -> None:
+        try:
+            aggregations = await api.list("aggregations")
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+        options = relationship_options(
+            [row for row in aggregations if not (
+                resource == "aggregations" and row["id"] == item["id"]
+            )], ("aggregation_number", "title"),
+        )
+        dialog = ui.dialog()
+        preview_host: Any = None
+        preview_state: dict[str, Any] = {}
+        with dialog, ui.card().classes("w-[680px] max-w-full gap-4"):
+            ui.label(f"Move {resource.rstrip('s')}").classes("text-xl font-semibold")
+            destination = ui.select(options, label="Destination aggregation").props(
+                "outlined options-dense"
+            ).classes("w-full")
+            keep_access = ui.checkbox("Keep current effective access as a local override")
+            reason = ui.textarea("Reason", placeholder="Required").props(
+                "outlined autogrow"
+            ).classes("w-full")
+            preview_host = ui.column().classes("w-full gap-2")
+
+            async def refresh_preview() -> None:
+                preview_host.clear()
+                preview_state.clear()
+                if destination.value is None:
+                    return
+                try:
+                    preview = await api.acl_move_preview(
+                        resource, item["id"], int(destination.value),
+                        keep_current_access_as_override=bool(keep_access.value),
+                    )
+                except ApiError as error:
+                    with preview_host:
+                        ui.label(error_message(error)).classes("text-sm text-negative")
+                    return
+                preview_state.update(preview)
+                with preview_host:
+                    ui.label(
+                        f"ACL impact: {preview['added_count']} grants added · {preview['removed_count']} removed"
+                    ).classes("text-sm font-medium")
+                    if resource == "aggregations":
+                        impact = preview.get("affected_subtree", {})
+                        ui.label(
+                            f"Subtree: {impact.get('aggregation_count', 0)} aggregations · "
+                            f"{impact.get('record_count', 0)} records"
+                        ).classes("text-sm text-slate-600")
+                    if preview.get("ownership_changes"):
+                        ui.label(
+                            "This move changes organizational ownership and retargets All org unit members."
+                        ).classes("text-sm font-medium text-amber-900 bg-amber-50 rounded p-2")
+
+            destination.on_value_change(lambda _: refresh_preview())
+            keep_access.on_value_change(lambda _: refresh_preview())
+
+            async def submit() -> None:
+                if destination.value is None or not (reason.value or "").strip():
+                    ui.notify("Destination and reason are required", color="warning")
+                    return
+                if not preview_state:
+                    await refresh_preview()
+                if not preview_state:
+                    return
+                try:
+                    saved = await api.move_with_acl(resource, item["id"], {
+                        "destination_aggregation_id": int(destination.value),
+                        "resource_version": item["version"],
+                        "keep_current_access_as_override": bool(keep_access.value),
+                        "confirm_ownership_change": bool(preview_state.get("ownership_changes")),
+                        "reason": reason.value.strip(),
+                    })
+                    dialog.close()
+                    ui.notify("Resource moved", color="positive")
+                    await on_saved(saved)
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                ui.button("Move", icon="drive_file_move", on_click=submit).props("unelevated no-caps")
+        dialog.open()
+
+    async def show_ownership_correction(root: dict[str, Any], on_saved) -> None:
+        try:
+            rows = await api.ownership_correction_options()
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+        rows = [row for row in rows if row["org_unit_id"] != root["owning_org_unit_id"]]
+        dialog = ui.dialog()
+        preview_host: Any = None
+        preview_state: dict[str, Any] = {}
+        with dialog, ui.card().classes("w-[680px] max-w-full gap-4"):
+            ui.label("Correct ownership").classes("text-xl font-semibold")
+            ui.label(
+                "Use this governed correction only when the root aggregation was created for the wrong organizational unit."
+            ).classes("text-sm text-slate-600")
+            destination = ui.select(
+                {row["role_id"]: row["label"] for row in rows},
+                label="Correct owner and creator ACL role",
+            ).props("outlined options-dense").classes("w-full")
+            reason = ui.textarea("Reason", placeholder="Required").props(
+                "outlined autogrow"
+            ).classes("w-full")
+            preview_host = ui.column().classes("w-full gap-2")
+
+            async def refresh_preview() -> None:
+                preview_host.clear(); preview_state.clear()
+                if destination.value is None:
+                    return
+                try:
+                    preview = await api.ownership_correction_preview(
+                        root["id"], int(destination.value)
+                    )
+                except ApiError as error:
+                    with preview_host:
+                        ui.label(error_message(error)).classes("text-sm text-negative")
+                    return
+                preview_state.update(preview)
+                with preview_host:
+                    ui.label(
+                        f"Affected holdings: {preview['affected_aggregation_count']} aggregations · "
+                        f"{preview['affected_record_count']} records"
+                    ).classes("text-sm font-medium")
+                    ui.label(
+                        f"Creator-role grants reassigned: {preview['creator_role_grant_count']}"
+                    ).classes("text-sm text-slate-600")
+                    ui.label(
+                        "All org unit members will immediately refer to the corrected owner. Other named-role grants remain unchanged."
+                    ).classes("text-sm text-amber-900 bg-amber-50 rounded p-2")
+
+            destination.on_value_change(lambda _: refresh_preview())
+
+            async def submit() -> None:
+                if destination.value is None or not (reason.value or "").strip():
+                    ui.notify("Correct owner and reason are required", color="warning")
+                    return
+                if not preview_state:
+                    await refresh_preview()
+                if not preview_state:
+                    return
+                try:
+                    saved = await api.correct_ownership(
+                        root["id"], int(destination.value), reason.value.strip()
+                    )
+                    dialog.close()
+                    ui.notify("Organizational ownership corrected", color="positive")
+                    await on_saved(saved)
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                ui.button("Confirm correction", icon="published_with_changes", on_click=submit).props(
+                    "unelevated no-caps color=negative"
+                )
+        dialog.open()
 
     async def show_record_details(record: dict[str, Any]) -> None:
         """Navigate to the dedicated details page for a record."""
@@ -2725,6 +2952,19 @@ def index() -> None:
                                 "records", record["id"], on_saved=lambda: refresh_record_view(),
                             ),
                         ).props("flat no-caps")
+                if not record.get("_effectively_closed") and capabilities.get("move"):
+                    with ui.expansion(
+                        "Advanced", caption="Specialist record actions", icon="tune", value=False,
+                    ).classes(
+                        "w-full border-t border-slate-100 px-5"
+                    ):
+                        with ui.row().classes("w-full justify-end gap-2 pb-4"):
+                            ui.button(
+                                "Move", icon="drive_file_move",
+                                on_click=lambda: show_governed_move(
+                                    "records", record, refresh_record_view,
+                                ),
+                            ).props("flat dense no-caps")
                 ui.separator()
                 with ui.column().classes("w-full px-5 py-4 gap-4"):
                     if record.get("_effectively_closed"):
@@ -2741,6 +2981,10 @@ def index() -> None:
                         for label, value in (
                             ("Record status", "Read-only" if record.get("_effectively_closed") else "Active"),
                             ("Security level", f"{security_level['code']} — {security_level['name']}"),
+                            (
+                                "Owning organizational unit",
+                                f"{record['owning_org_unit_code']} — {record['owning_org_unit_name']}",
+                            ),
                             ("Originated", format_timestamp(record.get("date_originated"))),
                             ("Created", format_timestamp(record.get("date_created"))),
                             ("Containing aggregation", record.get("aggregation_display")),
@@ -2885,8 +3129,9 @@ def index() -> None:
         spec = ENTITIES["records"]
         try:
             draft = await api.create_record_draft()
-            aggregations, security_levels = await asyncio.gather(
-                api.list("aggregations"), api.list("security-levels")
+            aggregations, security_levels, creation_roles = await asyncio.gather(
+                api.list("aggregations"), api.list("security-levels"),
+                api.creation_role_options(target_aggregation_id),
             )
             aggregations_by_id = {item["id"]: item for item in aggregations}
             aggregations = [
@@ -2995,8 +3240,13 @@ def index() -> None:
         async def commit() -> None:
             try:
                 payload = form_payload(spec, controls, creating=True)
+                creator_role_id = controls["creator_acl_role_id"].value
+                if creator_role_id is None:
+                    raise ValueError("Select who this record is being created for")
                 await api.update_record_draft(draft["id"], payload)
-                committed_record = await api.commit_record_draft(draft["id"])
+                committed_record = await api.commit_record_draft(
+                    draft["id"], int(creator_role_id),
+                )
                 dialog.close()
                 ui.notify("Record and digital components created", color="positive")
                 await load_recent(spec)
@@ -3019,8 +3269,59 @@ def index() -> None:
                 ui.badge("Draft", color="primary").props("outline")
             with ui.element("div").classes("w-full overflow-y-auto px-6 pb-2 max-h-[calc(100vh-190px)]"):
                 ui.label("Record details").classes("text-base font-semibold mt-4 mb-2")
+                ui.label("* Required fields").classes("text-xs text-slate-500 -mt-1 mb-2")
                 with ui.grid(columns=2).classes("w-full gap-3"):
+                    aggregation_field = next(
+                        field for field in spec.fields if field.name == "aggregation_id"
+                    )
+                    controls["aggregation_id"] = field_input(
+                        aggregation_field,
+                        value=target_aggregation_id,
+                        options=relationship_options(
+                            aggregations, aggregation_field.lookup_label_fields,
+                        ),
+                    )
+                    controls["aggregation_id"].classes("col-span-2")
+                    if target_aggregation_id is not None:
+                        controls["aggregation_id"].disable()
+
+                    role_options = {
+                        item["role_id"]: item["label"] for item in creation_roles
+                    } if target_aggregation_id is not None else {}
+                    controls["creator_acl_role_id"] = ui.select(
+                        role_options,
+                        value=(
+                            creation_roles[0]["role_id"]
+                            if target_aggregation_id is not None and len(creation_roles) == 1
+                            else None
+                        ),
+                        label="Create for *",
+                    ).props("outlined options-dense").classes("w-full col-span-2")
+                    if target_aggregation_id is None or len(creation_roles) <= 1:
+                        controls["creator_acl_role_id"].disable()
+                    ui.label(
+                        "Select the role that will receive creator access. The record belongs to the "
+                        "parent aggregation's organizational unit."
+                    ).classes("text-xs leading-5 text-slate-500 col-span-2 -mt-2")
+                    creation_role_status = ui.label(
+                        "Select a parent aggregation before choosing Create for."
+                        if target_aggregation_id is None
+                        else (
+                            "Create for was set automatically because you have one eligible role."
+                            if len(creation_roles) == 1
+                            else (
+                                "You do not have an effective role in the parent aggregation's "
+                                "organizational unit, so you cannot create a record there."
+                                if not creation_roles
+                                else "Choose one of your roles in the parent aggregation's organizational unit."
+                            )
+                        )
+                    ).props('role="status" aria-live="polite"').classes(
+                        "text-xs leading-5 text-amber-800 col-span-2 -mt-2"
+                    )
                     for field in spec.fields:
+                        if field.name == "aggregation_id":
+                            continue
                         lookup_rows = (
                             aggregations if field.lookup_resource == "aggregations"
                             else security_levels if field.lookup_resource == "security-levels"
@@ -3033,9 +3334,6 @@ def index() -> None:
                                 security_levels, key=lambda item: (item["level_number"], item["id"])
                             )["id"]
                         controls[field.name] = field_input(field, value=initial_value, options=options)
-                        if field.name == "aggregation_id" and target_aggregation_id is not None:
-                            controls[field.name].value = target_aggregation_id
-                            controls[field.name].disable()
                         if field.kind == "textarea":
                             controls[field.name].classes("col-span-2")
                     def constrain_record_security_levels() -> None:
@@ -3058,6 +3356,62 @@ def index() -> None:
                         controls["security_level_id"].update()
                     controls["aggregation_id"].on_value_change(
                         lambda _: constrain_record_security_levels()
+                    )
+                    async def refresh_record_creation_roles() -> None:
+                        aggregation_id = controls["aggregation_id"].value
+                        role_control = controls["creator_acl_role_id"]
+                        previous_role_id = role_control.value
+                        if aggregation_id is None:
+                            role_control.set_options({}, value=None)
+                            role_control.disable()
+                            creation_role_status.set_text(
+                                "Select a parent aggregation before choosing Create for."
+                            )
+                            return
+                        try:
+                            rows = await api.creation_role_options(int(aggregation_id))
+                        except ApiError as error:
+                            ui.notify(error_message(error), color="negative", close_button=True)
+                            return
+                        eligible_role_ids = {item["role_id"] for item in rows}
+                        previous_role_was_cleared = (
+                            previous_role_id is not None
+                            and previous_role_id not in eligible_role_ids
+                        )
+                        selected_role_id = (
+                            previous_role_id if previous_role_id in eligible_role_ids
+                            else rows[0]["role_id"] if len(rows) == 1
+                            else None
+                        )
+                        role_control.set_options(
+                            {item["role_id"]: item["label"] for item in rows},
+                            value=selected_role_id,
+                        )
+                        if len(rows) <= 1:
+                            role_control.disable()
+                        else:
+                            role_control.enable()
+                        if not rows:
+                            creation_role_status.set_text(
+                                "You do not have an effective role in the parent aggregation's "
+                                "organizational unit, so you cannot create a record there."
+                            )
+                        elif previous_role_was_cleared:
+                            creation_role_status.set_text(
+                                "Your previous Create for selection was cleared because it does not "
+                                "belong to the parent aggregation's organizational unit."
+                            )
+                        elif len(rows) == 1:
+                            creation_role_status.set_text(
+                                "Create for was set automatically because you have one eligible role."
+                            )
+                        else:
+                            creation_role_status.set_text(
+                                "Choose one of your roles in the parent aggregation's organizational unit."
+                            )
+
+                    controls["aggregation_id"].on_value_change(
+                        lambda _: refresh_record_creation_roles()
                     )
                     constrain_record_security_levels()
                 with ui.row().classes("w-full items-center mt-5 mb-2"):
@@ -3119,8 +3473,13 @@ def index() -> None:
             return
         lookup_options: dict[str, dict[int, str]] = {}
         lookup_rows_by_field: dict[str, list[dict[str, Any]]] = {}
+        creation_roles: list[dict[str, Any]] = []
         retention_rule: dict[str, Any] | None = None
         try:
+            if creating and spec.key == "aggregations":
+                creation_roles = await api.creation_role_options(
+                    (initial_values or {}).get("parent_aggregation_id")
+                )
             if row and spec.key == "classifications":
                 try:
                     retention_rule = await api.classification_retention_rule(row["id"])
@@ -3283,8 +3642,73 @@ def index() -> None:
         controls: dict[str, Any] = {}
         with dialog, ui.card().classes("w-[620px] max-w-full"):
             ui.label(f"{'Add' if creating else 'Edit'} {spec.singular}").classes("text-xl font-semibold")
+            ui.label("* Required fields").classes("text-xs text-slate-500 -mt-2")
             with ui.column().classes("w-full gap-3"):
+                if not creating and spec.key in {"aggregations", "records"}:
+                    owner_label = " — ".join(filter(None, (
+                        row.get("owning_org_unit_code"),
+                        row.get("owning_org_unit_name"),
+                    ))) or "Unavailable"
+                    ui.input(
+                        "Owning organizational unit", value=owner_label,
+                    ).props("outlined readonly").classes("w-full")
+                    ui.label(
+                        "Ownership is determined by placement. Move the resource through the governed move action to change it."
+                    ).classes("text-xs leading-5 text-slate-500 -mt-2")
+                if creating and spec.key == "aggregations":
+                    parent_field = next(
+                        field for field in spec.fields if field.name == "parent_aggregation_id"
+                    )
+                    initial_parent_id = (initial_values or {}).get("parent_aggregation_id")
+                    controls["parent_aggregation_id"] = field_input(
+                        parent_field,
+                        initial_parent_id,
+                        lookup_options.get("parent_aggregation_id"),
+                    )
+                    ui.label(
+                        "Optional. Leave this blank to create a root aggregation; select a parent "
+                        "to create a child aggregation beneath it."
+                    ).classes("text-xs leading-5 text-slate-500 -mt-2")
+                    if "parent_aggregation_id" in effective_locked_fields:
+                        controls["parent_aggregation_id"].disable()
+                    role_options = {
+                        item["role_id"]: item["label"] for item in creation_roles
+                    }
+                    initial_role_id = (
+                        creation_roles[0]["role_id"] if len(creation_roles) == 1 else None
+                    )
+                    controls["creator_acl_role_id"] = ui.select(
+                        role_options, value=initial_role_id, label="Create for *",
+                    ).props("outlined options-dense").classes("w-full")
+                    if len(creation_roles) == 1:
+                        controls["creator_acl_role_id"].disable()
+                    ui.label(
+                        "For a child aggregation, the parent determines the owning organizational unit "
+                        "and Create for selects the role that receives creator access. For a root "
+                        "aggregation, Create for determines both."
+                    ).classes("text-xs leading-5 text-slate-500 -mt-2")
+                    aggregation_creation_role_status = ui.label(
+                        (
+                            (
+                                "You do not have an eligible role in the parent aggregation's "
+                                "organizational unit, so you cannot add a child aggregation there."
+                                if initial_parent_id is not None
+                                else "You do not have an eligible role, so you cannot create a root aggregation."
+                            )
+                            if not creation_roles
+                            else "Choose one of your roles in the parent aggregation's organizational unit."
+                            if initial_parent_id is not None and len(creation_roles) > 1
+                            else "Create for was set automatically because you have one eligible role."
+                            if initial_parent_id is not None
+                            else "No parent is selected, so this will be a root aggregation and the "
+                            "selected role's organizational unit will become its owner."
+                        )
+                    ).props('role="status" aria-live="polite"').classes(
+                        "text-xs leading-5 text-amber-800 -mt-2"
+                    )
                 for field in spec.fields:
+                    if creating and spec.key == "aggregations" and field.name == "parent_aggregation_id":
+                        continue
                     source = retention_rule if field.name in {
                         "current_period_years", "intermediate_period_years",
                         "final_disposition", "instructions",
@@ -3436,6 +3860,69 @@ def index() -> None:
                     controls["parent_aggregation_id"].on_value_change(
                         lambda _: constrain_aggregation_security_levels()
                     )
+                    if creating:
+                        async def refresh_aggregation_creation_roles() -> None:
+                            control = controls["creator_acl_role_id"]
+                            previous_role_id = control.value
+                            parent_id = controls["parent_aggregation_id"].value
+                            try:
+                                rows = await api.creation_role_options(
+                                    parent_id
+                                )
+                            except ApiError as error:
+                                ui.notify(error_message(error), color="negative", close_button=True)
+                                return
+                            options = {item["role_id"]: item["label"] for item in rows}
+                            eligible_role_ids = set(options)
+                            previous_role_was_cleared = (
+                                previous_role_id is not None
+                                and previous_role_id not in eligible_role_ids
+                            )
+                            selected_role_id = (
+                                previous_role_id if previous_role_id in eligible_role_ids
+                                else rows[0]["role_id"] if len(rows) == 1
+                                else None
+                            )
+                            control.set_options(
+                                options,
+                                value=selected_role_id,
+                            )
+                            if len(rows) <= 1:
+                                control.disable()
+                            else:
+                                control.enable()
+                            if not rows:
+                                aggregation_creation_role_status.set_text(
+                                    "You do not have an eligible role"
+                                    + (
+                                        " in the parent aggregation's organizational unit, so you "
+                                        "cannot add a child aggregation there."
+                                        if parent_id is not None
+                                        else ", so you cannot create a root aggregation."
+                                    )
+                                )
+                            elif previous_role_was_cleared:
+                                aggregation_creation_role_status.set_text(
+                                    "Your previous Create for selection was cleared because it does not "
+                                    "belong to the parent aggregation's organizational unit."
+                                )
+                            elif parent_id is None:
+                                aggregation_creation_role_status.set_text(
+                                    "No parent is selected, so this will be a root aggregation and the "
+                                    "selected role's organizational unit will become its owner."
+                                )
+                            elif len(rows) == 1:
+                                aggregation_creation_role_status.set_text(
+                                    "Create for was set automatically because you have one eligible role."
+                                )
+                            else:
+                                aggregation_creation_role_status.set_text(
+                                    "Choose one of your roles in the parent aggregation's organizational unit."
+                                )
+
+                        controls["parent_aggregation_id"].on_value_change(
+                            lambda _: refresh_aggregation_creation_roles()
+                        )
                 constrain_aggregation_security_levels()
 
             security_change_reason = None
@@ -3456,6 +3943,11 @@ def index() -> None:
             async def save() -> None:
                 try:
                     payload = form_payload(spec, controls, creating=creating)
+                    if creating and spec.key == "aggregations":
+                        creator_role_id = controls["creator_acl_role_id"].value
+                        if creator_role_id is None:
+                            raise ValueError("Select who this aggregation is being created for")
+                        payload["creator_acl_role_id"] = int(creator_role_id)
                     if spec.key == "aggregations":
                         if payload.get("parent_aggregation_id") is None and payload.get("classification_id") is None:
                             raise ValueError("A root aggregation must have a terminal classification")
@@ -4089,6 +4581,10 @@ def index() -> None:
                             aggregation_metadata = (
                                 ("Status", "Closed" if closure else "Open"),
                                 ("Security level", f"{security_level['code']} — {security_level['name']}"),
+                                (
+                                    "Owning organizational unit",
+                                    f"{current['owning_org_unit_code']} — {current['owning_org_unit_name']}",
+                                ),
                                 ("Date opened", format_timestamp(current.get("date_opened"))),
                                 ("Classification", " › ".join(
                                     f"{item['code']} — {item['title']}" for item in classification_path
@@ -4147,16 +4643,56 @@ def index() -> None:
                                         "aggregations", current["id"], on_saved=lambda: open_aggregation(current),
                                     ),
                                 ).props("flat dense no-caps")
-                                ui.button(
-                                    "Child defaults", icon="account_tree",
-                                ).props("flat dense no-caps").on(
-                                    "click", lambda: show_acl_editor("aggregations", current["id"], scope="aggregation")
-                                )
-                                ui.button(
-                                    "Record defaults", icon="description",
-                                ).props("flat dense no-caps").on(
-                                    "click", lambda: show_acl_editor("aggregations", current["id"], scope="record")
-                                )
+                        show_aggregation_move = (
+                            closure is None
+                            and current.get("parent_aggregation_id") is not None
+                            and capabilities.get("move")
+                        )
+                        show_ownership_correction_action = (
+                            closure is None and capabilities.get("correct_ownership")
+                        )
+                        show_acl_defaults = capabilities.get("manage_acl")
+                        if (
+                            show_aggregation_move
+                            or show_ownership_correction_action
+                            or show_acl_defaults
+                        ):
+                            with ui.expansion(
+                                "Advanced", caption="Specialist aggregation actions",
+                                icon="tune", value=False,
+                            ).classes(
+                                "w-full border-t border-slate-100"
+                            ):
+                                with ui.row().classes("w-full justify-end gap-2 pb-2"):
+                                    if show_aggregation_move:
+                                        ui.button(
+                                            "Move", icon="drive_file_move",
+                                            on_click=lambda: show_governed_move(
+                                                "aggregations", current, open_aggregation,
+                                            ),
+                                        ).props("flat dense no-caps")
+                                    if show_ownership_correction_action:
+                                        ui.button(
+                                            "Correct ownership", icon="published_with_changes",
+                                            on_click=lambda: show_ownership_correction(
+                                                current, open_aggregation,
+                                            ),
+                                        ).props("flat dense no-caps color=negative")
+                                    if show_acl_defaults:
+                                        ui.button(
+                                            "Child defaults", icon="account_tree",
+                                        ).props("flat dense no-caps").on(
+                                            "click", lambda: show_acl_editor(
+                                                "aggregations", current["id"], scope="aggregation"
+                                            )
+                                        )
+                                        ui.button(
+                                            "Record defaults", icon="description",
+                                        ).props("flat dense no-caps").on(
+                                            "click", lambda: show_acl_editor(
+                                                "aggregations", current["id"], scope="record"
+                                            )
+                                        )
                     if effective_rule:
                         with ui.card().classes(
                             "retention-card shadow-none p-5 gap-4 flex-1 min-w-[360px] max-w-[560px]"
@@ -5430,7 +5966,7 @@ def index() -> None:
                     "aggregations", "records",
                 ]
                 count_resources += list(dashboard_administration_resources(privileges))
-                count_results, scheme_rows, scheme_classification_counts, inactive_result, unclassified_result, favourites = await asyncio.gather(
+                count_results, scheme_rows, scheme_classification_counts, inactive_result, unclassified_result, favourites, ownership_counts = await asyncio.gather(
                     asyncio.gather(*(api.count(resource) for resource in count_resources)),
                     api.list("classification-schemes") if can_classify else available([]),
                     api.request("GET", "/api/v1/classification-schemes/classification-counts") if can_classify else available([]),
@@ -5446,6 +5982,7 @@ def index() -> None:
                         "limit": 1,
                     }),
                     reload_favourites(),
+                    api.request("GET", "/api/v1/dashboard/ownership-counts"),
                 )
                 recent_limit = dashboard_recent_item_limit()
                 recent_days = dashboard_recent_days()
@@ -5593,6 +6130,30 @@ def index() -> None:
                                         ui.label(detail).classes(
                                             "text-[11px] leading-4 text-slate-400 whitespace-pre-line"
                                         )
+
+                ui.label("Holdings by organizational unit").classes("text-lg font-semibold mt-2")
+                if ownership_counts:
+                    with ui.card().classes("w-full shadow-none border border-slate-200 p-0 gap-0"):
+                        for index, owner_count in enumerate(ownership_counts):
+                            if index:
+                                ui.separator()
+                            with ui.row().classes("w-full items-center gap-3 px-4 py-3"):
+                                ui.avatar(
+                                    icon="corporate_fare", color="blue-1", text_color="primary",
+                                ).props("size=36px")
+                                with ui.column().classes("gap-0 grow min-w-0"):
+                                    ui.label(
+                                        f"{owner_count['org_unit_code']} — "
+                                        f"{owner_count['org_unit_name']}"
+                                    ).classes("font-semibold text-slate-700")
+                                    ui.label(
+                                        f"{owner_count['aggregation_count']} aggregations · "
+                                        f"{owner_count['record_count']} records"
+                                    ).classes("text-xs text-slate-500")
+                else:
+                    ui.label(
+                        "No organizational-unit holdings are available for your effective roles."
+                    ).classes("text-sm text-slate-500")
 
                 if unclassified_root_count or inactive_classification_count:
                     ui.label("Governance attention").classes("text-lg font-semibold mt-2")

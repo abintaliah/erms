@@ -10,8 +10,9 @@ INSERT INTO classification_retention_rules
     (classification_id, current_period_years, intermediate_period_years, final_disposition)
 VALUES (:content_classification_id, 5, 0, 'destruction');
 
-INSERT INTO aggregations (aggregation_number, title, classification_id)
-VALUES ('VERSION-TEST', 'Before', :content_classification_id)
+INSERT INTO aggregations (aggregation_number, title, classification_id, owning_org_unit_id)
+SELECT 'VERSION-TEST', 'Before', :content_classification_id, id
+FROM org_units WHERE code='PHASE2-SEGMENT'
 RETURNING id, version \gset version_aggregation_
 
 SELECT 1 / CASE WHEN :'version_aggregation_version'::bigint = 1 THEN 1 ELSE 0 END;

@@ -9,11 +9,12 @@ from psycopg import Connection
 
 from .authorization_policy import require_authorization_admin
 from .database import get_connection
-from .resource_authorization import require_resource_operation
+from .resource_authorization import governance_role_snapshot, require_global, require_resource_operation
 from .schemas import (
     AclChangePreviewRead, AclMoveRequest, AclPrincipalGrant, AclReplace,
     ChildAggregationAclChangePreviewRead, ChildAggregationAclRead,
     ChildAggregationAclReplace, ChildRecordAclRead, ChildRecordAclReplace,
+    CreationRoleOption, OwnershipCorrectionPreviewRead, OwnershipCorrectionRequest,
     PermissionRead, ResourceAclRead,
 )
 
@@ -64,7 +65,10 @@ def _group(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         key = (row["principal_type"], row["role_id"])
         item = grouped.setdefault(key, {
             "principal_type": row["principal_type"], "role_id": row["role_id"],
-            "display_name": "Everyone" if row["principal_type"] == "everyone" else row["role_name"],
+            "display_name": {
+                "everyone": "Everyone",
+                "org_unit_members": "All org unit members",
+            }.get(row["principal_type"], row["role_name"]),
             "role_code": row["role_code"], "permission_codes": [],
         })
         item["permission_codes"].append(row["permission_code"])
@@ -216,19 +220,30 @@ def _rows_as_values(rows: list[dict[str, Any]]) -> list[tuple[str, int | None, i
     return [(row["principal_type"],row["role_id"],row["permission_id"]) for row in rows]
 
 
-def _preview_delta(connection: Connection, current: list[dict[str, Any]], proposed: list[tuple[str, int | None, int]]) -> dict[str, Any]:
+def _preview_delta(
+    connection: Connection, current: list[dict[str, Any]],
+    proposed: list[tuple[str, int | None, int]], owner_org_unit_id: int,
+) -> dict[str, Any]:
     permission_codes = {row["id"]: row["code"] for row in connection.execute("SELECT id,code FROM permissions").fetchall()}
     old = _permission_set(current)
     new = {(principal, role_id, permission_codes[permission_id]) for principal,role_id,permission_id in proposed}
     changed_roles = {role_id for _,role_id,_ in old.symmetric_difference(new) if role_id is not None}
     everyone_changed = any(principal == "everyone" for principal,_,_ in old.symmetric_difference(new))
+    org_unit_members_changed = any(
+        principal == "org_unit_members" for principal,_,_ in old.symmetric_difference(new)
+    )
     if everyone_changed:
         user_count = connection.execute("SELECT count(*) AS count FROM users WHERE status='active'").fetchone()["count"]
-    elif changed_roles:
+    elif org_unit_members_changed or changed_roles:
         user_count = connection.execute(
-            """SELECT count(DISTINCT user_id) AS count FROM user_role_assignments
-               WHERE role_id=ANY(%s) AND valid_from<=CURRENT_TIMESTAMP
-                 AND (valid_until IS NULL OR valid_until>CURRENT_TIMESTAMP)""", (list(changed_roles),),
+            """SELECT count(DISTINCT assignment.user_id) AS count
+               FROM user_role_assignments assignment
+               JOIN roles role ON role.id=assignment.role_id
+               WHERE (assignment.role_id=ANY(%s) OR (%s AND role.org_unit_id=%s))
+                 AND assignment.valid_from<=CURRENT_TIMESTAMP
+                 AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+                 AND role_effectively_active(role.id)""",
+            (list(changed_roles) or [0], org_unit_members_changed, owner_org_unit_id),
         ).fetchone()["count"]
     else: user_count = 0
     return {"added_grants":len(new-old),"removed_grants":len(old-new),"potentially_affected_user_count":user_count}
@@ -317,7 +332,7 @@ def preview_child_aggregation_permissions(aggregation_id:int,payload:ChildAggreg
                else _effective_aggregation(connection,aggregation_id)[2])
     proposed = (custom_proposed if payload.mode=="custom"
                 else _rows_as_values(_effective_aggregation(connection,aggregation_id)[2]))
-    return {**_preview_delta(connection,current,proposed),**_descendant_impact(connection,aggregation_id),"mode":payload.mode,"version":payload.version}
+    return {**_preview_delta(connection,current,proposed,aggregation["owning_org_unit_id"]),**_descendant_impact(connection,aggregation_id),"mode":payload.mode,"version":payload.version}
 
 
 @router.get("/aggregations/{aggregation_id}/default-child-record-permissions", response_model=ChildRecordAclRead, dependencies=[Depends(require_authorization_admin)])
@@ -345,7 +360,7 @@ def preview_child_record_permissions(aggregation_id:int,payload:ChildRecordAclRe
     aggregation=_resource(connection,"aggregations",aggregation_id)
     if aggregation["child_record_acl_version"]!=payload.version: raise HTTPException(status_code=409,detail="acl_version_conflict")
     proposed=_validate_grants(connection,payload.grants,"record")
-    return {**_preview_delta(connection,_grant_rows(connection,"child_record",aggregation_id),proposed),
+    return {**_preview_delta(connection,_grant_rows(connection,"child_record",aggregation_id),proposed,aggregation["owning_org_unit_id"]),
             "affected_record_count":child_record_permissions(aggregation_id,connection)["affected_record_count"],"version":payload.version}
 
 
@@ -384,7 +399,10 @@ def aggregation_acl_move_preview(aggregation_id:int,destination_aggregation_id:i
     old=_permission_set(current); new=_permission_set(proposed)
     return {"keep_current_access_as_override":keep_current_access_as_override,"added_count":len(new-old),"removed_count":len(old-new),
             "affected_subtree":_descendant_impact(connection,aggregation_id),"resource_version":aggregation["version"],
-            "destination_child_acl_version":destination["child_aggregation_acl_version"]}
+            "destination_child_acl_version":destination["child_aggregation_acl_version"],
+            "ownership_changes":aggregation["owning_org_unit_id"]!=destination["owning_org_unit_id"],
+            "source_owning_org_unit_id":aggregation["owning_org_unit_id"],
+            "destination_owning_org_unit_id":destination["owning_org_unit_id"]}
 
 
 @router.post("/aggregations/{aggregation_id}/acl-move")
@@ -392,6 +410,11 @@ def move_aggregation_with_acl(aggregation_id:int,payload:AclMoveRequest,connecti
     require_resource_operation(connection,"aggregation",aggregation_id,"aggregation.move","aggregation.move")
     require_resource_operation(connection,"aggregation",payload.destination_aggregation_id,"aggregation.move","aggregation.receive_child")
     aggregation=_resource(connection,"aggregations",aggregation_id); destination=_resource(connection,"aggregations",payload.destination_aggregation_id)
+    ownership_changes=aggregation["owning_org_unit_id"]!=destination["owning_org_unit_id"]
+    if ownership_changes and not payload.confirm_ownership_change:
+        raise HTTPException(status_code=422,detail={"code":"ownership_change_requires_confirmation","message":"Confirm the organizational ownership change before moving this aggregation."})
+    if ownership_changes:
+        connection.execute("SELECT set_config('app.ownership_move_confirmed','true',true),set_config('app.change_reason',%s,true)",(payload.reason,))
     if aggregation["version"]!=payload.resource_version: raise HTTPException(status_code=409,detail="resource_version_conflict")
     if aggregation["inherit_acl_from_parent"] and payload.keep_current_access_as_override:
         _replace(connection,"aggregation",aggregation_id,_rows_as_inputs(_effective_aggregation(connection,aggregation_id)[2]))
@@ -399,7 +422,7 @@ def move_aggregation_with_acl(aggregation_id:int,payload:AclMoveRequest,connecti
     else: inherit=aggregation["inherit_acl_from_parent"]
     _assert_continuity(connection,aggregation["security_level_id"])
     updated=connection.execute("UPDATE aggregations SET parent_aggregation_id=%s,inherit_acl_from_parent=%s,resource_acl_version=resource_acl_version+1 WHERE id=%s RETURNING *",(payload.destination_aggregation_id,inherit,aggregation_id)).fetchone()
-    connection.execute("SELECT append_domain_event('aggregation',%s,'MOVED_WITH_ACL_POLICY',%s::jsonb,%s)",(aggregation_id,json.dumps({"destination_aggregation_id":payload.destination_aggregation_id,"keep_current_access_as_override":payload.keep_current_access_as_override}),payload.reason))
+    connection.execute("SELECT append_domain_event('aggregation',%s,'MOVED_WITH_ACL_POLICY',%s::jsonb,%s)",(aggregation_id,json.dumps({"destination_aggregation_id":payload.destination_aggregation_id,"keep_current_access_as_override":payload.keep_current_access_as_override,"ownership_changed":ownership_changes,"old_owning_org_unit_id":aggregation["owning_org_unit_id"],"new_owning_org_unit_id":destination["owning_org_unit_id"]}),payload.reason))
     return updated
 
 
@@ -407,23 +430,156 @@ def move_aggregation_with_acl(aggregation_id:int,payload:AclMoveRequest,connecti
 def record_acl_move_preview(record_id:int,destination_aggregation_id:int,keep_current_access_as_override:bool=False,connection:Connection=Depends(get_connection,scope="function")):
     require_resource_operation(connection,"record",record_id,"record.move","record.move",lock=False)
     require_resource_operation(connection,"aggregation",destination_aggregation_id,"record.move","aggregation.receive_record",lock=False)
-    record=_resource(connection,"records",record_id); _resource(connection,"aggregations",destination_aggregation_id)
+    record=_resource(connection,"records",record_id); destination=_resource(connection,"aggregations",destination_aggregation_id)
     current=_effective_record(connection,record_id)[2]
     proposed=current if not record["inherit_acl_from_parent"] or keep_current_access_as_override else _grant_rows(connection,"child_record",destination_aggregation_id)
     old=_permission_set(current); new=_permission_set(proposed)
-    return {"keep_current_access_as_override":keep_current_access_as_override,"added_count":len(new-old),"removed_count":len(old-new),"resource_version":record["version"]}
+    return {"keep_current_access_as_override":keep_current_access_as_override,"added_count":len(new-old),"removed_count":len(old-new),"resource_version":record["version"],
+            "ownership_changes":record["owning_org_unit_id"]!=destination["owning_org_unit_id"],
+            "source_owning_org_unit_id":record["owning_org_unit_id"],
+            "destination_owning_org_unit_id":destination["owning_org_unit_id"]}
 
 
 @router.post("/records/{record_id}/acl-move")
 def move_record_with_acl(record_id:int,payload:AclMoveRequest,connection:Connection=Depends(get_connection,scope="function")):
     require_resource_operation(connection,"record",record_id,"record.move","record.move")
     require_resource_operation(connection,"aggregation",payload.destination_aggregation_id,"record.move","aggregation.receive_record")
-    record=_resource(connection,"records",record_id); _resource(connection,"aggregations",payload.destination_aggregation_id)
+    record=_resource(connection,"records",record_id); destination=_resource(connection,"aggregations",payload.destination_aggregation_id)
+    ownership_changes=record["owning_org_unit_id"]!=destination["owning_org_unit_id"]
+    if ownership_changes and not payload.confirm_ownership_change:
+        raise HTTPException(status_code=422,detail={"code":"ownership_change_requires_confirmation","message":"Confirm the organizational ownership change before moving this record."})
+    if ownership_changes:
+        connection.execute("SELECT set_config('app.ownership_move_confirmed','true',true),set_config('app.change_reason',%s,true)",(payload.reason,))
     if record["version"]!=payload.resource_version: raise HTTPException(status_code=409,detail="resource_version_conflict")
     if record["inherit_acl_from_parent"] and payload.keep_current_access_as_override:
         _replace(connection,"record",record_id,_rows_as_inputs(_effective_record(connection,record_id)[2])); inherit=False
     else: inherit=record["inherit_acl_from_parent"]
     _assert_continuity(connection,record["security_level_id"])
     updated=connection.execute("UPDATE records SET aggregation_id=%s,inherit_acl_from_parent=%s,resource_acl_version=resource_acl_version+1 WHERE id=%s RETURNING *",(payload.destination_aggregation_id,inherit,record_id)).fetchone()
-    connection.execute("SELECT append_domain_event('record',%s,'MOVED_WITH_ACL_POLICY',%s::jsonb,%s)",(record_id,json.dumps({"destination_aggregation_id":payload.destination_aggregation_id,"keep_current_access_as_override":payload.keep_current_access_as_override}),payload.reason))
+    connection.execute("SELECT append_domain_event('record',%s,'MOVED_WITH_ACL_POLICY',%s::jsonb,%s)",(record_id,json.dumps({"destination_aggregation_id":payload.destination_aggregation_id,"keep_current_access_as_override":payload.keep_current_access_as_override,"ownership_changed":ownership_changes,"old_owning_org_unit_id":record["owning_org_unit_id"],"new_owning_org_unit_id":destination["owning_org_unit_id"]}),payload.reason))
+    return updated
+
+
+def _require_ownership_correction(connection: Connection, root: dict[str, Any]) -> None:
+    require_global(connection, "organization.ownership.correct")
+    if not governance_role_snapshot(connection, [root["security_level_id"]]):
+        raise HTTPException(status_code=403, detail={"code": "governance_correction_required"})
+    if root["parent_aggregation_id"] is not None:
+        raise HTTPException(status_code=422, detail={
+            "code": "root_ownership_correction_only",
+            "message": "Move a child aggregation to change its owning organizational unit.",
+        })
+
+
+def _ownership_correction_preview(
+    connection: Connection, aggregation_id: int, destination_role_id: int,
+) -> dict[str, Any]:
+    root = _resource(connection, "aggregations", aggregation_id)
+    _require_ownership_correction(connection, root)
+    role = connection.execute(
+        """SELECT role.id AS role_id,role.code AS role_code,role.name AS role_name,
+                  unit.id AS org_unit_id,unit.code AS org_unit_code,unit.name AS org_unit_name
+             FROM roles role JOIN org_units unit ON unit.id=role.org_unit_id
+            WHERE role.id=%s AND role_effectively_active(role.id)""",
+        (destination_role_id,),
+    ).fetchone()
+    if role is None:
+        raise HTTPException(status_code=422, detail="destination role must be active")
+    if role["org_unit_id"] == root["owning_org_unit_id"]:
+        raise HTTPException(status_code=422, detail="destination role belongs to the current owner")
+    counts = connection.execute(
+        """WITH RECURSIVE subtree(id) AS (
+             SELECT %s::bigint UNION ALL SELECT child.id FROM subtree parent
+             JOIN aggregations child ON child.parent_aggregation_id=parent.id)
+           SELECT count(*)::int AS aggregation_count,
+                  (SELECT count(*)::int FROM records WHERE aggregation_id IN (SELECT id FROM subtree)) AS record_count
+             FROM subtree""", (aggregation_id,),
+    ).fetchone()
+    creator = connection.execute(
+        """SELECT NULLIF(metadata->>'creator_acl_role_id','')::bigint AS role_id
+             FROM event_history WHERE entity_type='aggregation' AND entity_id=%s
+              AND operation='CREATE' ORDER BY id LIMIT 1""", (aggregation_id,),
+    ).fetchone()
+    creator_role_id = creator["role_id"] if creator else None
+    grant_count = 0
+    if creator_role_id is not None:
+        grant_count = connection.execute(
+            """WITH RECURSIVE subtree(id) AS (
+                 SELECT %s::bigint UNION ALL SELECT child.id FROM subtree parent
+                 JOIN aggregations child ON child.parent_aggregation_id=parent.id),
+               affected AS (
+                 SELECT id FROM aggregation_acl_grants WHERE aggregation_id IN (SELECT id FROM subtree) AND role_id=%s
+                 UNION ALL SELECT id FROM aggregation_child_aggregation_acl_defaults WHERE aggregation_id IN (SELECT id FROM subtree) AND role_id=%s
+                 UNION ALL SELECT id FROM aggregation_child_record_acl_defaults WHERE aggregation_id IN (SELECT id FROM subtree) AND role_id=%s
+                 UNION ALL SELECT grant_row.id FROM record_acl_grants grant_row JOIN records record ON record.id=grant_row.record_id
+                   WHERE record.aggregation_id IN (SELECT id FROM subtree) AND grant_row.role_id=%s)
+               SELECT count(*)::int AS count FROM affected""",
+            (aggregation_id, creator_role_id, creator_role_id, creator_role_id, creator_role_id),
+        ).fetchone()["count"]
+    return {
+        "root_aggregation_id": aggregation_id,
+        "source_owning_org_unit_id": root["owning_org_unit_id"],
+        "destination_owning_org_unit_id": role["org_unit_id"],
+        "destination_role_id": role["role_id"], "destination_role_code": role["role_code"],
+        "destination_role_name": role["role_name"],
+        "affected_aggregation_count": counts["aggregation_count"],
+        "affected_record_count": counts["record_count"],
+        "creator_role_id": creator_role_id, "creator_role_grant_count": grant_count,
+    }
+
+
+@router.get("/ownership-correction-options", response_model=list[CreationRoleOption])
+def ownership_correction_options(connection: Connection = Depends(get_connection, scope="function")):
+    require_global(connection, "organization.ownership.correct")
+    if not governance_role_snapshot(connection, [connection.execute("SELECT lowest_security_level_id() AS id").fetchone()["id"]]):
+        raise HTTPException(status_code=403, detail={"code": "governance_correction_required"})
+    rows = connection.execute(
+        """SELECT role.id AS role_id,role.code AS role_code,role.name AS role_name,
+                  unit.id AS org_unit_id,unit.code AS org_unit_code,unit.name AS org_unit_name
+             FROM roles role JOIN org_units unit ON unit.id=role.org_unit_id
+            WHERE role_effectively_active(role.id)
+            ORDER BY unit.name COLLATE "C",role.name COLLATE "C",role.id"""
+    ).fetchall()
+    return [{**row,"label":f"{row['org_unit_name']} — {row['role_name']}"} for row in rows]
+
+
+@router.get("/aggregations/{aggregation_id}/ownership-correction-preview", response_model=OwnershipCorrectionPreviewRead)
+def ownership_correction_preview(aggregation_id:int,destination_role_id:int,connection:Connection=Depends(get_connection,scope="function")):
+    return _ownership_correction_preview(connection,aggregation_id,destination_role_id)
+
+
+@router.post("/aggregations/{aggregation_id}/correct-ownership")
+def correct_root_ownership(aggregation_id:int,payload:OwnershipCorrectionRequest,connection:Connection=Depends(get_connection,scope="function")):
+    preview=_ownership_correction_preview(connection,aggregation_id,payload.destination_role_id)
+    old_role_id=preview["creator_role_id"]
+    if old_role_id is not None and old_role_id != payload.destination_role_id:
+        scopes=(
+            ("aggregation_acl_grants","aggregation_id","SELECT id FROM subtree"),
+            ("aggregation_child_aggregation_acl_defaults","aggregation_id","SELECT id FROM subtree"),
+            ("aggregation_child_record_acl_defaults","aggregation_id","SELECT id FROM subtree"),
+        )
+        for table,owner_column,owners in scopes:
+            connection.execute(f"""WITH RECURSIVE subtree(id) AS (
+                SELECT %s::bigint UNION ALL SELECT child.id FROM subtree parent JOIN aggregations child ON child.parent_aggregation_id=parent.id)
+                INSERT INTO {table}({owner_column},principal_type,role_id,permission_id)
+                SELECT grant_row.{owner_column},'role',%s,grant_row.permission_id FROM {table} grant_row
+                WHERE grant_row.{owner_column} IN ({owners}) AND grant_row.principal_type='role' AND grant_row.role_id=%s
+                ON CONFLICT DO NOTHING""",(aggregation_id,payload.destination_role_id,old_role_id))
+            connection.execute(f"""WITH RECURSIVE subtree(id) AS (
+                SELECT %s::bigint UNION ALL SELECT child.id FROM subtree parent JOIN aggregations child ON child.parent_aggregation_id=parent.id)
+                DELETE FROM {table} WHERE {owner_column} IN ({owners}) AND principal_type='role' AND role_id=%s""",(aggregation_id,old_role_id))
+        connection.execute("""WITH RECURSIVE subtree(id) AS (
+            SELECT %s::bigint UNION ALL SELECT child.id FROM subtree parent JOIN aggregations child ON child.parent_aggregation_id=parent.id)
+            INSERT INTO record_acl_grants(record_id,principal_type,role_id,permission_id)
+            SELECT grant_row.record_id,'role',%s,grant_row.permission_id FROM record_acl_grants grant_row
+            JOIN records record ON record.id=grant_row.record_id WHERE record.aggregation_id IN (SELECT id FROM subtree)
+              AND grant_row.principal_type='role' AND grant_row.role_id=%s ON CONFLICT DO NOTHING""",(aggregation_id,payload.destination_role_id,old_role_id))
+        connection.execute("""WITH RECURSIVE subtree(id) AS (
+            SELECT %s::bigint UNION ALL SELECT child.id FROM subtree parent JOIN aggregations child ON child.parent_aggregation_id=parent.id)
+            DELETE FROM record_acl_grants grant_row USING records record
+            WHERE record.id=grant_row.record_id AND record.aggregation_id IN (SELECT id FROM subtree)
+              AND grant_row.principal_type='role' AND grant_row.role_id=%s""",(aggregation_id,old_role_id))
+    connection.execute("SELECT set_config('app.ownership_correction_authorized','authorized',true),set_config('app.change_reason',%s,true)",(payload.reason,))
+    updated=connection.execute("UPDATE aggregations SET owning_org_unit_id=%s WHERE id=%s RETURNING *",(preview["destination_owning_org_unit_id"],aggregation_id)).fetchone()
+    connection.execute("SELECT append_domain_event('aggregation',%s,'OWNERSHIP_CORRECTED',%s::jsonb,%s)",(aggregation_id,json.dumps(preview),payload.reason))
     return updated
