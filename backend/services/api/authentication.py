@@ -319,19 +319,25 @@ def my_recent_activity(
     reasons, other actors, or resources the caller can no longer view.
     """
     return list(connection.execute(
-        """WITH matching_events AS (
-               SELECT event.entity_type, event.entity_id, event.operation,
-                      event.occurred_at,
-                      row_number() OVER (
-                          PARTITION BY event.entity_type, event.operation
-                          ORDER BY event.occurred_at DESC, event.id DESC
-                      ) AS position
+        """WITH latest_resource_events AS (
+               SELECT DISTINCT ON (event.entity_type,event.entity_id,event.operation)
+                      event.id,event.entity_type,event.entity_id,event.operation,
+                      event.occurred_at
                  FROM event_history AS event
                 WHERE event.actor_user_id=%s
                   AND event.entity_type IN ('aggregation','record')
                   AND event.operation IN ('CREATE','UPDATE')
                   AND (%s::timestamptz IS NULL OR event.occurred_at >= %s)
-                  AND (
+                ORDER BY event.entity_type,event.entity_id,event.operation,
+                         event.occurred_at DESC,event.id DESC
+           ), matching_events AS (
+               SELECT event.entity_type,event.entity_id,event.operation,event.occurred_at,
+                      row_number() OVER (
+                          PARTITION BY event.entity_type, event.operation
+                          ORDER BY event.occurred_at DESC, event.id DESC
+                      ) AS position
+                 FROM latest_resource_events AS event
+                WHERE (
                       (event.entity_type='aggregation' AND EXISTS (
                           SELECT 1 FROM aggregations resource
                            WHERE resource.id=event.entity_id

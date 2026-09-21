@@ -1,14 +1,44 @@
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from psycopg import Connection
 
 from .authentication import Principal, principal_from_request
 from .database import get_connection
-from .schemas import DashboardSummaryRead
+from .schemas import DashboardReviewItem, DashboardSummaryRead
+from .config import integer_environment
 
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
+
+
+@router.get("/reviews", response_model=list[DashboardReviewItem])
+def dashboard_reviews(
+    state: Literal["overdue", "upcoming"] = Query(...),
+    limit: int = Query(500, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    comparison = (
+        "date_of_next_review<=CURRENT_TIMESTAMP" if state == "overdue" else
+        "date_of_next_review>CURRENT_TIMESTAMP AND date_of_next_review<=CURRENT_TIMESTAMP+(%s*INTERVAL '1 day')"
+    )
+    parameters = (REVIEW_WARNING_WINDOW_DAYS, limit, offset) if state == "upcoming" else (limit, offset)
+    return list(connection.execute(
+        f"""WITH reviewable AS (
+          SELECT 'aggregation'::text entity_type,id entity_id,date_of_next_review,title,aggregation_number,NULL::text record_number
+          FROM aggregations WHERE date_of_next_review IS NOT NULL AND current_user_can_view_aggregation(id)
+           AND owning_org_unit_id IN (SELECT DISTINCT role.org_unit_id FROM user_role_assignments assignment JOIN roles role ON role.id=assignment.role_id WHERE assignment.user_id=current_user_id() AND assignment.valid_from<=CURRENT_TIMESTAMP AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP) AND role_effectively_active(role.id))
+          UNION ALL
+          SELECT 'record',id,date_of_next_review,title,NULL::text,record_number
+          FROM records WHERE date_of_next_review IS NOT NULL AND current_user_can_view_record(id)
+           AND owning_org_unit_id IN (SELECT DISTINCT role.org_unit_id FROM user_role_assignments assignment JOIN roles role ON role.id=assignment.role_id WHERE assignment.user_id=current_user_id() AND assignment.valid_from<=CURRENT_TIMESTAMP AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP) AND role_effectively_active(role.id))
+        ) SELECT * FROM reviewable WHERE {comparison} ORDER BY date_of_next_review ASC,entity_type,entity_id LIMIT %s OFFSET %s""",
+        parameters,
+    ).fetchall())
+REVIEW_WARNING_WINDOW_DAYS = integer_environment("REVIEW_WARNING_WINDOW_DAYS", 30)
+DASHBOARD_REVIEW_PREVIEW_LIMIT = integer_environment("DASHBOARD_REVIEW_PREVIEW_LIMIT", 5)
 
 
 @router.get("/summary", response_model=DashboardSummaryRead)
@@ -165,22 +195,28 @@ def dashboard_summary(
     ).fetchall())
 
     recent_activity = list(connection.execute(
-        """WITH matching_events AS (
-               SELECT event.entity_type,event.entity_id,event.operation,event.occurred_at,
-                      row_number() OVER (
-                          PARTITION BY event.entity_type,event.operation
-                          ORDER BY event.occurred_at DESC,event.id DESC
-                      ) AS position
+        """WITH latest_resource_events AS (
+               SELECT DISTINCT ON (event.entity_type,event.entity_id,event.operation)
+                      event.id,event.entity_type,event.entity_id,event.operation,event.occurred_at
                  FROM event_history event
                 WHERE event.actor_user_id=%s
                   AND event.entity_type IN ('aggregation','record')
                   AND event.operation IN ('CREATE','UPDATE')
                   AND (%s::timestamptz IS NULL OR event.occurred_at >= %s)
+                ORDER BY event.entity_type,event.entity_id,event.operation,
+                         event.occurred_at DESC,event.id DESC
+           ), ranked_events AS (
+               SELECT event.entity_type,event.entity_id,event.operation,event.occurred_at,
+                      row_number() OVER (
+                          PARTITION BY event.entity_type,event.operation
+                          ORDER BY event.occurred_at DESC,event.id DESC
+                      ) AS position
+                 FROM latest_resource_events event
            )
            SELECT event.entity_type,event.entity_id,event.operation,event.occurred_at,
                   coalesce(aggregation.title,record.title) AS title,
                   aggregation.aggregation_number,record.record_number
-             FROM matching_events event
+             FROM ranked_events event
         LEFT JOIN aggregations aggregation
                ON event.entity_type='aggregation' AND aggregation.id=event.entity_id
               AND current_user_can_view_aggregation(aggregation.id)
@@ -191,6 +227,53 @@ def dashboard_summary(
               AND (aggregation.id IS NOT NULL OR record.id IS NOT NULL)
             ORDER BY event.occurred_at DESC,event.entity_type,event.entity_id""",
         (principal.user_id, recent_since, recent_since, recent_limit),
+    ).fetchall())
+    review_counts = connection.execute(
+        """SELECT
+             count(*) FILTER (WHERE date_of_next_review<=CURRENT_TIMESTAMP) AS overdue,
+             count(*) FILTER (WHERE date_of_next_review>CURRENT_TIMESTAMP
+                                AND date_of_next_review<=CURRENT_TIMESTAMP+(%s*INTERVAL '1 day')) AS upcoming
+           FROM (
+             SELECT date_of_next_review FROM aggregations
+              WHERE date_of_next_review IS NOT NULL
+                AND current_user_can_view_aggregation(id)
+                AND owning_org_unit_id IN (SELECT DISTINCT role.org_unit_id FROM user_role_assignments assignment JOIN roles role ON role.id=assignment.role_id WHERE assignment.user_id=current_user_id() AND assignment.valid_from<=CURRENT_TIMESTAMP AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP) AND role_effectively_active(role.id))
+             UNION ALL
+             SELECT date_of_next_review FROM records
+              WHERE date_of_next_review IS NOT NULL
+                AND current_user_can_view_record(id)
+                AND owning_org_unit_id IN (SELECT DISTINCT role.org_unit_id FROM user_role_assignments assignment JOIN roles role ON role.id=assignment.role_id WHERE assignment.user_id=current_user_id() AND assignment.valid_from<=CURRENT_TIMESTAMP AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP) AND role_effectively_active(role.id))
+           ) reviewable""",
+        (REVIEW_WARNING_WINDOW_DAYS,),
+    ).fetchone()
+    review_rows = list(connection.execute(
+        """WITH reviewable AS (
+               SELECT 'aggregation'::text AS entity_type,id AS entity_id,date_of_next_review,title,aggregation_number,NULL::text AS record_number
+                 FROM aggregations WHERE date_of_next_review IS NOT NULL AND current_user_can_view_aggregation(id)
+                  AND owning_org_unit_id IN (SELECT DISTINCT role.org_unit_id FROM user_role_assignments assignment JOIN roles role ON role.id=assignment.role_id WHERE assignment.user_id=current_user_id() AND assignment.valid_from<=CURRENT_TIMESTAMP AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP) AND role_effectively_active(role.id))
+               UNION ALL
+               SELECT 'record',id,date_of_next_review,title,NULL::text,record_number
+                 FROM records WHERE date_of_next_review IS NOT NULL AND current_user_can_view_record(id)
+                  AND owning_org_unit_id IN (SELECT DISTINCT role.org_unit_id FROM user_role_assignments assignment JOIN roles role ON role.id=assignment.role_id WHERE assignment.user_id=current_user_id() AND assignment.valid_from<=CURRENT_TIMESTAMP AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP) AND role_effectively_active(role.id))
+           ) SELECT * FROM reviewable
+           WHERE date_of_next_review <= CURRENT_TIMESTAMP
+           ORDER BY date_of_next_review ASC,entity_id ASC LIMIT %s""",
+        (DASHBOARD_REVIEW_PREVIEW_LIMIT,),
+    ).fetchall())
+    upcoming_rows = list(connection.execute(
+        """WITH reviewable AS (
+               SELECT 'aggregation'::text AS entity_type,id AS entity_id,date_of_next_review,title,aggregation_number,NULL::text AS record_number
+                 FROM aggregations WHERE date_of_next_review IS NOT NULL AND current_user_can_view_aggregation(id)
+                  AND owning_org_unit_id IN (SELECT DISTINCT role.org_unit_id FROM user_role_assignments assignment JOIN roles role ON role.id=assignment.role_id WHERE assignment.user_id=current_user_id() AND assignment.valid_from<=CURRENT_TIMESTAMP AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP) AND role_effectively_active(role.id))
+               UNION ALL
+               SELECT 'record',id,date_of_next_review,title,NULL::text,record_number
+                 FROM records WHERE date_of_next_review IS NOT NULL AND current_user_can_view_record(id)
+                  AND owning_org_unit_id IN (SELECT DISTINCT role.org_unit_id FROM user_role_assignments assignment JOIN roles role ON role.id=assignment.role_id WHERE assignment.user_id=current_user_id() AND assignment.valid_from<=CURRENT_TIMESTAMP AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP) AND role_effectively_active(role.id))
+           ) SELECT * FROM reviewable
+           WHERE date_of_next_review > CURRENT_TIMESTAMP
+             AND date_of_next_review <= CURRENT_TIMESTAMP + (%s * INTERVAL '1 day')
+           ORDER BY date_of_next_review ASC,entity_id ASC LIMIT %s""",
+        (REVIEW_WARNING_WINDOW_DAYS, DASHBOARD_REVIEW_PREVIEW_LIMIT,),
     ).fetchall())
 
     return {
@@ -203,4 +286,9 @@ def dashboard_summary(
             "records": favourite_records,
         },
         "recent_activity": recent_activity,
+        "review_warning_window_days": REVIEW_WARNING_WINDOW_DAYS,
+        "overdue_review_count": int(review_counts["overdue"]),
+        "upcoming_review_count": int(review_counts["upcoming"]),
+        "overdue_reviews": review_rows,
+        "upcoming_reviews": upcoming_rows,
     }

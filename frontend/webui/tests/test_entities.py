@@ -30,6 +30,7 @@ from frontend.webui.app import (
     format_timestamp,
     filter_membership_rows,
     index,
+    medium_label,
     user_avatar,
     relationship_options,
     append_navigation_entry,
@@ -46,6 +47,8 @@ from frontend.webui.config import (
     user_details_session_limit,
 )
 from frontend.webui.app import favourite_preview
+
+APP_SOURCE = inspect.getsource(index)
 
 
 def test_native_preview_kind_uses_safe_browser_renderers():
@@ -82,13 +85,16 @@ def test_form_payload_converts_ids_and_omits_empty_create_fields():
         "title": Control("Annual report"),
         "description": Control(""),
         "date_originated": Control(""),
+        "date_of_next_review": Control(""),
         "security_level_id": Control(1.0),
+        "medium": Control("mixed"),
     }
     assert form_payload(spec, controls, creating=True) == {
         "aggregation_id": 12,
         "record_number": "REC-12",
         "title": "Annual report",
         "security_level_id": 1,
+        "medium": "mixed",
     }
 
 
@@ -137,6 +143,13 @@ def test_plain_metadata_containing_uppercase_t_is_not_treated_as_a_timestamp():
     assert display_value(code) == code
     assert display_value(description) == description
     assert display_value(None) == "—"
+
+
+def test_medium_label_uses_accessible_business_terms():
+    assert medium_label("digital") == "Digital"
+    assert medium_label("physical") == "Physical"
+    assert medium_label("mixed") == "Mixed"
+    assert medium_label(None) == "—"
 
 
 def test_dashboard_recent_configuration(monkeypatch):
@@ -665,3 +678,31 @@ def test_upload_batch_is_fully_buffered_before_api_awaits():
         (b"third", "three.txt", "application/octet-stream"),
     ]
     assert all(source.tell() > 0 for source in sources)
+def test_review_and_location_experience_has_accessible_text_labels():
+    source = APP_SOURCE
+    assert 'ui.label("Review reminders")' in source
+    assert 'ui.label("Change location")' in source
+    assert 'ui.input("Assigned location"' in source
+    assert 'ui.input("Current location"' in source
+    assert 'ui.textarea("Reason *")' in source
+    assert '"Inherited assigned location", record.get("effective_assigned_location")' in source
+    assert '"Inherited current location", record.get("effective_current_location")' in source
+    assert '"Record status"' not in source
+    assert '"Closure state"' not in source
+    assert '"View all", icon="arrow_forward"' in source
+    assert '"Review", review_display(record.get("date_of_next_review"))' in source
+    assert '("Vital status", "Vital" if record.get("is_vital") else "Not vital")' in source
+    assert '("Vital status", "Vital" if current.get("is_vital") else "Not vital")' in source
+    assert '("Medium", medium_label(record.get("medium")))' in source
+    assert '("Medium", medium_label(current.get("medium")))' in source
+    assert 'color="red-8" if record.get("is_vital") else "blue-grey-7"' in source
+    assert 'color="red-8" if current.get("is_vital") else "blue-grey-7"' in source
+    assert 'ui.label("Vital record")' in source
+    assert "This record is protected from deletion while its vital status applies." in source
+    assert 'ui.badge("Vital", color="red-8")' not in source
+    assert '"Change this aggregation\'s assigned or current physical location"' in source
+    assert '"Change whether this aggregation is protected as vital"' in source
+    assert '"Change whether this record is protected as vital"' in source
+    assert '"Reason for change"' in source
+    assert '"Reason for changing the medium"' not in source
+    assert '"Reason for lowering the security level"' not in source

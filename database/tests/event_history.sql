@@ -1,6 +1,9 @@
 
 BEGIN;
 
+INSERT INTO org_units(code,name)
+VALUES ('PHASE2-SEGMENT','Event history test unit');
+
 INSERT INTO classification_schemes (code, title, date_published)
 VALUES ('AUDIT-TEST', 'Audit test scheme', CURRENT_TIMESTAMP)
 RETURNING id AS audit_scheme_id \gset
@@ -27,7 +30,8 @@ DECLARE
 BEGIN
     SELECT * INTO STRICT create_event
     FROM event_history
-    WHERE entity_type = 'aggregation' AND operation = 'CREATE';
+    WHERE entity_type = 'aggregation' AND operation = 'CREATE'
+      AND after_state ->> 'aggregation_number' = 'AUDIT-AGG-001';
 
     IF create_event.before_state IS NOT NULL
        OR create_event.after_state ->> 'title' <> 'Audited aggregation'
@@ -40,7 +44,8 @@ BEGIN
 
     SELECT * INTO STRICT update_event
     FROM event_history
-    WHERE entity_type = 'aggregation' AND operation = 'UPDATE';
+    WHERE entity_type = 'aggregation' AND operation = 'UPDATE'
+      AND after_state ->> 'aggregation_number' = 'AUDIT-AGG-001';
 
     IF update_event.before_state ->> 'title' <> 'Audited aggregation'
        OR update_event.after_state ->> 'title' <> 'Updated audited aggregation'
@@ -109,7 +114,8 @@ DECLARE
 BEGIN
     SELECT * INTO STRICT delete_event
     FROM event_history
-    WHERE entity_type = 'aggregation' AND operation = 'DELETE';
+    WHERE entity_type = 'aggregation' AND operation = 'DELETE'
+      AND before_state ->> 'aggregation_number' = 'AUDIT-AGG-001';
 
     IF delete_event.before_state ->> 'title' <> 'Updated audited aggregation'
        OR delete_event.after_state IS NOT NULL THEN

@@ -28,6 +28,15 @@ def storage_secret() -> str:
     return os.getenv("WEBUI_STORAGE_SECRET", "local-development-change-me")
 
 
+def default_root_aggregation_medium() -> str:
+    value = os.getenv("DEFAULT_ROOT_AGGREGATION_MEDIUM", "mixed").strip().lower()
+    if value not in {"digital", "physical", "mixed"}:
+        raise RuntimeError(
+            "DEFAULT_ROOT_AGGREGATION_MEDIUM must be digital, physical, or mixed"
+        )
+    return value
+
+
 def _positive_integer(name: str, default: int) -> int:
     raw_value = os.getenv(name, str(default))
     try:

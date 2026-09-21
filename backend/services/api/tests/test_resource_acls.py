@@ -29,7 +29,7 @@ def _create_child(client: TestClient, parent_id: int, number: str) -> dict:
 def test_catalogue_organizational_defaults_and_no_synthetic_role(client: TestClient, aggregation: dict, record: dict):
     catalogue = client.get("/api/v1/permissions")
     assert catalogue.status_code == 200
-    assert len(catalogue.json()) == 30
+    assert len(catalogue.json()) == 35
     aggregation_acl = client.get(f"/api/v1/aggregations/{aggregation['id']}/permissions").json()
     record_acl = client.get(f"/api/v1/records/{record['id']}/permissions").json()
     assert aggregation_acl["inherit_acl_from_parent"] is False

@@ -123,8 +123,18 @@ CONTENT_CLEANUP_INTERVAL_SECONDS=3600
 AUTH_SESSION_RETENTION_DAYS=90
 AUTH_SESSION_CLEANUP_INTERVAL_SECONDS=3600
 AUTH_SESSION_CLEANUP_BATCH_SIZE=500
+DASHBOARD_REVIEW_PREVIEW_LIMIT=5
+REVIEW_WARNING_WINDOW_DAYS=30
+DEFAULT_ROOT_AGGREGATION_MEDIUM=mixed
 AUTH_COOKIE_SECURE=true
 ```
+
+`DEFAULT_ROOT_AGGREGATION_MEDIUM` accepts `digital`, `physical`, or `mixed` and
+defaults root-aggregation forms without preventing the creator from choosing a
+different value. `REVIEW_WARNING_WINDOW_DAYS` controls how far ahead review
+warnings appear and defaults to 30 days. `DASHBOARD_REVIEW_PREVIEW_LIMIT`
+defaults to five items per review category; zero keeps complete counts but
+omits preview items. Invalid values must prevent application startup.
 
 Run segmented-content cleanup from exactly one dedicated worker or deployment
 scheduler, not from every API worker:

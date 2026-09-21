@@ -29,6 +29,7 @@ from .config import (
     dashboard_favourite_item_limit,
     dashboard_recent_days,
     dashboard_recent_item_limit,
+    default_root_aggregation_medium,
     classification_recent_selection_limit,
     host,
     port,
@@ -197,6 +198,27 @@ def display_value(value: Any) -> str:
     if value is None:
         return "—"
     return str(value)
+
+
+def medium_label(value: Any) -> str:
+    return {
+        "digital": "Digital",
+        "physical": "Physical",
+        "mixed": "Mixed",
+    }.get(str(value or "").lower(), "—")
+
+
+def review_state(value: Any) -> str | None:
+    if not value:
+        return None
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    now = datetime.now(parsed.tzinfo) if parsed.tzinfo else datetime.now()
+    return "Overdue" if parsed <= now else "Upcoming"
+
+
+def review_display(value: Any) -> str:
+    state = review_state(value)
+    return f"{state} · {format_timestamp(value)}" if state else "Not scheduled"
 
 
 def format_timestamp(value: Any) -> str:
@@ -561,6 +583,12 @@ def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | N
             "selective_preservation": "Selective preservation",
             "retain_as_local_archives": "Retain as local archives",
         }, label=display_label, value=value, clearable=True).props("outlined").classes("w-full")
+    if field.kind == "medium":
+        control = ui.select({
+            "digital": "Digital", "physical": "Physical", "mixed": "Mixed",
+        }, label=display_label, value=value).props("outlined options-dense").classes("w-full")
+        control.tooltip("How the resource is held: digital files, physical material, or a mixture of both")
+        return control
     if field.kind == "textarea":
         return ui.textarea(display_label, value=value or "").props("outlined autogrow").classes("w-full")
     if field.kind == "int":
@@ -573,13 +601,18 @@ def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | N
         )
     if field.kind == "datetime":
         rendered = str(value or "")[:16]
-        return ui.input(display_label, value=rendered).props("outlined type=datetime-local").classes("w-full")
+        props = "outlined type=datetime-local"
+        if field.name == "date_of_next_review":
+            props += f" min={datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M')}"
+        return ui.input(display_label, value=rendered).props(props).classes("w-full")
     return ui.input(display_label, value=value or "").props("outlined").classes("w-full")
 
 
 def form_payload(spec: EntitySpec, controls: dict[str, Any], *, creating: bool) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     for field in spec.fields:
+        if field.name not in controls:
+            continue
         value = controls[field.name].value
         if field.kind in {"int", "lookup", "classification"} and value not in (None, ""):
             value = int(value)
@@ -2010,6 +2043,12 @@ def index() -> None:
                                 f"Closed by {closure['aggregation_number']} — {closure['title']}. "
                                 "Files may still be viewed or downloaded."
                             ).classes("text-sm text-amber-800")
+                elif record.get("medium") == "physical":
+                    with ui.row().classes("w-full items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3"):
+                        ui.icon("inventory_2", color="primary")
+                        with ui.column().classes("gap-0 grow"):
+                            ui.label("This is a physical record").classes("font-semibold text-blue-900")
+                            ui.label("Digital files cannot be added.").classes("text-sm text-blue-800")
                 elif component_capabilities.get("add_component"):
                     uploader_control["uploader"] = component_uploader(uploaded)
                 else:
@@ -2717,10 +2756,18 @@ def index() -> None:
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
             return
+        compatible_aggregations = [
+            row for row in aggregations
+            if not (resource == "aggregations" and row["id"] == item["id"])
+            and (
+                row.get("medium", "mixed") == item.get("medium", "mixed")
+                if resource == "aggregations"
+                else row.get("medium", "mixed") == "mixed"
+                     or row.get("medium", "mixed") == item.get("medium", "mixed")
+            )
+        ]
         options = relationship_options(
-            [row for row in aggregations if not (
-                resource == "aggregations" and row["id"] == item["id"]
-            )], ("aggregation_number", "title"),
+            compatible_aggregations, ("aggregation_number", "title"),
         )
         dialog = ui.dialog()
         preview_host: Any = None
@@ -2730,6 +2777,14 @@ def index() -> None:
             destination = ui.select(options, label="Destination aggregation").props(
                 "outlined options-dense"
             ).classes("w-full")
+            ui.label(
+                "Only destinations compatible with this resource's medium are shown."
+            ).classes("text-xs leading-5 text-slate-500 -mt-2")
+            if not compatible_aggregations:
+                ui.label(
+                    "No compatible destination aggregation is currently available."
+                ).classes("text-sm text-amber-800")
+                destination.disable()
             keep_access = ui.checkbox("Keep current effective access as a local override")
             reason = ui.textarea("Reason", placeholder="Required").props(
                 "outlined autogrow"
@@ -2896,6 +2951,14 @@ def index() -> None:
             record = (await decorate_for_spec(ENTITIES["records"], [fetched]))[0]
             security_level = await api.get("security-levels", record["security_level_id"])
             capabilities = await api.resource_capabilities("records", record_id)
+            location_source_ids = {
+                record.get("effective_assigned_location_source_aggregation_id"),
+                record.get("effective_current_location_source_aggregation_id"),
+            } - {None}
+            location_sources = {
+                source_id: await api.get("aggregations", source_id)
+                for source_id in location_source_ids
+            }
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
             return
@@ -2995,6 +3058,45 @@ def index() -> None:
                                 "records", record["id"], on_saved=lambda: refresh_record_view(),
                             ),
                         ).props("flat no-caps")
+                    if capabilities.get("change_vital_status"):
+                        async def change_vital() -> None:
+                            dialog = ui.dialog()
+                            with dialog, ui.card().classes("w-[520px] max-w-full"):
+                                ui.label("Change vital status").classes("text-xl font-semibold")
+                                value = ui.checkbox("Vital record", value=bool(record.get("is_vital")))
+                                reason = ui.textarea("Reason *").props("outlined autogrow").classes("w-full")
+                                async def submit() -> None:
+                                    if not (reason.value or "").strip():
+                                        ui.notify("Enter a reason", color="warning"); return
+                                    try:
+                                        saved = await api.change_vital_status("records", record["id"], record["version"], bool(value.value), reason.value.strip())
+                                        dialog.close(); await refresh_record_view(saved)
+                                    except ApiError as error: ui.notify(error_message(error), color="negative", close_button=True)
+                                ui.button("Save", on_click=submit).props("unelevated")
+                            dialog.open()
+                        ui.button(
+                            "Vital status", icon="emergency", on_click=change_vital,
+                        ).props("flat no-caps").tooltip(
+                            "Change whether this record is protected as vital"
+                        )
+                    if capabilities.get("change_review_date"):
+                        async def change_record_review_date() -> None:
+                            dialog = ui.dialog()
+                            with dialog, ui.card().classes("w-[520px] max-w-full"):
+                                ui.label("Schedule next review").classes("text-xl font-semibold")
+                                ui.label("Set a future date, or clear it when no review is scheduled. This governed action is recorded in event history.").classes("text-sm text-slate-500")
+                                review_date = ui.input("Date of next review", value=str(record.get("date_of_next_review") or "")[:16]).props(f"outlined clearable type=datetime-local min={datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M')}").classes("w-full")
+                                reason = ui.textarea("Reason *").props("outlined autogrow").classes("w-full")
+                                async def submit() -> None:
+                                    if not (reason.value or "").strip(): ui.notify("Enter a reason", color="warning"); return
+                                    value = datetime.fromisoformat(review_date.value).isoformat() if review_date.value else None
+                                    try:
+                                        saved = await api.change_review_date("records", record["id"], record["version"], value, reason.value.strip())
+                                        dialog.close(); await refresh_record_view(saved)
+                                    except (ApiError, ValueError) as error: ui.notify(error_message(error) if isinstance(error, ApiError) else "Choose a valid future date", color="negative", close_button=True)
+                                ui.button("Save", on_click=submit).props("unelevated")
+                            dialog.open()
+                        ui.button("Next review", icon="event", on_click=change_record_review_date).props("flat no-caps").tooltip("Schedule or clear this record's next governance review")
                 if not record.get("_effectively_closed") and capabilities.get("move"):
                     with ui.expansion(
                         "Advanced", caption="Specialist record actions", icon="tune", value=False,
@@ -3014,6 +3116,16 @@ def index() -> None:
                         with ui.row().classes("w-full items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg"):
                             ui.icon("lock", color="amber-8")
                             ui.label("This record is read-only because its aggregation hierarchy is closed.").classes("text-sm text-amber-900")
+                    if record.get("is_vital"):
+                        with ui.row().classes(
+                            "w-full items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg"
+                        ):
+                            ui.icon("emergency", color="red-8")
+                            with ui.column().classes("gap-0"):
+                                ui.label("Vital record").classes("text-sm font-semibold text-red-900")
+                                ui.label(
+                                    "This record is protected from deletion while its vital status applies."
+                                ).classes("text-xs text-red-800")
                     if record.get("description"):
                         with ui.column().classes("w-full gap-1 rounded-xl bg-slate-50 px-4 py-3"):
                             ui.label("DESCRIPTION").classes("detail-field-label")
@@ -3022,14 +3134,18 @@ def index() -> None:
                             )
                     with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
                         for label, value in (
-                            ("Record status", "Read-only" if record.get("_effectively_closed") else "Active"),
                             ("Security level", f"{security_level['code']} — {security_level['name']}"),
                             (
                                 "Owning organizational unit",
                                 f"{record['owning_org_unit_code']} — {record['owning_org_unit_name']}",
                             ),
+                            ("Medium", medium_label(record.get("medium"))),
+                            ("Vital status", "Vital" if record.get("is_vital") else "Not vital"),
                             ("Originated", format_timestamp(record.get("date_originated"))),
                             ("Created", format_timestamp(record.get("date_created"))),
+                            ("Inherited assigned location", record.get("effective_assigned_location") or "Unknown"),
+                            ("Inherited current location", record.get("effective_current_location") or "Unknown"),
+                            ("Review", review_display(record.get("date_of_next_review"))),
                             ("Containing aggregation", record.get("aggregation_display")),
                         ):
                             with ui.column().classes("detail-field gap-1"):
@@ -3042,13 +3158,18 @@ def index() -> None:
                                     ).props("flat dense no-caps color=primary align=left").classes(
                                         "font-semibold self-start -ml-2"
                                     )
-                                elif label == "Record status":
+                                elif label == "Vital status":
                                     ui.badge(
                                         str(value),
-                                        color="amber-8" if record.get("_effectively_closed") else "positive",
+                                        color="red-8" if record.get("is_vital") else "blue-grey-7",
                                     ).props("outline")
                                 else:
                                     ui.label(str(value or "—")).classes("detail-field-value")
+                                    if label.startswith("Inherited "):
+                                        source_key = "effective_assigned_location_source_aggregation_id" if "assigned" in label else "effective_current_location_source_aggregation_id"
+                                        source = location_sources.get(record.get(source_key))
+                                        if source:
+                                            ui.label(f"Inherited from {source['aggregation_number']} — {source['title']}").classes("text-xs text-slate-500")
 
             with ui.card().classes("detail-surface w-full shadow-none p-5 gap-4"):
                 with ui.row().classes("w-full items-center gap-3"):
@@ -3081,6 +3202,10 @@ def index() -> None:
             return [
                 {
                     **item,
+                    "medium_display": medium_label(item.get("medium")),
+                    "vital_display": "Vital" if item.get("is_vital") else "Contains vital resources" if item.get("has_vital_descendants") else "Not vital",
+                    "review_display": review_display(item.get("date_of_next_review")),
+                    "location_display": item.get("effective_current_location") or item.get("effective_assigned_location") or "Unknown",
                     "_effectively_closed": effective_closure(
                         by_id.get(item["id"], item), by_id
                     ) is not None,
@@ -3145,6 +3270,10 @@ def index() -> None:
             return [
                 {
                     **item,
+                    "medium_display": medium_label(item.get("medium")),
+                    "vital_display": "Vital" if item.get("is_vital") else "Not vital",
+                    "review_display": review_display(item.get("date_of_next_review")),
+                    "location_display": item.get("effective_current_location") or item.get("effective_assigned_location") or "Unknown",
                     "_effectively_closed": effective_closure(
                         by_id.get(item.get("aggregation_id")), by_id
                     ) is not None,
@@ -3376,6 +3505,9 @@ def index() -> None:
                             initial_value = min(
                                 security_levels, key=lambda item: (item["level_number"], item["id"])
                             )["id"]
+                        if field.name == "medium":
+                            parent = aggregations_by_id.get(controls["aggregation_id"].value)
+                            initial_value = parent.get("medium", "mixed") if parent else "mixed"
                         controls[field.name] = field_input(field, value=initial_value, options=options)
                         if field.kind == "textarea":
                             controls[field.name].classes("col-span-2")
@@ -3397,8 +3529,31 @@ def index() -> None:
                             allowed, ("code", "name")
                         )
                         controls["security_level_id"].update()
+                    def constrain_record_medium() -> None:
+                        parent = aggregations_by_id.get(controls["aggregation_id"].value)
+                        medium_control = controls["medium"]
+                        if not parent:
+                            medium_control.set_options({}, value=None)
+                            medium_control.disable()
+                            return
+                        parent_medium = parent.get("medium", "mixed")
+                        if parent_medium == "mixed":
+                            medium_control.set_options(
+                                {"digital": "Digital", "physical": "Physical", "mixed": "Mixed"},
+                                value=medium_control.value or "mixed",
+                            )
+                            medium_control.enable()
+                        else:
+                            medium_control.set_options(
+                                {parent_medium: parent_medium.capitalize()}, value=parent_medium,
+                            )
+                            medium_control.disable()
+                        medium_control.update()
                     controls["aggregation_id"].on_value_change(
                         lambda _: constrain_record_security_levels()
+                    )
+                    controls["aggregation_id"].on_value_change(
+                        lambda _: constrain_record_medium()
                     )
                     async def refresh_record_creation_roles() -> None:
                         aggregation_id = controls["aggregation_id"].value
@@ -3457,11 +3612,33 @@ def index() -> None:
                         lambda _: refresh_record_creation_roles()
                     )
                     constrain_record_security_levels()
+                    constrain_record_medium()
                 with ui.row().classes("w-full items-center mt-5 mb-2"):
                     with ui.column().classes("gap-0"):
                         ui.label("Digital components").classes("text-base font-semibold")
                         ui.label("Files remain staged until you create the record.").classes("text-xs text-slate-500")
-                uploader_control["uploader"] = component_uploader(upload_to_draft)
+                with ui.column().classes("w-full") as draft_upload_area:
+                    uploader_control["uploader"] = component_uploader(upload_to_draft)
+                with ui.row().classes(
+                    "w-full items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3"
+                ) as physical_draft_notice:
+                    ui.icon("inventory_2", color="primary")
+                    with ui.column().classes("gap-0 grow"):
+                        ui.label("This is a physical record").classes("font-semibold text-blue-900")
+                        ui.label("Digital files cannot be added.").classes("text-sm text-blue-800")
+
+                def update_draft_component_controls() -> None:
+                    selected_medium = controls["medium"].value
+                    draft_upload_area.set_visibility(selected_medium in {"digital", "mixed"})
+                    physical_draft_notice.set_visibility(selected_medium == "physical")
+
+                controls["medium"].on_value_change(
+                    lambda _: update_draft_component_controls()
+                )
+                controls["aggregation_id"].on_value_change(
+                    lambda _: update_draft_component_controls()
+                )
+                update_draft_component_controls()
                 with ui.element("div").classes("component-list w-full mt-3") as component_list:
                     component_area = ui.element("div").classes("component-grid w-full")
                 component_list.set_visibility(False)
@@ -3750,6 +3927,10 @@ def index() -> None:
                         "text-xs leading-5 text-amber-800 -mt-2"
                     )
                 for field in spec.fields:
+                    if not creating and spec.key in {"aggregations", "records"} and field.name in {
+                        "date_of_next_review", "is_vital", "assigned_location", "current_location",
+                    }:
+                        continue
                     if creating and spec.key == "aggregations" and field.name == "parent_aggregation_id":
                         continue
                     source = retention_rule if field.name in {
@@ -3773,6 +3954,10 @@ def index() -> None:
                             initial_value = min(
                                 available_levels, key=lambda item: (item["level_number"], item["id"])
                             )["id"]
+                    if creating and spec.key == "aggregations" and field.name == "medium":
+                        parent_id = controls["parent_aggregation_id"].value
+                        parent = next((item for item in lookup_rows_by_field.get("parent_aggregation_id", []) if item["id"] == parent_id), None)
+                        initial_value = parent.get("medium", "mixed") if parent else default_root_aggregation_medium()
                     if creating and field.name == "profile_id" and initial_value is None:
                         available_profiles = lookup_rows_by_field.get(field.name, [])
                         compatibility = next(
@@ -3899,9 +4084,28 @@ def index() -> None:
                         )
                     security_control.update()
 
+                def constrain_aggregation_medium() -> None:
+                    parent_id = controls["parent_aggregation_id"].value
+                    parent = next((item for item in parents if item["id"] == parent_id), None)
+                    medium_control = controls["medium"]
+                    if parent:
+                        medium = parent.get("medium", "mixed")
+                        medium_control.set_options({medium: medium.capitalize()}, value=medium)
+                        medium_control.disable()
+                    else:
+                        medium_control.set_options(
+                            {"digital": "Digital", "physical": "Physical", "mixed": "Mixed"},
+                            value=medium_control.value or default_root_aggregation_medium(),
+                        )
+                        medium_control.enable()
+                    medium_control.update()
+
                 if controls.get("parent_aggregation_id"):
                     controls["parent_aggregation_id"].on_value_change(
                         lambda _: constrain_aggregation_security_levels()
+                    )
+                    controls["parent_aggregation_id"].on_value_change(
+                        lambda _: constrain_aggregation_medium()
                     )
                     if creating:
                         async def refresh_aggregation_creation_roles() -> None:
@@ -3967,15 +4171,56 @@ def index() -> None:
                             lambda _: refresh_aggregation_creation_roles()
                         )
                 constrain_aggregation_security_levels()
+                constrain_aggregation_medium()
 
-            security_change_reason = None
-            if not creating and spec.key in {"aggregations", "records", "roles"}:
-                security_change_reason = ui.textarea(
-                    "Reason for sensitive authorization changes" if spec.key == "roles" else "Reason for lowering the security level",
+            if spec.key == "records" and "medium" in controls:
+                aggregation_rows = lookup_rows_by_field.get("aggregation_id", [])
+
+                def constrain_edited_record_medium() -> None:
+                    parent = next(
+                        (item for item in aggregation_rows
+                         if item["id"] == controls["aggregation_id"].value),
+                        None,
+                    )
+                    medium_control = controls["medium"]
+                    if not parent:
+                        return
+                    parent_medium = parent.get("medium", "mixed")
+                    if parent_medium == "mixed":
+                        medium_control.set_options({
+                            "digital": "Digital", "physical": "Physical", "mixed": "Mixed",
+                        }, value=medium_control.value or "mixed")
+                        medium_control.enable()
+                    else:
+                        medium_control.set_options(
+                            {parent_medium: parent_medium.capitalize()}, value=parent_medium,
+                        )
+                        medium_control.disable()
+                    medium_control.update()
+
+                controls["aggregation_id"].on_value_change(
+                    lambda _: constrain_edited_record_medium()
+                )
+                constrain_edited_record_medium()
+
+            resource_change_reason = None
+            if not creating and spec.key in {"aggregations", "records"}:
+                resource_change_reason = ui.textarea(
+                    "Reason for change",
                     placeholder=(
-                        "Required for profile, governance-status, or clearance reductions"
-                        if spec.key == "roles" else "Required only when selecting a lower level"
+                        "Required when lowering the security level or changing the medium"
+                        if spec.key == "records"
+                        else "Required when lowering the security level or changing the medium"
                     ),
+                ).props("outlined autogrow").classes("w-full")
+                ui.label(
+                    "A reason is required only when lowering the security level or changing the medium."
+                ).classes("text-xs text-slate-500 -mt-2")
+            security_change_reason = None
+            if not creating and spec.key == "roles":
+                security_change_reason = ui.textarea(
+                    "Reason for sensitive authorization changes",
+                    placeholder="Required for profile, governance-status, or clearance reductions",
                 ).props("outlined autogrow").classes("w-full")
             profile_change_reason = None
             if not creating and spec.key == "profiles":
@@ -4017,15 +4262,23 @@ def index() -> None:
                         if spec.key == "profiles":
                             payload.pop("code", None)
                         change_reason = None
-                        if security_change_reason is not None and "security_level_id" in payload:
+                        if resource_change_reason is not None and "security_level_id" in payload:
                             levels = lookup_rows_by_field.get("security_level_id", [])
                             level_numbers = {item["id"]: item["level_number"] for item in levels}
                             old_number = level_numbers.get(row.get("security_level_id"))
                             new_number = level_numbers.get(payload.get("security_level_id"))
                             if old_number is not None and new_number is not None and new_number < old_number:
-                                change_reason = (security_change_reason.value or "").strip()
+                                change_reason = (resource_change_reason.value or "").strip()
                                 if not change_reason:
                                     raise ValueError("A reason is required when lowering the security level")
+                        if (
+                            resource_change_reason is not None
+                            and spec.key in {"aggregations", "records"}
+                            and payload.get("medium") != row.get("medium")
+                        ):
+                            change_reason = (resource_change_reason.value or "").strip()
+                            if not change_reason:
+                                raise ValueError("A reason is required when changing the record medium")
                         if spec.key == "roles" and any(
                             payload.get(name) != row.get(name)
                             for name in ("profile_id", "is_information_governance")
@@ -4611,6 +4864,11 @@ def index() -> None:
                                     ).props("flat dense no-caps color=primary").tooltip(
                                         "Clear the closure date; all other metadata remains unchanged"
                                     )
+                        if current.get("is_vital") or current.get("has_vital_descendants"):
+                            with ui.row().classes("w-full items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3"):
+                                ui.icon("emergency", color="red-8")
+                                ui.label("Vital" if current.get("is_vital") else "Contains vital resources").classes("text-sm font-semibold text-red-900")
+                                ui.label("This aggregation cannot be deleted while vital protection applies.").classes("text-xs text-red-800")
                         if current.get("description"):
                             with ui.column().classes("w-full gap-1 rounded-xl bg-slate-50 px-4 py-3"):
                                 ui.label("DESCRIPTION").classes("detail-field-label")
@@ -4623,7 +4881,12 @@ def index() -> None:
                                     "Owning organizational unit",
                                     f"{current['owning_org_unit_code']} — {current['owning_org_unit_name']}",
                                 ),
+                                ("Medium", medium_label(current.get("medium"))),
+                                ("Vital status", "Vital" if current.get("is_vital") else "Not vital"),
                                 ("Date opened", format_timestamp(current.get("date_opened"))),
+                                ("Assigned location", current.get("effective_assigned_location") or "Unknown"),
+                                ("Current location", current.get("effective_current_location") or "Unknown"),
+                                ("Review", review_display(current.get("date_of_next_review"))),
                                 ("Classification", " › ".join(
                                     f"{item['code']} — {item['title']}" for item in classification_path
                                 ) if classification_path else "Unclassified"),
@@ -4636,9 +4899,124 @@ def index() -> None:
                                         ui.badge(
                                             str(value), color="amber-8" if closure else "positive",
                                         ).props("outline")
+                                    elif label == "Vital status":
+                                        ui.badge(
+                                            str(value),
+                                            color="red-8" if current.get("is_vital") else "blue-grey-7",
+                                        ).props("outline")
                                     else:
                                         ui.label(str(value or "—")).classes("detail-field-value")
+                                        if label in {"Assigned location", "Current location"}:
+                                            source_key = "effective_assigned_location_source_aggregation_id" if label == "Assigned location" else "effective_current_location_source_aggregation_id"
+                                            source_id = current.get(source_key)
+                                            source = by_id.get(source_id)
+                                            if source_id == current["id"]:
+                                                ui.label("Set on this aggregation").classes("text-xs text-slate-500")
+                                            elif source:
+                                                ui.label(f"Inherited from {source['aggregation_number']} — {source['title']}").classes("text-xs text-slate-500")
                         with ui.row().classes("w-full justify-end"):
+                            if capabilities.get("change_location"):
+                                async def change_location() -> None:
+                                    dialog = ui.dialog()
+                                    with dialog, ui.card().classes("w-[520px] max-w-full"):
+                                        ui.label("Change location").classes("text-xl font-semibold")
+                                        ui.label("Leave a location blank to clear its local value and inherit it from the nearest parent.").classes("text-sm text-slate-500")
+                                        assigned = ui.input("Assigned location", value=current.get("assigned_location") or "").classes("w-full")
+                                        current_location = ui.input("Current location", value=current.get("current_location") or "").classes("w-full")
+                                        impact_host = ui.column().classes("w-full gap-1 rounded-lg bg-slate-50 p-3")
+                                        impact_host.set_visibility(False)
+                                        initial_locations = (
+                                            current.get("assigned_location") or "",
+                                            current.get("current_location") or "",
+                                        )
+                                        async def refresh_location_impact() -> None:
+                                            impact_host.clear()
+                                            proposed_locations = (
+                                                (assigned.value or "").strip(),
+                                                (current_location.value or "").strip(),
+                                            )
+                                            if proposed_locations == initial_locations:
+                                                impact_host.set_visibility(False)
+                                                return
+                                            impact_host.set_visibility(True)
+                                            try:
+                                                preview = await api.preview_aggregation_location(current["id"], {
+                                                    "assigned_location": proposed_locations[0] or None,
+                                                    "current_location": proposed_locations[1] or None,
+                                                })
+                                            except ApiError as error:
+                                                with impact_host:
+                                                    ui.label(
+                                                        "The descendant impact preview could not be calculated. "
+                                                        "You can cancel and try again."
+                                                    ).classes("text-sm text-negative")
+                                                return
+                                            with impact_host:
+                                                count = preview["affected_descendant_count"]
+                                                ui.label(f"Descendant impact: {count} resource{'s' if count != 1 else ''}").classes("text-sm font-semibold")
+                                                if not count:
+                                                    ui.label("No descendant's effective location will change.").classes("text-xs text-slate-500")
+                                                for descendant in preview["affected_descendants"]:
+                                                    kind = "Aggregation" if descendant["entity_type"] == "aggregation" else "Record"
+                                                    ui.label(f"{kind}: {descendant['number']} — {descendant['title']}").classes("text-xs text-slate-600")
+                                                if preview.get("preview_truncated"):
+                                                    ui.label("Only the first 50 affected descendants are shown.").classes("text-xs text-slate-500")
+                                        assigned.on_value_change(lambda _: refresh_location_impact())
+                                        current_location.on_value_change(lambda _: refresh_location_impact())
+                                        reason = ui.textarea("Reason *").props("outlined autogrow").classes("w-full")
+                                        async def submit() -> None:
+                                            if not (reason.value or "").strip(): ui.notify("Enter a reason", color="warning"); return
+                                            if ((assigned.value or "").strip(), (current_location.value or "").strip()) == initial_locations:
+                                                ui.notify("No location changes have been entered", color="warning"); return
+                                            try:
+                                                saved = await api.change_aggregation_location(current["id"], current["version"], {"assigned_location": assigned.value.strip() or None, "current_location": current_location.value.strip() or None, "reason": reason.value.strip()})
+                                                dialog.close(); await open_aggregation(saved)
+                                            except ApiError as error: ui.notify(error_message(error), color="negative", close_button=True)
+                                        ui.button("Save", on_click=submit).props("unelevated")
+                                    dialog.open()
+                                ui.button(
+                                    "Location", icon="location_on", on_click=change_location,
+                                ).props("flat dense no-caps").tooltip(
+                                    "Change this aggregation's assigned or current physical location"
+                                )
+                            if capabilities.get("change_vital_status"):
+                                async def change_vital_aggregation() -> None:
+                                    dialog = ui.dialog()
+                                    with dialog, ui.card().classes("w-[520px] max-w-full"):
+                                        ui.label("Change vital status").classes("text-xl font-semibold")
+                                        value = ui.checkbox("Vital aggregation", value=bool(current.get("is_vital")))
+                                        reason = ui.textarea("Reason *").props("outlined autogrow").classes("w-full")
+                                        async def submit() -> None:
+                                            if not (reason.value or "").strip(): ui.notify("Enter a reason", color="warning"); return
+                                            try:
+                                                saved = await api.change_vital_status("aggregations", current["id"], current["version"], bool(value.value), reason.value.strip())
+                                                dialog.close(); await open_aggregation(saved)
+                                            except ApiError as error: ui.notify(error_message(error), color="negative", close_button=True)
+                                        ui.button("Save", on_click=submit).props("unelevated")
+                                    dialog.open()
+                                ui.button(
+                                    "Vital status", icon="emergency", on_click=change_vital_aggregation,
+                                ).props("flat dense no-caps").tooltip(
+                                    "Change whether this aggregation is protected as vital"
+                                )
+                            if capabilities.get("change_review_date"):
+                                async def change_aggregation_review_date() -> None:
+                                    dialog = ui.dialog()
+                                    with dialog, ui.card().classes("w-[520px] max-w-full"):
+                                        ui.label("Schedule next review").classes("text-xl font-semibold")
+                                        ui.label("Set a future date, or clear it when no review is scheduled. This governed action is recorded in event history.").classes("text-sm text-slate-500")
+                                        review_date = ui.input("Date of next review", value=str(current.get("date_of_next_review") or "")[:16]).props(f"outlined clearable type=datetime-local min={datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M')}").classes("w-full")
+                                        reason = ui.textarea("Reason *").props("outlined autogrow").classes("w-full")
+                                        async def submit() -> None:
+                                            if not (reason.value or "").strip(): ui.notify("Enter a reason", color="warning"); return
+                                            value = datetime.fromisoformat(review_date.value).isoformat() if review_date.value else None
+                                            try:
+                                                saved = await api.change_review_date("aggregations", current["id"], current["version"], value, reason.value.strip())
+                                                dialog.close(); await open_aggregation(saved)
+                                            except (ApiError, ValueError) as error: ui.notify(error_message(error) if isinstance(error, ApiError) else "Choose a valid future date", color="negative", close_button=True)
+                                        ui.button("Save", on_click=submit).props("unelevated")
+                                    dialog.open()
+                                ui.button("Next review", icon="event", on_click=change_aggregation_review_date).props("flat dense no-caps").tooltip("Schedule or clear this aggregation's next governance review")
                             if closure is None and capabilities.get("close"):
                                 ui.button(
                                     "Close", icon="lock",
@@ -5953,6 +6331,16 @@ def index() -> None:
             dashboard_content = ui.column().classes("w-full px-5 pb-5 pt-0 gap-4")
         dashboard_load_state = {"running": False}
 
+        async def open_dashboard_resource(resource: str, item: dict[str, Any]) -> None:
+            try:
+                entity = await api.get(resource, item["id"])
+                if resource == "aggregations":
+                    await open_aggregation(entity)
+                else:
+                    await show_record_details(entity)
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
         async def show_unclassified_roots() -> None:
             await select_entity("aggregations")
             try:
@@ -5975,6 +6363,39 @@ def index() -> None:
                 render_table(ENTITIES["aggregations"])
             except ApiError as error:
                 ui.notify(error_message(error), color="negative", close_button=True)
+
+        async def show_all_reviews(review_kind: str) -> None:
+            try:
+                items = await api.dashboard_reviews(review_kind)
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+                return
+            register_navigation("dashboard", f"{review_kind.title()} reviews")
+            title.text = f"{review_kind.title()} reviews"
+            subtitle.text = "Governance review reminders for holdings owned by your organizational units"
+            table_container.clear()
+            with table_container, ui.column().classes("w-full p-5 gap-3"):
+                with ui.row().classes("w-full items-center"):
+                    ui.button("Back to dashboard", icon="arrow_back", on_click=select_dashboard).props("flat no-caps")
+                    ui.space()
+                    ui.badge(str(len(items)), color="negative" if review_kind == "overdue" else "warning").props("outline")
+                if not items:
+                    ui.label("No matching review reminders.").classes("text-slate-500")
+                for item in items:
+                    resource = "aggregations" if item["entity_type"] == "aggregation" else "records"
+                    number = item.get("aggregation_number") or item.get("record_number")
+                    with ui.card().classes(
+                        "recent-card cursor-pointer w-full shadow-none border border-slate-200 p-3"
+                    ).on(
+                        "click", lambda _, row=item, kind=resource: open_dashboard_resource(
+                            kind, {"id": row["entity_id"]},
+                        ),
+                    ):
+                        with ui.row().classes("w-full items-center gap-3"):
+                            ui.icon("folder" if resource == "aggregations" else "description", color="primary")
+                            with ui.column().classes("gap-0 grow min-w-0"):
+                                ui.label(item["title"]).classes("font-semibold")
+                                ui.label(f"{number} · {review_display(item['date_of_next_review'])}").classes("text-xs text-slate-500")
 
         async def load_dashboard() -> None:
             if dashboard_load_state["running"]:
@@ -6133,6 +6554,43 @@ def index() -> None:
                         "No organizational-unit holdings are available for your effective roles."
                     ).classes("text-sm text-slate-500")
 
+                overdue_reviews = summary.get("overdue_reviews", [])
+                upcoming_reviews = summary.get("upcoming_reviews", [])
+                ui.label("Review reminders").classes("text-lg font-semibold mt-2")
+                ui.label(
+                    f"Upcoming reviews fall within the next {summary.get('review_warning_window_days', 30)} days."
+                ).classes("text-sm text-slate-500 -mt-1")
+                with ui.grid(columns=2).classes("w-full gap-4"):
+                    for heading, items, color, empty in (
+                        ("Overdue", overdue_reviews, "negative", "No overdue reviews."),
+                        ("Upcoming", upcoming_reviews, "warning", "No reviews due soon."),
+                    ):
+                        with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-2"):
+                            with ui.row().classes("items-center gap-2"):
+                                ui.icon("event", color=color)
+                                ui.label(heading).classes("font-semibold")
+                                total = summary["overdue_review_count" if heading == "Overdue" else "upcoming_review_count"]
+                                ui.badge(str(total), color=color).props("outline")
+                                ui.space()
+                                ui.button(
+                                    "View all", icon="arrow_forward",
+                                    on_click=lambda _, kind=heading.lower(): show_all_reviews(kind),
+                                ).props("flat dense no-caps color=primary")
+                            if not items:
+                                ui.label(empty).classes("text-sm text-slate-400")
+                            for item in items:
+                                resource = "aggregations" if item["entity_type"] == "aggregation" else "records"
+                                number = item.get("aggregation_number") or item.get("record_number")
+                                with ui.row().classes("recent-card cursor-pointer w-full items-center gap-2 px-2 py-2").on(
+                                    "click", lambda _, row=item, kind=resource: open_dashboard_resource(kind, {"id": row["entity_id"]}),
+                                ):
+                                    ui.icon("folder" if resource == "aggregations" else "description", color="primary")
+                                    with ui.column().classes("gap-0 grow min-w-0"):
+                                        ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
+                                        ui.label(f"{number} · {format_timestamp(item['date_of_next_review'])}").classes("text-xs text-slate-500")
+                            if total > len(items):
+                                ui.label(f"Showing {len(items)} of {total}.").classes("text-xs text-slate-500 self-end")
+
                 if unclassified_root_count or inactive_classification_count:
                     ui.label("Governance attention").classes("text-lg font-semibold mt-2")
                     with ui.row().classes("w-full gap-3 flex-wrap"):
@@ -6162,17 +6620,6 @@ def index() -> None:
                 ui.label("Your favourites").classes("text-lg font-semibold mt-2")
                 favourites_area = ui.column().classes("w-full gap-3")
 
-                async def open_dashboard_favourite(resource: str, item: dict[str, Any]) -> None:
-                    try:
-                        entity = await api.get(resource, item["id"])
-                        if resource == "aggregations":
-                            await open_aggregation(entity)
-                        else:
-                            decorated = await decorate_for_spec(ENTITIES["records"], [entity])
-                            await show_record_details(decorated[0])
-                    except ApiError as error:
-                        ui.notify(error_message(error), color="negative", close_button=True)
-
                 def render_favourite_entry(
                     resource: str, item: dict[str, Any], *, after_remove: Any,
                 ) -> None:
@@ -6181,7 +6628,7 @@ def index() -> None:
                         "recent-card cursor-pointer w-full items-center no-wrap px-3 py-2 gap-3"
                     ).on(
                         "click",
-                        lambda _, selected=item, kind=resource: open_dashboard_favourite(kind, selected),
+                        lambda _, selected=item, kind=resource: open_dashboard_resource(kind, selected),
                     ):
                         ui.icon(icon).classes("text-primary")
                         with ui.column().classes("gap-0 grow min-w-0"):
@@ -6312,7 +6759,7 @@ def index() -> None:
                                 for item in items:
                                     handler = (
                                         lambda _, entry=item, kind=resource:
-                                            open_dashboard_favourite(kind, entry)
+                                            open_dashboard_resource(kind, entry)
                                     )
                                     with ui.row().classes(
                                         "recent-card cursor-pointer w-full items-center no-wrap px-3 py-2 gap-3"
@@ -6592,6 +7039,22 @@ def index() -> None:
                         "text-sm leading-6 text-slate-600 whitespace-pre-wrap"
                     )
                 with ui.grid(columns=2).classes("w-full gap-3"):
+                    detail_value("Medium", medium_label(item.get("medium")))
+                    detail_value("Vital status", "Vital" if item.get("is_vital") else "Contains vital resources" if item.get("has_vital_descendants") else "Not vital")
+                    detail_value("Review", review_display(item.get("date_of_next_review")))
+                    for location_kind, label in (("assigned", "Assigned location"), ("current", "Current location")):
+                        value = item.get(f"effective_{location_kind}_location") or "Unknown"
+                        source_id = item.get(f"effective_{location_kind}_location_source_aggregation_id")
+                        source = (item.get("_location_sources") or {}).get(source_id)
+                        source_text = ""
+                        if source_id == item.get("id") and is_aggregation:
+                            source_text = " · set here"
+                        elif source:
+                            source_text = f" · inherited from {source['aggregation_number']} — {source['title']}"
+                        elif source_id:
+                            source_text = f" · inherited from aggregation #{source_id}"
+                        visible_label = label if is_aggregation else f"Inherited {label.lower()}"
+                        detail_value(visible_label, f"{value}{source_text}")
                     if is_aggregation:
                         detail_value("Created", item.get("date_created"), timestamp=True)
                         detail_value("Opened", item.get("date_opened"), timestamp=True)
@@ -6647,6 +7110,17 @@ def index() -> None:
 
         async def select_browse_item(item: dict[str, Any]) -> None:
             page_scroll_top = await page_client.run_javascript("window.scrollY || 0")
+            source_ids = {
+                item.get("effective_assigned_location_source_aggregation_id"),
+                item.get("effective_current_location_source_aggregation_id"),
+            } - {None, item.get("id") if item.get("type") == "aggregation" else None}
+            location_sources = {}
+            for source_id in source_ids:
+                try:
+                    location_sources[source_id] = await api.get("aggregations", source_id)
+                except ApiError:
+                    pass
+            item = {**item, "_location_sources": location_sources}
             browse["selected"] = (item["type"], item["id"])
             browse["selected_item"] = item
             render_detail_content(item, loading_retention=item["type"] == "aggregation")

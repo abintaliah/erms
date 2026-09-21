@@ -272,6 +272,25 @@ class ErmsApiClient:
         )
         return response["capabilities"]
 
+    async def change_vital_status(self, resource: str, entity_id: int, version: int, is_vital: bool, reason: str) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/{resource}/{entity_id}/vital-status",
+            json={"is_vital": is_vital, "reason": reason}, headers={"If-Match": str(version)},
+        )
+
+    async def change_review_date(self, resource: str, entity_id: int, version: int, date_of_next_review: str | None, reason: str) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/{resource}/{entity_id}/review-date",
+            json={"date_of_next_review": date_of_next_review, "reason": reason},
+            headers={"If-Match": str(version)},
+        )
+
+    async def change_aggregation_location(self, entity_id: int, version: int, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/aggregations/{entity_id}/location", json=payload, headers={"If-Match": str(version)})
+
+    async def preview_aggregation_location(self, entity_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/aggregations/{entity_id}/location-preview", json=payload)
+
     async def acl_move_preview(
         self, resource: str, entity_id: int, destination_aggregation_id: int,
         *, keep_current_access_as_override: bool = False,
@@ -345,6 +364,17 @@ class ErmsApiClient:
                 "recent_since": recent_since.isoformat(),
             },
         )
+
+    async def dashboard_reviews(self, state: str) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        while True:
+            page = await self.request(
+                "GET", "/api/v1/dashboard/reviews",
+                params={"state": state, "limit": 500, "offset": len(rows)},
+            )
+            rows.extend(page)
+            if len(page) < 500:
+                return rows
 
     async def search(
         self, resource: str, query: str, fields: tuple[str, ...],

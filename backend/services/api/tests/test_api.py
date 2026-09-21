@@ -1,5 +1,6 @@
 import hashlib
 import os
+from datetime import datetime, timedelta, timezone
 
 import psycopg
 import pytest
@@ -88,6 +89,231 @@ def test_aggregation_crud_and_hierarchy(client: TestClient, aggregation: dict):
 
     assert client.delete(f"/api/v1/aggregations/{child['id']}", headers={"If-Match": str(child["version"])}).status_code == 204
     assert client.get(f"/api/v1/aggregations/{child['id']}").status_code == 404
+
+
+def test_medium_hierarchy_creation_and_empty_only_changes(client: TestClient):
+    physical = client.post("/api/v1/aggregations", json={
+        "aggregation_number": "PHY-001", "title": "Physical root",
+        "classification_id": 1, "medium": "physical",
+    }).json()
+    assert physical["medium"] == "physical"
+
+    child_response = client.post("/api/v1/aggregations", json={
+        "parent_aggregation_id": physical["id"], "aggregation_number": "PHY-002",
+        "title": "Physical child", "medium": "digital",
+    })
+    assert child_response.status_code == 422
+    assert child_response.json()["detail"]["code"] == "aggregation_medium_mismatch"
+
+    child = client.post("/api/v1/aggregations", json={
+        "parent_aggregation_id": physical["id"], "aggregation_number": "PHY-003",
+        "title": "Derived physical child",
+    }).json()
+    assert child["medium"] == "physical"
+
+    record_response = client.post("/api/v1/records", json={
+        "aggregation_id": physical["id"], "record_number": "PHY-R-1",
+        "title": "Wrong digital record", "medium": "digital",
+    })
+    assert record_response.status_code == 422
+    assert record_response.json()["detail"]["code"] == "record_medium_not_allowed_by_parent"
+
+    change_response = client.patch(
+        f"/api/v1/aggregations/{physical['id']}", json={"medium": "digital"},
+        headers={"If-Match": str(physical["version"])},
+    )
+    assert change_response.status_code == 422
+    assert change_response.json()["detail"]["code"] == "medium_change_requires_empty_aggregation"
+
+
+def test_mixed_aggregation_accepts_every_record_medium(client: TestClient, aggregation: dict):
+    assert aggregation["medium"] == "mixed"
+    for index, medium in enumerate(("digital", "physical", "mixed"), 1):
+        response = client.post("/api/v1/records", json={
+            "aggregation_id": aggregation["id"], "record_number": f"MIX-{index}",
+            "title": medium.title(), "medium": medium,
+        })
+        assert response.status_code == 201, response.text
+        assert response.json()["medium"] == medium
+
+
+def test_physical_record_rejects_components_and_reports_capability_reason(
+    client: TestClient, aggregation: dict,
+):
+    record = client.post("/api/v1/records", json={
+        "aggregation_id": aggregation["id"], "record_number": "PHYSICAL-1",
+        "title": "Paper file", "medium": "physical",
+    }).json()
+    capabilities = client.get(f"/api/v1/records/{record['id']}/capabilities").json()
+    assert capabilities["capabilities"]["add_component"] is False
+    assert capabilities["capability_reasons"]["add_component"] == (
+        "physical_record_disallows_digital_components"
+    )
+
+    response = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": "1"},
+        files={"file": ("scan.pdf", b"scan", "application/pdf")},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == (
+        "physical_record_disallows_digital_components"
+    )
+
+
+def test_record_medium_change_requires_reason_and_no_components(
+    client: TestClient, aggregation: dict,
+):
+    record = client.post("/api/v1/records", json={
+        "aggregation_id": aggregation["id"], "record_number": "MEDIUM-CHANGE-1",
+        "title": "Convertible", "medium": "digital",
+    }).json()
+    missing_reason = client.patch(
+        f"/api/v1/records/{record['id']}", json={"medium": "physical"},
+        headers={"If-Match": str(record["version"])},
+    )
+    assert missing_reason.status_code == 422
+    assert missing_reason.json()["detail"]["code"] == "medium_change_reason_required"
+
+    changed = client.patch(
+        f"/api/v1/records/{record['id']}", json={"medium": "physical"},
+        headers={"If-Match": str(record["version"]), "X-Change-Reason": "Paper original received"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["medium"] == "physical"
+    history = client.get(f"/api/v1/records/{record['id']}/history").json()
+    event = next(item for item in history if item["operation"] == "MEDIUM_CHANGED")
+    assert event["reason"] == "Paper original received"
+
+    digital = client.post("/api/v1/records", json={
+        "aggregation_id": aggregation["id"], "record_number": "MEDIUM-CHANGE-2",
+        "title": "Has content", "medium": "digital",
+    }).json()
+    uploaded = client.post(
+        f"/api/v1/records/{digital['id']}/digital-components/upload",
+        data={"component_order": "1"}, files={"file": ("file.txt", b"content", "text/plain")},
+    )
+    assert uploaded.status_code == 201
+    rejected = client.patch(
+        f"/api/v1/records/{digital['id']}", json={"medium": "physical"},
+        headers={"If-Match": str(digital["version"]), "X-Change-Reason": "Wrong medium"},
+    )
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"]["code"] == "physical_record_has_digital_components"
+
+
+def test_physical_draft_rejects_staging_and_staged_draft_cannot_become_physical(
+    client: TestClient, aggregation: dict,
+):
+    physical = client.post("/api/v1/record-drafts", json={
+        "aggregation_id": aggregation["id"], "medium": "physical",
+    }).json()
+    rejected = client.post(
+        f"/api/v1/record-drafts/{physical['id']}/components",
+        data={"component_order": "1"}, files={"file": ("scan.pdf", b"scan", "application/pdf")},
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["detail"]["code"] == "physical_record_disallows_digital_components"
+
+    digital = client.post("/api/v1/record-drafts", json={
+        "aggregation_id": aggregation["id"], "medium": "digital",
+    }).json()
+    staged = client.post(
+        f"/api/v1/record-drafts/{digital['id']}/components",
+        data={"component_order": "1"}, files={"file": ("born-digital.txt", b"data", "text/plain")},
+    )
+    assert staged.status_code == 201
+    change = client.patch(
+        f"/api/v1/record-drafts/{digital['id']}", json={"medium": "physical"},
+    )
+    assert change.status_code == 422
+    assert change.json()["detail"]["code"] == "physical_record_has_staged_components"
+
+
+def test_vital_status_is_governed_and_blocks_resource_and_parent_deletion(client: TestClient, aggregation: dict):
+    record = client.post("/api/v1/records", json={
+        "aggregation_id": aggregation["id"], "record_number": "VITAL-1", "title": "Vital record",
+    }).json()
+    changed = client.post(f"/api/v1/records/{record['id']}/vital-status", json={
+        "is_vital": True, "reason": "Required for service recovery",
+    }, headers={"If-Match": str(record["version"])})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["is_vital"] is True
+    assert client.delete(f"/api/v1/records/{record['id']}", headers={"If-Match": str(changed.json()["version"])}).status_code == 409
+    assert client.delete(f"/api/v1/aggregations/{aggregation['id']}", headers={"If-Match": str(aggregation["version"])}).status_code == 409
+    history = client.get(f"/api/v1/records/{record['id']}/history").json()
+    assert any(item["operation"] == "VITAL_STATUS_CHANGED" for item in history)
+
+
+def test_review_dates_must_be_future_but_can_be_cleared(client: TestClient, aggregation: dict):
+    rejected = client.post(
+        f"/api/v1/aggregations/{aggregation['id']}/review-date",
+        json={"date_of_next_review": (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(), "reason": "Schedule review"},
+        headers={"If-Match": str(aggregation["version"])},
+    )
+    assert rejected.status_code == 422
+    future = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+    scheduled = client.post(
+        f"/api/v1/aggregations/{aggregation['id']}/review-date",
+        json={"date_of_next_review": future, "reason": "Schedule review"}, headers={"If-Match": str(aggregation["version"])},
+    )
+    assert scheduled.status_code == 200, scheduled.text
+    closed = client.patch(
+        f"/api/v1/aggregations/{aggregation['id']}",
+        json={"date_closed": datetime.now(timezone.utc).isoformat()},
+        headers={"If-Match": str(scheduled.json()["version"])},
+    )
+    assert closed.status_code == 200, closed.text
+    cleared = client.post(
+        f"/api/v1/aggregations/{aggregation['id']}/review-date",
+        json={"date_of_next_review": None, "reason": "Review no longer required"}, headers={"If-Match": str(closed.json()["version"])},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["date_of_next_review"] is None
+
+
+def test_governed_locations_inherit_and_can_change_on_closed_aggregation(client: TestClient, aggregation: dict):
+    changed = client.post(
+        f"/api/v1/aggregations/{aggregation['id']}/location",
+        json={"assigned_location": "STORE-A-01", "current_location": "DESK-07", "reason": "Initial physical placement"},
+        headers={"If-Match": str(aggregation["version"])},
+    )
+    assert changed.status_code == 200, changed.text
+    child = client.post("/api/v1/aggregations", json={
+        "parent_aggregation_id": aggregation["id"], "aggregation_number": "LOC-CHILD", "title": "Location child",
+    }).json()
+    assert child["effective_assigned_location"] == "STORE-A-01"
+    assert child["effective_assigned_location_source_aggregation_id"] == aggregation["id"]
+    record = client.post("/api/v1/records", json={
+        "aggregation_id": child["id"], "record_number": "LOC-REC", "title": "Inherited-location record",
+    }).json()
+    assert record["effective_assigned_location_source_aggregation_id"] == aggregation["id"]
+    preview = client.post(
+        f"/api/v1/aggregations/{aggregation['id']}/location-preview",
+        json={"current_location": "STORE-A-02"},
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["affected_descendant_count"] == 2
+    assert {item["entity_type"] for item in preview.json()["affected_descendants"]} == {"aggregation", "record"}
+    closed = client.patch(
+        f"/api/v1/aggregations/{aggregation['id']}", json={"date_closed": datetime.now(timezone.utc).isoformat()},
+        headers={"If-Match": str(changed.json()["version"])},
+    )
+    assert closed.status_code == 200, closed.text
+    moved = client.post(
+        f"/api/v1/aggregations/{aggregation['id']}/location",
+        json={"current_location": "STORE-A-02", "reason": "Container moved after closure"},
+        headers={"If-Match": str(closed.json()["version"])},
+    )
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["effective_current_location"] == "STORE-A-02"
+    history = client.get(f"/api/v1/aggregations/{aggregation['id']}/history").json()
+    assert any(item["operation"] == "RESOURCE_LOCATION_CHANGED" for item in history)
+    assert not any(
+        item["operation"] == "UPDATE" and
+        ({"assigned_location", "current_location"} & set(item.get("changed_fields") or []))
+        for item in history
+    )
 
 
 def test_aggregation_date_constraint_has_an_accessible_primary_message(
@@ -1000,6 +1226,11 @@ def test_record_draft_commits_metadata_and_ordered_content_atomically(client, ag
     draft_response = client.post("/api/v1/record-drafts", json={})
     assert draft_response.status_code == 201
     draft = draft_response.json()
+    updated = client.patch(f"/api/v1/record-drafts/{draft['id']}", json={
+        "aggregation_id": aggregation["id"], "record_number": "REC-DRAFT-1",
+        "title": "Created as a package", "description": "Metadata and files commit together",
+    })
+    assert updated.status_code == 200
 
     assert client.get("/api/v1/records").json() == []
     first = client.post(
@@ -1024,11 +1255,6 @@ def test_record_draft_commits_metadata_and_ordered_content_atomically(client, ag
     assert [item["file_name"] for item in staged] == ["second.pdf", "first.txt"]
     assert all(item["content_status"] == "staged" for item in staged)
 
-    updated = client.patch(f"/api/v1/record-drafts/{draft['id']}", json={
-        "aggregation_id": aggregation["id"], "record_number": "REC-DRAFT-1",
-        "title": "Created as a package", "description": "Metadata and files commit together",
-    })
-    assert updated.status_code == 200
     committed = client.post(f"/api/v1/record-drafts/{draft['id']}/commit")
     assert committed.status_code == 201
     record = committed.json()
@@ -1038,8 +1264,8 @@ def test_record_draft_commits_metadata_and_ordered_content_atomically(client, ag
     assert client.get(f"/api/v1/record-drafts/{draft['id']}").status_code == 404
 
 
-def test_record_draft_component_can_be_removed_and_incomplete_commit_rolls_back(client):
-    draft = client.post("/api/v1/record-drafts", json={}).json()
+def test_record_draft_component_can_be_removed_and_incomplete_commit_rolls_back(client, aggregation):
+    draft = client.post("/api/v1/record-drafts", json={"aggregation_id": aggregation["id"]}).json()
     component = client.post(
         f"/api/v1/record-drafts/{draft['id']}/components",
         data={"component_order": "1"}, files={"file": ("remove.txt", b"remove", "text/plain")},
@@ -1052,8 +1278,8 @@ def test_record_draft_component_can_be_removed_and_incomplete_commit_rolls_back(
     assert client.get("/api/v1/records").json() == []
 
 
-def test_expired_draft_cleanup_removes_staged_segments(client):
-    draft = client.post("/api/v1/record-drafts", json={}).json()
+def test_expired_draft_cleanup_removes_staged_segments(client, aggregation):
+    draft = client.post("/api/v1/record-drafts", json={"aggregation_id": aggregation["id"]}).json()
     staged = client.post(
         f"/api/v1/record-drafts/{draft['id']}/components",
         data={"component_order": "1"},

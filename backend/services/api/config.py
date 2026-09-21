@@ -54,4 +54,12 @@ def float_environment(name: str, default: float, *, minimum: float = 0) -> float
     return value
 
 
+def choice_environment(name: str, default: str, choices: set[str]) -> str:
+    value = os.getenv(name, default).strip().lower()
+    if value not in choices:
+        allowed = ", ".join(sorted(choices))
+        raise RuntimeError(f"{name} must be one of: {allowed}")
+    return value
+
+
 load_environment()

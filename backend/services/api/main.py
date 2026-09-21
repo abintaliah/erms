@@ -27,7 +27,7 @@ from .authentication import CSRF_COOKIE, SESSION_COOKIE, hash_secret, resolve_pr
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .concurrency import expected_version
 from .continuity_lock import acquire_continuity_shared_lock
-from .config import integer_environment
+from .config import choice_environment, integer_environment
 from .content_storage import configured_storage, inspect_upload
 from .database import close_pool, get_connection, open_pool, pool
 from .document_conversion import ConversionUnavailable, UnsupportedPreview, pdf_rendition
@@ -47,6 +47,11 @@ from .schemas import (
     RecordDraftUpdate,
     RecordRead,
     RecordPlacementCorrection,
+    VitalStatusChange,
+    ReviewDateChange,
+    AggregationLocationChange,
+    AggregationLocationPreview,
+    AggregationLocationPreviewRead,
     RecordUpdate,
     SearchRequest,
     SearchResponse,
@@ -73,6 +78,57 @@ from .governance_authorization import router as governance_authorization_router
 from .security_operations import router as security_operations_router
 from .dashboard import router as dashboard_router
 from .authorization_policy import load_policy_context, require_audit_view
+
+
+RESOURCE_MEDIA = {"digital", "physical", "mixed"}
+DEFAULT_ROOT_AGGREGATION_MEDIUM = choice_environment(
+    "DEFAULT_ROOT_AGGREGATION_MEDIUM", "mixed", RESOURCE_MEDIA,
+)
+REVIEW_WARNING_WINDOW_DAYS = integer_environment("REVIEW_WARNING_WINDOW_DAYS", 30)
+
+
+def _medium_error(code: str, message: str, **details) -> HTTPException:
+    return HTTPException(status_code=422, detail={"code": code, "message": message, **details})
+
+
+def _record_medium_allowed(parent_medium: str, record_medium: str) -> bool:
+    return parent_medium == "mixed" or parent_medium == record_medium
+
+
+def _resolved_record_medium(parent: dict, requested: str | None) -> str:
+    medium = requested or parent["medium"]
+    if not _record_medium_allowed(parent["medium"], medium):
+        raise _medium_error(
+            "record_medium_not_allowed_by_parent",
+            f"A {parent['medium']} aggregation can only contain compatible records.",
+            parent_medium=parent["medium"], requested_medium=medium,
+        )
+    return medium
+
+
+def _require_record_accepts_components(connection: Connection, record_id: int) -> dict:
+    record = connection.execute(
+        "SELECT id,medium FROM records WHERE id=%s FOR KEY SHARE", (record_id,),
+    ).fetchone()
+    if record is not None and record["medium"] == "physical":
+        raise HTTPException(status_code=409, detail={
+            "code": "physical_record_disallows_digital_components",
+            "message": "This is a physical record. Digital files cannot be added.",
+        })
+    return record
+
+
+def _require_draft_accepts_components(draft: dict) -> None:
+    if draft.get("medium") == "physical":
+        raise HTTPException(status_code=409, detail={
+            "code": "physical_record_disallows_digital_components",
+            "message": "This draft is for a physical record. Digital files cannot be added.",
+        })
+    if not draft.get("medium"):
+        raise HTTPException(status_code=409, detail={
+            "code": "record_medium_required_before_components",
+            "message": "Select the parent aggregation and record medium before adding digital files.",
+        })
 
 
 @asynccontextmanager
@@ -401,6 +457,7 @@ def create_aggregation(
         connection, payload.creator_acl_role_id, payload.parent_aggregation_id,
     )
     if payload.parent_aggregation_id is None:
+        values["medium"] = payload.medium or DEFAULT_ROOT_AGGREGATION_MEDIUM
         level_id = payload.security_level_id or connection.execute(
             "SELECT lowest_security_level_id() AS id"
         ).fetchone()["id"]
@@ -412,6 +469,13 @@ def create_aggregation(
             connection, "aggregation", payload.parent_aggregation_id,
             "aggregation.create_child", "aggregation.add_child",
         )
+        if payload.medium is not None and payload.medium != parent["medium"]:
+            raise _medium_error(
+                "aggregation_medium_mismatch",
+                "A child aggregation must use the same medium as its parent.",
+                parent_medium=parent["medium"], requested_medium=payload.medium,
+            )
+        values["medium"] = parent["medium"]
         level_id = payload.security_level_id or parent["security_level_id"]
         require_clearance_for_level(connection, level_id)
     connection.execute(
@@ -482,6 +546,9 @@ def get_aggregation_capabilities(
         "reclassify": ("aggregation.reclassify", "aggregation.reclassify"),
         "change_security_level": ("aggregation.security_level.change", "aggregation.security_level.change"),
         "manage_acl": ("aggregation.acl.manage", "aggregation.acl.manage"),
+        "change_vital_status": ("aggregation.vital_status.change", "aggregation.vital_status.change"),
+        "change_location": ("aggregation.location.change", "aggregation.location.change"),
+        "change_review_date": ("aggregation.review_date.change", "aggregation.review_date.change"),
         "add_child": ("aggregation.create_child", "aggregation.add_child"),
         "add_record": ("record.create", "aggregation.add_record"),
     }
@@ -490,6 +557,13 @@ def get_aggregation_capabilities(
     capabilities["view"] = True
     capabilities["close"] = capabilities["close"] and resource["date_closed"] is None
     capabilities["reopen"] = capabilities["reopen"] and resource["date_closed"] is not None
+    vital_descendants = connection.execute("SELECT aggregation_has_vital_descendants(%s) AS value", (aggregation_id,)).fetchone()["value"]
+    capabilities["delete"] = capabilities["delete"] and not resource["is_vital"] and not vital_descendants
+    capability_reasons = {}
+    if resource["is_vital"]:
+        capability_reasons["delete"] = "vital_resource_deletion_blocked"
+    elif vital_descendants:
+        capability_reasons["delete"] = "vital_descendant_deletion_blocked"
     capabilities["correct_ownership"] = bool(
         resource["parent_aggregation_id"] is None
         and connection.execute(
@@ -508,7 +582,7 @@ def get_aggregation_capabilities(
         ).fetchone()["allowed"]
     )
     return {"resource_type": "aggregation", "resource_id": aggregation_id,
-            "capabilities": capabilities}
+            "capabilities": capabilities, "capability_reasons": capability_reasons}
 
 
 @app.patch("/api/v1/aggregations/{aggregation_id}", response_model=AggregationRead, tags=["aggregations"])
@@ -534,11 +608,50 @@ def update_aggregation(
         else:
             destination = require_resource_operation(connection, "aggregation", payload.parent_aggregation_id,
                                        "aggregation.move", "aggregation.receive_child")
+            if destination["medium"] != existing["medium"]:
+                raise _medium_error(
+                    "aggregation_medium_mismatch",
+                    "This aggregation and all its descendants must be compatible with the destination medium.",
+                    source_medium=existing["medium"], destination_medium=destination["medium"],
+                )
             if destination["owning_org_unit_id"] != existing["owning_org_unit_id"]:
                 raise HTTPException(status_code=422, detail={
                     "code": "ownership_change_requires_confirmation",
                     "message": "Use the move command and confirm the organizational ownership change.",
                 })
+    if "medium" in fields and payload.medium != existing["medium"]:
+        require_resource_operation(
+            connection, "aggregation", aggregation_id,
+            "aggregation.modify", "aggregation.modify_metadata",
+        )
+        has_contents = connection.execute(
+            """SELECT EXISTS (SELECT 1 FROM aggregations WHERE parent_aggregation_id=%s)
+                      OR EXISTS (SELECT 1 FROM records WHERE aggregation_id=%s) AS value""",
+            (aggregation_id, aggregation_id),
+        ).fetchone()["value"]
+        if has_contents:
+            raise _medium_error(
+                "medium_change_requires_empty_aggregation",
+                "An aggregation's medium can only be changed while it is empty.",
+            )
+        if existing["parent_aggregation_id"] is not None:
+            parent = connection.execute(
+                "SELECT medium FROM aggregations WHERE id=%s FOR KEY SHARE",
+                (existing["parent_aggregation_id"],),
+            ).fetchone()
+            if parent and payload.medium != parent["medium"]:
+                raise _medium_error(
+                    "aggregation_medium_mismatch",
+                    "A child aggregation must use the same medium as its parent.",
+                    parent_medium=parent["medium"], requested_medium=payload.medium,
+                )
+        medium_change_reason = request.headers.get("X-Change-Reason", "").strip()
+        if not medium_change_reason:
+            raise _medium_error(
+                "medium_change_reason_required",
+                "Enter a reason for changing this aggregation's medium.",
+            )
+        connection.execute("SELECT set_config('app.change_reason',%s,true)", (medium_change_reason,))
     if "classification_id" in fields and payload.classification_id != existing["classification_id"]:
         require_resource_operation(connection, "aggregation", aggregation_id,
                                    "aggregation.reclassify", "aggregation.reclassify")
@@ -585,6 +698,11 @@ def update_aggregation(
     updated = update_row(
         connection, "aggregations", aggregation_id, payload.model_dump(exclude_unset=True), version
     )
+    if "medium" in fields and payload.medium != existing["medium"]:
+        connection.execute(
+            "SELECT append_domain_event('aggregation',%s,'MEDIUM_CHANGED',%s::jsonb,%s)",
+            (aggregation_id, Jsonb({"old_medium": existing["medium"], "new_medium": payload.medium}), medium_change_reason),
+        )
     append_security_level_event(
         connection, entity_type="aggregation", entity_id=aggregation_id,
         old_security_level_id=existing["security_level_id"], new_security_level_id=new_level_id,
@@ -601,12 +719,90 @@ def delete_aggregation(aggregation_id: int, version: int = Depends(expected_vers
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@app.post("/api/v1/aggregations/{aggregation_id}/vital-status", response_model=AggregationRead, tags=["aggregations"])
+def change_aggregation_vital_status(aggregation_id: int, payload: VitalStatusChange, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    existing = require_resource_operation(connection, "aggregation", aggregation_id, "aggregation.vital_status.change", "aggregation.vital_status.change")
+    if existing["is_vital"] == payload.is_vital:
+        return get_or_404(connection, "aggregations", aggregation_id)
+    connection.execute("SELECT set_config('app.vital_status_change_authorized','authorized',true),set_config('app.suppress_ordinary_history','authorized',true),set_config('app.change_reason',%s,true)", (payload.reason,))
+    updated = update_row(connection, "aggregations", aggregation_id, {"is_vital": payload.is_vital}, version)
+    connection.execute("SELECT append_domain_event('aggregation',%s,'VITAL_STATUS_CHANGED',%s::jsonb,%s)", (aggregation_id, Jsonb({"old_is_vital": existing["is_vital"], "new_is_vital": payload.is_vital, "authorization_basis": "governed"}), payload.reason))
+    return updated
+
+
+@app.post("/api/v1/aggregations/{aggregation_id}/location", response_model=AggregationRead, tags=["aggregations"])
+def change_aggregation_location(aggregation_id: int, payload: AggregationLocationChange, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    existing = require_resource_operation(connection, "aggregation", aggregation_id, "aggregation.location.change", "aggregation.location.change")
+    values = payload.model_dump(exclude={"reason"}, exclude_unset=True)
+    connection.execute("SELECT set_config('app.location_change_authorized','authorized',true),set_config('app.suppress_ordinary_history','authorized',true),set_config('app.change_reason',%s,true)", (payload.reason,))
+    updated = update_row(connection, "aggregations", aggregation_id, values, version)
+    connection.execute("SELECT append_domain_event('aggregation',%s,'RESOURCE_LOCATION_CHANGED',%s::jsonb,%s)", (aggregation_id, Jsonb({"old": {key: existing.get(key) for key in values}, "new": values, "authorization_basis": "governed"}), payload.reason))
+    return updated
+
+
+@app.post("/api/v1/aggregations/{aggregation_id}/location-preview", response_model=AggregationLocationPreviewRead, tags=["aggregations"])
+def preview_aggregation_location_change(aggregation_id: int, payload: AggregationLocationPreview, connection: Connection = Depends(get_connection, scope="function")):
+    require_resource_operation(connection, "aggregation", aggregation_id, "aggregation.location.change", "aggregation.location.change")
+    proposed = payload.model_dump(exclude_unset=True)
+    assigned_supplied = "assigned_location" in proposed
+    current_supplied = "current_location" in proposed
+    rows = list(connection.execute(
+        """WITH RECURSIVE descendants AS (
+               SELECT root.id,root.parent_aggregation_id,root.aggregation_number,root.title,
+                      root.assigned_location,root.current_location,0 depth,
+                      coalesce(CASE WHEN %s THEN %s ELSE root.assigned_location END,
+                               aggregation_effective_assigned_location(root.parent_aggregation_id)) proposed_assigned,
+                      coalesce(CASE WHEN %s THEN %s ELSE root.current_location END,
+                               aggregation_effective_current_location(root.parent_aggregation_id)) proposed_current
+                 FROM aggregations root WHERE root.id=%s
+               UNION ALL
+               SELECT child.id,child.parent_aggregation_id,child.aggregation_number,child.title,
+                      child.assigned_location,child.current_location,parent.depth+1,
+                      coalesce(child.assigned_location,parent.proposed_assigned),
+                      coalesce(child.current_location,parent.proposed_current)
+                 FROM aggregations child JOIN descendants parent ON child.parent_aggregation_id=parent.id
+             ), aggregation_impact AS (
+               SELECT 'aggregation'::text entity_type,item.id entity_id,item.aggregation_number number,item.title,item.depth,
+                      aggregation_effective_assigned_location(item.id) old_assigned,
+                      aggregation_effective_current_location(item.id) old_current,
+                      item.proposed_assigned new_assigned,item.proposed_current new_current
+                 FROM descendants item WHERE item.depth>0
+             ), record_impact AS (
+               SELECT 'record'::text entity_type,record.id entity_id,record.record_number number,record.title,parent.depth,
+                      aggregation_effective_assigned_location(record.aggregation_id) old_assigned,
+                      aggregation_effective_current_location(record.aggregation_id) old_current,
+                      parent.proposed_assigned new_assigned,parent.proposed_current new_current
+                 FROM records record JOIN descendants parent ON parent.id=record.aggregation_id
+             ), impact AS (SELECT * FROM aggregation_impact UNION ALL SELECT * FROM record_impact)
+             SELECT entity_type,entity_id,number,title
+                 FROM impact
+                WHERE old_assigned IS DISTINCT FROM new_assigned OR old_current IS DISTINCT FROM new_current
+                  AND CASE WHEN entity_type='aggregation' THEN current_user_can_view_aggregation(entity_id) ELSE current_user_can_view_record(entity_id) END
+                ORDER BY depth,entity_type,entity_id""",
+        (assigned_supplied, proposed.get("assigned_location"), current_supplied,
+         proposed.get("current_location"), aggregation_id),
+    ).fetchall())
+    return {"affected_descendant_count": len(rows), "affected_descendants": rows[:50], "preview_truncated": len(rows) > 50}
+
+
+@app.post("/api/v1/aggregations/{aggregation_id}/review-date", response_model=AggregationRead, tags=["aggregations"])
+def change_aggregation_review_date(aggregation_id: int, payload: ReviewDateChange, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    existing = require_resource_operation(connection, "aggregation", aggregation_id, "aggregation.review_date.change", "aggregation.review_date.change")
+    if existing["date_of_next_review"] == payload.date_of_next_review:
+        return get_or_404(connection, "aggregations", aggregation_id)
+    connection.execute("SELECT set_config('app.review_date_change_authorized','authorized',true),set_config('app.suppress_ordinary_history','authorized',true),set_config('app.change_reason',%s,true)", (payload.reason,))
+    updated = update_row(connection, "aggregations", aggregation_id, {"date_of_next_review": payload.date_of_next_review}, version)
+    connection.execute("SELECT append_domain_event('aggregation',%s,'REVIEW_DATE_CHANGED',%s::jsonb,%s)", (aggregation_id, Jsonb({"old_date_of_next_review": existing["date_of_next_review"].isoformat() if existing["date_of_next_review"] else None, "new_date_of_next_review": payload.date_of_next_review.isoformat() if payload.date_of_next_review else None, "authorization_basis": "governed"}), payload.reason))
+    return updated
+
+
 @app.post("/api/v1/records", response_model=RecordRead, status_code=status.HTTP_201_CREATED, tags=["records"])
 def create_record(payload: RecordCreate, connection: Connection = Depends(get_connection, scope="function")):
     acquire_continuity_shared_lock(connection)
-    if connection.execute(
-        "SELECT 1 FROM aggregations WHERE id=%s", (payload.aggregation_id,),
-    ).fetchone() is None:
+    parent = connection.execute(
+        "SELECT id,medium FROM aggregations WHERE id=%s FOR KEY SHARE", (payload.aggregation_id,),
+    ).fetchone()
+    if parent is None:
         raise HTTPException(status_code=409, detail="referenced aggregation does not exist")
     require_resource_operation(connection, "aggregation", payload.aggregation_id,
                                "record.create", "aggregation.add_record")
@@ -625,9 +821,9 @@ def create_record(payload: RecordCreate, connection: Connection = Depends(get_co
             "creator_org_unit_id": selected_role["org_unit_id"],
         })),
     )
-    return create_row(
-        connection, "records", payload.model_dump(exclude={"creator_acl_role_id"}),
-    )
+    values = payload.model_dump(exclude={"creator_acl_role_id"})
+    values["medium"] = _resolved_record_medium(parent, payload.medium)
+    return create_row(connection, "records", values)
 
 
 @app.get("/api/v1/records", response_model=list[RecordRead], tags=["records"])
@@ -677,7 +873,7 @@ def get_record_capabilities(
     record_id: int,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    get_or_404(connection, "records", record_id)
+    record = get_or_404(connection, "records", record_id)
     component_metadata = connection.execute(
         "SELECT current_user_can_list_record_components(%s) AS allowed", (record_id,),
     ).fetchone()["allowed"]
@@ -687,6 +883,8 @@ def get_record_capabilities(
         "move": ("record.move", "record.move"),
         "change_security_level": ("record.security_level.change", "record.security_level.change"),
         "manage_acl": ("record.acl.manage", "record.acl.manage"),
+        "change_vital_status": ("record.vital_status.change", "record.vital_status.change"),
+        "change_review_date": ("record.review_date.change", "record.review_date.change"),
         "view_component": ("record.component.view", "record.component.view"),
         "download_component": ("record.component.download", "record.component.download"),
         "add_component": ("record.component.add", "record.component.add"),
@@ -698,8 +896,17 @@ def get_record_capabilities(
                     for name, policy in mappings.items()}
     capabilities.update({"view": True, "list_components": component_metadata,
                          "share_component": False, "print_component": False})
+    capability_reasons = {}
+    if record["medium"] == "physical":
+        capabilities["add_component"] = False
+        capabilities["replace_component"] = False
+        capability_reasons["add_component"] = "physical_record_disallows_digital_components"
+        capability_reasons["replace_component"] = "physical_record_disallows_digital_components"
+    if record["is_vital"]:
+        capabilities["delete"] = False
+        capability_reasons["delete"] = "vital_resource_deletion_blocked"
     return {"resource_type": "record", "resource_id": record_id,
-            "capabilities": capabilities}
+            "capabilities": capabilities, "capability_reasons": capability_reasons}
 
 
 @app.patch("/api/v1/records/{record_id}", response_model=RecordRead, tags=["records"])
@@ -717,6 +924,7 @@ def update_record(
         require_resource_operation(
             connection, "record", record_id, "record.modify", "record.modify_metadata",
         )
+    destination = None
     if "aggregation_id" in fields and payload.aggregation_id != existing["aggregation_id"]:
         require_resource_operation(connection, "record", record_id, "record.move", "record.move")
         destination = require_resource_operation(connection, "aggregation", payload.aggregation_id,
@@ -726,6 +934,33 @@ def update_record(
                 "code": "ownership_change_requires_confirmation",
                 "message": "Use the move command and confirm the organizational ownership change.",
             })
+    if "medium" in fields and payload.medium != existing["medium"]:
+        require_resource_operation(
+            connection, "record", record_id, "record.modify", "record.modify_metadata",
+        )
+        if payload.medium == "physical" and connection.execute(
+            "SELECT 1 FROM digital_components WHERE record_id=%s LIMIT 1", (record_id,),
+        ).fetchone():
+            raise _medium_error(
+                "physical_record_has_digital_components",
+                "Remove all digital components before changing this record to physical.",
+            )
+        medium_change_reason = request.headers.get("X-Change-Reason", "").strip()
+        if not medium_change_reason:
+            raise _medium_error(
+                "medium_change_reason_required",
+                "Enter a reason for changing this record's medium.",
+            )
+        connection.execute(
+            "SELECT set_config('app.change_reason',%s,true)", (medium_change_reason,),
+        )
+    if destination is None:
+        parent_id = payload.aggregation_id if "aggregation_id" in fields else existing["aggregation_id"]
+        destination = connection.execute(
+            "SELECT id,medium FROM aggregations WHERE id=%s FOR KEY SHARE", (parent_id,),
+        ).fetchone()
+    resulting_medium = payload.medium if "medium" in fields else existing["medium"]
+    _resolved_record_medium(destination, resulting_medium)
     if "security_level_id" in fields and payload.security_level_id != existing["security_level_id"]:
         require_resource_operation(connection, "record", record_id,
                                    "record.security_level.change", "record.security_level.change")
@@ -737,6 +972,12 @@ def update_record(
     if new_level_id is not None and new_number < old_number:
         require_global(connection, "security.resource.downgrade")
     updated = update_row(connection, "records", record_id, payload.model_dump(exclude_unset=True), version)
+    if "medium" in fields and payload.medium != existing["medium"]:
+        connection.execute(
+            "SELECT append_domain_event('record',%s,'MEDIUM_CHANGED',%s::jsonb,%s)",
+            (record_id, Jsonb({"old_medium": existing["medium"], "new_medium": payload.medium}),
+             medium_change_reason),
+        )
     append_security_level_event(
         connection, entity_type="record", entity_id=record_id,
         old_security_level_id=existing["security_level_id"], new_security_level_id=new_level_id,
@@ -750,6 +991,28 @@ def delete_record(record_id: int, version: int = Depends(expected_version), conn
     require_resource_operation(connection, "record", record_id, "record.delete", "record.delete")
     delete_row(connection, "records", record_id, version)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.post("/api/v1/records/{record_id}/vital-status", response_model=RecordRead, tags=["records"])
+def change_record_vital_status(record_id: int, payload: VitalStatusChange, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    existing = require_resource_operation(connection, "record", record_id, "record.vital_status.change", "record.vital_status.change")
+    if existing["is_vital"] == payload.is_vital:
+        return get_or_404(connection, "records", record_id)
+    connection.execute("SELECT set_config('app.vital_status_change_authorized','authorized',true),set_config('app.suppress_ordinary_history','authorized',true),set_config('app.change_reason',%s,true)", (payload.reason,))
+    updated = update_row(connection, "records", record_id, {"is_vital": payload.is_vital}, version)
+    connection.execute("SELECT append_domain_event('record',%s,'VITAL_STATUS_CHANGED',%s::jsonb,%s)", (record_id, Jsonb({"old_is_vital": existing["is_vital"], "new_is_vital": payload.is_vital, "authorization_basis": "governed"}), payload.reason))
+    return updated
+
+
+@app.post("/api/v1/records/{record_id}/review-date", response_model=RecordRead, tags=["records"])
+def change_record_review_date(record_id: int, payload: ReviewDateChange, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    existing = require_resource_operation(connection, "record", record_id, "record.review_date.change", "record.review_date.change")
+    if existing["date_of_next_review"] == payload.date_of_next_review:
+        return get_or_404(connection, "records", record_id)
+    connection.execute("SELECT set_config('app.review_date_change_authorized','authorized',true),set_config('app.suppress_ordinary_history','authorized',true),set_config('app.change_reason',%s,true)", (payload.reason,))
+    updated = update_row(connection, "records", record_id, {"date_of_next_review": payload.date_of_next_review}, version)
+    connection.execute("SELECT append_domain_event('record',%s,'REVIEW_DATE_CHANGED',%s::jsonb,%s)", (record_id, Jsonb({"old_date_of_next_review": existing["date_of_next_review"].isoformat() if existing["date_of_next_review"] else None, "new_date_of_next_review": payload.date_of_next_review.isoformat() if payload.date_of_next_review else None, "authorization_basis": "governed"}), payload.reason))
+    return updated
 
 
 def _effective_closure(connection: Connection, aggregation_id: int) -> dict | None:
@@ -837,6 +1100,14 @@ def _open_draft(connection: Connection, draft_id: int, *, lock: bool = False) ->
 def create_record_draft(payload: RecordDraftCreate, connection: Connection = Depends(get_connection, scope="function")):
     require_global(connection, "record.create")
     values = payload.model_dump(exclude_none=True)
+    if payload.aggregation_id is not None:
+        parent = connection.execute(
+            "SELECT id,medium FROM aggregations WHERE id=%s FOR KEY SHARE",
+            (payload.aggregation_id,),
+        ).fetchone()
+        if parent is None:
+            raise HTTPException(status_code=409, detail="referenced aggregation does not exist")
+        values["medium"] = _resolved_record_medium(parent, payload.medium)
     values["owner_user_id"] = connection.execute("SELECT current_user_id() AS id").fetchone()["id"]
     if not values:
         return connection.execute("INSERT INTO record_drafts DEFAULT VALUES RETURNING *").fetchone()
@@ -850,8 +1121,25 @@ def get_record_draft(draft_id: int, connection: Connection = Depends(get_connect
 
 @app.patch("/api/v1/record-drafts/{draft_id}", response_model=RecordDraftRead, tags=["record drafts"])
 def update_record_draft(draft_id: int, payload: RecordDraftUpdate, connection: Connection = Depends(get_connection, scope="function")):
-    _open_draft(connection, draft_id)
+    draft = _open_draft(connection, draft_id)
     values = payload.model_dump(exclude_unset=True)
+    aggregation_id = values.get("aggregation_id", draft["aggregation_id"])
+    if aggregation_id is not None:
+        parent = connection.execute(
+            "SELECT id,medium FROM aggregations WHERE id=%s FOR KEY SHARE", (aggregation_id,),
+        ).fetchone()
+        if parent is None:
+            raise HTTPException(status_code=409, detail="referenced aggregation does not exist")
+        values["medium"] = _resolved_record_medium(
+            parent, values.get("medium", draft.get("medium")),
+        )
+    if values.get("medium") == "physical" and draft.get("medium") != "physical" and connection.execute(
+        "SELECT 1 FROM record_draft_components WHERE draft_id=%s LIMIT 1", (draft_id,),
+    ).fetchone():
+        raise _medium_error(
+            "physical_record_has_staged_components",
+            "Remove all staged digital files before changing this draft to physical.",
+        )
     if not values:
         return _open_draft(connection, draft_id)
     assignments = ", ".join(f"{key} = %s" for key in values)
@@ -889,7 +1177,8 @@ def upload_record_draft_component(
     date_originated: datetime | None = Form(default=None),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    _open_draft(connection, draft_id, lock=True)
+    draft = _open_draft(connection, draft_id, lock=True)
+    _require_draft_accepts_components(draft)
     inspected = inspect_upload(file)
     component = connection.execute(
         """INSERT INTO record_draft_components
@@ -965,7 +1254,7 @@ def commit_record_draft(
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     draft = _open_draft(connection, draft_id, lock=True)
-    missing = [name for name in ("aggregation_id", "record_number", "title") if not draft.get(name)]
+    missing = [name for name in ("aggregation_id", "medium", "record_number", "title") if not draft.get(name)]
     if missing:
         raise HTTPException(status_code=422, detail=f"draft is missing required fields: {', '.join(missing)}")
     security_level_id = draft["security_level_id"]
@@ -977,6 +1266,10 @@ def commit_record_draft(
         connection, "aggregation", draft["aggregation_id"],
         "record.create", "aggregation.add_record",
     )
+    parent = connection.execute(
+        "SELECT id,medium FROM aggregations WHERE id=%s FOR KEY SHARE", (draft["aggregation_id"],),
+    ).fetchone()
+    medium = _resolved_record_medium(parent, draft.get("medium"))
     selected_role = _select_creator_role(
         connection, creator_acl_role_id, draft["aggregation_id"],
     )
@@ -992,11 +1285,19 @@ def commit_record_draft(
     components = connection.execute(
         "SELECT * FROM record_draft_components WHERE draft_id = %s ORDER BY component_order FOR UPDATE", (draft_id,)
     ).fetchall()
+    if medium == "physical" and components:
+        raise HTTPException(status_code=409, detail={
+            "code": "physical_record_disallows_digital_components",
+            "message": "This is a physical record. Digital files cannot be added.",
+        })
     record = create_row(connection, "records", {
         "aggregation_id": draft["aggregation_id"], "record_number": draft["record_number"],
         "title": draft["title"], "description": draft["description"],
         "date_originated": draft["date_originated"],
         "security_level_id": security_level_id,
+        "medium": medium,
+        "is_vital": draft["is_vital"],
+        "date_of_next_review": draft["date_of_next_review"],
     })
     incomplete = [item["file_name"] for item in components if item["content_status"] != "available"]
     if incomplete:
@@ -1076,6 +1377,7 @@ def create_digital_component(
 ):
     require_resource_operation(connection, "record", payload.record_id,
                                "record.component.add", "record.component.add")
+    _require_record_accepts_components(connection, payload.record_id)
     return create_row(connection, "digital_components", payload.model_dump())
 
 
@@ -1245,6 +1547,7 @@ def upload_digital_component(
 ):
     require_resource_operation(connection, "record", record_id,
                                "record.component.add", "record.component.add")
+    _require_record_accepts_components(connection, record_id)
     inspected = inspect_upload(file)
     mime_type = file.content_type or "application/octet-stream"
     component = create_row(

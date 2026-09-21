@@ -4,6 +4,10 @@ SELECT set_config('app.actor_type', 'automated_process', true),
        set_config('app.actor_name', 'Phase 3 ownership test', true),
        set_config('app.event_source', 'test', true);
 
+INSERT INTO org_units(code,name) VALUES
+('PHASE2-SEGMENT','Phase 2 Segment'),
+('PHASE2-OTHER','Phase 2 Other');
+
 INSERT INTO classification_schemes(code, title, date_published)
 VALUES ('OWN-P3', 'Ownership Phase 3', CURRENT_TIMESTAMP);
 INSERT INTO classifications(classification_scheme_id, code, title, is_terminal)
@@ -14,6 +18,11 @@ INSERT INTO classification_retention_rules(
 )
 SELECT id, 1, 0, 'destruction' FROM classifications WHERE code='OWN-P3-01';
 UPDATE classifications SET is_terminal=true WHERE code='OWN-P3-01';
+
+INSERT INTO aggregations(aggregation_number,title,classification_id,owning_org_unit_id)
+SELECT 'SEG-MIG-AGG','Ownership source',classification.id,unit.id
+FROM classifications classification CROSS JOIN org_units unit
+WHERE classification.code='OWN-P3-01' AND unit.code='PHASE2-SEGMENT';
 
 INSERT INTO aggregations(
     aggregation_number, title, classification_id, owning_org_unit_id

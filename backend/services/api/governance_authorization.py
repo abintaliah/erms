@@ -44,6 +44,9 @@ OPERATION_POLICY = {
     "aggregation.move": ("aggregation.move", "aggregation.move"),
     "aggregation.reclassify": ("aggregation.reclassify", "aggregation.reclassify"),
     "aggregation.security_level.change": ("aggregation.security_level.change", "aggregation.security_level.change"),
+    "aggregation.vital_status.change": ("aggregation.vital_status.change", "aggregation.vital_status.change"),
+    "aggregation.location.change": ("aggregation.location.change", "aggregation.location.change"),
+    "aggregation.review_date.change": ("aggregation.review_date.change", "aggregation.review_date.change"),
     "aggregation.acl.manage": ("aggregation.acl.manage", "aggregation.acl.manage"),
     "aggregation.add_child": ("aggregation.create_child", "aggregation.add_child"),
     "aggregation.add_record": ("record.create", "aggregation.add_record"),
@@ -52,6 +55,8 @@ OPERATION_POLICY = {
     "record.delete": ("record.delete", "record.delete"),
     "record.move": ("record.move", "record.move"),
     "record.security_level.change": ("record.security_level.change", "record.security_level.change"),
+    "record.vital_status.change": ("record.vital_status.change", "record.vital_status.change"),
+    "record.review_date.change": ("record.review_date.change", "record.review_date.change"),
     "record.acl.manage": ("record.acl.manage", "record.acl.manage"),
     "record.component.list": ("record.view", "record.component.list"),
     "record.component.view": ("record.component.view", "record.component.view"),
@@ -150,6 +155,13 @@ def _integrity_gate(
         "record.component.view", "record.component.download",
     }
     if operation in read_only:
+        return True, None
+    governed_closed_exceptions = {
+        "aggregation.vital_status.change", "aggregation.location.change",
+        "aggregation.review_date.change", "record.vital_status.change",
+        "record.review_date.change",
+    }
+    if operation in governed_closed_exceptions:
         return True, None
     if resource_type == "aggregation" and operation == "aggregation.reopen" and resource["date_closed"] is not None:
         return True, None

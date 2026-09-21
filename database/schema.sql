@@ -542,6 +542,10 @@ DECLARE
     context_user_id  text;
     context_metadata text;
 BEGIN
+    IF TG_OP = 'UPDATE'
+       AND current_setting('app.suppress_ordinary_history', true) = 'authorized' THEN
+        RETURN NEW;
+    END IF;
     old_state := CASE WHEN TG_OP IN ('UPDATE', 'DELETE') THEN to_jsonb(OLD) END;
     new_state := CASE WHEN TG_OP IN ('INSERT', 'UPDATE') THEN to_jsonb(NEW) END;
     entity_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
@@ -621,9 +625,6 @@ CREATE TRIGGER event_history_reject_truncate
 BEFORE TRUNCATE ON event_history
 FOR EACH STATEMENT EXECUTE FUNCTION reject_event_history_mutation();
 
-INSERT INTO schema_migrations (version)
-VALUES ('001_add_event_history')
-ON CONFLICT (version) DO NOTHING;
 
 -- User management subsystem. The equivalent upgrade for existing databases is
 -- database/migrations/002_add_user_management.sql.
@@ -907,9 +908,6 @@ CREATE TRIGGER user_role_assignments_record_history
 AFTER INSERT OR UPDATE OR DELETE ON user_role_assignments
 FOR EACH ROW EXECUTE FUNCTION record_entity_history('user_role_assignment');
 
-INSERT INTO schema_migrations (version)
-VALUES ('002_add_user_management')
-ON CONFLICT (version) DO NOTHING;
 
 -- Open record drafts stage metadata and binary content until the user commits
 -- the complete record package. The equivalent upgrade is migration 004.
@@ -977,8 +975,6 @@ DROP TRIGGER IF EXISTS record_drafts_touch ON record_drafts;
 CREATE TRIGGER record_drafts_touch BEFORE UPDATE ON record_drafts
 FOR EACH ROW EXECUTE FUNCTION touch_record_draft();
 
-INSERT INTO schema_migrations (version) VALUES ('004_add_record_drafts')
-ON CONFLICT (version) DO NOTHING;
 
 -- Binary content storage and optimistic concurrency. The equivalent upgrade
 -- for existing databases is migration 003.
@@ -1212,13 +1208,7 @@ BEGIN
 END;
 $$;
 
-INSERT INTO schema_migrations (version)
-VALUES ('003_add_content_storage_and_entity_versions')
-ON CONFLICT (version) DO NOTHING;
 
-INSERT INTO schema_migrations (version)
-VALUES ('005_add_authentication')
-ON CONFLICT (version) DO NOTHING;
 
 -- Enforce inherited aggregation closure across records, components and blobs.
 CREATE OR REPLACE FUNCTION assert_aggregation_effectively_open(p_aggregation_id bigint)
@@ -1445,9 +1435,6 @@ CREATE TRIGGER digital_component_content_sets_protect_closed_aggregation
 BEFORE INSERT OR UPDATE OR DELETE ON digital_component_content_sets
 FOR EACH ROW EXECUTE FUNCTION protect_content_set_in_closed_aggregation();
 
-INSERT INTO schema_migrations (version)
-VALUES ('006_enforce_closed_aggregations')
-ON CONFLICT (version) DO NOTHING;
 
 -- Freeze aggregation metadata while allowing an explicit direct reopen.
 CREATE OR REPLACE FUNCTION protect_closed_aggregation_hierarchy()
@@ -1524,14 +1511,8 @@ CREATE TRIGGER aggregations_protect_closed_hierarchy
 BEFORE INSERT OR UPDATE OR DELETE ON aggregations
 FOR EACH ROW EXECUTE FUNCTION protect_closed_aggregation_hierarchy();
 
-INSERT INTO schema_migrations (version)
-VALUES ('007_freeze_closed_aggregation_metadata')
-ON CONFLICT (version) DO NOTHING;
 
 
-INSERT INTO schema_migrations(version)
-VALUES ('008_cascade_record_digital_components')
-ON CONFLICT(version) DO NOTHING;
 
 -- Enforce user-management lifecycle semantics and inherited organization activity.
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -2392,61 +2373,19 @@ AFTER INSERT OR UPDATE OR DELETE ON security_levels
 FOR EACH ROW EXECUTE FUNCTION record_entity_history('security_level');
 
 
-INSERT INTO schema_migrations(version)
-VALUES ('009_user_management_lifecycle')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('010_rename_org_unit_deactivation_date')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('011_normalize_org_unit_event_history')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('012_backfill_anonymous_event_actor')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('013_snapshot_event_actor_identity')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('014_backfill_webui_event_source')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('015_reclassify_lifecycle_normalization_events')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('016_snapshot_role_assignment_parties')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('017_rename_system_accounts_to_service')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('018_rename_system_actor_to_automated_process')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('019_add_classification_schemes')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('028_add_user_favourites')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('030_remove_assignment_attribution_and_prepare_user_deletion')
-ON CONFLICT(version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('032_add_security_levels')
-ON CONFLICT(version) DO NOTHING;
 
 
 -- The canonical schema repeats upgrade DDL here so a new database is created
@@ -2630,7 +2569,6 @@ SELECT append_domain_event(
 )
 FROM profiles profile WHERE profile.code='ALL_PRIVS';
 
-INSERT INTO schema_migrations(version) VALUES ('033_add_privileges_profiles_and_role_authorization');
 
 -- Canonical definitions corresponding to 034_add_resource_acl_inheritance.sql
 
@@ -2918,7 +2856,6 @@ CREATE TRIGGER child_aggregation_acl_history AFTER INSERT OR UPDATE OR DELETE ON
 CREATE TRIGGER child_record_acl_history AFTER INSERT OR UPDATE OR DELETE ON aggregation_child_record_acl_defaults FOR EACH ROW EXECUTE FUNCTION record_entity_history('aggregation_child_record_acl_default');
 CREATE TRIGGER record_acl_history AFTER INSERT OR UPDATE OR DELETE ON record_acl_grants FOR EACH ROW EXECUTE FUNCTION record_entity_history('record_acl_grant');
 
-INSERT INTO schema_migrations(version) VALUES ('034_add_resource_acl_inheritance');
 
 -- Canonical definitions corresponding to 035_enforce_resource_read_authorization.sql
 
@@ -3197,7 +3134,6 @@ FROM records resource;
 CREATE INDEX user_role_assignments_effective_lookup_idx
   ON user_role_assignments(user_id,role_id,valid_from,valid_until);
 
-INSERT INTO schema_migrations(version) VALUES ('035_enforce_resource_read_authorization');
 
 -- Canonical definitions corresponding to 036_enforce_resource_mutation_authorization.sql
 
@@ -3254,7 +3190,6 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
      AND user_can_record_operation(current_user_id(),$1,$2,$3)
 $$;
 
-INSERT INTO schema_migrations(version) VALUES ('036_enforce_resource_mutation_authorization');
 
 -- Canonical definitions corresponding to 037_enforce_draft_component_authorization.sql
 
@@ -3335,31 +3270,12 @@ BEGIN
   RETURN NEW;
 END $$;
 
-INSERT INTO schema_migrations(version) VALUES ('037_enforce_draft_component_authorization');
 
-INSERT INTO schema_migrations(version)
-VALUES ('038_add_security_operations_indexes')
-ON CONFLICT (version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('039_shorten_builtin_profile_codes')
-ON CONFLICT (version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('040_add_information_governance_profiles')
-ON CONFLICT (version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('041_grant_governance_security_level_administration')
-ON CONFLICT (version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('042_add_organization_browse_privilege')
-ON CONFLICT (version) DO NOTHING;
 
-INSERT INTO schema_migrations(version)
-VALUES ('043_add_event_reference_snapshots')
-ON CONFLICT (version) DO NOTHING;
 
 -- Canonical definitions corresponding to
 -- 044_add_organizational_ownership_foundation.sql
@@ -3475,8 +3391,6 @@ BEGIN
 END;
 $$;
 
-INSERT INTO schema_migrations(version)
-VALUES ('044_add_organizational_ownership_foundation');
 
 -- 045_assign_existing_organizational_ownership.sql
 -- New databases contain no historical holdings to assign, but retain the
@@ -3523,8 +3437,6 @@ CREATE INDEX organizational_ownership_root_assignments_role_idx
 CREATE INDEX organizational_ownership_root_assignments_unit_idx
     ON organizational_ownership_root_assignments(owning_org_unit_id, root_aggregation_id);
 
-INSERT INTO schema_migrations(version)
-VALUES ('045_assign_existing_organizational_ownership');
 
 -- 046_enforce_organizational_ownership.sql
 ALTER TABLE aggregations ALTER COLUMN owning_org_unit_id SET NOT NULL;
@@ -3659,7 +3571,6 @@ CREATE TRIGGER records_enforce_ownership
 BEFORE INSERT OR UPDATE OF aggregation_id, owning_org_unit_id ON records
 FOR EACH ROW EXECUTE FUNCTION enforce_record_ownership();
 
-INSERT INTO schema_migrations(version) VALUES ('046_enforce_organizational_ownership');
 
 -- 047_expose_organizational_ownership_in_search.sql
 CREATE OR REPLACE VIEW authorized_aggregations_for_search AS
@@ -3684,8 +3595,6 @@ SELECT resource.id,
        resource.resource_acl_version,resource.version,resource.owning_org_unit_id
 FROM records resource;
 
-INSERT INTO schema_migrations(version)
-VALUES ('047_expose_organizational_ownership_in_search');
 
 -- 048_add_org_unit_members_acl_principal.sql
 CREATE OR REPLACE FUNCTION user_has_aggregation_permission(
@@ -3831,13 +3740,429 @@ CREATE OR REPLACE FUNCTION user_has_destination_record_permission(
   )
 $$;
 
-INSERT INTO schema_migrations(version)
-VALUES ('048_add_org_unit_members_acl_principal');
 
-INSERT INTO schema_migrations(version)
-VALUES ('049_initialize_organizational_acl_defaults');
 
-INSERT INTO schema_migrations(version)
-VALUES ('050_add_root_ownership_correction');
 
+ALTER TABLE aggregations
+    ADD COLUMN medium text NOT NULL DEFAULT 'mixed',
+    ADD COLUMN is_vital boolean NOT NULL DEFAULT false,
+    ADD COLUMN date_of_next_review timestamptz,
+    ADD COLUMN assigned_location text,
+    ADD COLUMN current_location text,
+    ADD CONSTRAINT aggregations_medium_valid CHECK (medium IN ('digital','physical','mixed')),
+    ADD CONSTRAINT aggregations_assigned_location_valid CHECK (
+        assigned_location IS NULL OR (
+            assigned_location=btrim(assigned_location)
+            AND assigned_location<>'' AND char_length(assigned_location)<=200
+        )
+    ),
+    ADD CONSTRAINT aggregations_current_location_valid CHECK (
+        current_location IS NULL OR (
+            current_location=btrim(current_location)
+            AND current_location<>'' AND char_length(current_location)<=200
+        )
+    );
+
+ALTER TABLE records
+    ADD COLUMN medium text NOT NULL DEFAULT 'mixed',
+    ADD COLUMN is_vital boolean NOT NULL DEFAULT false,
+    ADD COLUMN date_of_next_review timestamptz,
+    ADD CONSTRAINT records_medium_valid CHECK (medium IN ('digital','physical','mixed'));
+
+CREATE INDEX aggregations_medium_idx ON aggregations(medium,id);
+CREATE INDEX aggregations_vital_idx ON aggregations(is_vital,id);
+CREATE INDEX aggregations_next_review_idx
+    ON aggregations(date_of_next_review,id) WHERE date_of_next_review IS NOT NULL;
+CREATE INDEX records_medium_idx ON records(medium,id);
+CREATE INDEX records_vital_idx ON records(is_vital,id);
+CREATE INDEX records_next_review_idx
+    ON records(date_of_next_review,id) WHERE date_of_next_review IS NOT NULL;
+
+CREATE FUNCTION enforce_future_next_review_date()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.date_of_next_review IS NOT NULL
+       AND (TG_OP='INSERT' OR NEW.date_of_next_review IS DISTINCT FROM OLD.date_of_next_review)
+       AND NEW.date_of_next_review<=CURRENT_TIMESTAMP THEN
+        RAISE EXCEPTION USING ERRCODE='23514',
+            MESSAGE='date_of_next_review must be in the future';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER aggregations_future_next_review
+BEFORE INSERT OR UPDATE OF date_of_next_review ON aggregations
+FOR EACH ROW EXECUTE FUNCTION enforce_future_next_review_date();
+
+CREATE TRIGGER records_future_next_review
+BEFORE INSERT OR UPDATE OF date_of_next_review ON records
+FOR EACH ROW EXECUTE FUNCTION enforce_future_next_review_date();
+
+CREATE FUNCTION aggregation_effective_assigned_location(p_aggregation_id bigint)
+RETURNS text LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE ancestors AS (
+        SELECT id,parent_aggregation_id,assigned_location,0 AS depth
+        FROM aggregations WHERE id=p_aggregation_id
+        UNION ALL
+        SELECT parent.id,parent.parent_aggregation_id,parent.assigned_location,child.depth+1
+        FROM ancestors child
+        JOIN aggregations parent ON parent.id=child.parent_aggregation_id
+    )
+    SELECT assigned_location FROM ancestors
+    WHERE assigned_location IS NOT NULL ORDER BY depth LIMIT 1
+$$;
+
+CREATE FUNCTION aggregation_effective_current_location(p_aggregation_id bigint)
+RETURNS text LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE ancestors AS (
+        SELECT id,parent_aggregation_id,current_location,0 AS depth
+        FROM aggregations WHERE id=p_aggregation_id
+        UNION ALL
+        SELECT parent.id,parent.parent_aggregation_id,parent.current_location,child.depth+1
+        FROM ancestors child
+        JOIN aggregations parent ON parent.id=child.parent_aggregation_id
+    )
+    SELECT current_location FROM ancestors
+    WHERE current_location IS NOT NULL ORDER BY depth LIMIT 1
+$$;
+
+CREATE FUNCTION aggregation_effective_assigned_location_source_id(p_aggregation_id bigint)
+RETURNS bigint LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE ancestors AS (
+        SELECT id,parent_aggregation_id,assigned_location,0 AS depth FROM aggregations WHERE id=p_aggregation_id
+        UNION ALL
+        SELECT parent.id,parent.parent_aggregation_id,parent.assigned_location,child.depth+1
+        FROM ancestors child JOIN aggregations parent ON parent.id=child.parent_aggregation_id
+    )
+    SELECT id FROM ancestors WHERE assigned_location IS NOT NULL ORDER BY depth LIMIT 1
+$$;
+
+CREATE FUNCTION aggregation_effective_current_location_source_id(p_aggregation_id bigint)
+RETURNS bigint LANGUAGE sql STABLE AS $$
+    WITH RECURSIVE ancestors AS (
+        SELECT id,parent_aggregation_id,current_location,0 AS depth FROM aggregations WHERE id=p_aggregation_id
+        UNION ALL
+        SELECT parent.id,parent.parent_aggregation_id,parent.current_location,child.depth+1
+        FROM ancestors child JOIN aggregations parent ON parent.id=child.parent_aggregation_id
+    )
+    SELECT id FROM ancestors WHERE current_location IS NOT NULL ORDER BY depth LIMIT 1
+$$;
+
+CREATE OR REPLACE VIEW authorized_aggregations_for_search AS
+SELECT resource.id,
+       CASE WHEN resource.parent_aggregation_id IS NULL
+                  OR current_user_can_view_aggregation(resource.parent_aggregation_id)
+            THEN resource.parent_aggregation_id END AS parent_aggregation_id,
+       resource.classification_id,resource.aggregation_number,resource.title,
+       resource.description,resource.date_created,resource.date_opened,resource.date_closed,
+       resource.security_level_id,resource.inherit_acl_from_parent,
+       resource.default_child_aggregation_acl_mode,resource.resource_acl_version,
+       resource.child_aggregation_acl_version,resource.child_record_acl_version,resource.version,
+       resource.owning_org_unit_id,resource.medium,resource.is_vital,
+       resource.date_of_next_review,resource.assigned_location,resource.current_location,
+       aggregation_effective_assigned_location(resource.id) AS effective_assigned_location,
+       aggregation_effective_current_location(resource.id) AS effective_current_location
+       ,CASE WHEN current_user_can_view_aggregation(aggregation_effective_assigned_location_source_id(resource.id)) THEN aggregation_effective_assigned_location_source_id(resource.id) END AS effective_assigned_location_source_aggregation_id
+       ,CASE WHEN current_user_can_view_aggregation(aggregation_effective_current_location_source_id(resource.id)) THEN aggregation_effective_current_location_source_id(resource.id) END AS effective_current_location_source_aggregation_id
+FROM aggregations resource;
+
+CREATE OR REPLACE VIEW authorized_records_for_search AS
+SELECT resource.id,
+       CASE WHEN current_user_can_view_aggregation(resource.aggregation_id)
+            THEN resource.aggregation_id END AS aggregation_id,
+       resource.record_number,resource.title,resource.description,resource.date_created,
+       resource.date_originated,resource.security_level_id,resource.inherit_acl_from_parent,
+       resource.resource_acl_version,resource.version,resource.owning_org_unit_id,
+       resource.medium,resource.is_vital,resource.date_of_next_review,
+       aggregation_effective_assigned_location(resource.aggregation_id) AS effective_assigned_location,
+       aggregation_effective_current_location(resource.aggregation_id) AS effective_current_location
+       ,CASE WHEN current_user_can_view_aggregation(aggregation_effective_assigned_location_source_id(resource.aggregation_id)) THEN aggregation_effective_assigned_location_source_id(resource.aggregation_id) END AS effective_assigned_location_source_aggregation_id
+       ,CASE WHEN current_user_can_view_aggregation(aggregation_effective_current_location_source_id(resource.aggregation_id)) THEN aggregation_effective_current_location_source_id(resource.aggregation_id) END AS effective_current_location_source_aggregation_id
+FROM records resource;
+
+
+COMMIT;
+
+-- Resource-medium hierarchy enforcement. Equivalent upgrade: migration 052.
+BEGIN;
+ALTER TABLE record_drafts ADD COLUMN IF NOT EXISTS medium text;
+ALTER TABLE record_drafts ADD COLUMN IF NOT EXISTS is_vital boolean NOT NULL DEFAULT false;
+ALTER TABLE record_drafts ADD COLUMN IF NOT EXISTS date_of_next_review timestamptz;
+ALTER TABLE record_drafts
+    DROP CONSTRAINT IF EXISTS record_drafts_medium_valid,
+    ADD CONSTRAINT record_drafts_medium_valid
+        CHECK (medium IS NULL OR medium IN ('digital','physical','mixed'));
+
+CREATE OR REPLACE FUNCTION enforce_aggregation_medium_hierarchy()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE parent_medium text;
+BEGIN
+    IF NEW.parent_aggregation_id IS NOT NULL THEN
+        SELECT medium INTO parent_medium FROM aggregations
+         WHERE id=NEW.parent_aggregation_id FOR UPDATE;
+        IF parent_medium IS NULL OR NEW.medium IS DISTINCT FROM parent_medium THEN
+            RAISE EXCEPTION USING ERRCODE='23514', CONSTRAINT='aggregation_medium_mismatch',
+                MESSAGE='aggregation_medium_mismatch: a child aggregation must use its parent medium';
+        END IF;
+    END IF;
+    IF TG_OP='UPDATE' AND NEW.medium IS DISTINCT FROM OLD.medium AND (
+        EXISTS (SELECT 1 FROM aggregations WHERE parent_aggregation_id=OLD.id)
+        OR EXISTS (SELECT 1 FROM records WHERE aggregation_id=OLD.id)) THEN
+        RAISE EXCEPTION USING ERRCODE='23514', CONSTRAINT='medium_change_requires_empty_aggregation',
+            MESSAGE='medium_change_requires_empty_aggregation: an aggregation must be empty before changing medium';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS aggregations_enforce_medium_hierarchy ON aggregations;
+CREATE TRIGGER aggregations_enforce_medium_hierarchy
+BEFORE INSERT OR UPDATE OF parent_aggregation_id,medium ON aggregations
+FOR EACH ROW EXECUTE FUNCTION enforce_aggregation_medium_hierarchy();
+
+CREATE OR REPLACE FUNCTION enforce_record_medium_hierarchy()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE parent_medium text;
+BEGIN
+    IF NEW.aggregation_id IS NULL THEN RETURN NEW; END IF;
+    SELECT medium INTO parent_medium FROM aggregations WHERE id=NEW.aggregation_id FOR UPDATE;
+    IF parent_medium IS NULL OR (parent_medium<>'mixed' AND NEW.medium IS DISTINCT FROM parent_medium) THEN
+        RAISE EXCEPTION USING ERRCODE='23514', CONSTRAINT='record_medium_not_allowed_by_parent',
+            MESSAGE='record_medium_not_allowed_by_parent: record medium is incompatible with its parent aggregation';
+    END IF;
+    IF TG_OP='UPDATE' AND NEW.medium='physical' AND NEW.medium IS DISTINCT FROM OLD.medium
+       AND EXISTS (SELECT 1 FROM digital_components WHERE record_id=OLD.id) THEN
+        RAISE EXCEPTION USING ERRCODE='23514', CONSTRAINT='physical_record_has_digital_components',
+            MESSAGE='physical_record_has_digital_components: a record with digital components cannot become physical';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS records_enforce_medium_hierarchy ON records;
+CREATE TRIGGER records_enforce_medium_hierarchy
+BEFORE INSERT OR UPDATE OF aggregation_id,medium ON records
+FOR EACH ROW EXECUTE FUNCTION enforce_record_medium_hierarchy();
+
+CREATE OR REPLACE FUNCTION enforce_record_draft_medium_hierarchy()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE parent_medium text;
+BEGIN
+    IF NEW.aggregation_id IS NULL THEN RETURN NEW; END IF;
+    SELECT medium INTO parent_medium FROM aggregations WHERE id=NEW.aggregation_id FOR UPDATE;
+    IF NEW.medium IS NULL THEN
+        NEW.medium:=parent_medium;
+    ELSIF parent_medium IS NULL OR (parent_medium<>'mixed' AND NEW.medium IS DISTINCT FROM parent_medium) THEN
+        RAISE EXCEPTION USING ERRCODE='23514', CONSTRAINT='record_medium_not_allowed_by_parent',
+            MESSAGE='record_medium_not_allowed_by_parent: draft medium is incompatible with its parent aggregation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS record_drafts_enforce_medium_hierarchy ON record_drafts;
+CREATE TRIGGER record_drafts_enforce_medium_hierarchy
+BEFORE INSERT OR UPDATE OF aggregation_id,medium ON record_drafts
+FOR EACH ROW EXECUTE FUNCTION enforce_record_draft_medium_hierarchy();
+COMMIT;
+
+-- Physical records cannot carry digital components. Equivalent upgrade: migration 053.
+BEGIN;
+CREATE OR REPLACE FUNCTION enforce_digital_component_record_medium()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE record_medium text;
+BEGIN
+    SELECT medium INTO record_medium FROM records WHERE id=NEW.record_id FOR UPDATE;
+    IF record_medium='physical' THEN
+        RAISE EXCEPTION USING ERRCODE='23514',
+            CONSTRAINT='physical_record_disallows_digital_components',
+            MESSAGE='physical_record_disallows_digital_components: physical records cannot have digital components';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS digital_components_enforce_record_medium ON digital_components;
+CREATE TRIGGER digital_components_enforce_record_medium
+BEFORE INSERT OR UPDATE OF record_id ON digital_components
+FOR EACH ROW EXECUTE FUNCTION enforce_digital_component_record_medium();
+
+CREATE OR REPLACE FUNCTION enforce_record_draft_medium_hierarchy()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE parent_medium text;
+BEGIN
+    IF NEW.aggregation_id IS NULL THEN RETURN NEW; END IF;
+    SELECT medium INTO parent_medium FROM aggregations WHERE id=NEW.aggregation_id FOR UPDATE;
+    IF NEW.medium IS NULL THEN
+        NEW.medium:=parent_medium;
+    ELSIF parent_medium IS NULL OR (parent_medium<>'mixed' AND NEW.medium IS DISTINCT FROM parent_medium) THEN
+        RAISE EXCEPTION USING ERRCODE='23514', CONSTRAINT='record_medium_not_allowed_by_parent',
+            MESSAGE='record_medium_not_allowed_by_parent: draft medium is incompatible with its parent aggregation';
+    END IF;
+    IF NEW.medium='physical' AND (TG_OP='INSERT' OR OLD.medium IS DISTINCT FROM NEW.medium)
+       AND EXISTS (SELECT 1 FROM record_draft_components WHERE draft_id=NEW.id) THEN
+        RAISE EXCEPTION USING ERRCODE='23514', CONSTRAINT='physical_record_has_staged_components',
+            MESSAGE='physical_record_has_staged_components: remove staged components before changing the draft medium';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION enforce_draft_component_record_medium()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE draft_medium text;
+BEGIN
+    SELECT medium INTO draft_medium FROM record_drafts WHERE id=NEW.draft_id FOR UPDATE;
+    IF draft_medium IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE='23514', CONSTRAINT='record_medium_required_before_components',
+            MESSAGE='record_medium_required_before_components: select a record medium before adding digital components';
+    ELSIF draft_medium='physical' THEN
+        RAISE EXCEPTION USING ERRCODE='23514', CONSTRAINT='physical_record_disallows_digital_components',
+            MESSAGE='physical_record_disallows_digital_components: physical record drafts cannot have digital components';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS record_draft_components_enforce_record_medium ON record_draft_components;
+CREATE TRIGGER record_draft_components_enforce_record_medium
+BEFORE INSERT OR UPDATE OF draft_id ON record_draft_components
+FOR EACH ROW EXECUTE FUNCTION enforce_draft_component_record_medium();
+COMMIT;
+
+-- Governed vital status and immutable deletion protection. Equivalent upgrade: migration 054.
+BEGIN;
+INSERT INTO privileges(code,name,description,category,is_reserved) VALUES
+ ('aggregation.vital_status.change','Change Aggregation Vital Status','Governed change of aggregation vital status.','aggregation',false),
+ ('record.vital_status.change','Change Record Vital Status','Governed change of record vital status.','record',false) ON CONFLICT DO NOTHING;
+INSERT INTO permissions(code,name,description,resource_type) VALUES
+ ('aggregation.vital_status.change','Change Aggregation Vital Status','Governed change of aggregation vital status.','aggregation'),
+ ('record.vital_status.change','Change Record Vital Status','Governed change of record vital status.','record') ON CONFLICT DO NOTHING;
+INSERT INTO privilege_dependencies(privilege_id,required_privilege_id)
+SELECT dependent.id,required.id FROM privileges dependent JOIN privileges required ON required.code=CASE WHEN dependent.code LIKE 'aggregation.%' THEN 'aggregation.view' ELSE 'record.view' END WHERE dependent.code IN ('aggregation.vital_status.change','record.vital_status.change') ON CONFLICT DO NOTHING;
+INSERT INTO permission_dependencies(permission_id,required_permission_id)
+SELECT dependent.id,required.id FROM permissions dependent JOIN permissions required ON required.code=CASE WHEN dependent.resource_type='aggregation' THEN 'aggregation.view' ELSE 'record.view' END WHERE dependent.code IN ('aggregation.vital_status.change','record.vital_status.change') ON CONFLICT DO NOTHING;
+INSERT INTO profile_privileges(profile_id,privilege_id)
+SELECT profile.id,privilege.id FROM profiles profile CROSS JOIN privileges privilege WHERE profile.code IN ('ALL_PRIVS','INFO_GOV_MGR','INFO_GOV_OFFICER') AND privilege.code IN ('aggregation.vital_status.change','record.vital_status.change') ON CONFLICT DO NOTHING;
+CREATE OR REPLACE FUNCTION aggregation_has_vital_descendants(p_id bigint) RETURNS boolean LANGUAGE sql STABLE AS $$
+ WITH RECURSIVE subtree AS (
+   SELECT p_id AS id
+   UNION ALL
+   SELECT child.id FROM aggregations child JOIN subtree parent ON child.parent_aggregation_id=parent.id
+ )
+ SELECT EXISTS(SELECT 1 FROM aggregations WHERE id IN (SELECT id FROM subtree) AND id<>p_id AND is_vital)
+     OR EXISTS(SELECT 1 FROM records WHERE aggregation_id IN (SELECT id FROM subtree) AND is_vital)$$;
+CREATE OR REPLACE FUNCTION protect_vital_resource_deletion() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE vital_count integer;
+BEGIN
+ IF TG_TABLE_NAME='records' THEN IF OLD.is_vital THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='vital_resource_deletion_blocked'; END IF; RETURN OLD; END IF;
+ PERFORM 1 FROM aggregations WHERE id=OLD.id FOR UPDATE;
+ IF OLD.is_vital THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='vital_resource_deletion_blocked'; END IF;
+ WITH RECURSIVE subtree AS (
+   SELECT OLD.id AS id
+   UNION ALL
+   SELECT child.id FROM aggregations child JOIN subtree parent ON child.parent_aggregation_id=parent.id
+ )
+ SELECT count(*) INTO vital_count FROM (
+   SELECT id FROM aggregations WHERE id IN (SELECT id FROM subtree) AND id<>OLD.id AND is_vital
+   UNION ALL
+   SELECT id FROM records WHERE aggregation_id IN (SELECT id FROM subtree) AND is_vital
+ ) vital;
+ IF vital_count>0 THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='vital_descendant_deletion_blocked'; END IF; RETURN OLD;
+END; $$;
+CREATE TRIGGER aggregations_protect_vital_deletion BEFORE DELETE ON aggregations FOR EACH ROW EXECUTE FUNCTION protect_vital_resource_deletion();
+CREATE TRIGGER records_protect_vital_deletion BEFORE DELETE ON records FOR EACH ROW EXECUTE FUNCTION protect_vital_resource_deletion();
+CREATE OR REPLACE FUNCTION allow_governed_vital_status_change() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN IF NEW.is_vital IS DISTINCT FROM OLD.is_vital AND (current_setting('app.vital_status_change_authorized',true)<>'authorized' OR NULLIF(btrim(current_setting('app.change_reason',true)), '') IS NULL) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='vital_status_change_requires_governed_authorization_and_reason'; END IF; RETURN NEW; END; $$;
+CREATE TRIGGER aggregations_govern_vital_status BEFORE UPDATE OF is_vital ON aggregations FOR EACH ROW EXECUTE FUNCTION allow_governed_vital_status_change();
+CREATE TRIGGER records_govern_vital_status BEFORE UPDATE OF is_vital ON records FOR EACH ROW EXECUTE FUNCTION allow_governed_vital_status_change();
+CREATE OR REPLACE FUNCTION protect_closed_aggregation_hierarchy() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE closure_source_id bigint;
+BEGIN
+ IF TG_OP='INSERT' THEN IF NEW.parent_aggregation_id IS NOT NULL THEN PERFORM assert_aggregation_effectively_open(NEW.parent_aggregation_id); END IF; RETURN NEW; END IF;
+ IF TG_OP='DELETE' THEN PERFORM assert_aggregation_effectively_open(OLD.id); RETURN OLD; END IF;
+ WITH RECURSIVE ancestors AS (SELECT id,parent_aggregation_id,date_closed,0 depth FROM aggregations WHERE id=OLD.id UNION ALL SELECT parent.id,parent.parent_aggregation_id,parent.date_closed,child.depth+1 FROM aggregations parent JOIN ancestors child ON parent.id=child.parent_aggregation_id) SELECT id INTO closure_source_id FROM ancestors WHERE date_closed IS NOT NULL ORDER BY depth LIMIT 1;
+ IF closure_source_id IS NOT NULL THEN
+  IF current_setting('app.vital_status_change_authorized',true)='authorized' AND NEW.is_vital IS DISTINCT FROM OLD.is_vital AND (to_jsonb(NEW)-'is_vital'-'version')=(to_jsonb(OLD)-'is_vital'-'version') THEN RETURN NEW; END IF;
+  IF closure_source_id=OLD.id AND OLD.date_closed IS NOT NULL AND NEW.date_closed IS NULL AND (to_jsonb(NEW)-'date_closed'-'version')=(to_jsonb(OLD)-'date_closed'-'version') THEN RETURN NEW; END IF;
+  RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='closed aggregation metadata is immutable';
+ END IF; RETURN NEW;
+END; $$;
+CREATE OR REPLACE FUNCTION protect_record_in_closed_aggregation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP='INSERT' THEN PERFORM assert_aggregation_effectively_open(NEW.aggregation_id); RETURN NEW; END IF;
+ IF TG_OP='DELETE' THEN PERFORM assert_aggregation_effectively_open(OLD.aggregation_id); RETURN OLD; END IF;
+ IF current_setting('app.vital_status_change_authorized',true)='authorized' AND NEW.is_vital IS DISTINCT FROM OLD.is_vital AND (to_jsonb(NEW)-'is_vital'-'version')=(to_jsonb(OLD)-'is_vital'-'version') THEN RETURN NEW; END IF;
+ IF current_setting('app.review_date_change_authorized',true)='authorized' AND NEW.date_of_next_review IS DISTINCT FROM OLD.date_of_next_review AND (to_jsonb(NEW)-'date_of_next_review'-'version')=(to_jsonb(OLD)-'date_of_next_review'-'version') THEN RETURN NEW; END IF;
+ PERFORM assert_aggregation_effectively_open(OLD.aggregation_id); RETURN NEW;
+END; $$;
+INSERT INTO privileges(code,name,description,category) VALUES ('aggregation.location.change','Change Aggregation Location','Governed change of aggregation assigned or current location.','aggregation') ON CONFLICT DO NOTHING;
+INSERT INTO permissions(code,name,description,resource_type) VALUES ('aggregation.location.change','Change Aggregation Location','Governed change of aggregation assigned or current location.','aggregation') ON CONFLICT DO NOTHING;
+INSERT INTO privilege_dependencies(privilege_id,required_privilege_id) SELECT dependent.id,required.id FROM privileges dependent JOIN privileges required ON required.code='aggregation.view' WHERE dependent.code='aggregation.location.change' ON CONFLICT DO NOTHING;
+INSERT INTO permission_dependencies(permission_id,required_permission_id) SELECT dependent.id,required.id FROM permissions dependent JOIN permissions required ON required.code='aggregation.view' WHERE dependent.code='aggregation.location.change' ON CONFLICT DO NOTHING;
+INSERT INTO profile_privileges(profile_id,privilege_id) SELECT profile.id,privilege.id FROM profiles profile CROSS JOIN privileges privilege WHERE profile.code IN ('ALL_PRIVS','INFO_GOV_MGR','INFO_GOV_OFFICER') AND privilege.code='aggregation.location.change' ON CONFLICT DO NOTHING;
+INSERT INTO privileges(code,name,description,category,is_reserved) VALUES ('aggregation.review_date.change','Change Aggregation Review Date','Governed scheduling or clearing of an aggregation review date.','aggregation',false),('record.review_date.change','Change Record Review Date','Governed scheduling or clearing of a record review date.','record',false) ON CONFLICT DO NOTHING;
+INSERT INTO permissions(code,name,description,resource_type) VALUES ('aggregation.review_date.change','Change Aggregation Review Date','Governed scheduling or clearing of an aggregation review date.','aggregation'),('record.review_date.change','Change Record Review Date','Governed scheduling or clearing of a record review date.','record') ON CONFLICT DO NOTHING;
+INSERT INTO privilege_dependencies(privilege_id,required_privilege_id) SELECT d.id,r.id FROM privileges d JOIN privileges r ON r.code=CASE WHEN d.code LIKE 'aggregation.%' THEN 'aggregation.view' ELSE 'record.view' END WHERE d.code IN ('aggregation.review_date.change','record.review_date.change') ON CONFLICT DO NOTHING;
+INSERT INTO permission_dependencies(permission_id,required_permission_id) SELECT d.id,r.id FROM permissions d JOIN permissions r ON r.code=CASE WHEN d.resource_type='aggregation' THEN 'aggregation.view' ELSE 'record.view' END WHERE d.code IN ('aggregation.review_date.change','record.review_date.change') ON CONFLICT DO NOTHING;
+INSERT INTO profile_privileges(profile_id,privilege_id) SELECT p.id,v.id FROM profiles p CROSS JOIN privileges v WHERE p.code IN ('ALL_PRIVS','INFO_GOV_MGR','INFO_GOV_OFFICER') AND v.code IN ('aggregation.review_date.change','record.review_date.change') ON CONFLICT DO NOTHING;
+CREATE OR REPLACE FUNCTION enforce_future_review_date() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.date_of_next_review IS NOT NULL AND (TG_OP='INSERT' OR NEW.date_of_next_review IS DISTINCT FROM OLD.date_of_next_review) AND NEW.date_of_next_review <= CURRENT_TIMESTAMP THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='date_of_next_review_must_be_future'; END IF; RETURN NEW; END; $$;
+CREATE TRIGGER aggregations_enforce_future_review_date BEFORE INSERT OR UPDATE OF date_of_next_review ON aggregations FOR EACH ROW EXECUTE FUNCTION enforce_future_review_date();
+CREATE TRIGGER records_enforce_future_review_date BEFORE INSERT OR UPDATE OF date_of_next_review ON records FOR EACH ROW EXECUTE FUNCTION enforce_future_review_date();
+CREATE TRIGGER record_drafts_enforce_future_review_date BEFORE INSERT OR UPDATE OF date_of_next_review ON record_drafts FOR EACH ROW EXECUTE FUNCTION enforce_future_review_date();
+CREATE OR REPLACE FUNCTION allow_governed_review_date_change() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.date_of_next_review IS DISTINCT FROM OLD.date_of_next_review AND (current_setting('app.review_date_change_authorized',true)<>'authorized' OR NULLIF(btrim(current_setting('app.change_reason',true)), '') IS NULL) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='review_date_change_requires_governed_authorization_and_reason'; END IF; RETURN NEW; END; $$;
+CREATE TRIGGER aggregations_govern_review_date BEFORE UPDATE OF date_of_next_review ON aggregations FOR EACH ROW EXECUTE FUNCTION allow_governed_review_date_change();
+CREATE TRIGGER records_govern_review_date BEFORE UPDATE OF date_of_next_review ON records FOR EACH ROW EXECUTE FUNCTION allow_governed_review_date_change();
+CREATE OR REPLACE FUNCTION allow_governed_aggregation_location_change() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF (NEW.assigned_location IS DISTINCT FROM OLD.assigned_location OR NEW.current_location IS DISTINCT FROM OLD.current_location) AND (current_setting('app.location_change_authorized',true)<>'authorized' OR NULLIF(btrim(current_setting('app.change_reason',true)), '') IS NULL) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='location_change_requires_governed_authorization_and_reason'; END IF; RETURN NEW; END; $$;
+CREATE TRIGGER aggregations_govern_location_change BEFORE UPDATE OF assigned_location,current_location ON aggregations FOR EACH ROW EXECUTE FUNCTION allow_governed_aggregation_location_change();
+CREATE OR REPLACE FUNCTION protect_closed_aggregation_hierarchy()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE closure_source_id bigint;
+BEGIN
+ IF TG_OP='INSERT' THEN
+   IF NEW.parent_aggregation_id IS NOT NULL THEN
+     PERFORM assert_aggregation_effectively_open(NEW.parent_aggregation_id);
+   END IF;
+   RETURN NEW;
+ END IF;
+ IF TG_OP='DELETE' THEN
+   PERFORM assert_aggregation_effectively_open(OLD.id);
+   RETURN OLD;
+ END IF;
+ WITH RECURSIVE ancestors AS (
+   SELECT id,parent_aggregation_id,date_closed,0 depth FROM aggregations WHERE id=OLD.id
+   UNION ALL
+   SELECT parent.id,parent.parent_aggregation_id,parent.date_closed,child.depth+1
+   FROM aggregations parent JOIN ancestors child ON parent.id=child.parent_aggregation_id
+ )
+ SELECT id INTO closure_source_id FROM ancestors
+ WHERE date_closed IS NOT NULL ORDER BY depth LIMIT 1;
+ IF closure_source_id IS NOT NULL THEN
+   IF current_setting('app.vital_status_change_authorized',true)='authorized'
+      AND NEW.is_vital IS DISTINCT FROM OLD.is_vital
+      AND (to_jsonb(NEW)-'is_vital'-'version')=(to_jsonb(OLD)-'is_vital'-'version') THEN
+     RETURN NEW;
+   END IF;
+   IF current_setting('app.location_change_authorized',true)='authorized'
+      AND (NEW.assigned_location IS DISTINCT FROM OLD.assigned_location
+           OR NEW.current_location IS DISTINCT FROM OLD.current_location)
+      AND (to_jsonb(NEW)-'assigned_location'-'current_location'-'version')
+          =(to_jsonb(OLD)-'assigned_location'-'current_location'-'version') THEN
+     RETURN NEW;
+   END IF;
+   IF current_setting('app.review_date_change_authorized',true)='authorized'
+      AND NEW.date_of_next_review IS DISTINCT FROM OLD.date_of_next_review
+      AND (to_jsonb(NEW)-'date_of_next_review'-'version')=(to_jsonb(OLD)-'date_of_next_review'-'version') THEN
+     RETURN NEW;
+   END IF;
+   IF closure_source_id=OLD.id AND OLD.date_closed IS NOT NULL
+      AND NEW.date_closed IS NULL
+      AND (to_jsonb(NEW)-'date_closed'-'version')=(to_jsonb(OLD)-'date_closed'-'version') THEN
+     RETURN NEW;
+   END IF;
+   RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='closed aggregation metadata is immutable';
+ END IF;
+ RETURN NEW;
+END;
+$$;
+CREATE INDEX aggregations_review_due_idx ON aggregations (date_of_next_review,id) WHERE date_of_next_review IS NOT NULL;
+CREATE INDEX records_review_due_idx ON records (date_of_next_review,id) WHERE date_of_next_review IS NOT NULL;
+CREATE INDEX aggregations_owner_review_due_idx ON aggregations (owning_org_unit_id,date_of_next_review,id) WHERE date_of_next_review IS NOT NULL;
+CREATE INDEX records_owner_review_due_idx ON records (owning_org_unit_id,date_of_next_review,id) WHERE date_of_next_review IS NOT NULL;
 COMMIT;
