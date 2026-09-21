@@ -1,9 +1,77 @@
 # Dashboard
 
-The Dashboard combines system-wide entity totals with personal recent records
-activity. Aggregation, record, user, role, and organizational-unit totals are
-system-wide. The recent aggregation and record lists are scoped to the currently
-authenticated user.
+## Client API
+
+All dashboard clients, including web and mobile clients, should load the
+dashboard through this single authenticated endpoint:
+
+```http
+GET /api/v1/dashboard/summary?recent_limit=4&recent_since=2026-08-22T00:00:00Z
+```
+
+Do not construct the dashboard by issuing separate entity-search, count,
+favourites, recent-activity, classification-metric, or ownership-count
+requests. That fan-out consumes multiple HTTP connections and database-pool
+checkouts, can produce an internally inconsistent snapshot, and can overload a
+small deployment when several dashboards refresh together. The summary
+endpoint performs the complete read through one HTTP request and one database
+pool checkout.
+
+The query parameters are:
+
+| Parameter | Required | Default | Meaning |
+| --- | --- | ---: | --- |
+| `recent_limit` | No | `7` | Maximum recent items for each entity-type/operation group; accepted range is 1–50 |
+| `recent_since` | No | No lower bound | ISO 8601 timestamp; excludes older personal activity |
+
+The response has this stable top-level shape:
+
+```json
+{
+  "overview_counts": {"aggregations": 12, "records": 48},
+  "classification_metrics": {
+    "published_scheme_count": 1,
+    "draft_scheme_count": 0,
+    "inactive_scheme_count": 0,
+    "branch_count": 8,
+    "terminal_count": 24,
+    "assignable_terminal_count": 20,
+    "draft_terminal_count": 0,
+    "inactive_classification_count": 0
+  },
+  "unclassified_root_count": 2,
+  "ownership_counts": [
+    {
+      "org_unit_id": 10,
+      "org_unit_code": "FIN",
+      "org_unit_name": "Finance",
+      "aggregation_count": 6,
+      "record_count": 31
+    }
+  ],
+  "favourites": {"aggregations": [], "records": []},
+  "recent_activity": []
+}
+```
+
+`overview_counts` always includes the aggregation and record counts visible to
+the caller. Administrative entity totals are included only when the caller has
+their corresponding global privileges; classification metrics remain zero
+without classification-administration privilege. Holdings,
+favourites, and recent activity use the same resource-visibility rules as their
+normal APIs. `ownership_counts` contains only organizational units in which the
+current user has a currently effective role, with each unit appearing once.
+Favourites and recent activity are private to the authenticated user.
+
+Clients should prevent overlapping refreshes of this endpoint. A refresh
+requested while one is already in flight should reuse, await, or decline the
+existing request rather than start another concurrent dashboard load.
+
+The Dashboard combines authorized entity totals with personal recent records
+activity. Aggregation and record totals follow the caller's resource visibility.
+Administrative totals are available only to callers with the corresponding
+global privileges. Recent aggregation and record lists are scoped to the
+currently authenticated user.
 
 ## Personal favourites
 
@@ -51,6 +119,6 @@ project `.env` file:
 | `DASHBOARD_RECENT_ITEM_LIMIT` | `4` | Maximum items shown in each created/updated aggregation/record category |
 | `DASHBOARD_RECENT_DAYS` | `30` | Rolling number of days included in personal recent activity |
 
-Both values must be positive integers. Actual process environment variables
+All values must be positive integers. Actual process environment variables
 override `.env` values. Restart the NiceGUI service after changing either
 setting.

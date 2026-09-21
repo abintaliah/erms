@@ -14,10 +14,11 @@ from nicegui import app, background_tasks, context, events, ui
 from .api_client import ApiError, ErmsApiClient
 from .capabilities import (
     capability_allowed,
+    can_add_from_collection,
     can_navigate,
     can_open_organization_detail,
 )
-from .acl_editor import dependents_of, permission_closure
+from .acl_editor import acl_grants_payload, dependents_of, permission_closure
 from .authorization_ui import (
     GATE_LABELS, OPERATIONS, acl_source_label, aggregation_reference_label,
     authorization_code_label, decision_code_label, operation_label, gate_detail, ordered_permission_catalogue,
@@ -2404,7 +2405,11 @@ def index() -> None:
                     return
                 if not reason.value or not str(reason.value).strip():
                     ui.notify("A reason is required", color="warning"); return
-                payload: dict[str, Any] = {"version": version, "grants": principals, "reason": str(reason.value).strip()}
+                payload: dict[str, Any] = {
+                    "version": version,
+                    "grants": acl_grants_payload(principals),
+                    "reason": str(reason.value).strip(),
+                }
                 if inherit is not None: payload["inherit_acl_from_parent"] = inherit.value
                 if mode is not None: payload["mode"] = mode.value
                 async def apply_change() -> None:
@@ -2664,6 +2669,45 @@ def index() -> None:
                 user.on_value_change(lambda _: load_explanation())
         dialog.open()
         await load_explanation()
+
+    async def show_reopen_aggregation(
+        item: dict[str, Any], on_saved,
+    ) -> None:
+        dialog = ui.dialog()
+        with dialog, ui.card().classes("w-[560px] max-w-full gap-4"):
+            ui.label("Reopen aggregation").classes("text-xl font-semibold")
+            ui.label(
+                "Reopening makes this aggregation and any descendants that are not "
+                "closed themselves available for changes again. The reason is recorded "
+                "in the permanent event history."
+            ).classes("text-sm text-slate-600")
+            reason = ui.textarea(
+                "Reason for reopening *", placeholder="Explain why this aggregation must be reopened",
+            ).props("outlined autogrow counter maxlength=2000").classes("w-full")
+
+            async def submit() -> None:
+                change_reason = str(reason.value or "").strip()
+                if not change_reason:
+                    ui.notify("Enter a reason for reopening", color="warning")
+                    reason.run_method("focus")
+                    return
+                try:
+                    saved = await api.update(
+                        "aggregations", item["id"], item["version"],
+                        {"date_closed": None}, change_reason=change_reason,
+                    )
+                    dialog.close()
+                    ui.notify("Aggregation reopened", color="positive")
+                    await on_saved(saved)
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                ui.button("Reopen", icon="lock_open", on_click=submit).props(
+                    "unelevated no-caps color=primary"
+                )
+        dialog.open()
 
     async def show_governed_move(
         resource: str, item: dict[str, Any], on_saved,
@@ -4389,16 +4433,11 @@ def index() -> None:
                     await breadcrumb_back(lambda: select_entity("aggregations"))
 
                 async def reopen_current() -> None:
-                    try:
-                        reopened = await api.update(
-                            "aggregations", current["id"], current["version"],
-                            {"date_closed": None},
-                        )
-                        ui.notify("Aggregation reopened", color="positive")
+                    async def reopened(saved: dict[str, Any]) -> None:
                         await load_recent(ENTITIES["aggregations"])
-                        await open_aggregation(reopened)
-                    except ApiError as error:
-                        ui.notify(error_message(error), color="negative", close_button=True)
+                        await open_aggregation(saved)
+
+                    await show_reopen_aggregation(current, reopened)
 
                 async def close_current() -> None:
                     try:
@@ -5408,18 +5447,14 @@ def index() -> None:
                 table.on("open_aggregation", lambda event: open_aggregation(event.args))
                 async def reopen_from_table(event) -> None:
                     row = event.args
-                    try:
-                        await api.update(
-                            "aggregations", row["id"], row["version"], {"date_closed": None}
-                        )
-                        ui.notify("Aggregation reopened", color="positive")
+                    async def reopened(_: dict[str, Any]) -> None:
                         await load_recent(spec)
                         if state["searched"]:
                             await load_rows(repeat_search=True)
                         else:
                             render_table(spec)
-                    except ApiError as error:
-                        ui.notify(error_message(error), color="negative", close_button=True)
+
+                    await show_reopen_aggregation(row, reopened)
                 table.on("reopen", reopen_from_table)
             if spec.key == "classification-schemes":
                 async def publish_scheme(event) -> None:
@@ -6460,7 +6495,10 @@ def index() -> None:
         set_aggregation_mode_controls("browse")
         search_bar.set_visibility(False)
         guidance.text = "Browse published classification schemes, governed aggregations, and their records."
-        add_button.set_visibility(key != "privileges")
+        privileges = set(
+            (auth_state.get("principal") or {}).get("global_privileges", [])
+        )
+        add_button.set_visibility(can_add_from_collection("aggregations", privileges))
         add_button.text = "Add"
         add_button.update()
         add_record_button.set_visibility(False)
@@ -8459,7 +8497,10 @@ def index() -> None:
             and not (key == "aggregations" and state.get("aggregation_mode") == "browse")
         )
         guidance.text = "Large collections are search-first to avoid loading unbounded result sets." if spec.search_first else ""
-        add_button.set_visibility(key not in {"privileges", "permissions"})
+        privileges = set(
+            (auth_state.get("principal") or {}).get("global_privileges", [])
+        )
+        add_button.set_visibility(can_add_from_collection(key, privileges))
         add_button.text = "Add"
         add_button.update()
         add_record_button.set_visibility(False)

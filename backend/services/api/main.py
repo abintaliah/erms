@@ -545,6 +545,16 @@ def update_aggregation(
     if "date_closed" in fields and payload.date_closed != existing["date_closed"]:
         privilege = "aggregation.close" if payload.date_closed is not None else "aggregation.reopen"
         require_resource_operation(connection, "aggregation", aggregation_id, privilege, privilege)
+        if payload.date_closed is None and existing["date_closed"] is not None:
+            reopen_reason = request.headers.get("X-Change-Reason", "").strip()
+            if not reopen_reason:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "reopen_reason_required",
+                        "message": "Enter a reason for reopening this aggregation.",
+                    },
+                )
         if (
             payload.date_closed is not None
             and existing["date_closed"] is None

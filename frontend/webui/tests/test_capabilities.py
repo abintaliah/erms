@@ -1,6 +1,6 @@
 from frontend.webui.capabilities import (
-    NAVIGATION_PRIVILEGES, can_navigate, can_open_organization_detail, capability_allowed,
-    dashboard_administration_resources,
+    NAVIGATION_PRIVILEGES, can_add_from_collection, can_navigate,
+    can_open_organization_detail, capability_allowed, dashboard_administration_resources,
 )
 
 
@@ -25,6 +25,15 @@ def test_information_resource_destinations_require_their_exact_view_privilege():
     assert not can_navigate("aggregations", {"record.view"})
     assert not can_navigate("organization-browser", ())
     assert can_navigate("organization-browser", {"organization.browse"})
+
+
+def test_information_resource_add_actions_require_creation_privileges():
+    view_only = {"aggregation.view", "record.view"}
+    assert not can_add_from_collection("aggregations", view_only)
+    assert not can_add_from_collection("records", view_only)
+    assert can_add_from_collection("aggregations", {"aggregation.create_root"})
+    assert can_add_from_collection("aggregations", {"aggregation.create_child"})
+    assert can_add_from_collection("records", {"record.create"})
 
 
 def test_navigation_and_dashboard_are_derived_from_exact_privileges():

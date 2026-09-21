@@ -25,6 +25,16 @@ def can_navigate(navigation_key: str, privileges: Iterable[str]) -> bool:
     return required is None or required in set(privileges)
 
 
+def can_add_from_collection(resource_key: str, privileges: Iterable[str]) -> bool:
+    """Return whether a collection page should offer its shared Add action."""
+    granted = set(privileges)
+    if resource_key == "aggregations":
+        return bool({"aggregation.create_root", "aggregation.create_child"} & granted)
+    if resource_key == "records":
+        return "record.create" in granted
+    return resource_key not in {"privileges", "permissions"}
+
+
 def can_open_organization_detail(entity_type: str, privileges: Iterable[str]) -> bool:
     """Return whether a browser summary may offer its administrative detail page."""
     destination = {

@@ -293,11 +293,35 @@ def test_closed_aggregation_makes_its_entire_subtree_immutable(client: TestClien
         f"/api/v1/aggregations/{child['id']}", headers={"If-Match": str(child["version"])},
     ).status_code == 409
 
-    reopened = client.patch(
+    missing_reason = client.patch(
         f"/api/v1/aggregations/{root['id']}", json={"date_closed": None},
         headers={"If-Match": str(root["version"])},
     )
+    assert missing_reason.status_code == 422
+    assert missing_reason.json()["detail"]["code"] == "reopen_reason_required"
+
+    reopen_reason = "The file was closed before the review was complete."
+    reopened = client.patch(
+        f"/api/v1/aggregations/{root['id']}", json={"date_closed": None},
+        headers={
+            "If-Match": str(root["version"]),
+            "X-Change-Reason": reopen_reason,
+        },
+    )
     assert reopened.status_code == 200
+    history = client.post("/api/v1/event-history/search", json={
+        "where": {
+            "and": [
+                {"field": "entity_type", "operator": "eq", "value": "aggregation"},
+                {"field": "entity_id", "operator": "eq", "value": root["id"]},
+                {"field": "operation", "operator": "eq", "value": "UPDATE"},
+            ]
+        },
+        "sort": [{"field": "id", "direction": "desc"}],
+        "limit": 1,
+    })
+    assert history.status_code == 200, history.text
+    assert history.json()["items"][0]["reason"] == reopen_reason
     updated_record = client.patch(
         f"/api/v1/records/{record['id']}", json={"title": "Allowed again"},
         headers={"If-Match": str(record["version"])},

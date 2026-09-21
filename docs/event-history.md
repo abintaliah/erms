@@ -361,13 +361,18 @@ rollback, and actor/request context behave correctly.
 
 ## Future domain events
 
+Aggregation reopening is currently represented by the authoritative automatic
+`UPDATE` event rather than a second domain event. A successful reopen has
+`date_closed` in `changed_fields` and must contain a non-blank `reason`. This
+avoids recording two history entries for one state change. A future dedicated
+`REOPEN` event would replace, not duplicate, that representation.
+
 The schema permits operations beyond the three automatic row-change events.
 Potential domain events include:
 
 ```text
 MOVE
 CLOSE
-REOPEN
 RECLASSIFY
 DECLARE_AS_RECORD
 VIEW

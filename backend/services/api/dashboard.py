@@ -18,7 +18,14 @@ def dashboard_summary(
     principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    """Return the complete dashboard using one database-pool checkout."""
+    """Return the authenticated user's complete dashboard summary.
+
+    Dashboard clients should use this endpoint instead of issuing separate
+    search, count, favourites, recent-activity, classification, and ownership
+    requests for individual cards. The response applies the same authorization
+    and resource-visibility rules as the underlying features while using one
+    database-pool checkout.
+    """
     privilege_rows = connection.execute(
         """SELECT code FROM privileges
             WHERE user_has_global_privilege(current_user_id(), code)"""

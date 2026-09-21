@@ -44,3 +44,15 @@ def permission_closure(selected: set[str]) -> set[str]:
 
 def dependents_of(permission: str, selected: set[str]) -> set[str]:
     return {code for code in selected if permission in permission_closure({code}) and code != permission}
+
+
+def acl_grants_payload(principals: list[dict]) -> list[dict]:
+    """Convert ACL read rows into the API's strict grant write contract."""
+    return [
+        {
+            "principal_type": principal["principal_type"],
+            "role_id": principal.get("role_id"),
+            "permission_codes": list(principal.get("permission_codes", [])),
+        }
+        for principal in principals
+    ]

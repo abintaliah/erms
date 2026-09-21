@@ -24,6 +24,8 @@ closure source shown by the UI.
   `date_closed`. An inherited closure cannot be cleared on the descendant; the
   closed ancestor must be reopened. Reopening a branch has no effect on a
   descendant that also has its own direct closure.
+- Reopening requires a non-blank reason. API clients supply it in the
+  `X-Change-Reason` header; the web UI collects it in the Reopen dialog.
 
 ## Operations prohibited in an effectively closed branch
 
@@ -51,11 +53,18 @@ only mutation permitted is clearing a directly closed aggregation's
 `date_closed` to reopen it; no other field may change in that operation.
 
 The web UI marks direct and inherited closure, disables metadata editing,
-provides a Reopen action only for directly closed aggregations, removes the component uploader,
+provides a Reopen action only for directly closed aggregations, requires the
+user to explain the change, removes the component uploader,
 and disables component reorder/removal controls while leaving view, download,
 and event-history actions available. New-record aggregation selection excludes
 effectively closed destinations. Database enforcement remains authoritative in
 case another client uses stale data.
+
+The successful update produces the normal immutable `UPDATE` event for the
+aggregation. Its `changed_fields` includes `date_closed`, and its `reason`
+contains the supplied reopening reason. The API rejects a reopen without a
+reason before changing the aggregation, so non-web clients cannot bypass this
+audit requirement.
 
 ## Concurrency and integrity
 

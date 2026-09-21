@@ -616,6 +616,11 @@ global `aggregation.reopen` privilege, sufficient clearance, and satisfaction
 of all existing lifecycle and integrity rules. The information-governance ACL
 bypass supplies resource scope.
 
+Every reopen must also carry a non-blank reason. The web client collects it in
+a mandatory confirmation dialog, the API enforces it for every caller, and the
+automatic immutable `UPDATE` event stores it in `event_history.reason` with
+`date_closed` identified in `changed_fields`.
+
 ## 12. Filtering, grouping, search, and reporting
 
 Owning org unit should be available as an optional filter and response field
