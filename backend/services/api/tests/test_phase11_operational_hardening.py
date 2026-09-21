@@ -85,6 +85,8 @@ def test_reconciliation_reports_administrators_custodians_and_hierarchy(client):
     body = response.json()
     assert body["active_authorization_administrators"]
     assert body["hierarchy_violation_count"] == 0
+    assert body["ownership_invariant_violation_count"] == 0
+    assert body["ownership_invariant_violations_by_type"] == {}
     assert all(set(item) >= {"code", "severity"} for item in body["findings"])
 
 

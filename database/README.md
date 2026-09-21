@@ -161,6 +161,30 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/042_add_organization_browse_privilege.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/043_add_event_reference_snapshots.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/044_add_organizational_ownership_foundation.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/045_assign_existing_organizational_ownership.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/046_enforce_organizational_ownership.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/047_expose_organizational_ownership_in_search.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/048_add_org_unit_members_acl_principal.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/049_initialize_organizational_acl_defaults.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/050_add_root_ownership_correction.sql
 ```
 
 The historical files numbered 021 and 024 are retained only for databases
@@ -232,6 +256,20 @@ the narrowly scoped transaction context used for audited record-placement
 corrections into effectively closed aggregations. See the corresponding
 `security-authorization-phase-2.md` through `security-authorization-phase-9.md`
 documents under `docs/`.
+Migration 043 preserves readable identity snapshots for entities referenced by
+event before-state, after-state, and metadata fields. Migration 044 adds the
+nullable organizational-ownership foundation to aggregations and records,
+restrictive org-unit foreign keys, owner-oriented browse indexes, and owning
+org-unit event-reference snapshots. It deliberately does not backfill owners,
+make ownership mandatory, propagate ownership, or alter authorization.
+Migration 045 deterministically assigns every existing root to an eligible
+active role and its organizational unit, propagates the selected owner through
+descendants and records, and retains the scored root mapping plus before/after
+reconciliation counts for later ACL migration.
+Migration 046 makes ownership mandatory, derives child and record ownership,
+rejects direct owner changes, and atomically propagates ownership through
+record and aggregation-subtree moves. Cross-owner moves require a reason and
+explicit confirmation.
 Migration 004 adds transactional record drafts. Migration 005 adds local
 credentials, database-backed login sessions, and the original person/system
 account types.
@@ -327,3 +365,19 @@ database/tests/run.sh
 The test runner always creates a fresh disposable PostgreSQL container, builds
 and tests its databases, and removes the container on success, failure, or
 interruption. It never points tests at the standalone development database.
+
+Migration 048 adds the contextual `org_unit_members` ACL principal to resource
+and child-default ACLs. It reserves the synthetic identity against real roles
+and updates authorization predicates so membership follows the resource owner
+and current effective role assignments without rewriting ACL rows.
+
+Migration 049 replaces the greenfield generated ACL contents with the approved
+organizational defaults. It initializes creator-role and `org_unit_members`
+grants for root ACLs, child-default policies, and dormant child/record local
+ACLs while preserving existing inheritance flags. New resources use the same
+initializer when the API supplies the validated creation role context.
+
+Migration 050 adds `organization.ownership.correct` to the information-
+governance profiles and installs the tightly scoped database context that
+allows the governed API command to correct a root owner while normal direct
+owner updates remain prohibited.

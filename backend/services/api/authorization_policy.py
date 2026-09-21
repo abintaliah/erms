@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 
 EVERYONE = "everyone"
+ORG_UNIT_MEMBERS = "org_unit_members"
 
 
 class DecisionCode(StrEnum):
@@ -70,6 +71,7 @@ class EffectiveRole:
     role_id: int
     role_code: str
     role_name: str
+    org_unit_id: int
     profile_id: int
     profile_code: str
     profile_name: str
@@ -109,6 +111,7 @@ class ResourceAcl:
     """
 
     everyone_permissions: frozenset[str] = field(default_factory=frozenset)
+    org_unit_member_permissions: frozenset[str] = field(default_factory=frozenset)
     role_permissions: Mapping[int, frozenset[str]] = field(default_factory=dict)
     source: str | None = None
 
@@ -127,6 +130,7 @@ class AuthorizationRequest:
     required_permissions: tuple[str, ...] = ()
     resource_levels: tuple[int, ...] = ()
     acl: ResourceAcl | None = None
+    owning_org_unit_id: int | None = None
     integrity_allowed: bool = True
     integrity_reason: str | None = None
 
@@ -150,6 +154,8 @@ class AuthorizationDecision:
     clearance_role_ids: tuple[int, ...] = ()
     acl_role_ids_by_permission: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
     everyone_permissions: tuple[str, ...] = ()
+    org_unit_member_permissions: tuple[str, ...] = ()
+    org_unit_member_role_ids_by_permission: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
     governance_bypass_role_ids: tuple[int, ...] = ()
     effective_clearance: int | None = None
     required_clearance: int | None = None
@@ -160,6 +166,14 @@ class AuthorizationDecision:
             for permission, role_ids in self.acl_role_ids_by_permission.items()
         }
         object.__setattr__(self, "acl_role_ids_by_permission", MappingProxyType(normalized))
+        org_unit_members = {
+            permission: tuple(role_ids)
+            for permission, role_ids in self.org_unit_member_role_ids_by_permission.items()
+        }
+        object.__setattr__(
+            self, "org_unit_member_role_ids_by_permission",
+            MappingProxyType(org_unit_members),
+        )
 
 
 def _aware(value: datetime) -> datetime:
@@ -189,6 +203,7 @@ def resolve_effective_roles(
             role_id=candidate.role_id,
             role_code=candidate.role_code,
             role_name=candidate.role_name,
+            org_unit_id=candidate.org_unit_id,
             profile_id=candidate.profile_id,
             profile_code=candidate.profile_code,
             profile_name=candidate.profile_name,
@@ -289,6 +304,23 @@ def authorize(context: PolicyContext, request: AuthorizationRequest) -> Authoriz
         permission for permission in request.required_permissions
         if request.acl and permission in request.acl.everyone_permissions
     )
+    org_unit_members = tuple(
+        permission for permission in request.required_permissions
+        if request.acl and permission in request.acl.org_unit_member_permissions
+        and request.owning_org_unit_id is not None
+        and any(
+            role.org_unit_id == request.owning_org_unit_id
+            for role in context.effective_roles
+        )
+    )
+    org_unit_member_roles = {
+        permission: tuple(
+            role.role_id for role in context.effective_roles
+            if request.owning_org_unit_id is not None
+            and role.org_unit_id == request.owning_org_unit_id
+        ) if permission in org_unit_members else ()
+        for permission in request.required_permissions
+    }
     missing: list[str] = []
     for permission in request.required_permissions:
         contributors = tuple(
@@ -296,7 +328,7 @@ def authorize(context: PolicyContext, request: AuthorizationRequest) -> Authoriz
             if request.acl and permission in request.acl.role_permissions.get(role.role_id, frozenset())
         )
         permission_roles[permission] = contributors
-        if permission not in everyone and not contributors:
+        if permission not in everyone and permission not in org_unit_members and not contributors:
             missing.append(permission)
 
     governance_roles = tuple(
@@ -316,6 +348,8 @@ def authorize(context: PolicyContext, request: AuthorizationRequest) -> Authoriz
             clearance_role_ids=clearance_roles,
             acl_role_ids_by_permission=permission_roles,
             everyone_permissions=everyone,
+            org_unit_member_permissions=org_unit_members,
+            org_unit_member_role_ids_by_permission=org_unit_member_roles,
         )
     gates.append(GateResult(
         "resource_acl", True, DecisionCode.ALLOWED.value,
@@ -331,6 +365,8 @@ def authorize(context: PolicyContext, request: AuthorizationRequest) -> Authoriz
         clearance_role_ids=clearance_roles,
         acl_role_ids_by_permission=permission_roles,
         everyone_permissions=everyone,
+        org_unit_member_permissions=org_unit_members,
+        org_unit_member_role_ids_by_permission=org_unit_member_roles,
         governance_bypass_role_ids=bypass,
         effective_clearance=effective_clearance,
         required_clearance=required_clearance,
@@ -504,6 +540,7 @@ require_identity_users_admin = require_global_privilege("identity.users.administ
 require_identity_sessions_admin = require_global_privilege("identity.sessions.administer")
 require_organization_browse = require_global_privilege("organization.browse")
 require_organization_admin = require_global_privilege("organization.administer")
+require_ownership_correct = require_global_privilege("organization.ownership.correct")
 require_authorization_admin = require_global_privilege("authorization.administer")
 require_security_levels_admin = require_global_privilege("security_levels.administer")
 require_classifications_admin = require_global_privilege("classifications.administer")

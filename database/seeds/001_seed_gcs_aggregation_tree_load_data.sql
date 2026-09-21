@@ -182,13 +182,31 @@ BEGIN
     FROM generate_series(1, 75) AS generated(sequence_no)
     JOIN classifications target ON target.id = target_classification_id;
 
+    CREATE TEMP TABLE seed_owner_roles ON COMMIT DROP AS
+    SELECT role.org_unit_id,
+           row_number() OVER (ORDER BY lower(unit.code), lower(role.code), role.id) AS stable_ordinal,
+           count(*) OVER () AS role_count
+    FROM roles role
+    JOIN org_units unit ON unit.id=role.org_unit_id
+    WHERE role.status='active' AND unit.status='active' AND lower(unit.code)<>'system';
+
+    IF NOT EXISTS (SELECT 1 FROM seed_owner_roles) THEN
+        RAISE EXCEPTION 'GCS aggregation seed requires at least one active non-system role';
+    END IF;
+
     INSERT INTO aggregations (
         classification_id, aggregation_number, title, description,
-        date_created, date_opened
+        date_created, date_opened, owning_org_unit_id
     )
     SELECT classification_id, aggregation_number, title, description,
-           date_created, date_opened
-    FROM seed_aggregations
+           date_created, date_opened, owner.org_unit_id
+    FROM (
+        SELECT seed.*,
+               row_number() OVER (ORDER BY seed_group, sequence_no) AS stable_ordinal
+        FROM seed_aggregations seed
+    ) seed
+    JOIN seed_owner_roles owner
+      ON owner.stable_ordinal = 1 + ((seed.stable_ordinal - 1) % owner.role_count)
     ORDER BY seed_group, sequence_no;
 
     CREATE TEMP TABLE inserted_seed_aggregations ON COMMIT DROP AS

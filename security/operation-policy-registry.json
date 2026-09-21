@@ -165,6 +165,23 @@
       "phase_12_enforced": false
     },
     {
+      "id": "POST:/api/v1/aggregations/{aggregation_id}/correct-ownership",
+      "method": "POST",
+      "path": "/api/v1/aggregations/{aggregation_id}/correct-ownership",
+      "current_access_class": "authenticated_only",
+      "target_policy_class": "governance_exception",
+      "global_privilege": "organization.ownership.correct",
+      "resource_permission": null,
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_5_enforced": false,
+      "phase_7_enforced": true,
+      "phase_8_enforced": false,
+      "phase_9_enforced": false,
+      "phase_11_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
       "id": "GET:/api/v1/aggregations/{aggregation_id}/default-child-aggregation-permissions",
       "method": "GET",
       "path": "/api/v1/aggregations/{aggregation_id}/default-child-aggregation-permissions",
@@ -295,6 +312,23 @@
       "phase_4_enforced": false,
       "phase_5_enforced": false,
       "phase_7_enforced": false,
+      "phase_8_enforced": false,
+      "phase_9_enforced": false,
+      "phase_11_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "GET:/api/v1/aggregations/{aggregation_id}/ownership-correction-preview",
+      "method": "GET",
+      "path": "/api/v1/aggregations/{aggregation_id}/ownership-correction-preview",
+      "current_access_class": "authenticated_only",
+      "target_policy_class": "governance_exception",
+      "global_privilege": "organization.ownership.correct",
+      "resource_permission": null,
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_5_enforced": false,
+      "phase_7_enforced": true,
       "phase_8_enforced": false,
       "phase_9_enforced": false,
       "phase_11_enforced": false,
@@ -1304,6 +1338,40 @@
       "phase_12_enforced": false
     },
     {
+      "id": "GET:/api/v1/creation-role-options",
+      "method": "GET",
+      "path": "/api/v1/creation-role-options",
+      "current_access_class": "authenticated_only",
+      "target_policy_class": "authenticated_only",
+      "global_privilege": null,
+      "resource_permission": null,
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_5_enforced": false,
+      "phase_7_enforced": false,
+      "phase_8_enforced": false,
+      "phase_9_enforced": false,
+      "phase_11_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "GET:/api/v1/dashboard/ownership-counts",
+      "method": "GET",
+      "path": "/api/v1/dashboard/ownership-counts",
+      "current_access_class": "authenticated_only",
+      "target_policy_class": "authenticated_only",
+      "global_privilege": null,
+      "resource_permission": null,
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_5_enforced": false,
+      "phase_7_enforced": false,
+      "phase_8_enforced": false,
+      "phase_9_enforced": false,
+      "phase_11_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
       "id": "GET:/api/v1/digital-components",
       "method": "GET",
       "path": "/api/v1/digital-components",
@@ -1825,6 +1893,23 @@
       "phase_4_enforced": true,
       "phase_5_enforced": false,
       "phase_7_enforced": false,
+      "phase_8_enforced": false,
+      "phase_9_enforced": false,
+      "phase_11_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "GET:/api/v1/ownership-correction-options",
+      "method": "GET",
+      "path": "/api/v1/ownership-correction-options",
+      "current_access_class": "authenticated_only",
+      "target_policy_class": "governance_exception",
+      "global_privilege": "organization.ownership.correct",
+      "resource_permission": null,
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_5_enforced": false,
+      "phase_7_enforced": true,
       "phase_8_enforced": false,
       "phase_9_enforced": false,
       "phase_11_enforced": false,
@@ -3265,9 +3350,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:952:button",
+      "id": "webui.app:962:button",
       "control": "button",
-      "line": 952,
+      "line": 962,
       "label_expression": null,
       "icon_expression": "\"account_circle\"",
       "callback_expression": null,
@@ -3277,9 +3362,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:977:button",
+      "id": "webui.app:987:button",
       "control": "button",
-      "line": 977,
+      "line": 987,
       "label_expression": "\"Change password\"",
       "icon_expression": "\"key\"",
       "callback_expression": null,
@@ -3289,9 +3374,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:980:button",
+      "id": "webui.app:990:button",
       "control": "button",
-      "line": 980,
+      "line": 990,
       "label_expression": "\"Sign out\"",
       "icon_expression": "\"logout\"",
       "callback_expression": null,
@@ -3301,9 +3386,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1006:button",
+      "id": "webui.app:1016:button",
       "control": "button",
-      "line": 1006,
+      "line": 1016,
       "label_expression": "label",
       "icon_expression": "icon",
       "callback_expression": null,
@@ -3313,35 +3398,11 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1017:button",
+      "id": "webui.app:1027:button",
       "control": "button",
-      "line": 1017,
+      "line": 1027,
       "label_expression": null,
       "icon_expression": "\"chevron_left\"",
-      "callback_expression": null,
-      "current_access_class": "authenticated_only",
-      "phase_0_enforced": false,
-      "phase_4_enforced": false,
-      "phase_12_enforced": false
-    },
-    {
-      "id": "webui.app:1156:button",
-      "control": "button",
-      "line": 1156,
-      "label_expression": "\"Add\"",
-      "icon_expression": "\"add\"",
-      "callback_expression": null,
-      "current_access_class": "authenticated_only",
-      "phase_0_enforced": false,
-      "phase_4_enforced": false,
-      "phase_12_enforced": false
-    },
-    {
-      "id": "webui.app:1157:button",
-      "control": "button",
-      "line": 1157,
-      "label_expression": "\"Add record\"",
-      "icon_expression": "\"note_add\"",
       "callback_expression": null,
       "current_access_class": "authenticated_only",
       "phase_0_enforced": false,
@@ -3352,8 +3413,8 @@
       "id": "webui.app:1166:button",
       "control": "button",
       "line": 1166,
-      "label_expression": "\"Search\"",
-      "icon_expression": "\"search\"",
+      "label_expression": "\"Add\"",
+      "icon_expression": "\"add\"",
       "callback_expression": null,
       "current_access_class": "authenticated_only",
       "phase_0_enforced": false,
@@ -3361,11 +3422,11 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1169:button",
+      "id": "webui.app:1167:button",
       "control": "button",
-      "line": 1169,
-      "label_expression": "\"Browse classification\"",
-      "icon_expression": "\"account_tree\"",
+      "line": 1167,
+      "label_expression": "\"Add record\"",
+      "icon_expression": "\"note_add\"",
       "callback_expression": null,
       "current_access_class": "authenticated_only",
       "phase_0_enforced": false,
@@ -3385,9 +3446,33 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1262:button",
+      "id": "webui.app:1179:button",
       "control": "button",
-      "line": 1262,
+      "line": 1179,
+      "label_expression": "\"Browse classification\"",
+      "icon_expression": "\"account_tree\"",
+      "callback_expression": null,
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:1186:button",
+      "control": "button",
+      "line": 1186,
+      "label_expression": "\"Search\"",
+      "icon_expression": "\"search\"",
+      "callback_expression": null,
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:1272:button",
+      "control": "button",
+      "line": 1272,
       "label_expression": null,
       "icon_expression": "\"more_horiz\"",
       "callback_expression": null,
@@ -3397,9 +3482,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1268:menu_item",
+      "id": "webui.app:1278:menu_item",
       "control": "menu_item",
-      "line": 1268,
+      "line": 1278,
       "label_expression": "item.get(\"label\") or item[\"page\"].replace(\"-\", \" \").title()",
       "icon_expression": null,
       "callback_expression": "lambda _, target=hidden_index: navigate_to_breadcrumb(target)",
@@ -3409,9 +3494,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1281:button",
+      "id": "webui.app:1291:button",
       "control": "button",
-      "line": 1281,
+      "line": 1291,
       "label_expression": "label",
       "icon_expression": null,
       "callback_expression": "lambda _, target=index: navigate_to_breadcrumb(target)",
@@ -3421,9 +3506,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1463:button",
+      "id": "webui.app:1473:button",
       "control": "button",
-      "line": 1463,
+      "line": 1473,
       "label_expression": null,
       "icon_expression": "\"favorite\" if selected else \"favorite_border\"",
       "callback_expression": null,
@@ -3433,9 +3518,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1648:button",
+      "id": "webui.app:1658:button",
       "control": "button",
-      "line": 1648,
+      "line": 1658,
       "label_expression": "\"Open entity\"",
       "icon_expression": "\"open_in_new\"",
       "callback_expression": "open_entity",
@@ -3445,9 +3530,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1652:button",
+      "id": "webui.app:1662:button",
       "control": "button",
-      "line": 1652,
+      "line": 1662,
       "label_expression": null,
       "icon_expression": "\"close\"",
       "callback_expression": "dialog.close",
@@ -3457,9 +3542,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1740:button",
+      "id": "webui.app:1750:button",
       "control": "button",
-      "line": 1740,
+      "line": 1750,
       "label_expression": null,
       "icon_expression": "\"open_in_new\"",
       "callback_expression": "lambda _, item=event: navigate_to_event_entity(item)",
@@ -3469,9 +3554,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1744:button",
+      "id": "webui.app:1754:button",
       "control": "button",
-      "line": 1744,
+      "line": 1754,
       "label_expression": null,
       "icon_expression": "\"chevron_right\"",
       "callback_expression": "lambda _, item=event: show_event_detail(item)",
@@ -3481,9 +3566,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1767:button",
+      "id": "webui.app:1777:button",
       "control": "button",
-      "line": 1767,
+      "line": 1777,
       "label_expression": null,
       "icon_expression": "\"close\"",
       "callback_expression": "dialog.close",
@@ -3493,9 +3578,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1834:button",
+      "id": "webui.app:1844:button",
       "control": "button",
-      "line": 1834,
+      "line": 1844,
       "label_expression": null,
       "icon_expression": "\"download\"",
       "callback_expression": "lambda: download_component(component)",
@@ -3505,48 +3590,12 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1835:button",
+      "id": "webui.app:1845:button",
       "control": "button",
-      "line": 1835,
+      "line": 1845,
       "label_expression": null,
       "icon_expression": "\"close\"",
       "callback_expression": "dialog.close",
-      "current_access_class": "authenticated_only",
-      "phase_0_enforced": false,
-      "phase_4_enforced": false,
-      "phase_12_enforced": false
-    },
-    {
-      "id": "webui.app:1859:button",
-      "control": "button",
-      "line": 1859,
-      "label_expression": null,
-      "icon_expression": "\"chevron_left\"",
-      "callback_expression": "lambda: ui.run_javascript( f\"window.ermsPdfViewer.previous({json.dumps(canvas_id)})\" )",
-      "current_access_class": "authenticated_only",
-      "phase_0_enforced": false,
-      "phase_4_enforced": false,
-      "phase_12_enforced": false
-    },
-    {
-      "id": "webui.app:1863:button",
-      "control": "button",
-      "line": 1863,
-      "label_expression": null,
-      "icon_expression": "\"chevron_right\"",
-      "callback_expression": "lambda: ui.run_javascript( f\"window.ermsPdfViewer.next({json.dumps(canvas_id)})\" )",
-      "current_access_class": "authenticated_only",
-      "phase_0_enforced": false,
-      "phase_4_enforced": false,
-      "phase_12_enforced": false
-    },
-    {
-      "id": "webui.app:1866:button",
-      "control": "button",
-      "line": 1866,
-      "label_expression": null,
-      "icon_expression": "\"zoom_out\"",
-      "callback_expression": "lambda: ui.run_javascript( f\"window.ermsPdfViewer.zoomOut({json.dumps(canvas_id)})\" )",
       "current_access_class": "authenticated_only",
       "phase_0_enforced": false,
       "phase_4_enforced": false,
@@ -3557,20 +3606,8 @@
       "control": "button",
       "line": 1869,
       "label_expression": null,
-      "icon_expression": "\"zoom_in\"",
-      "callback_expression": "lambda: ui.run_javascript( f\"window.ermsPdfViewer.zoomIn({json.dumps(canvas_id)})\" )",
-      "current_access_class": "authenticated_only",
-      "phase_0_enforced": false,
-      "phase_4_enforced": false,
-      "phase_12_enforced": false
-    },
-    {
-      "id": "webui.app:1872:button",
-      "control": "button",
-      "line": 1872,
-      "label_expression": null,
-      "icon_expression": "\"download\"",
-      "callback_expression": "lambda: download_component(component)",
+      "icon_expression": "\"chevron_left\"",
+      "callback_expression": "lambda: ui.run_javascript( f\"window.ermsPdfViewer.previous({json.dumps(canvas_id)})\" )",
       "current_access_class": "authenticated_only",
       "phase_0_enforced": false,
       "phase_4_enforced": false,
@@ -3581,6 +3618,54 @@
       "control": "button",
       "line": 1873,
       "label_expression": null,
+      "icon_expression": "\"chevron_right\"",
+      "callback_expression": "lambda: ui.run_javascript( f\"window.ermsPdfViewer.next({json.dumps(canvas_id)})\" )",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:1876:button",
+      "control": "button",
+      "line": 1876,
+      "label_expression": null,
+      "icon_expression": "\"zoom_out\"",
+      "callback_expression": "lambda: ui.run_javascript( f\"window.ermsPdfViewer.zoomOut({json.dumps(canvas_id)})\" )",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:1879:button",
+      "control": "button",
+      "line": 1879,
+      "label_expression": null,
+      "icon_expression": "\"zoom_in\"",
+      "callback_expression": "lambda: ui.run_javascript( f\"window.ermsPdfViewer.zoomIn({json.dumps(canvas_id)})\" )",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:1882:button",
+      "control": "button",
+      "line": 1882,
+      "label_expression": null,
+      "icon_expression": "\"download\"",
+      "callback_expression": "lambda: download_component(component)",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:1883:button",
+      "control": "button",
+      "line": 1883,
+      "label_expression": null,
       "icon_expression": "\"close\"",
       "callback_expression": "close_viewer",
       "current_access_class": "authenticated_only",
@@ -3589,9 +3674,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:1987:button",
+      "id": "webui.app:1997:button",
       "control": "button",
-      "line": 1987,
+      "line": 1997,
       "label_expression": null,
       "icon_expression": "\"close\"",
       "callback_expression": "dialog.close",
@@ -3601,9 +3686,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2013:button",
+      "id": "webui.app:2023:button",
       "control": "button",
-      "line": 2013,
+      "line": 2023,
       "label_expression": "\"Close\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -3613,9 +3698,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2082:button",
+      "id": "webui.app:2101:button",
       "control": "button",
-      "line": 2082,
+      "line": 2101,
       "label_expression": null,
       "icon_expression": "\"close\"",
       "callback_expression": "dialog.close",
@@ -3625,9 +3710,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2104:button",
+      "id": "webui.app:2123:button",
       "control": "button",
-      "line": 2104,
+      "line": 2123,
       "label_expression": "\"Open\"",
       "icon_expression": "\"open_in_new\"",
       "callback_expression": "open_editor_acl_source",
@@ -3637,9 +3722,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2168:button",
+      "id": "webui.app:2187:button",
       "control": "button",
-      "line": 2168,
+      "line": 2187,
       "label_expression": "\"Use local ACL\" if inherit is not None else \"Use custom default ACL\"",
       "icon_expression": "\"edit\"",
       "callback_expression": "activate_local_acl",
@@ -3649,9 +3734,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2190:button",
+      "id": "webui.app:2209:button",
       "control": "button",
-      "line": 2190,
+      "line": 2209,
       "label_expression": "\"Add role\"",
       "icon_expression": "\"person_add\"",
       "callback_expression": "add_role",
@@ -3661,9 +3746,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2193:button",
+      "id": "webui.app:2212:button",
       "control": "button",
-      "line": 2193,
+      "line": 2212,
       "label_expression": "\"Add Everyone\"",
       "icon_expression": "\"groups\"",
       "callback_expression": "lambda: ( principals.insert(0, {\"principal_type\": \"everyone\", \"role_id\": None, \"permission_codes\": []}), render_principals(), )",
@@ -3673,9 +3758,21 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2266:button",
+      "id": "webui.app:2224:button",
       "control": "button",
-      "line": 2266,
+      "line": 2224,
+      "label_expression": "\"Add all org unit members\"",
+      "icon_expression": "\"corporate_fare\"",
+      "callback_expression": "lambda: ( principals.insert(0, { \"principal_type\": \"org_unit_members\", \"role_id\": None, \"permission_codes\": [], }), render_principals(), )",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:2316:button",
+      "control": "button",
+      "line": 2316,
       "label_expression": null,
       "icon_expression": "\"account_tree\"",
       "callback_expression": "lambda _, control=role_picker: show_organization_structure( selection_mode=\"role\", target_control=control, )",
@@ -3685,9 +3782,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2275:button",
+      "id": "webui.app:2325:button",
       "control": "button",
-      "line": 2275,
+      "line": 2325,
       "label_expression": null,
       "icon_expression": "\"delete_outline\"",
       "callback_expression": "lambda _, i=index: (principals.pop(i), render_principals())",
@@ -3697,9 +3794,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2387:button",
+      "id": "webui.app:2437:button",
       "control": "button",
-      "line": 2387,
+      "line": 2437,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "confirmation.close",
@@ -3709,9 +3806,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2390:button",
+      "id": "webui.app:2440:button",
       "control": "button",
-      "line": 2390,
+      "line": 2440,
       "label_expression": "\"Apply change\"",
       "icon_expression": "\"check\"",
       "callback_expression": "confirm_apply",
@@ -3721,9 +3818,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2395:button",
+      "id": "webui.app:2445:button",
       "control": "button",
-      "line": 2395,
+      "line": 2445,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -3733,9 +3830,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2396:button",
+      "id": "webui.app:2446:button",
       "control": "button",
-      "line": 2396,
+      "line": 2446,
       "label_expression": "\"Save ACL\"",
       "icon_expression": "\"save\"",
       "callback_expression": "save_acl",
@@ -3745,9 +3842,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2419:button",
+      "id": "webui.app:2469:button",
       "control": "button",
-      "line": 2419,
+      "line": 2469,
       "label_expression": null,
       "icon_expression": "\"close\"",
       "callback_expression": "dialog.close",
@@ -3757,9 +3854,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2428:button",
+      "id": "webui.app:2478:button",
       "control": "button",
-      "line": 2428,
+      "line": 2478,
       "label_expression": "\"Explain\"",
       "icon_expression": "\"play_arrow\"",
       "callback_expression": null,
@@ -3769,9 +3866,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2507:button",
+      "id": "webui.app:2557:button",
       "control": "button",
-      "line": 2507,
+      "line": 2557,
       "label_expression": "\"Open\"",
       "icon_expression": "\"open_in_new\"",
       "callback_expression": "open_acl_source",
@@ -3781,9 +3878,57 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2672:button",
+      "id": "webui.app:2751:button",
       "control": "button",
-      "line": 2672,
+      "line": 2751,
+      "label_expression": "\"Cancel\"",
+      "icon_expression": null,
+      "callback_expression": "dialog.close",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:2752:button",
+      "control": "button",
+      "line": 2752,
+      "label_expression": "\"Move\"",
+      "icon_expression": "\"drive_file_move\"",
+      "callback_expression": "submit",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:2825:button",
+      "control": "button",
+      "line": 2825,
+      "label_expression": "\"Cancel\"",
+      "icon_expression": null,
+      "callback_expression": "dialog.close",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:2826:button",
+      "control": "button",
+      "line": 2826,
+      "label_expression": "\"Confirm correction\"",
+      "icon_expression": "\"published_with_changes\"",
+      "callback_expression": "submit",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:2908:button",
+      "control": "button",
+      "line": 2908,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "confirmation.close",
@@ -3793,9 +3938,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2673:button",
+      "id": "webui.app:2909:button",
       "control": "button",
-      "line": 2673,
+      "line": 2909,
       "label_expression": "\"Delete record\"",
       "icon_expression": "\"delete_forever\"",
       "callback_expression": "delete_record",
@@ -3805,9 +3950,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2690:button",
+      "id": "webui.app:2926:button",
       "control": "button",
-      "line": 2690,
+      "line": 2926,
       "label_expression": "\"Back\"",
       "icon_expression": "\"arrow_back\"",
       "callback_expression": "leave_record_page",
@@ -3817,9 +3962,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2692:button",
+      "id": "webui.app:2928:button",
       "control": "button",
-      "line": 2692,
+      "line": 2928,
       "label_expression": "\"Edit metadata\"",
       "icon_expression": "\"edit\"",
       "callback_expression": "lambda: open_editor( record, on_saved=refresh_record_view, resource_key=\"records\", )",
@@ -3829,9 +3974,21 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2699:button",
+      "id": "webui.app:2935:button",
       "control": "button",
-      "line": 2699,
+      "line": 2935,
+      "label_expression": "\"Move\"",
+      "icon_expression": "\"drive_file_move\"",
+      "callback_expression": "lambda: show_governed_move( \"records\", record, refresh_record_view, )",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:2942:button",
+      "control": "button",
+      "line": 2942,
       "label_expression": "\"Delete\"",
       "icon_expression": "\"delete_outline\"",
       "callback_expression": "confirm_delete_record",
@@ -3841,9 +3998,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2703:button",
+      "id": "webui.app:2946:button",
       "control": "button",
-      "line": 2703,
+      "line": 2946,
       "label_expression": "\"Event history\"",
       "icon_expression": "\"history\"",
       "callback_expression": "lambda: show_entity_history(\"records\", record)",
@@ -3853,9 +4010,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2707:button",
+      "id": "webui.app:2950:button",
       "control": "button",
-      "line": 2707,
+      "line": 2950,
       "label_expression": "\"Why this access?\"",
       "icon_expression": "\"fact_check\"",
       "callback_expression": "lambda: show_access_explanation(\"record\", record[\"id\"])",
@@ -3865,9 +4022,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2712:button",
+      "id": "webui.app:2955:button",
       "control": "button",
-      "line": 2712,
+      "line": 2955,
       "label_expression": "\"Access\"",
       "icon_expression": "\"policy\"",
       "callback_expression": "lambda: show_acl_editor( \"records\", record[\"id\"], on_saved=lambda: refresh_record_view(), )",
@@ -3877,9 +4034,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:2742:button",
+      "id": "webui.app:2989:button",
       "control": "button",
-      "line": 2742,
+      "line": 2989,
       "label_expression": "aggregation_label",
       "icon_expression": null,
       "callback_expression": "open_containing_aggregation",
@@ -3889,9 +4046,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3070:button",
+      "id": "webui.app:3359:button",
       "control": "button",
-      "line": 3070,
+      "line": 3359,
       "label_expression": "\"Cancel draft\"",
       "icon_expression": null,
       "callback_expression": "discard",
@@ -3901,9 +4058,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3071:button",
+      "id": "webui.app:3360:button",
       "control": "button",
-      "line": 3071,
+      "line": 3360,
       "label_expression": "\"Create record\"",
       "icon_expression": "\"check\"",
       "callback_expression": "commit",
@@ -3913,9 +4070,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3224:button",
+      "id": "webui.app:3518:button",
       "control": "button",
-      "line": 3224,
+      "line": 3518,
       "label_expression": null,
       "icon_expression": "\"arrow_back\"",
       "callback_expression": "show_schemes if not path else lambda: show_level(scheme, path[-1] if path else None, path[:-1])",
@@ -3925,9 +4082,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3267:button",
+      "id": "webui.app:3561:button",
       "control": "button",
-      "line": 3267,
+      "line": 3561,
       "label_expression": null,
       "icon_expression": "\"close\"",
       "callback_expression": "browser.close",
@@ -3937,9 +4094,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3347:button",
+      "id": "webui.app:3667:button",
       "control": "button",
-      "line": 3347,
+      "line": 3667,
       "label_expression": "\"Browse organization structure\"",
       "icon_expression": "\"account_tree\"",
       "callback_expression": "lambda _, control=controls[field.name], mode=selector_mode: show_organization_structure( selection_mode=mode, target_control=control, )",
@@ -3949,9 +4106,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3389:button",
+      "id": "webui.app:3709:button",
       "control": "button",
-      "line": 3389,
+      "line": 3709,
       "label_expression": "\"Browse classification tree\"",
       "icon_expression": "\"account_tree\"",
       "callback_expression": "lambda control=controls[field.name]: browse_classification_tree(control)",
@@ -3961,9 +4118,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3539:button",
+      "id": "webui.app:3886:button",
       "control": "button",
-      "line": 3539,
+      "line": 3886,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -3973,9 +4130,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3540:button",
+      "id": "webui.app:3887:button",
       "control": "button",
-      "line": 3540,
+      "line": 3887,
       "label_expression": "\"Save\"",
       "icon_expression": "\"save\"",
       "callback_expression": "save",
@@ -3985,9 +4142,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3654:button",
+      "id": "webui.app:4001:button",
       "control": "button",
-      "line": 3654,
+      "line": 4001,
       "label_expression": "\"Filters\"",
       "icon_expression": "\"filter_list\"",
       "callback_expression": "toggle_filter_panel",
@@ -3997,9 +4154,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3680:button",
+      "id": "webui.app:4027:button",
       "control": "button",
-      "line": 3680,
+      "line": 4027,
       "label_expression": null,
       "icon_expression": "\"filter_alt_off\"",
       "callback_expression": "lambda: ( membership_status.set_value(\"all\"), membership_valid_from.set_value(None), membership_valid_until.set_value(None), )",
@@ -4009,9 +4166,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3801:button",
+      "id": "webui.app:4148:button",
       "control": "button",
-      "line": 3801,
+      "line": 4148,
       "label_expression": "\"Browse\"",
       "icon_expression": "\"account_tree\"",
       "callback_expression": "lambda: show_organization_structure( selection_mode=\"role\" if for_user else \"user\", target_control=selection_holder[\"control\"], )",
@@ -4021,9 +4178,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3810:button",
+      "id": "webui.app:4157:button",
       "control": "button",
-      "line": 3810,
+      "line": 4157,
       "label_expression": "\"Assign\"",
       "icon_expression": "\"person_add\"",
       "callback_expression": "assign",
@@ -4033,9 +4190,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3815:button",
+      "id": "webui.app:4162:button",
       "control": "button",
-      "line": 3815,
+      "line": 4162,
       "label_expression": "\"Close\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -4045,9 +4202,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3983:button",
+      "id": "webui.app:4330:button",
       "control": "button",
-      "line": 3983,
+      "line": 4330,
       "label_expression": "\"Remove override\"",
       "icon_expression": "\"delete_outline\"",
       "callback_expression": "remove_rule",
@@ -4057,9 +4214,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3984:button",
+      "id": "webui.app:4331:button",
       "control": "button",
-      "line": 3984,
+      "line": 4331,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -4069,9 +4226,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:3985:button",
+      "id": "webui.app:4332:button",
       "control": "button",
-      "line": 3985,
+      "line": 4332,
       "label_expression": "\"Save override\"",
       "icon_expression": "\"save\"",
       "callback_expression": "save_rule",
@@ -4081,9 +4238,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4016:button",
+      "id": "webui.app:4363:button",
       "control": "button",
-      "line": 4016,
+      "line": 4363,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "confirmation.close",
@@ -4093,9 +4250,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4017:button",
+      "id": "webui.app:4364:button",
       "control": "button",
-      "line": 4017,
+      "line": 4364,
       "label_expression": "\"Delete aggregation\"",
       "icon_expression": "\"delete_forever\"",
       "callback_expression": "delete_current",
@@ -4105,9 +4262,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4024:button",
+      "id": "webui.app:4371:button",
       "control": "button",
-      "line": 4024,
+      "line": 4371,
       "label_expression": "\"Aggregations\"",
       "icon_expression": "\"folder\"",
       "callback_expression": "lambda: select_entity(\"aggregations\")",
@@ -4117,9 +4274,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4027:button",
+      "id": "webui.app:4374:button",
       "control": "button",
-      "line": 4027,
+      "line": 4374,
       "label_expression": "ancestor[\"title\"]",
       "icon_expression": null,
       "callback_expression": "lambda _, item=ancestor: open_aggregation(item)",
@@ -4129,9 +4286,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4044:button",
+      "id": "webui.app:4391:button",
       "control": "button",
-      "line": 4044,
+      "line": 4391,
       "label_expression": "\"Back\"",
       "icon_expression": "\"arrow_back\"",
       "callback_expression": "leave_aggregation_page",
@@ -4141,9 +4298,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4069:button",
+      "id": "webui.app:4416:button",
       "control": "button",
-      "line": 4069,
+      "line": 4416,
       "label_expression": "\"Reopen\"",
       "icon_expression": "\"lock_open\"",
       "callback_expression": "reopen_current",
@@ -4153,9 +4310,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4099:button",
+      "id": "webui.app:4450:button",
       "control": "button",
-      "line": 4099,
+      "line": 4450,
       "label_expression": "\"Close\"",
       "icon_expression": "\"lock\"",
       "callback_expression": "close_current",
@@ -4165,9 +4322,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4106:button",
+      "id": "webui.app:4457:button",
       "control": "button",
-      "line": 4106,
+      "line": 4457,
       "label_expression": "\"Delete\"",
       "icon_expression": "\"delete_outline\"",
       "callback_expression": "confirm_delete_current",
@@ -4177,9 +4334,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4116:button",
+      "id": "webui.app:4467:button",
       "control": "button",
-      "line": 4116,
+      "line": 4467,
       "label_expression": "\"Edit metadata\"",
       "icon_expression": "\"edit\"",
       "callback_expression": "lambda: open_editor( current, on_saved=open_aggregation, resource_key=\"aggregations\", )",
@@ -4189,9 +4346,33 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4123:button",
+      "id": "webui.app:4479:button",
       "control": "button",
-      "line": 4123,
+      "line": 4479,
+      "label_expression": "\"Move\"",
+      "icon_expression": "\"drive_file_move\"",
+      "callback_expression": "lambda: show_governed_move( \"aggregations\", current, open_aggregation, )",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:4486:button",
+      "control": "button",
+      "line": 4486,
+      "label_expression": "\"Correct ownership\"",
+      "icon_expression": "\"published_with_changes\"",
+      "callback_expression": "lambda: show_ownership_correction( current, open_aggregation, )",
+      "current_access_class": "authenticated_only",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
+      "id": "webui.app:4492:button",
+      "control": "button",
+      "line": 4492,
       "label_expression": "\"Event history\"",
       "icon_expression": "\"history\"",
       "callback_expression": "lambda: show_entity_history(\"aggregations\", current)",
@@ -4201,9 +4382,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4127:button",
+      "id": "webui.app:4496:button",
       "control": "button",
-      "line": 4127,
+      "line": 4496,
       "label_expression": "\"Why this access?\"",
       "icon_expression": "\"fact_check\"",
       "callback_expression": "lambda: show_access_explanation(\"aggregation\", current[\"id\"])",
@@ -4213,9 +4394,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4134:button",
+      "id": "webui.app:4503:button",
       "control": "button",
-      "line": 4134,
+      "line": 4503,
       "label_expression": "\"Access\"",
       "icon_expression": "\"policy\"",
       "callback_expression": "lambda: show_acl_editor( \"aggregations\", current[\"id\"], on_saved=lambda: open_aggregation(current), )",
@@ -4225,9 +4406,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4140:button",
+      "id": "webui.app:4509:button",
       "control": "button",
-      "line": 4140,
+      "line": 4509,
       "label_expression": "\"Child defaults\"",
       "icon_expression": "\"account_tree\"",
       "callback_expression": null,
@@ -4237,9 +4418,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4145:button",
+      "id": "webui.app:4514:button",
       "control": "button",
-      "line": 4145,
+      "line": 4514,
       "label_expression": "\"Record defaults\"",
       "icon_expression": "\"description\"",
       "callback_expression": null,
@@ -4249,9 +4430,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4199:button",
+      "id": "webui.app:4568:button",
       "control": "button",
-      "line": 4199,
+      "line": 4568,
       "label_expression": "\"Edit local override\" if local_retention_rule else \"Set local override\"",
       "icon_expression": "\"tune\"",
       "callback_expression": "manage_local_retention_rule",
@@ -4261,9 +4442,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4288:button",
+      "id": "webui.app:4657:button",
       "control": "button",
-      "line": 4288,
+      "line": 4657,
       "label_expression": "\"Refresh\"",
       "icon_expression": "\"refresh\"",
       "callback_expression": "refresh_recent",
@@ -4273,9 +4454,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4359:button",
+      "id": "webui.app:4728:button",
       "control": "button",
-      "line": 4359,
+      "line": 4728,
       "label_expression": null,
       "icon_expression": "\"favorite\"",
       "callback_expression": null,
@@ -4285,9 +4466,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4375:button",
+      "id": "webui.app:4744:button",
       "control": "button",
-      "line": 4375,
+      "line": 4744,
       "label_expression": null,
       "icon_expression": "\"close\"",
       "callback_expression": "dialog.close",
@@ -4297,9 +4478,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4419:button",
+      "id": "webui.app:4788:button",
       "control": "button",
-      "line": 4419,
+      "line": 4788,
       "label_expression": "f\"View all ({len(items)})\"",
       "icon_expression": "\"open_in_full\"",
       "callback_expression": "show_all",
@@ -4309,9 +4490,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4539:button",
+      "id": "webui.app:4908:button",
       "control": "button",
-      "line": 4539,
+      "line": 4908,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -4321,9 +4502,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4540:button",
+      "id": "webui.app:4909:button",
       "control": "button",
-      "line": 4540,
+      "line": 4909,
       "label_expression": "\"Save privileges\"",
       "icon_expression": "\"save\"",
       "callback_expression": "save_privileges",
@@ -4333,9 +4514,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4930:button",
+      "id": "webui.app:5299:button",
       "control": "button",
-      "line": 4930,
+      "line": 5299,
       "label_expression": "\"I have copied it\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -4345,9 +4526,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4969:button",
+      "id": "webui.app:5338:button",
       "control": "button",
-      "line": 4969,
+      "line": 5338,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -4357,9 +4538,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:4970:button",
+      "id": "webui.app:5339:button",
       "control": "button",
-      "line": 4970,
+      "line": 5339,
       "label_expression": "action",
       "icon_expression": null,
       "callback_expression": "proceed",
@@ -4369,9 +4550,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5030:button",
+      "id": "webui.app:5399:button",
       "control": "button",
-      "line": 5030,
+      "line": 5399,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -4381,9 +4562,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5031:button",
+      "id": "webui.app:5400:button",
       "control": "button",
-      "line": 5031,
+      "line": 5400,
       "label_expression": "action",
       "icon_expression": "\"toggle_on\" if activating else \"toggle_off\"",
       "callback_expression": "proceed",
@@ -4393,9 +4574,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5109:button",
+      "id": "webui.app:5478:button",
       "control": "button",
-      "line": 5109,
+      "line": 5478,
       "label_expression": "\"Back to sign in\"",
       "icon_expression": "\"arrow_back\"",
       "callback_expression": "return_to_sign_in",
@@ -4405,9 +4586,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5114:button",
+      "id": "webui.app:5483:button",
       "control": "button",
-      "line": 5114,
+      "line": 5483,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -4417,9 +4598,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5115:button",
+      "id": "webui.app:5484:button",
       "control": "button",
-      "line": 5115,
+      "line": 5484,
       "label_expression": "\"Set new password\" if forced_change else \"Change password\"",
       "icon_expression": "\"password\"",
       "callback_expression": "save_password",
@@ -4429,9 +4610,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5201:button",
+      "id": "webui.app:5570:button",
       "control": "button",
-      "line": 5201,
+      "line": 5570,
       "label_expression": "\"Refresh\"",
       "icon_expression": "\"refresh\"",
       "callback_expression": "load_sessions",
@@ -4441,9 +4622,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5312:button",
+      "id": "webui.app:5681:button",
       "control": "button",
-      "line": 5312,
+      "line": 5681,
       "label_expression": "\"Clear\"",
       "icon_expression": "\"filter_alt_off\"",
       "callback_expression": "clear_session_filters",
@@ -4453,9 +4634,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5315:button",
+      "id": "webui.app:5684:button",
       "control": "button",
-      "line": 5315,
+      "line": 5684,
       "label_expression": "\"Apply filters\"",
       "icon_expression": "\"filter_alt\"",
       "callback_expression": "apply_session_filters",
@@ -4465,9 +4646,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5346:button",
+      "id": "webui.app:5715:button",
       "control": "button",
-      "line": 5346,
+      "line": 5715,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "confirmation.close",
@@ -4477,10 +4658,10 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5347:button",
+      "id": "webui.app:5716:button",
       "control": "button",
-      "line": 5347,
-      "label_expression": "\"Force logout\"",
+      "line": 5716,
+      "label_expression": "\"Force sign-out\"",
       "icon_expression": "\"logout\"",
       "callback_expression": "proceed",
       "current_access_class": "authenticated_only",
@@ -4489,9 +4670,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5404:button",
+      "id": "webui.app:5773:button",
       "control": "button",
-      "line": 5404,
+      "line": 5773,
       "label_expression": "\"Refresh\"",
       "icon_expression": "\"refresh\"",
       "callback_expression": null,
@@ -4501,9 +4682,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5543:button",
+      "id": "webui.app:5913:button",
       "control": "button",
-      "line": 5543,
+      "line": 5913,
       "label_expression": "\"Refresh\"",
       "icon_expression": "\"refresh\"",
       "callback_expression": "load_dashboard",
@@ -4513,9 +4694,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5646:button",
+      "id": "webui.app:6040:button",
       "control": "button",
-      "line": 5646,
+      "line": 6040,
       "label_expression": null,
       "icon_expression": "\"favorite\"",
       "callback_expression": null,
@@ -4525,9 +4706,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5683:button",
+      "id": "webui.app:6077:button",
       "control": "button",
-      "line": 5683,
+      "line": 6077,
       "label_expression": null,
       "icon_expression": "\"close\"",
       "callback_expression": "dialog.close",
@@ -4537,9 +4718,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5735:button",
+      "id": "webui.app:6129:button",
       "control": "button",
-      "line": 5735,
+      "line": 6129,
       "label_expression": "f\"View all ({len(favourites[resource])})\"",
       "icon_expression": "\"open_in_full\"",
       "callback_expression": "lambda _, kind=resource: show_all_favourites(kind)",
@@ -4549,9 +4730,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5818:button",
+      "id": "webui.app:6212:button",
       "control": "button",
-      "line": 5818,
+      "line": 6212,
       "label_expression": "\"Apply filters\"",
       "icon_expression": "\"filter_alt\"",
       "callback_expression": null,
@@ -4561,9 +4742,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5821:button",
+      "id": "webui.app:6215:button",
       "control": "button",
-      "line": 5821,
+      "line": 6215,
       "label_expression": "\"Previous\"",
       "icon_expression": "\"chevron_left\"",
       "callback_expression": null,
@@ -4573,9 +4754,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:5822:button",
+      "id": "webui.app:6216:button",
       "control": "button",
-      "line": 5822,
+      "line": 6216,
       "label_expression": "\"Next\"",
       "icon_expression": "\"chevron_right\"",
       "callback_expression": null,
@@ -4585,9 +4766,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6092:button",
+      "id": "webui.app:6486:button",
       "control": "button",
-      "line": 6092,
+      "line": 6486,
       "label_expression": "\"Open aggregation\" if is_aggregation else \"Open record\"",
       "icon_expression": "\"open_in_new\"",
       "callback_expression": "open_selected",
@@ -4597,9 +4778,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6183:button",
+      "id": "webui.app:6577:button",
       "control": "button",
-      "line": 6183,
+      "line": 6577,
       "label_expression": null,
       "icon_expression": "\"search\"",
       "callback_expression": "lambda: filter_collection(key, filter_input.value or \"\")",
@@ -4609,9 +4790,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6196:button",
+      "id": "webui.app:6590:button",
       "control": "button",
-      "line": 6196,
+      "line": 6590,
       "label_expression": null,
       "icon_expression": "\"more_horiz\"",
       "callback_expression": "lambda: load_collection(key, append=True)",
@@ -4621,9 +4802,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6219:button",
+      "id": "webui.app:6613:button",
       "control": "button",
-      "line": 6219,
+      "line": 6613,
       "label_expression": "\"Retry\"",
       "icon_expression": null,
       "callback_expression": "lambda: load_collection(key)",
@@ -4633,9 +4814,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6278:button",
+      "id": "webui.app:6672:button",
       "control": "button",
-      "line": 6278,
+      "line": 6672,
       "label_expression": null,
       "icon_expression": "\"expand_more\" if expanded else \"chevron_right\"",
       "callback_expression": "lambda: toggle_classification(item)",
@@ -4645,9 +4826,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6320:button",
+      "id": "webui.app:6714:button",
       "control": "button",
-      "line": 6320,
+      "line": 6714,
       "label_expression": null,
       "icon_expression": "\"expand_more\" if expanded else \"chevron_right\"",
       "callback_expression": "lambda: toggle_aggregation(item)",
@@ -4657,9 +4838,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6410:button",
+      "id": "webui.app:6804:button",
       "control": "button",
-      "line": 6410,
+      "line": 6804,
       "label_expression": null,
       "icon_expression": "\"refresh\"",
       "callback_expression": "lambda: select_browse_scheme(browse[\"scheme_id\"])",
@@ -4669,9 +4850,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6513:button",
+      "id": "webui.app:6907:button",
       "control": "button",
-      "line": 6513,
+      "line": 6907,
       "label_expression": "\"Close\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -4681,9 +4862,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6540:button",
+      "id": "webui.app:6934:button",
       "control": "button",
-      "line": 6540,
+      "line": 6934,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -4693,9 +4874,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6541:button",
+      "id": "webui.app:6935:button",
       "control": "button",
-      "line": 6541,
+      "line": 6935,
       "label_expression": "\"Delete permanently\"",
       "icon_expression": "\"delete_forever\"",
       "callback_expression": "remove",
@@ -4705,9 +4886,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6582:button",
+      "id": "webui.app:6976:button",
       "control": "button",
-      "line": 6582,
+      "line": 6976,
       "label_expression": "\"Back\"",
       "icon_expression": "\"arrow_back\"",
       "callback_expression": "lambda: breadcrumb_back(lambda: select_entity(\"org-units\"))",
@@ -4717,9 +4898,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6586:button",
+      "id": "webui.app:6980:button",
       "control": "button",
-      "line": 6586,
+      "line": 6980,
       "label_expression": "\"Edit\"",
       "icon_expression": "\"edit\"",
       "callback_expression": "lambda: open_editor(unit, on_saved=refresh, resource_key=\"org-units\")",
@@ -4729,9 +4910,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6587:button",
+      "id": "webui.app:6981:button",
       "control": "button",
-      "line": 6587,
+      "line": 6981,
       "label_expression": "\"History\"",
       "icon_expression": "\"history\"",
       "callback_expression": "lambda: show_entity_history(\"org-units\", unit)",
@@ -4741,9 +4922,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6588:button",
+      "id": "webui.app:6982:button",
       "control": "button",
-      "line": 6588,
+      "line": 6982,
       "label_expression": "\"Activate\" if unit[\"status\"] == \"inactive\" else \"Deactivate\"",
       "icon_expression": "\"toggle_on\" if unit[\"status\"] == \"inactive\" else \"toggle_off\"",
       "callback_expression": "change_status",
@@ -4753,9 +4934,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6589:button",
+      "id": "webui.app:6983:button",
       "control": "button",
-      "line": 6589,
+      "line": 6983,
       "label_expression": "\"Delete\"",
       "icon_expression": "\"delete_outline\"",
       "callback_expression": "lambda: confirm_identity_deletion( \"org-units\", unit, label=\"organization unit\", on_deleted=lambda: select_entity(\"org-units\"), )",
@@ -4765,9 +4946,9 @@
       "phase_12_enforced": true
     },
     {
-      "id": "webui.app:6649:button",
+      "id": "webui.app:7043:button",
       "control": "button",
-      "line": 6649,
+      "line": 7043,
       "label_expression": "\"Back\"",
       "icon_expression": "\"arrow_back\"",
       "callback_expression": "lambda: breadcrumb_back(lambda: select_entity(\"roles\"))",
@@ -4777,9 +4958,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6653:button",
+      "id": "webui.app:7047:button",
       "control": "button",
-      "line": 6653,
+      "line": 7047,
       "label_expression": "\"Edit\"",
       "icon_expression": "\"edit\"",
       "callback_expression": "lambda: open_editor(role, on_saved=refresh, resource_key=\"roles\")",
@@ -4789,9 +4970,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6654:button",
+      "id": "webui.app:7048:button",
       "control": "button",
-      "line": 6654,
+      "line": 7048,
       "label_expression": "\"User assignments\"",
       "icon_expression": "\"group\"",
       "callback_expression": "lambda: show_memberships(role, for_user=False)",
@@ -4801,9 +4982,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6655:button",
+      "id": "webui.app:7049:button",
       "control": "button",
-      "line": 6655,
+      "line": 7049,
       "label_expression": "\"History\"",
       "icon_expression": "\"history\"",
       "callback_expression": "lambda: show_entity_history(\"roles\", role)",
@@ -4813,9 +4994,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6656:button",
+      "id": "webui.app:7050:button",
       "control": "button",
-      "line": 6656,
+      "line": 7050,
       "label_expression": "\"Activate\" if role[\"status\"] == \"inactive\" else \"Deactivate\"",
       "icon_expression": "\"toggle_on\" if role[\"status\"] == \"inactive\" else \"toggle_off\"",
       "callback_expression": "change_status",
@@ -4825,9 +5006,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6657:button",
+      "id": "webui.app:7051:button",
       "control": "button",
-      "line": 6657,
+      "line": 7051,
       "label_expression": "\"Delete\"",
       "icon_expression": "\"delete_outline\"",
       "callback_expression": "lambda: confirm_identity_deletion( \"roles\", role, label=\"role\", on_deleted=lambda: select_entity(\"roles\"), )",
@@ -4837,9 +5018,9 @@
       "phase_12_enforced": true
     },
     {
-      "id": "webui.app:6760:button",
+      "id": "webui.app:7154:button",
       "control": "button",
-      "line": 6760,
+      "line": 7154,
       "label_expression": "\"I have copied it\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -4849,9 +5030,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6775:button",
+      "id": "webui.app:7169:button",
       "control": "button",
-      "line": 6775,
+      "line": 7169,
       "label_expression": "\"Back\"",
       "icon_expression": "\"arrow_back\"",
       "callback_expression": "lambda: breadcrumb_back(lambda: select_entity(\"users\"))",
@@ -4861,9 +5042,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6779:button",
+      "id": "webui.app:7173:button",
       "control": "button",
-      "line": 6779,
+      "line": 7173,
       "label_expression": "\"Edit\"",
       "icon_expression": "\"edit\"",
       "callback_expression": "lambda: open_editor(person, on_saved=refresh_user, resource_key=\"users\")",
@@ -4873,9 +5054,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6780:button",
+      "id": "webui.app:7174:button",
       "control": "button",
-      "line": 6780,
+      "line": 7174,
       "label_expression": "\"Role assignments\"",
       "icon_expression": "\"group\"",
       "callback_expression": "lambda: show_memberships(person, for_user=True)",
@@ -4885,9 +5066,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6781:button",
+      "id": "webui.app:7175:button",
       "control": "button",
-      "line": 6781,
+      "line": 7175,
       "label_expression": "\"Temporary password\"",
       "icon_expression": "\"password\"",
       "callback_expression": "issue_password",
@@ -4897,9 +5078,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6782:button",
+      "id": "webui.app:7176:button",
       "control": "button",
-      "line": 6782,
+      "line": 7176,
       "label_expression": "\"History\"",
       "icon_expression": "\"history\"",
       "callback_expression": "lambda: show_entity_history(\"users\", person)",
@@ -4909,9 +5090,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6783:button",
+      "id": "webui.app:7177:button",
       "control": "button",
-      "line": 6783,
+      "line": 7177,
       "label_expression": "\"Delete\"",
       "icon_expression": "\"delete_outline\"",
       "callback_expression": "lambda: confirm_identity_deletion( \"users\", person, label=\"user\", on_deleted=lambda: select_entity(\"users\"), )",
@@ -4921,9 +5102,9 @@
       "phase_12_enforced": true
     },
     {
-      "id": "webui.app:6791:button",
+      "id": "webui.app:7185:button",
       "control": "button",
-      "line": 6791,
+      "line": 7185,
       "label_expression": "\"Activate\"",
       "icon_expression": "\"toggle_on\"",
       "callback_expression": "lambda: change_status(\"activate\")",
@@ -4933,9 +5114,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6793:button",
+      "id": "webui.app:7187:button",
       "control": "button",
-      "line": 6793,
+      "line": 7187,
       "label_expression": "\"Deactivate\"",
       "icon_expression": "\"toggle_off\"",
       "callback_expression": "lambda: change_status(\"deactivate\")",
@@ -4945,9 +5126,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6795:button",
+      "id": "webui.app:7189:button",
       "control": "button",
-      "line": 6795,
+      "line": 7189,
       "label_expression": "\"Unsuspend\"",
       "icon_expression": "\"play_circle\"",
       "callback_expression": "lambda: change_status(\"unsuspend\")",
@@ -4957,9 +5138,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6797:button",
+      "id": "webui.app:7191:button",
       "control": "button",
-      "line": 6797,
+      "line": 7191,
       "label_expression": "\"Suspend\"",
       "icon_expression": "\"pause_circle\"",
       "callback_expression": "lambda: change_status(\"suspend\")",
@@ -4969,9 +5150,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6859:button",
+      "id": "webui.app:7253:button",
       "control": "button",
-      "line": 6859,
+      "line": 7253,
       "label_expression": "\"Previous\"",
       "icon_expression": "\"chevron_left\"",
       "callback_expression": null,
@@ -4981,9 +5162,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:6860:button",
+      "id": "webui.app:7254:button",
       "control": "button",
-      "line": 6860,
+      "line": 7254,
       "label_expression": "\"Next\"",
       "icon_expression": "\"chevron_right\"",
       "callback_expression": null,
@@ -4993,9 +5174,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7031:button",
+      "id": "webui.app:7425:button",
       "control": "button",
-      "line": 7031,
+      "line": 7425,
       "label_expression": null,
       "icon_expression": "\"expand_more\" if key in expanded else \"chevron_right\"",
       "callback_expression": "lambda _, item=node: toggle_node(item)",
@@ -5005,9 +5186,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7204:button",
+      "id": "webui.app:7598:button",
       "control": "button",
-      "line": 7204,
+      "line": 7598,
       "label_expression": "action_label.title()",
       "icon_expression": "\"open_in_new\"",
       "callback_expression": "lambda: open_selected(node)",
@@ -5017,9 +5198,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7267:button",
+      "id": "webui.app:7661:button",
       "control": "button",
-      "line": 7267,
+      "line": 7661,
       "label_expression": "\"Search\"",
       "icon_expression": "\"search\"",
       "callback_expression": "run_search",
@@ -5029,9 +5210,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7269:button",
+      "id": "webui.app:7663:button",
       "control": "button",
-      "line": 7269,
+      "line": 7663,
       "label_expression": "\"Filters\"",
       "icon_expression": "\"filter_list\"",
       "callback_expression": null,
@@ -5041,9 +5222,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7299:button",
+      "id": "webui.app:7693:button",
       "control": "button",
-      "line": 7299,
+      "line": 7693,
       "label_expression": "\"Refresh\"",
       "icon_expression": "\"refresh\"",
       "callback_expression": "refresh_browser",
@@ -5053,9 +5234,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7311:button",
+      "id": "webui.app:7705:button",
       "control": "button",
-      "line": 7311,
+      "line": 7705,
       "label_expression": "\"Clear\"",
       "icon_expression": "\"filter_alt_off\"",
       "callback_expression": "lambda: ( entity_type_filter.set_value(selection_mode or \"all\"), status_filter.set_value(\"all\"), validity_filter.set_value(\"all\"), )",
@@ -5065,9 +5246,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7332:button",
+      "id": "webui.app:7726:button",
       "control": "button",
-      "line": 7332,
+      "line": 7726,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -5077,9 +5258,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7333:button",
+      "id": "webui.app:7727:button",
       "control": "button",
-      "line": 7333,
+      "line": 7727,
       "label_expression": "f\"Select {selection_mode.replace('_', ' ')}\"",
       "icon_expression": "\"check\"",
       "callback_expression": "confirm_browser_selection",
@@ -5089,9 +5270,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7591:button",
+      "id": "webui.app:7985:button",
       "control": "button",
-      "line": 7591,
+      "line": 7985,
       "label_expression": "\"Open roles\"",
       "icon_expression": "\"open_in_new\"",
       "callback_expression": "lambda: select_entity(\"roles\")",
@@ -5101,9 +5282,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7605:button",
+      "id": "webui.app:7999:button",
       "control": "button",
-      "line": 7605,
+      "line": 7999,
       "label_expression": "\"Configure a role\"",
       "icon_expression": "\"badge\"",
       "callback_expression": "lambda: select_entity(\"roles\")",
@@ -5113,9 +5294,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7609:button",
+      "id": "webui.app:8003:button",
       "control": "button",
-      "line": 7609,
+      "line": 8003,
       "label_expression": "\"Review profiles\"",
       "icon_expression": "\"admin_panel_settings\"",
       "callback_expression": "lambda: select_entity(\"profiles\")",
@@ -5125,9 +5306,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7629:button",
+      "id": "webui.app:8023:button",
       "control": "button",
-      "line": 7629,
+      "line": 8023,
       "label_expression": "\"Open role\"",
       "icon_expression": "\"open_in_new\"",
       "callback_expression": "lambda _, identifier=role[\"id\"]: select_role_details(identifier)",
@@ -5137,9 +5318,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7747:button",
+      "id": "webui.app:8141:button",
       "control": "button",
-      "line": 7747,
+      "line": 8141,
       "label_expression": "\"Refresh\"",
       "icon_expression": "\"refresh\"",
       "callback_expression": null,
@@ -5149,9 +5330,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7752:button",
+      "id": "webui.app:8146:button",
       "control": "button",
-      "line": 7752,
+      "line": 8146,
       "label_expression": "\"Apply range\"",
       "icon_expression": "\"date_range\"",
       "callback_expression": null,
@@ -5161,9 +5342,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:7827:button",
+      "id": "webui.app:8221:button",
       "control": "button",
-      "line": 7827,
+      "line": 8221,
       "label_expression": "\"Open role\"",
       "icon_expression": "\"open_in_new\"",
       "callback_expression": "lambda _, role_id=affected_role[\"id\"]: select_role_details(role_id)",
@@ -5173,9 +5354,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8007:button",
+      "id": "webui.app:8401:button",
       "control": "button",
-      "line": 8007,
+      "line": 8401,
       "label_expression": "\"Add scheme\"",
       "icon_expression": "\"add\"",
       "callback_expression": null,
@@ -5185,9 +5366,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8024:button",
+      "id": "webui.app:8418:button",
       "control": "button",
-      "line": 8024,
+      "line": 8418,
       "label_expression": null,
       "icon_expression": "\"arrow_upward\"",
       "callback_expression": null,
@@ -5197,9 +5378,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8292:button",
+      "id": "webui.app:8686:button",
       "control": "button",
-      "line": 8292,
+      "line": 8686,
       "label_expression": null,
       "icon_expression": "\"expand_more\" if item[\"id\"] in workspace[\"expanded\"] else \"chevron_right\"",
       "callback_expression": "lambda _, node=item: toggle_branch(node)",
@@ -5209,9 +5390,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8400:button",
+      "id": "webui.app:8794:button",
       "control": "button",
-      "line": 8400,
+      "line": 8794,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -5221,9 +5402,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8401:button",
+      "id": "webui.app:8795:button",
       "control": "button",
-      "line": 8401,
+      "line": 8795,
       "label_expression": "action.title()",
       "icon_expression": null,
       "callback_expression": "apply_change",
@@ -5233,9 +5414,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8436:button",
+      "id": "webui.app:8830:button",
       "control": "button",
-      "line": 8436,
+      "line": 8830,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -5245,9 +5426,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8437:button",
+      "id": "webui.app:8831:button",
       "control": "button",
-      "line": 8437,
+      "line": 8831,
       "label_expression": "\"Delete permanently\"",
       "icon_expression": "\"delete_forever\"",
       "callback_expression": "remove",
@@ -5257,9 +5438,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8489:button",
+      "id": "webui.app:8883:button",
       "control": "button",
-      "line": 8489,
+      "line": 8883,
       "label_expression": "\"Edit scheme\"",
       "icon_expression": "\"edit\"",
       "callback_expression": "lambda: open_editor( scheme, on_saved=lambda _: reload_workspace(scheme[\"id\"]), resource_key=\"classification-schemes\", )",
@@ -5269,9 +5450,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8493:button",
+      "id": "webui.app:8887:button",
       "control": "button",
-      "line": 8493,
+      "line": 8887,
       "label_expression": "\"Event history\"",
       "icon_expression": "\"history\"",
       "callback_expression": "lambda: show_entity_history(\"classification-schemes\", scheme)",
@@ -5281,9 +5462,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8498:button",
+      "id": "webui.app:8892:button",
       "control": "button",
-      "line": 8498,
+      "line": 8892,
       "label_expression": "\"Publish\"",
       "icon_expression": "\"publish\"",
       "callback_expression": "lambda: publish_workspace_scheme(scheme)",
@@ -5293,9 +5474,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8503:button",
+      "id": "webui.app:8897:button",
       "control": "button",
-      "line": 8503,
+      "line": 8897,
       "label_expression": "\"Unpublish\"",
       "icon_expression": "\"unpublished\"",
       "callback_expression": "lambda: unpublish_workspace_scheme(scheme)",
@@ -5305,9 +5486,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8512:button",
+      "id": "webui.app:8906:button",
       "control": "button",
-      "line": 8512,
+      "line": 8906,
       "label_expression": "\"Reactivate\" if scheme.get(\"date_deactivated\") else \"Deactivate\"",
       "icon_expression": "\"toggle_on\" if scheme.get(\"date_deactivated\") else \"toggle_off\"",
       "callback_expression": "lambda: change_workspace_scheme_lifecycle(scheme)",
@@ -5317,9 +5498,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8524:button",
+      "id": "webui.app:8918:button",
       "control": "button",
-      "line": 8524,
+      "line": 8918,
       "label_expression": "delete_label",
       "icon_expression": "\"delete_outline\"",
       "callback_expression": "lambda: confirm_delete_workspace_scheme(scheme)",
@@ -5329,9 +5510,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8565:button",
+      "id": "webui.app:8959:button",
       "control": "button",
-      "line": 8565,
+      "line": 8959,
       "label_expression": "\"Search\"",
       "icon_expression": "\"search\"",
       "callback_expression": "lambda: search_within_scheme(classification_search)",
@@ -5341,9 +5522,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8567:button",
+      "id": "webui.app:8961:button",
       "control": "button",
-      "line": 8567,
+      "line": 8961,
       "label_expression": "\"Clear\"",
       "icon_expression": null,
       "callback_expression": "lambda: clear_classification_search()",
@@ -5353,9 +5534,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8595:button",
+      "id": "webui.app:8989:button",
       "control": "button",
-      "line": 8595,
+      "line": 8989,
       "label_expression": null,
       "icon_expression": "\"add\"",
       "callback_expression": "lambda: create_classification()",
@@ -5365,9 +5546,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8600:button",
+      "id": "webui.app:8994:button",
       "control": "button",
-      "line": 8600,
+      "line": 8994,
       "label_expression": null,
       "icon_expression": "\"subdirectory_arrow_right\"",
       "callback_expression": "lambda: create_classification(selected) if selected is not None and not selected[\"is_terminal\"] else None",
@@ -5377,9 +5558,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8618:button",
+      "id": "webui.app:9012:button",
       "control": "button",
-      "line": 8618,
+      "line": 9012,
       "label_expression": null,
       "icon_expression": "\"refresh\"",
       "callback_expression": "lambda: refresh_tree()",
@@ -5389,9 +5570,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8736:button",
+      "id": "webui.app:9130:button",
       "control": "button",
-      "line": 8736,
+      "line": 9130,
       "label_expression": "\"Event history\"",
       "icon_expression": "\"history\"",
       "callback_expression": "lambda: show_entity_history(\"classifications\", selected)",
@@ -5401,9 +5582,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8740:button",
+      "id": "webui.app:9134:button",
       "control": "button",
-      "line": 8740,
+      "line": 9134,
       "label_expression": "\"Edit\"",
       "icon_expression": "\"edit\"",
       "callback_expression": "edit_selected",
@@ -5413,9 +5594,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8741:button",
+      "id": "webui.app:9135:button",
       "control": "button",
-      "line": 8741,
+      "line": 9135,
       "label_expression": "\"Reactivate\" if selected.get(\"date_deactivated\") else \"Deactivate\"",
       "icon_expression": "\"toggle_on\" if selected.get(\"date_deactivated\") else \"toggle_off\"",
       "callback_expression": "lambda: change_classification_lifecycle(selected)",
@@ -5425,9 +5606,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8758:button",
+      "id": "webui.app:9152:button",
       "control": "button",
-      "line": 8758,
+      "line": 9152,
       "label_expression": "\"Delete\"",
       "icon_expression": "\"delete_outline\"",
       "callback_expression": "lambda: confirm_delete_classification(selected)",
@@ -5437,9 +5618,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8817:button",
+      "id": "webui.app:9211:button",
       "control": "button",
-      "line": 8817,
+      "line": 9211,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -5449,9 +5630,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8818:button",
+      "id": "webui.app:9212:button",
       "control": "button",
-      "line": 8818,
+      "line": 9212,
       "label_expression": "\"Unpublish\"",
       "icon_expression": "\"unpublished\"",
       "callback_expression": "unpublish",
@@ -5461,9 +5642,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8866:button",
+      "id": "webui.app:9260:button",
       "control": "button",
-      "line": 8866,
+      "line": 9260,
       "label_expression": "\"Cancel\"",
       "icon_expression": null,
       "callback_expression": "dialog.close",
@@ -5473,9 +5654,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:8867:button",
+      "id": "webui.app:9261:button",
       "control": "button",
-      "line": 8867,
+      "line": 9261,
       "label_expression": "\"Delete permanently\"",
       "icon_expression": "\"delete_forever\"",
       "callback_expression": "delete_scheme",
@@ -5485,9 +5666,9 @@
       "phase_12_enforced": false
     },
     {
-      "id": "webui.app:9072:button",
+      "id": "webui.app:9466:button",
       "control": "button",
-      "line": 9072,
+      "line": 9466,
       "label_expression": "\"Continue to wathiq\"",
       "icon_expression": "\"login\"",
       "callback_expression": null,

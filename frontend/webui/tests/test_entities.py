@@ -548,6 +548,46 @@ def test_dashboard_recent_configuration_rejects_non_positive_values(monkeypatch)
         dashboard_favourite_item_limit()
 
 
+def test_organizational_ownership_is_presented_on_details_and_dashboard():
+    source = inspect.getsource(index)
+    assert '"Owning organizational unit"' in source
+    assert '"/api/v1/dashboard/ownership-counts"' in source
+    assert 'ui.label("Holdings by organizational unit")' in source
+    assert "owner_count['aggregation_count']" in source
+    assert "owner_count['record_count']" in source
+
+
+def test_metadata_editor_shows_read_only_owning_org_unit_context():
+    source = inspect.getsource(index)
+    assert '"Owning organizational unit", value=owner_label' in source
+    assert '.props("outlined readonly")' in source
+    assert "Move the resource through the governed move action to change it." in source
+
+
+def test_governed_move_and_root_ownership_correction_are_exposed():
+    source = inspect.getsource(index)
+    assert source.count('"Advanced", caption="Specialist') == 2
+    assert source.count('icon="tune", value=False') == 2
+    assert "show_aggregation_move" in source
+    assert "show_ownership_correction_action" in source
+    assert "show_acl_defaults" in source
+    assert 'ui.label("Correct ownership")' in source
+    assert '"Correct owner and creator ACL role"' in source
+    assert 'api.correct_ownership(' in source
+    assert 'api.acl_move_preview(' in source
+    assert 'api.move_with_acl(' in source
+    assert '"This move changes organizational ownership' in source
+
+
+def test_acl_editor_presents_contextual_org_unit_members_principal():
+    source = inspect.getsource(index)
+    assert '"Add all org unit members"' in source
+    assert '"principal_type": "org_unit_members"' in source
+    assert 'ui.label("All org unit members")' in source
+    assert "Membership updates automatically when role assignments change." in source
+    assert "Everyone currently working in" in source
+
+
 def test_component_display_helpers_prioritize_readable_file_information():
     assert format_file_size(512) == "512 B"
     assert format_file_size(1_572_864) == "1.5 MB"

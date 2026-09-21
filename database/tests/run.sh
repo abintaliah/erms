@@ -148,7 +148,29 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${DATABASE_DIR}/migrations/042_add_organization_browse_privilege.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${DATABASE_DIR}/migrations/043_add_event_reference_snapshots.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/044_add_organizational_ownership_foundation.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${SCRIPT_DIR}/organizational_ownership_foundation.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${SCRIPT_DIR}/organizational_ownership_assignment_before.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/045_assign_existing_organizational_ownership.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${SCRIPT_DIR}/organizational_ownership_assignment.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/046_enforce_organizational_ownership.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/047_expose_organizational_ownership_in_search.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/048_add_org_unit_members_acl_principal.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/049_initialize_organizational_acl_defaults.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/050_add_root_ownership_correction.sql"
 "${SCRIPT_DIR}/check_security_schema_parity.sh" "${DATABASE_URL}" "${DATABASE_DIR}/schema.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${SCRIPT_DIR}/organizational_ownership_invariants.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${SCRIPT_DIR}/segmented_content_migration_after.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"

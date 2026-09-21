@@ -22,6 +22,7 @@ $$;
 -- follow and intentionally assume an otherwise empty records subsystem.
 DELETE FROM records WHERE record_number = 'SEG-MIG-REC';
 DELETE FROM aggregations WHERE aggregation_number = 'SEG-MIG-AGG';
+DELETE FROM org_units WHERE code = 'PHASE2-OTHER';
 ALTER TABLE event_history DISABLE TRIGGER USER;
 TRUNCATE event_history RESTART IDENTITY;
 ALTER TABLE event_history ENABLE TRIGGER USER;

@@ -11,8 +11,9 @@ INSERT INTO classification_retention_rules
     (classification_id, current_period_years, intermediate_period_years, final_disposition)
 VALUES (:audit_classification_id, 5, 0, 'destruction');
 
-INSERT INTO aggregations (aggregation_number, title, classification_id)
-VALUES ('AUDIT-AGG-001', 'Audited aggregation', :audit_classification_id)
+INSERT INTO aggregations (aggregation_number, title, classification_id, owning_org_unit_id)
+SELECT 'AUDIT-AGG-001', 'Audited aggregation', :audit_classification_id, id
+FROM org_units WHERE code='PHASE2-SEGMENT'
 RETURNING id AS audited_aggregation_id \gset
 
 UPDATE aggregations
@@ -50,8 +51,9 @@ END;
 $$;
 
 SAVEPOINT before_rolled_back_change;
-INSERT INTO aggregations (aggregation_number, title, classification_id)
-VALUES ('AUDIT-ROLLBACK', 'This change will roll back', :audit_classification_id);
+INSERT INTO aggregations (aggregation_number, title, classification_id, owning_org_unit_id)
+SELECT 'AUDIT-ROLLBACK', 'This change will roll back', :audit_classification_id, id
+FROM org_units WHERE code='PHASE2-SEGMENT';
 ROLLBACK TO SAVEPOINT before_rolled_back_change;
 
 DO $$

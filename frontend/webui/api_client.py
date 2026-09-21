@@ -108,6 +108,15 @@ class ErmsApiClient:
     async def profile_references(self) -> list[dict[str, Any]]:
         return await self.request("GET", "/api/v1/profiles/reference", params={"limit": 500})
 
+    async def creation_role_options(
+        self, parent_aggregation_id: int | None = None,
+    ) -> list[dict[str, Any]]:
+        params = (
+            {"parent_aggregation_id": parent_aggregation_id}
+            if parent_aggregation_id is not None else None
+        )
+        return await self.request("GET", "/api/v1/creation-role-options", params=params)
+
     async def logout(self) -> None:
         await self.request("POST", "/api/v1/auth/logout")
 
@@ -208,12 +217,15 @@ class ErmsApiClient:
 
     async def browse_page(
         self, path: str, *, cursor: str | None = None, query: str = "", limit: int = 50,
+        owning_org_unit_id: int | None = None,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {"limit": limit}
         if cursor:
             params["cursor"] = cursor
         if query:
             params["query"] = query
+        if owning_org_unit_id is not None:
+            params["owning_org_unit_id"] = owning_org_unit_id
         return await self.request("GET", f"/api/v1/browse/{path}", params=params)
 
     async def history(self, resource: str, entity_id: int, *, limit: int = 200) -> list[dict[str, Any]]:
@@ -260,6 +272,44 @@ class ErmsApiClient:
         )
         return response["capabilities"]
 
+    async def acl_move_preview(
+        self, resource: str, entity_id: int, destination_aggregation_id: int,
+        *, keep_current_access_as_override: bool = False,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "GET", f"/api/v1/{resource}/{entity_id}/acl-move-preview",
+            params={
+                "destination_aggregation_id": destination_aggregation_id,
+                "keep_current_access_as_override": str(keep_current_access_as_override).lower(),
+            },
+        )
+
+    async def move_with_acl(
+        self, resource: str, entity_id: int, payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/{resource}/{entity_id}/acl-move", json=payload,
+        )
+
+    async def ownership_correction_options(self) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/ownership-correction-options")
+
+    async def ownership_correction_preview(
+        self, aggregation_id: int, destination_role_id: int,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "GET", f"/api/v1/aggregations/{aggregation_id}/ownership-correction-preview",
+            params={"destination_role_id": destination_role_id},
+        )
+
+    async def correct_ownership(
+        self, aggregation_id: int, destination_role_id: int, reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/aggregations/{aggregation_id}/correct-ownership",
+            json={"destination_role_id": destination_role_id, "reason": reason},
+        )
+
     async def replace_resource_acl(self, resource: str, entity_id: int, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.request("PUT", f"/api/v1/{resource}/{entity_id}/permissions", json=payload)
 
@@ -285,7 +335,10 @@ class ErmsApiClient:
         result = await self.search_request(resource, {"limit": 1, "offset": 0})
         return int(result["total"])
 
-    async def search(self, resource: str, query: str, fields: tuple[str, ...]) -> list[dict[str, Any]]:
+    async def search(
+        self, resource: str, query: str, fields: tuple[str, ...],
+        *, owning_org_unit_id: int | None = None,
+    ) -> list[dict[str, Any]]:
         term = query.strip()
         if not term:
             return []
@@ -293,10 +346,19 @@ class ErmsApiClient:
             {"field": field, "operator": "contains_ci", "value": term}
             for field in fields
         ]
+        where: dict[str, Any] = {"or": conditions}
+        if owning_org_unit_id is not None and resource in {"aggregations", "records"}:
+            where = {"and": [
+                where,
+                {
+                    "field": "owning_org_unit_id", "operator": "eq",
+                    "value": owning_org_unit_id,
+                },
+            ]}
         result = await self.request(
             "POST",
             f"/api/v1/{resource}/search",
-            json={"where": {"or": conditions}, "limit": 100, "offset": 0},
+            json={"where": where, "limit": 100, "offset": 0},
         )
         return result["items"]
 
@@ -535,8 +597,16 @@ class ErmsApiClient:
     async def delete_draft_component(self, draft_id: int, component_id: int) -> None:
         await self.request("DELETE", f"/api/v1/record-drafts/{draft_id}/components/{component_id}")
 
-    async def commit_record_draft(self, draft_id: int) -> dict[str, Any]:
-        return await self.request("POST", f"/api/v1/record-drafts/{draft_id}/commit")
+    async def commit_record_draft(
+        self, draft_id: int, creator_acl_role_id: int | None = None,
+    ) -> dict[str, Any]:
+        params = (
+            {"creator_acl_role_id": creator_acl_role_id}
+            if creator_acl_role_id is not None else None
+        )
+        return await self.request(
+            "POST", f"/api/v1/record-drafts/{draft_id}/commit", params=params,
+        )
 
     async def discard_record_draft(self, draft_id: int) -> None:
         await self.request("DELETE", f"/api/v1/record-drafts/{draft_id}")

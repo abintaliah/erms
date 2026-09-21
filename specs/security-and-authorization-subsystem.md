@@ -4,7 +4,7 @@
 **Approved:** 19 September 2026
 **Project:** ERMS / wathiq  
 **Prepared:** 19 September 2026  
-**Revision:** 0.6 — explicit ACL-mode contract and deployment policy decisions
+**Revision:** 0.7 — reserved defunct-organization holdings-transfer privilege
 
 ## 1. Purpose
 
@@ -371,9 +371,15 @@ continue to require `organization.administer`.
 | `security.resource.downgrade` | Lower an aggregation or record security level |
 | `closure.correct_record_placement` | Permit a qualified information-governance role to add or move a record into a closed aggregation without reopening it |
 | `authorization.recovery` | Use a future audited break-glass recovery workflow |
+| `organization.holdings.transfer` | Transfer every aggregation and record owned by a defunct org unit to one active destination under the approved ACL-reconciliation workflow |
 
 Reserved future privileges grant nothing until the corresponding workflow is
 implemented. They must not become generic Boolean bypasses.
+`organization.holdings.transfer` remains reserved and unseeded until Phase 8
+of the organizational-ownership implementation. When implemented, it also
+requires an effective information-governance role, sufficient clearance for
+every affected resource, a complete ACL-reconciliation plan, a reason, and one
+explicit confirmation.
 
 ### 5.2 Profile structure and assignment
 

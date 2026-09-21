@@ -97,12 +97,17 @@ def _acl(connection: Connection, resource_type: str, resource_id: int) -> tuple[
     everyone = frozenset(
         row["permission_code"] for row in rows if row["principal_type"] == "everyone"
     )
+    org_unit_members = frozenset(
+        row["permission_code"]
+        for row in rows if row["principal_type"] == "org_unit_members"
+    )
     by_role: dict[int, set[str]] = {}
     for row in rows:
         if row["principal_type"] == "role":
             by_role.setdefault(row["role_id"], set()).add(row["permission_code"])
     acl = ResourceAcl(
         everyone_permissions=everyone,
+        org_unit_member_permissions=org_unit_members,
         role_permissions={key: frozenset(value) for key, value in by_role.items()},
         source=source,
     )
@@ -183,6 +188,7 @@ def explain_access(
             (resource["security_level_id"],),
         ).fetchone()["level_number"],),
         acl=acl,
+        owning_org_unit_id=resource["owning_org_unit_id"],
         integrity_allowed=integrity_allowed, integrity_reason=integrity_reason,
     ))
     required_security_level = connection.execute(
@@ -209,6 +215,11 @@ def explain_access(
                 key: list(value) for key, value in decision.acl_role_ids_by_permission.items()
             },
             "everyone_permissions": list(decision.everyone_permissions),
+            "org_unit_member_permissions": list(decision.org_unit_member_permissions),
+            "org_unit_member_role_ids_by_permission": {
+                key: list(value)
+                for key, value in decision.org_unit_member_role_ids_by_permission.items()
+            },
             "governance_bypass_role_ids": list(decision.governance_bypass_role_ids),
         },
         "subject": _serialize_context(subject), "acl": acl_detail,

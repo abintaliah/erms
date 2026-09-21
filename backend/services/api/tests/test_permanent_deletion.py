@@ -132,10 +132,12 @@ def test_deletion_preflight_latency_at_requested_scale(client: TestClient):
                FROM unnest(%s::bigint[]) user_id""", (role_ids, user_ids),
         )
         aggregation_ids = [row["id"] for row in connection.execute(
-            """INSERT INTO aggregations(aggregation_number,title,classification_id)
-               SELECT 'PERF-A-'||n,'Performance Aggregation '||n,1
-               FROM generate_series(1,100) n RETURNING id"""
-        ).fetchall()]
+                """INSERT INTO aggregations(
+                       aggregation_number,title,classification_id,owning_org_unit_id
+                   )
+                   SELECT 'PERF-A-'||n,'Performance Aggregation '||n,1,%s
+                   FROM generate_series(1,100) n RETURNING id""", (root,)
+            ).fetchall()]
         connection.execute(
             """INSERT INTO records(aggregation_id,record_number,title)
                SELECT aggregation_id,'PERF-RC-'||aggregation_id||'-'||n,

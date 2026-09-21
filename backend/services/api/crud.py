@@ -19,6 +19,17 @@ def redact_hidden_relationships(
 ) -> list[dict[str, Any]]:
     """Remove protected parent identifiers with one bounded set query."""
     relation = {"aggregations": "parent_aggregation_id", "records": "aggregation_id"}.get(table)
+    if table in {"aggregations", "records"} and rows:
+        owner_ids = sorted({row["owning_org_unit_id"] for row in rows if row.get("owning_org_unit_id")})
+        owners = {
+            row["id"]: row for row in connection.execute(
+                "SELECT id,code,name FROM org_units WHERE id=ANY(%s)", (owner_ids,)
+            ).fetchall()
+        } if owner_ids else {}
+        for row in rows:
+            owner = owners.get(row.get("owning_org_unit_id"), {})
+            row["owning_org_unit_code"] = owner.get("code")
+            row["owning_org_unit_name"] = owner.get("name")
     if relation is None:
         return rows
     parent_ids = sorted({row[relation] for row in rows if row.get(relation) is not None})
@@ -88,7 +99,8 @@ def create_row(connection: Connection, table: str, values: dict[str, Any]) -> di
         sql.SQL(", ").join(sql.Identifier(column) for column in columns),
         sql.SQL(", ").join(sql.Placeholder() for _ in columns),
     )
-    return connection.execute(query, [values[column] for column in columns]).fetchone()
+    row = connection.execute(query, [values[column] for column in columns]).fetchone()
+    return redact_hidden_relationships(connection, table, [row])[0]
 
 
 def update_row(
@@ -125,7 +137,7 @@ def update_row(
                 "current_version": current["version"],
             },
         )
-    return row
+    return redact_hidden_relationships(connection, table, [row])[0]
 
 
 def delete_row(

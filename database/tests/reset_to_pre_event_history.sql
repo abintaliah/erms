@@ -1,5 +1,45 @@
 -- Test-only fixture: turn the freshly bootstrapped database into the state that
 -- existed immediately before migration 001.
+DROP TRIGGER IF EXISTS aggregations_enforce_ownership ON aggregations;
+DROP TRIGGER IF EXISTS aggregations_propagate_ownership ON aggregations;
+DROP TRIGGER IF EXISTS records_enforce_ownership ON records;
+DROP FUNCTION IF EXISTS enforce_aggregation_ownership();
+DROP FUNCTION IF EXISTS propagate_aggregation_ownership();
+DROP FUNCTION IF EXISTS enforce_record_ownership();
+DROP VIEW IF EXISTS authorized_records_for_search;
+DROP VIEW IF EXISTS authorized_aggregations_for_search;
+DROP INDEX IF EXISTS aggregation_acl_org_unit_members_grant_unique;
+DROP INDEX IF EXISTS child_aggregation_acl_org_unit_members_grant_unique;
+DROP INDEX IF EXISTS child_record_acl_org_unit_members_grant_unique;
+DROP INDEX IF EXISTS record_acl_org_unit_members_grant_unique;
+ALTER TABLE roles
+    DROP CONSTRAINT IF EXISTS roles_org_unit_members_code_reserved,
+    DROP CONSTRAINT IF EXISTS roles_org_unit_members_name_reserved;
+DELETE FROM schema_migrations
+WHERE version = '048_add_org_unit_members_acl_principal';
+DELETE FROM schema_migrations
+WHERE version = '049_initialize_organizational_acl_defaults';
+DELETE FROM schema_migrations
+WHERE version = '050_add_root_ownership_correction';
+DELETE FROM schema_migrations
+WHERE version = '047_expose_organizational_ownership_in_search';
+ALTER TABLE records ALTER COLUMN owning_org_unit_id DROP NOT NULL;
+ALTER TABLE aggregations ALTER COLUMN owning_org_unit_id DROP NOT NULL;
+DELETE FROM schema_migrations
+WHERE version = '046_enforce_organizational_ownership';
+DROP TABLE IF EXISTS organizational_ownership_root_assignments;
+DROP TABLE IF EXISTS organizational_ownership_assignment_runs;
+DELETE FROM schema_migrations
+WHERE version = '045_assign_existing_organizational_ownership';
+DROP VIEW IF EXISTS organizational_ownership_diagnostics;
+ALTER TABLE records
+    DROP CONSTRAINT IF EXISTS records_owning_org_unit_fk,
+    DROP COLUMN IF EXISTS owning_org_unit_id;
+ALTER TABLE aggregations
+    DROP CONSTRAINT IF EXISTS aggregations_owning_org_unit_fk,
+    DROP COLUMN IF EXISTS owning_org_unit_id;
+DELETE FROM schema_migrations
+WHERE version = '044_add_organizational_ownership_foundation';
 DROP FUNCTION IF EXISTS current_user_can_record_operation(bigint,text,text);
 DROP FUNCTION IF EXISTS current_user_can_aggregation_operation(bigint,text,text);
 DROP FUNCTION IF EXISTS user_can_record_operation(bigint,bigint,text,text);

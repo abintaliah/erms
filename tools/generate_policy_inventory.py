@@ -103,6 +103,8 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         return "globally_privileged", "organization.browse", None
     if path.startswith("/api/v1/favourites"):
         return "authenticated_only", None, None
+    if path == "/api/v1/ownership-correction-options" or "ownership-correction" in path or path.endswith("/correct-ownership"):
+        return "governance_exception", "organization.ownership.correct", None
     if path.startswith("/api/v1/aggregations/") and "permissions" in path:
         return "resource_scoped", "authorization.administer", "aggregation.acl.manage"
     if path.startswith("/api/v1/records/") and path.endswith("permissions"):
@@ -184,6 +186,8 @@ def api_operations() -> list[dict[str, Any]]:
             phase_7_enforced = (
                 path.endswith("/capabilities")
                 or "/acl-move" in path
+                or "ownership-correction" in path
+                or path.endswith("/correct-ownership")
                 or path.startswith("/api/v1/security-level-changes/")
                 or (
                     path in {

@@ -11,8 +11,9 @@ INSERT INTO classification_retention_rules
     (classification_id, current_period_years, intermediate_period_years, final_disposition)
 VALUES (:test_classification_id, 5, 0, 'destruction');
 
-INSERT INTO aggregations (aggregation_number, title, description, date_opened, classification_id)
-VALUES ('AGG-001', 'Root aggregation', 'Top-level test aggregation', NULL, :test_classification_id)
+INSERT INTO aggregations (aggregation_number, title, description, date_opened, classification_id, owning_org_unit_id)
+SELECT 'AGG-001', 'Root aggregation', 'Top-level test aggregation', NULL,
+       :test_classification_id, id FROM org_units WHERE code='PHASE2-SEGMENT'
 RETURNING id AS root_aggregation_id \gset
 
 INSERT INTO aggregations (

@@ -663,14 +663,17 @@ def test_update_and_delete_snapshots_remain_available(
     history_response = client.get(f"/api/v1/records/{record['id']}/history")
     assert history_response.status_code == 200
     history = history_response.json()
-    assert [event["operation"] for event in history] == ["DELETE", "UPDATE", "CREATE"]
+    assert [
+        event["operation"] for event in history
+        if event["operation"] != "INFORMATION_GOVERNANCE_BYPASS_USED"
+    ] == ["DELETE", "UPDATE", "CREATE"]
 
-    update_event = history[1]
+    update_event = next(event for event in history if event["operation"] == "UPDATE")
     assert update_event["before_state"]["title"] == "Example record"
     assert update_event["after_state"]["title"] == "Changed title"
     assert update_event["changed_fields"] == ["description", "title"]
 
-    delete_event = history[0]
+    delete_event = next(event for event in history if event["operation"] == "DELETE")
     assert delete_event["before_state"]["title"] == "Changed title"
     assert delete_event["after_state"] is None
 

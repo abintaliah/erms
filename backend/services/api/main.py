@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime
 from io import BytesIO
+import json
 import secrets
 from urllib.parse import quote
 from uuid import UUID, uuid4
@@ -50,6 +51,8 @@ from .schemas import (
     SearchRequest,
     SearchResponse,
     ResourceCapabilitiesRead,
+    OwnershipDashboardCount,
+    CreationRoleOption,
 )
 from .search import search_rows
 from .security_level_events import append_security_level_event, validate_security_level_change
@@ -280,6 +283,106 @@ def health(connection: Connection = Depends(get_connection, scope="function")) -
     return {"status": "ok"}
 
 
+def _creation_role_options(
+    connection: Connection, parent_aggregation_id: int | None = None,
+) -> list[dict]:
+    parameters: list[int] = []
+    owner_clause = ""
+    if parent_aggregation_id is not None:
+        parent = connection.execute(
+            "SELECT owning_org_unit_id FROM aggregations WHERE id=%s",
+            (parent_aggregation_id,),
+        ).fetchone()
+        if parent is None:
+            raise HTTPException(status_code=409, detail="referenced aggregation does not exist")
+        owner_clause = " AND role.org_unit_id=%s"
+        parameters.append(parent["owning_org_unit_id"])
+    rows = connection.execute(
+        """SELECT DISTINCT role.id AS role_id,role.code AS role_code,
+                  role.name AS role_name,unit.id AS org_unit_id,
+                  unit.code AS org_unit_code,unit.name AS org_unit_name
+             FROM user_role_assignments assignment
+             JOIN roles role ON role.id=assignment.role_id
+             JOIN org_units unit ON unit.id=role.org_unit_id
+            WHERE assignment.user_id=current_user_id()
+              AND CURRENT_TIMESTAMP>=assignment.valid_from
+              AND (assignment.valid_until IS NULL OR CURRENT_TIMESTAMP<assignment.valid_until)
+              AND role_effectively_active(role.id)""" + owner_clause +
+        " ORDER BY org_unit_name,role_name,role_id",
+        parameters,
+    ).fetchall()
+    return [{**row, "label": f"{row['org_unit_name']} — {row['role_name']}"} for row in rows]
+
+
+def _select_creator_role(
+    connection: Connection, requested_role_id: int | None,
+    parent_aggregation_id: int | None = None,
+) -> dict:
+    options = _creation_role_options(connection, parent_aggregation_id)
+    if not options:
+        raise HTTPException(status_code=403, detail={
+            "code": "creator_acl_role_not_eligible",
+            "message": "You do not have a current role in the owning organizational unit.",
+        })
+    if requested_role_id is None:
+        if len(options) != 1:
+            raise HTTPException(status_code=422, detail={
+                "code": "creator_acl_role_selection_required",
+                "message": "Select the organizational role to create this resource for.",
+            })
+        return options[0]
+    selected = next((row for row in options if row["role_id"] == requested_role_id), None)
+    if selected is None:
+        raise HTTPException(status_code=403, detail={
+            "code": "creator_acl_role_not_eligible",
+            "message": "The selected role is not currently eligible for this owner.",
+        })
+    return selected
+
+
+@app.get(
+    "/api/v1/creation-role-options",
+    response_model=list[CreationRoleOption], tags=["authorization"],
+)
+def creation_role_options(
+    parent_aggregation_id: int | None = None,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return _creation_role_options(connection, parent_aggregation_id)
+
+
+@app.get(
+    "/api/v1/dashboard/ownership-counts",
+    response_model=list[OwnershipDashboardCount],
+    tags=["dashboard"],
+)
+def dashboard_ownership_counts(
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return list(connection.execute(
+        """WITH eligible_units AS (
+               SELECT DISTINCT unit.id,unit.code,unit.name
+               FROM user_role_assignments assignment
+               JOIN roles role ON role.id=assignment.role_id
+               JOIN org_units unit ON unit.id=role.org_unit_id
+               WHERE assignment.user_id=current_user_id()
+                 AND CURRENT_TIMESTAMP>=assignment.valid_from
+                 AND (assignment.valid_until IS NULL OR CURRENT_TIMESTAMP<=assignment.valid_until)
+                 AND role_effectively_active(role.id)
+           )
+           SELECT unit.id AS org_unit_id,unit.code AS org_unit_code,
+                  unit.name AS org_unit_name,
+                  (SELECT count(*) FROM aggregations aggregation
+                    WHERE aggregation.owning_org_unit_id=unit.id
+                      AND current_user_can_view_aggregation(aggregation.id)) AS aggregation_count,
+                  (SELECT count(*) FROM records record
+                    WHERE record.owning_org_unit_id=unit.id
+                      AND current_user_can_view_record(record.id)) AS record_count
+           FROM eligible_units unit
+           ORDER BY unit.name COLLATE "C",unit.id"""
+    ).fetchall())
+
+
 @app.post(
     "/api/v1/aggregations",
     response_model=AggregationRead,
@@ -291,12 +394,17 @@ def create_aggregation(
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     acquire_continuity_shared_lock(connection)
+    values = payload.model_dump(exclude={"creator_acl_role_id"})
+    selected_role = _select_creator_role(
+        connection, payload.creator_acl_role_id, payload.parent_aggregation_id,
+    )
     if payload.parent_aggregation_id is None:
         level_id = payload.security_level_id or connection.execute(
             "SELECT lowest_security_level_id() AS id"
         ).fetchone()["id"]
         require_global(connection, "aggregation.create_root")
         require_clearance_for_level(connection, level_id)
+        values["owning_org_unit_id"] = selected_role["org_unit_id"]
     else:
         parent = require_resource_operation(
             connection, "aggregation", payload.parent_aggregation_id,
@@ -304,12 +412,21 @@ def create_aggregation(
         )
         level_id = payload.security_level_id or parent["security_level_id"]
         require_clearance_for_level(connection, level_id)
-    return create_row(connection, "aggregations", payload.model_dump())
+    connection.execute(
+        "SELECT set_config('app.creator_acl_role_id',%s,true),set_config('app.event_metadata',%s,true)",
+        (str(selected_role["role_id"]), json.dumps({
+            "creator_acl_role_id": selected_role["role_id"],
+            "creator_acl_role_code": selected_role["role_code"],
+            "creator_org_unit_id": selected_role["org_unit_id"],
+        })),
+    )
+    return create_row(connection, "aggregations", values)
 
 
 @app.get("/api/v1/aggregations", response_model=list[AggregationRead], tags=["aggregations"])
 def list_aggregations(
     parent_aggregation_id: int | None = None,
+    owning_org_unit_id: int | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
@@ -324,7 +441,8 @@ def list_aggregations(
         "aggregations",
         limit=limit,
         offset=offset,
-        filters={"parent_aggregation_id": parent_aggregation_id},
+        filters={"parent_aggregation_id": parent_aggregation_id,
+                 "owning_org_unit_id": owning_org_unit_id},
     )
 
 
@@ -370,6 +488,23 @@ def get_aggregation_capabilities(
     capabilities["view"] = True
     capabilities["close"] = capabilities["close"] and resource["date_closed"] is None
     capabilities["reopen"] = capabilities["reopen"] and resource["date_closed"] is not None
+    capabilities["correct_ownership"] = bool(
+        resource["parent_aggregation_id"] is None
+        and connection.execute(
+            """SELECT user_has_global_privilege(current_user_id(),'organization.ownership.correct')
+                      AND EXISTS (
+                        SELECT 1 FROM user_role_assignments assignment
+                        JOIN roles role ON role.id=assignment.role_id
+                        JOIN security_levels role_level ON role_level.id=role.security_level_id
+                        JOIN security_levels resource_level ON resource_level.id=%s
+                        WHERE assignment.user_id=current_user_id() AND role.is_information_governance
+                          AND assignment.valid_from<=CURRENT_TIMESTAMP
+                          AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+                          AND role_effectively_active(role.id)
+                          AND role_level.level_number>=resource_level.level_number) AS allowed""",
+            (resource["security_level_id"],),
+        ).fetchone()["allowed"]
+    )
     return {"resource_type": "aggregation", "resource_id": aggregation_id,
             "capabilities": capabilities}
 
@@ -395,8 +530,13 @@ def update_aggregation(
         if payload.parent_aggregation_id is None:
             require_global(connection, "aggregation.create_root")
         else:
-            require_resource_operation(connection, "aggregation", payload.parent_aggregation_id,
+            destination = require_resource_operation(connection, "aggregation", payload.parent_aggregation_id,
                                        "aggregation.move", "aggregation.receive_child")
+            if destination["owning_org_unit_id"] != existing["owning_org_unit_id"]:
+                raise HTTPException(status_code=422, detail={
+                    "code": "ownership_change_requires_confirmation",
+                    "message": "Use the move command and confirm the organizational ownership change.",
+                })
     if "classification_id" in fields and payload.classification_id != existing["classification_id"]:
         require_resource_operation(connection, "aggregation", aggregation_id,
                                    "aggregation.reclassify", "aggregation.reclassify")
@@ -458,16 +598,30 @@ def create_record(payload: RecordCreate, connection: Connection = Depends(get_co
         raise HTTPException(status_code=409, detail="referenced aggregation does not exist")
     require_resource_operation(connection, "aggregation", payload.aggregation_id,
                                "record.create", "aggregation.add_record")
+    selected_role = _select_creator_role(
+        connection, payload.creator_acl_role_id, payload.aggregation_id,
+    )
     level_id = payload.security_level_id or connection.execute(
         "SELECT lowest_security_level_id() AS id"
     ).fetchone()["id"]
     require_clearance_for_level(connection, level_id)
-    return create_row(connection, "records", payload.model_dump())
+    connection.execute(
+        "SELECT set_config('app.creator_acl_role_id',%s,true),set_config('app.event_metadata',%s,true)",
+        (str(selected_role["role_id"]), json.dumps({
+            "creator_acl_role_id": selected_role["role_id"],
+            "creator_acl_role_code": selected_role["role_code"],
+            "creator_org_unit_id": selected_role["org_unit_id"],
+        })),
+    )
+    return create_row(
+        connection, "records", payload.model_dump(exclude={"creator_acl_role_id"}),
+    )
 
 
 @app.get("/api/v1/records", response_model=list[RecordRead], tags=["records"])
 def list_records(
     aggregation_id: int | None = None,
+    owning_org_unit_id: int | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
@@ -482,7 +636,8 @@ def list_records(
         "records",
         limit=limit,
         offset=offset,
-        filters={"aggregation_id": aggregation_id},
+        filters={"aggregation_id": aggregation_id,
+                 "owning_org_unit_id": owning_org_unit_id},
     )
 
 
@@ -552,8 +707,13 @@ def update_record(
         )
     if "aggregation_id" in fields and payload.aggregation_id != existing["aggregation_id"]:
         require_resource_operation(connection, "record", record_id, "record.move", "record.move")
-        require_resource_operation(connection, "aggregation", payload.aggregation_id,
+        destination = require_resource_operation(connection, "aggregation", payload.aggregation_id,
                                    "record.move", "aggregation.receive_record")
+        if destination["owning_org_unit_id"] != existing["owning_org_unit_id"]:
+            raise HTTPException(status_code=422, detail={
+                "code": "ownership_change_requires_confirmation",
+                "message": "Use the move command and confirm the organizational ownership change.",
+            })
     if "security_level_id" in fields and payload.security_level_id != existing["security_level_id"]:
         require_resource_operation(connection, "record", record_id,
                                    "record.security_level.change", "record.security_level.change")
@@ -788,7 +948,10 @@ def delete_record_draft_component(draft_id: int, component_id: int, connection: 
 
 
 @app.post("/api/v1/record-drafts/{draft_id}/commit", response_model=RecordRead, status_code=201, tags=["record drafts"])
-def commit_record_draft(draft_id: int, connection: Connection = Depends(get_connection, scope="function")):
+def commit_record_draft(
+    draft_id: int, creator_acl_role_id: int | None = None,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
     draft = _open_draft(connection, draft_id, lock=True)
     missing = [name for name in ("aggregation_id", "record_number", "title") if not draft.get(name)]
     if missing:
@@ -802,7 +965,18 @@ def commit_record_draft(draft_id: int, connection: Connection = Depends(get_conn
         connection, "aggregation", draft["aggregation_id"],
         "record.create", "aggregation.add_record",
     )
+    selected_role = _select_creator_role(
+        connection, creator_acl_role_id, draft["aggregation_id"],
+    )
     require_clearance_for_level(connection, security_level_id)
+    connection.execute(
+        "SELECT set_config('app.creator_acl_role_id',%s,true),set_config('app.event_metadata',%s,true)",
+        (str(selected_role["role_id"]), json.dumps({
+            "creator_acl_role_id": selected_role["role_id"],
+            "creator_acl_role_code": selected_role["role_code"],
+            "creator_org_unit_id": selected_role["org_unit_id"],
+        })),
+    )
     components = connection.execute(
         "SELECT * FROM record_draft_components WHERE draft_id = %s ORDER BY component_order FOR UPDATE", (draft_id,)
     ).fetchall()
@@ -837,6 +1011,7 @@ def commit_record_draft(draft_id: int, connection: Connection = Depends(get_conn
 def commit_record_draft_placement_correction(
     draft_id: int,
     request: Request,
+    creator_acl_role_id: int | None = None,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     draft = _open_draft(connection, draft_id, lock=True)
@@ -861,7 +1036,7 @@ def commit_record_draft_placement_correction(
         "SELECT set_config('app.closed_record_placement_correction','authorized',true), set_config('app.change_reason',%s,true)",
         (reason,),
     )
-    record = commit_record_draft(draft_id, connection)
+    record = commit_record_draft(draft_id, creator_acl_role_id, connection)
     connection.execute(
         "SELECT append_domain_event('record',%s,'CLOSED_AGGREGATION_RECORD_CORRECTED',%s::jsonb,%s)",
         (record["id"], Jsonb({

@@ -1,9 +1,10 @@
 # Organizational Ownership and Default ACLs — Technical Specification
 
-**Status:** Review draft — not approved and not implemented  
-**Project:** ERMS / wathiq  
-**Prepared:** 20 September 2026  
-**Revision:** 0.6 — persistent dormant ACLs, single-role UI, and deterministic greenfield migration
+**Status:** Approved — Phase 7 complete; exceptional bulk transfer deferred
+**Approved:** 20 September 2026
+**Project:** ERMS / wathiq
+**Prepared:** 20 September 2026
+**Revision:** 1.3 — Phase 7 operational hardening and core-feature release completed
 
 ## 1. Purpose
 
@@ -202,7 +203,27 @@ owner, and affected aggregation and record counts. An ownership-changing move
 requires a non-blank reason and one explicit confirmation. No additional
 approval is required because of size or sensitivity.
 
-### 6.6 Exceptional bulk transfer from a defunct org unit
+### 6.6 Governed correction of mistaken root ownership
+
+An information-governance user may correct a root aggregation that was created
+for the wrong organizational unit without changing its placement. This is not
+an ordinary metadata edit.
+
+The action requires `organization.ownership.correct`, an effective
+information-governance role with sufficient clearance, an active destination
+role, a preview, a non-blank reason, and one confirmation. It atomically:
+
+- changes the root owner and propagates it through all descendants and records;
+- retargets `org_unit_members` context automatically;
+- replaces grants belonging to the original root creator ACL role with the
+  selected destination role throughout the subtree, consolidating duplicates;
+- preserves `Everyone` and all other named-role grants; and
+- records `OWNERSHIP_CORRECTED` with affected counts and role mapping.
+
+Child aggregations and records cannot use this command; their ownership changes
+only through the governed Move action.
+
+### 6.7 Exceptional bulk transfer from a defunct org unit
 
 Bulk transfer of all holdings from a defunct org unit is a distinct exceptional
 operation. It is not implemented as repeated ordinary record or aggregation
@@ -235,7 +256,7 @@ The bulk-transfer workflow must:
   immutable history; and
 - produce a completion report and a failure report when applicable.
 
-### 6.6.1 ACL reconciliation policy
+### 6.7.1 ACL reconciliation policy
 
 Ownership transfer and ACL reconciliation are one governed plan. The transfer
 must not leave the fate of source-unit role grants implicit.
@@ -639,6 +660,10 @@ org unit with no authorized resources displays zero rather than disappearing.
 - Child aggregation and record forms display the inherited owner as read-only
   context or omit the field entirely.
 - Aggregation and record details display the owning org unit.
+- **Create for** is creation context, not persistent resource metadata. After
+  creation, ordinary details and edit views show **Owning organizational unit**;
+  the selected role remains represented by the named-role ACL grants and audit
+  history.
 - Search and list pages may filter and group by owning org unit.
 - Move confirmation displays an ownership change when the destination owner
   differs.
@@ -1170,6 +1195,13 @@ dependencies are complete; child inheritance and dormant local ACL behaviour
 are verified; and users without an effective role in the parent owner cannot
 create children or records.
 
+**Implementation status:** Complete. Migration 049 applies the approved ACL
+defaults to mapped greenfield holdings and installs the prospective creation
+initializer. The API validates effective role choices and records the choice in
+creation audit metadata. The aggregation and saved-record creation interfaces
+use the combined selector, including automatic read-only selection when only
+one role is eligible.
+
 ### Phase 7 — Operational hardening and core-feature release
 
 Complete the ordinary feature before considering exceptional bulk transfer:
@@ -1189,9 +1221,21 @@ At this point organizational ownership, filtering, dashboard reporting,
 `org_unit_members`, creation defaults, and ordinary ownership-changing moves
 form a complete deployable feature.
 
+**Implementation status:** Complete. The security reconciliation endpoint
+monitors ownership invariant violations alongside security hierarchy and
+authorization-continuity findings. A production-shaped rehearsal verifies a
+150-aggregation subtree with 150 records moves atomically across owners,
+retains audit evidence, leaves diagnostics empty, meets the test latency
+budget, and uses the owner/browse indexes. Canonical-schema, migration,
+authorization, search, dashboard, lifecycle, concurrency, history,
+backup/restore, import, and frontend regression gates pass. Wathiq maintains no
+separate ownership authorization cache, so there is no stale cache to
+invalidate; database invariants apply equally to API, background-worker,
+scheduled-job, seed, and migration writes.
+
 ### Phase 8 — Exceptional defunct-unit bulk transfer (deferrable final phase)
 
-Implement Section 6.6 only when the organization needs it:
+Implement Section 6.7 only when the organization needs it:
 
 - add `organization.holdings.transfer` to the privilege catalogue;
 - implement source and destination eligibility checks;

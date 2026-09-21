@@ -24,7 +24,7 @@ def clean_database(client: TestClient):
         connection.execute("ALTER TABLE event_history ENABLE TRIGGER USER")
         org_id = connection.execute("INSERT INTO org_units (code,name) VALUES ('test-root','Test Root') RETURNING id").fetchone()[0]
         user_id = connection.execute("INSERT INTO users (name,email) VALUES ('Test Administrator','admin@test.invalid') RETURNING id").fetchone()[0]
-        role_id = connection.execute("INSERT INTO roles (org_unit_id,code,name) VALUES (%s,'system-administrator','System Administrator') RETURNING id", (org_id,)).fetchone()[0]
+        role_id = connection.execute("INSERT INTO roles (org_unit_id,code,name,is_information_governance) VALUES (%s,'system-administrator','System Administrator',true) RETURNING id", (org_id,)).fetchone()[0]
         connection.execute("INSERT INTO user_role_assignments (user_id,role_id) VALUES (%s,%s)", (user_id,role_id))
         connection.execute("INSERT INTO user_credentials (user_id,password_hash,must_change_password) VALUES (%s,%s,false)", (user_id,hash_password(password)))
         scheme_id = connection.execute("INSERT INTO classification_schemes (code,title,date_published) VALUES ('TEST','Test Scheme',CURRENT_TIMESTAMP) RETURNING id").fetchone()[0]
@@ -72,7 +72,7 @@ def aggregation(client: TestClient) -> dict:
         "/api/v1/aggregations",
         json={"aggregation_number": "AGG-001", "title": "Root aggregation", "classification_id": 1},
     )
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
     return response.json()
 
 

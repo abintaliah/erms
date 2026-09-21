@@ -23,7 +23,7 @@ def _create_profile(client: TestClient, code: str = "RECORDS_EDITOR") -> dict:
 def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient):
     privileges = _by_code(client, "/api/v1/privileges?limit=500")
     profiles = _by_code(client, "/api/v1/profiles?limit=500")
-    assert len(privileges) == 38
+    assert len(privileges) == 39
     assert "organization.browse" in privileges
     assert set(profiles) >= {
         "ALL_PRIVS", "SYS_ADMIN",
@@ -38,7 +38,7 @@ def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient
     role = client.get("/api/v1/roles/1")
     assert role.status_code == 200
     assert role.json()["profile_id"] == profiles["ALL_PRIVS"]["id"]
-    assert role.json()["is_information_governance"] is False
+    assert role.json()["is_information_governance"] is True
 
 
 def test_composite_profile_dependencies_preview_assignment_and_audit(client: TestClient):

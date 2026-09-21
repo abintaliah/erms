@@ -26,12 +26,14 @@ NOW = datetime(2026, 9, 19, 8, 0, tzinfo=timezone.utc)
 def role(
     role_id: int,
     *,
+    org_unit_id: int = 1,
     clearance: int = 10,
     privileges: tuple[str, ...] = ("record.view",),
     governance: bool = False,
 ) -> EffectiveRole:
     return EffectiveRole(
         role_id=role_id, role_code=f"R{role_id}", role_name=f"Role {role_id}",
+        org_unit_id=org_unit_id,
         profile_id=role_id, profile_code=f"P{role_id}", profile_name=f"Profile {role_id}",
         security_level_id=role_id, security_level_code=f"L{clearance}",
         clearance=clearance, is_information_governance=governance,
@@ -176,6 +178,23 @@ def test_everyone_grant_is_an_acl_contributor():
     ))
     assert decision.allowed
     assert decision.everyone_permissions == ("record.view",)
+
+
+def test_org_unit_members_grant_matches_only_roles_in_the_resource_owner():
+    request = AuthorizationRequest(
+        operation="record.view",
+        required_privilege="record.view",
+        required_permissions=("record.view",),
+        owning_org_unit_id=7,
+        acl=ResourceAcl(org_unit_member_permissions=frozenset({"record.view"})),
+    )
+    allowed = authorize(context(role(1, org_unit_id=7)), request)
+    denied = authorize(context(role(2, org_unit_id=8)), request)
+
+    assert allowed.allowed
+    assert allowed.org_unit_member_permissions == ("record.view",)
+    assert allowed.org_unit_member_role_ids_by_permission == {"record.view": (1,)}
+    assert denied.code == DecisionCode.INSUFFICIENT_RESOURCE_PERMISSION
 
 
 def test_governance_bypasses_only_acl_using_its_own_clearance():

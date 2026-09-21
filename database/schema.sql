@@ -2518,7 +2518,7 @@ WITH seed(code, category, reserved) AS (VALUES
  ('authorization.administer','administration',false), ('authorization.explain','administration',false),
  ('security_levels.administer','administration',false), ('identity.users.administer','administration',false),
  ('identity.sessions.administer','administration',false), ('organization.browse','administration',false),
- ('organization.administer','administration',false),
+ ('organization.administer','administration',false), ('organization.ownership.correct','exceptional',false),
  ('classifications.administer','administration',false), ('audit.view','administration',false),
  ('aggregation.view','aggregation',false), ('aggregation.create_root','aggregation',false),
  ('aggregation.create_child','aggregation',false), ('aggregation.modify','aggregation',false),
@@ -2562,7 +2562,7 @@ SELECT profile.id, privilege.id FROM profiles profile JOIN privileges privilege 
 
 INSERT INTO profile_privileges(profile_id,privilege_id)
 SELECT profile.id, privilege.id FROM profiles profile JOIN privileges privilege ON
- privilege.code IN ('authorization.administer','authorization.explain','classifications.administer','security_levels.administer','audit.view','organization.browse',
+ privilege.code IN ('authorization.administer','authorization.explain','classifications.administer','security_levels.administer','audit.view','organization.browse','organization.ownership.correct',
  'aggregation.view','aggregation.create_root','aggregation.create_child','aggregation.modify',
  'aggregation.move','aggregation.reclassify','aggregation.close','aggregation.reopen',
  'aggregation.delete','aggregation.security_level.change','aggregation.acl.manage',
@@ -2732,56 +2732,62 @@ ALTER TABLE records
 
 ALTER TABLE roles ADD CONSTRAINT roles_everyone_code_reserved CHECK (lower(btrim(code)) <> 'everyone');
 ALTER TABLE roles ADD CONSTRAINT roles_everyone_name_reserved CHECK (lower(btrim(name)) <> 'everyone');
+ALTER TABLE roles ADD CONSTRAINT roles_org_unit_members_code_reserved CHECK (lower(btrim(code)) <> 'org_unit_members');
+ALTER TABLE roles ADD CONSTRAINT roles_org_unit_members_name_reserved CHECK (lower(btrim(name)) <> 'all org unit members');
 
 CREATE TABLE aggregation_acl_grants (
     id bigserial PRIMARY KEY,
     aggregation_id bigint NOT NULL REFERENCES aggregations(id) ON DELETE CASCADE,
-    principal_type text NOT NULL CHECK (principal_type IN ('role','everyone')),
+    principal_type text NOT NULL CHECK (principal_type IN ('role','everyone','org_unit_members')),
     role_id bigint REFERENCES roles(id) ON DELETE RESTRICT,
     permission_id bigint NOT NULL REFERENCES permissions(id) ON DELETE RESTRICT,
     date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_updated timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     version integer NOT NULL DEFAULT 1 CHECK (version>0),
     CHECK ((principal_type='role' AND role_id IS NOT NULL) OR
-           (principal_type='everyone' AND role_id IS NULL))
+           (principal_type IN ('everyone','org_unit_members') AND role_id IS NULL))
 );
 CREATE UNIQUE INDEX aggregation_acl_role_grant_unique ON aggregation_acl_grants(aggregation_id,role_id,permission_id) WHERE principal_type='role';
 CREATE UNIQUE INDEX aggregation_acl_everyone_grant_unique ON aggregation_acl_grants(aggregation_id,permission_id) WHERE principal_type='everyone';
+CREATE UNIQUE INDEX aggregation_acl_org_unit_members_grant_unique ON aggregation_acl_grants(aggregation_id,permission_id) WHERE principal_type='org_unit_members';
 
 CREATE TABLE aggregation_child_aggregation_acl_defaults (LIKE aggregation_acl_grants INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY);
 ALTER TABLE aggregation_child_aggregation_acl_defaults DROP COLUMN aggregation_id;
 ALTER TABLE aggregation_child_aggregation_acl_defaults ADD COLUMN aggregation_id bigint NOT NULL REFERENCES aggregations(id) ON DELETE CASCADE;
 ALTER TABLE aggregation_child_aggregation_acl_defaults ADD PRIMARY KEY(id);
-ALTER TABLE aggregation_child_aggregation_acl_defaults ADD CHECK ((principal_type='role' AND role_id IS NOT NULL) OR (principal_type='everyone' AND role_id IS NULL));
+ALTER TABLE aggregation_child_aggregation_acl_defaults ADD CHECK ((principal_type='role' AND role_id IS NOT NULL) OR (principal_type IN ('everyone','org_unit_members') AND role_id IS NULL));
 ALTER TABLE aggregation_child_aggregation_acl_defaults ADD FOREIGN KEY(role_id) REFERENCES roles(id) ON DELETE RESTRICT;
 ALTER TABLE aggregation_child_aggregation_acl_defaults ADD FOREIGN KEY(permission_id) REFERENCES permissions(id) ON DELETE RESTRICT;
 CREATE UNIQUE INDEX child_aggregation_acl_role_grant_unique ON aggregation_child_aggregation_acl_defaults(aggregation_id,role_id,permission_id) WHERE principal_type='role';
 CREATE UNIQUE INDEX child_aggregation_acl_everyone_grant_unique ON aggregation_child_aggregation_acl_defaults(aggregation_id,permission_id) WHERE principal_type='everyone';
+CREATE UNIQUE INDEX child_aggregation_acl_org_unit_members_grant_unique ON aggregation_child_aggregation_acl_defaults(aggregation_id,permission_id) WHERE principal_type='org_unit_members';
 
 CREATE TABLE aggregation_child_record_acl_defaults (LIKE aggregation_acl_grants INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY);
 ALTER TABLE aggregation_child_record_acl_defaults DROP COLUMN aggregation_id;
 ALTER TABLE aggregation_child_record_acl_defaults ADD COLUMN aggregation_id bigint NOT NULL REFERENCES aggregations(id) ON DELETE CASCADE;
 ALTER TABLE aggregation_child_record_acl_defaults ADD PRIMARY KEY(id);
-ALTER TABLE aggregation_child_record_acl_defaults ADD CHECK ((principal_type='role' AND role_id IS NOT NULL) OR (principal_type='everyone' AND role_id IS NULL));
+ALTER TABLE aggregation_child_record_acl_defaults ADD CHECK ((principal_type='role' AND role_id IS NOT NULL) OR (principal_type IN ('everyone','org_unit_members') AND role_id IS NULL));
 ALTER TABLE aggregation_child_record_acl_defaults ADD FOREIGN KEY(role_id) REFERENCES roles(id) ON DELETE RESTRICT;
 ALTER TABLE aggregation_child_record_acl_defaults ADD FOREIGN KEY(permission_id) REFERENCES permissions(id) ON DELETE RESTRICT;
 CREATE UNIQUE INDEX child_record_acl_role_grant_unique ON aggregation_child_record_acl_defaults(aggregation_id,role_id,permission_id) WHERE principal_type='role';
 CREATE UNIQUE INDEX child_record_acl_everyone_grant_unique ON aggregation_child_record_acl_defaults(aggregation_id,permission_id) WHERE principal_type='everyone';
+CREATE UNIQUE INDEX child_record_acl_org_unit_members_grant_unique ON aggregation_child_record_acl_defaults(aggregation_id,permission_id) WHERE principal_type='org_unit_members';
 
 CREATE TABLE record_acl_grants (
     id bigserial PRIMARY KEY,
     record_id bigint NOT NULL REFERENCES records(id) ON DELETE CASCADE,
-    principal_type text NOT NULL CHECK (principal_type IN ('role','everyone')),
+    principal_type text NOT NULL CHECK (principal_type IN ('role','everyone','org_unit_members')),
     role_id bigint REFERENCES roles(id) ON DELETE RESTRICT,
     permission_id bigint NOT NULL REFERENCES permissions(id) ON DELETE RESTRICT,
     date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_updated timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     version integer NOT NULL DEFAULT 1 CHECK (version>0),
     CHECK ((principal_type='role' AND role_id IS NOT NULL) OR
-           (principal_type='everyone' AND role_id IS NULL))
+           (principal_type IN ('everyone','org_unit_members') AND role_id IS NULL))
 );
 CREATE UNIQUE INDEX record_acl_role_grant_unique ON record_acl_grants(record_id,role_id,permission_id) WHERE principal_type='role';
 CREATE UNIQUE INDEX record_acl_everyone_grant_unique ON record_acl_grants(record_id,permission_id) WHERE principal_type='everyone';
+CREATE UNIQUE INDEX record_acl_org_unit_members_grant_unique ON record_acl_grants(record_id,permission_id) WHERE principal_type='org_unit_members';
 
 CREATE INDEX aggregation_acl_role_idx ON aggregation_acl_grants(role_id,aggregation_id,permission_id);
 CREATE INDEX child_aggregation_acl_role_idx ON aggregation_child_aggregation_acl_defaults(role_id,aggregation_id,permission_id);
@@ -2874,17 +2880,27 @@ CREATE CONSTRAINT TRIGGER child_record_acl_dependencies AFTER INSERT OR UPDATE O
 CREATE CONSTRAINT TRIGGER record_acl_dependencies AFTER INSERT OR UPDATE OR DELETE ON record_acl_grants DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION validate_acl_dependencies('record_id');
 
 CREATE FUNCTION initialize_resource_acls() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE creator_role_id bigint := NULLIF(current_setting('app.creator_acl_role_id',true),'')::bigint;
 BEGIN
+  IF creator_role_id IS NULL THEN RETURN NEW; END IF;
   IF TG_TABLE_NAME='aggregations' THEN
+    INSERT INTO aggregation_acl_grants(aggregation_id,principal_type,role_id,permission_id)
+      SELECT NEW.id,'role',creator_role_id,id FROM permissions WHERE code=ANY(ARRAY['aggregation.view','aggregation.modify_metadata','aggregation.add_child','aggregation.add_record','aggregation.close','aggregation.acl.manage','aggregation.history.view']);
     INSERT INTO aggregation_acl_grants(aggregation_id,principal_type,permission_id)
-      SELECT NEW.id,'everyone',id FROM permissions WHERE resource_type='aggregation';
+      SELECT NEW.id,'org_unit_members',id FROM permissions WHERE code=ANY(ARRAY['aggregation.view','aggregation.history.view']);
+    INSERT INTO aggregation_child_aggregation_acl_defaults(aggregation_id,principal_type,role_id,permission_id)
+      SELECT NEW.id,'role',creator_role_id,id FROM permissions WHERE code=ANY(ARRAY['aggregation.view','aggregation.modify_metadata','aggregation.add_child','aggregation.add_record','aggregation.close','aggregation.acl.manage','aggregation.history.view']);
     INSERT INTO aggregation_child_aggregation_acl_defaults(aggregation_id,principal_type,permission_id)
-      SELECT NEW.id,'everyone',id FROM permissions WHERE resource_type='aggregation';
+      SELECT NEW.id,'org_unit_members',id FROM permissions WHERE code=ANY(ARRAY['aggregation.view','aggregation.history.view']);
+    INSERT INTO aggregation_child_record_acl_defaults(aggregation_id,principal_type,role_id,permission_id)
+      SELECT NEW.id,'role',creator_role_id,id FROM permissions WHERE code=ANY(ARRAY['record.view','record.acl.manage','record.history.view','record.component.list','record.component.view','record.component.download','record.component.share','record.component.print']);
     INSERT INTO aggregation_child_record_acl_defaults(aggregation_id,principal_type,permission_id)
-      SELECT NEW.id,'everyone',id FROM permissions WHERE resource_type='record';
+      SELECT NEW.id,'org_unit_members',id FROM permissions WHERE code=ANY(ARRAY['record.view','record.component.list','record.component.view','record.component.download']);
   ELSE
+    INSERT INTO record_acl_grants(record_id,principal_type,role_id,permission_id)
+      SELECT NEW.id,'role',creator_role_id,id FROM permissions WHERE code=ANY(ARRAY['record.view','record.acl.manage','record.history.view','record.component.list','record.component.view','record.component.download','record.component.share','record.component.print']);
     INSERT INTO record_acl_grants(record_id,principal_type,permission_id)
-      SELECT NEW.id,'everyone',id FROM permissions WHERE resource_type='record';
+      SELECT NEW.id,'org_unit_members',id FROM permissions WHERE code=ANY(ARRAY['record.view','record.component.list','record.component.view','record.component.download']);
   END IF;
   RETURN NEW;
 END $$;
@@ -3340,5 +3356,488 @@ ON CONFLICT (version) DO NOTHING;
 INSERT INTO schema_migrations(version)
 VALUES ('042_add_organization_browse_privilege')
 ON CONFLICT (version) DO NOTHING;
+
+INSERT INTO schema_migrations(version)
+VALUES ('043_add_event_reference_snapshots')
+ON CONFLICT (version) DO NOTHING;
+
+-- Canonical definitions corresponding to
+-- 044_add_organizational_ownership_foundation.sql
+
+SELECT set_config('app.actor_type', 'automated_process', true),
+       set_config('app.actor_name', 'Database migration 044', true),
+       set_config('app.event_source', 'migration', true),
+       set_config('app.change_reason', 'Add the organizational ownership schema foundation', true),
+       set_config('app.event_metadata', '{"migration":"044_add_organizational_ownership_foundation"}', true);
+
+ALTER TABLE aggregations
+    ADD COLUMN owning_org_unit_id bigint,
+    ADD CONSTRAINT aggregations_owning_org_unit_fk
+        FOREIGN KEY (owning_org_unit_id) REFERENCES org_units (id) ON DELETE RESTRICT;
+
+ALTER TABLE records
+    ADD COLUMN owning_org_unit_id bigint,
+    ADD CONSTRAINT records_owning_org_unit_fk
+        FOREIGN KEY (owning_org_unit_id) REFERENCES org_units (id) ON DELETE RESTRICT;
+
+CREATE INDEX aggregations_owner_parent_number_browse_idx
+    ON aggregations (
+        owning_org_unit_id,
+        parent_aggregation_id,
+        aggregation_number COLLATE "C",
+        id
+    );
+
+CREATE INDEX records_owner_aggregation_number_browse_idx
+    ON records (
+        owning_org_unit_id,
+        aggregation_id,
+        record_number COLLATE "C",
+        id
+    );
+
+CREATE VIEW organizational_ownership_diagnostics AS
+SELECT
+    'aggregation'::text AS resource_type,
+    child.id AS resource_id,
+    child.parent_aggregation_id AS parent_resource_id,
+    child.owning_org_unit_id,
+    parent.owning_org_unit_id AS expected_owning_org_unit_id,
+    CASE WHEN child.owning_org_unit_id IS NULL THEN 'missing_owner' ELSE 'owner_mismatch' END AS issue
+FROM aggregations AS child
+LEFT JOIN aggregations AS parent ON parent.id = child.parent_aggregation_id
+WHERE child.owning_org_unit_id IS NULL
+   OR (child.parent_aggregation_id IS NOT NULL
+       AND child.owning_org_unit_id IS DISTINCT FROM parent.owning_org_unit_id)
+UNION ALL
+SELECT
+    'record'::text,
+    record.id,
+    record.aggregation_id,
+    record.owning_org_unit_id,
+    parent.owning_org_unit_id,
+    CASE WHEN record.owning_org_unit_id IS NULL THEN 'missing_owner' ELSE 'owner_mismatch' END
+FROM records AS record
+JOIN aggregations AS parent ON parent.id = record.aggregation_id
+WHERE record.owning_org_unit_id IS NULL
+   OR record.owning_org_unit_id IS DISTINCT FROM parent.owning_org_unit_id;
+
+CREATE OR REPLACE FUNCTION event_reference_identity(reference_field text, reference_id bigint)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE snapshot jsonb;
+BEGIN
+    CASE reference_field
+        WHEN 'profile_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM profiles WHERE id=reference_id;
+        WHEN 'old_profile_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM profiles WHERE id=reference_id;
+        WHEN 'new_profile_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM profiles WHERE id=reference_id;
+        WHEN 'security_level_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name,'level_number',level_number) INTO snapshot FROM security_levels WHERE id=reference_id;
+        WHEN 'classification_id' THEN SELECT jsonb_build_object('id',id,'code',code,'title',title) INTO snapshot FROM classifications WHERE id=reference_id;
+        WHEN 'parent_classification_id' THEN SELECT jsonb_build_object('id',id,'code',code,'title',title) INTO snapshot FROM classifications WHERE id=reference_id;
+        WHEN 'classification_scheme_id' THEN SELECT jsonb_build_object('id',id,'code',code,'title',title) INTO snapshot FROM classification_schemes WHERE id=reference_id;
+        WHEN 'aggregation_id' THEN SELECT jsonb_build_object('id',id,'code',aggregation_number,'title',title) INTO snapshot FROM aggregations WHERE id=reference_id;
+        WHEN 'parent_aggregation_id' THEN SELECT jsonb_build_object('id',id,'code',aggregation_number,'title',title) INTO snapshot FROM aggregations WHERE id=reference_id;
+        WHEN 'destination_aggregation_id' THEN SELECT jsonb_build_object('id',id,'code',aggregation_number,'title',title) INTO snapshot FROM aggregations WHERE id=reference_id;
+        WHEN 'record_id' THEN SELECT jsonb_build_object('id',id,'code',record_number,'title',title) INTO snapshot FROM records WHERE id=reference_id;
+        WHEN 'role_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM roles WHERE id=reference_id;
+        WHEN 'supervisor_role_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM roles WHERE id=reference_id;
+        WHEN 'user_id' THEN SELECT jsonb_build_object('id',id,'name',name,'email',email) INTO snapshot FROM users WHERE id=reference_id;
+        WHEN 'owner_user_id' THEN SELECT jsonb_build_object('id',id,'name',name,'email',email) INTO snapshot FROM users WHERE id=reference_id;
+        WHEN 'org_unit_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM org_units WHERE id=reference_id;
+        WHEN 'parent_org_unit_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM org_units WHERE id=reference_id;
+        WHEN 'owning_org_unit_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM org_units WHERE id=reference_id;
+        ELSE snapshot := NULL;
+    END CASE;
+    RETURN snapshot;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION event_state_reference_snapshots(event_state jsonb)
+RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE reference_field text; reference_value text; snapshot jsonb; snapshots jsonb := '{}'::jsonb;
+BEGIN
+    IF event_state IS NULL OR jsonb_typeof(event_state) <> 'object' THEN RETURN snapshots; END IF;
+    FOREACH reference_field IN ARRAY ARRAY[
+        'profile_id','old_profile_id','new_profile_id','security_level_id',
+        'classification_id','parent_classification_id','classification_scheme_id',
+        'aggregation_id','parent_aggregation_id','destination_aggregation_id',
+        'record_id','role_id','supervisor_role_id','user_id','owner_user_id',
+        'org_unit_id','parent_org_unit_id','owning_org_unit_id'
+    ] LOOP
+        reference_value := event_state ->> reference_field;
+        IF reference_value IS NOT NULL AND reference_value ~ '^[0-9]+$' THEN
+            snapshot := event_reference_identity(reference_field,reference_value::bigint);
+            IF snapshot IS NOT NULL THEN snapshots := snapshots || jsonb_build_object(reference_field,snapshot); END IF;
+        END IF;
+    END LOOP;
+    RETURN snapshots;
+END;
+$$;
+
+INSERT INTO schema_migrations(version)
+VALUES ('044_add_organizational_ownership_foundation');
+
+-- 045_assign_existing_organizational_ownership.sql
+-- New databases contain no historical holdings to assign, but retain the
+-- reporting structures used by the upgrade migration and later ACL work.
+CREATE TABLE organizational_ownership_assignment_runs (
+    id                    bigserial PRIMARY KEY,
+    migration_version     text NOT NULL UNIQUE,
+    started_at            timestamptz NOT NULL DEFAULT clock_timestamp(),
+    completed_at          timestamptz,
+    root_count            bigint NOT NULL,
+    aggregation_count     bigint NOT NULL,
+    record_count          bigint NOT NULL,
+    before_counts_by_unit jsonb NOT NULL,
+    after_counts_by_unit  jsonb,
+    CONSTRAINT ownership_assignment_run_version_not_blank
+        CHECK (btrim(migration_version) <> ''),
+    CONSTRAINT ownership_assignment_run_counts_nonnegative
+        CHECK (root_count >= 0 AND aggregation_count >= 0 AND record_count >= 0),
+    CONSTRAINT ownership_assignment_run_before_counts_object
+        CHECK (jsonb_typeof(before_counts_by_unit) = 'object'),
+    CONSTRAINT ownership_assignment_run_after_counts_object
+        CHECK (after_counts_by_unit IS NULL OR jsonb_typeof(after_counts_by_unit) = 'object')
+);
+
+CREATE TABLE organizational_ownership_root_assignments (
+    root_aggregation_id bigint PRIMARY KEY,
+    run_id              bigint NOT NULL REFERENCES organizational_ownership_assignment_runs(id) ON DELETE RESTRICT,
+    selected_role_id    bigint NOT NULL,
+    selected_role_code  text NOT NULL,
+    selected_role_name  text NOT NULL,
+    owning_org_unit_id  bigint NOT NULL,
+    owning_org_unit_code text NOT NULL,
+    owning_org_unit_name text NOT NULL,
+    match_score         integer NOT NULL CHECK (match_score >= 0),
+    assignment_method   text NOT NULL CHECK (assignment_method IN (
+        'text_match', 'score_tie_stable_distribution', 'no_text_match_stable_distribution'
+    )),
+    root_title          text NOT NULL,
+    root_description    text,
+    assigned_at         timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX organizational_ownership_root_assignments_role_idx
+    ON organizational_ownership_root_assignments(selected_role_id, root_aggregation_id);
+CREATE INDEX organizational_ownership_root_assignments_unit_idx
+    ON organizational_ownership_root_assignments(owning_org_unit_id, root_aggregation_id);
+
+INSERT INTO schema_migrations(version)
+VALUES ('045_assign_existing_organizational_ownership');
+
+-- 046_enforce_organizational_ownership.sql
+ALTER TABLE aggregations ALTER COLUMN owning_org_unit_id SET NOT NULL;
+ALTER TABLE records ALTER COLUMN owning_org_unit_id SET NOT NULL;
+
+CREATE FUNCTION enforce_aggregation_ownership()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    parent_owner bigint;
+    target_owner bigint;
+    confirmed boolean := COALESCE(NULLIF(current_setting('app.ownership_move_confirmed', true), '')::boolean, false);
+    propagating boolean := current_setting('app.ownership_propagation', true) = 'authorized';
+    correcting boolean := current_setting('app.ownership_correction_authorized', true) = 'authorized';
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.parent_aggregation_id IS NOT NULL THEN
+            SELECT owning_org_unit_id INTO STRICT parent_owner
+            FROM aggregations WHERE id = NEW.parent_aggregation_id FOR UPDATE;
+            NEW.owning_org_unit_id := parent_owner;
+        ELSIF NEW.owning_org_unit_id IS NULL THEN
+            RAISE EXCEPTION USING ERRCODE='23502', MESSAGE='root aggregation ownership is required';
+        END IF;
+        RETURN NEW;
+    END IF;
+    IF propagating THEN RETURN NEW; END IF;
+
+    IF correcting THEN
+        IF OLD.parent_aggregation_id IS NOT NULL OR NEW.parent_aggregation_id IS NOT NULL
+           OR NEW.parent_aggregation_id IS DISTINCT FROM OLD.parent_aggregation_id
+           OR NULLIF(btrim(current_setting('app.change_reason', true)), '') IS NULL THEN
+            RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='ownership correction is restricted to root aggregations and requires a reason';
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    IF NEW.parent_aggregation_id IS NOT DISTINCT FROM OLD.parent_aggregation_id THEN
+        IF NEW.owning_org_unit_id IS DISTINCT FROM OLD.owning_org_unit_id THEN
+            RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='owning_org_unit_id cannot be changed directly';
+        END IF;
+        RETURN NEW;
+    END IF;
+    IF NEW.parent_aggregation_id IS NULL THEN
+        target_owner := OLD.owning_org_unit_id;
+    ELSE
+        SELECT owning_org_unit_id INTO STRICT target_owner
+        FROM aggregations WHERE id = NEW.parent_aggregation_id FOR UPDATE;
+    END IF;
+
+    IF target_owner IS DISTINCT FROM OLD.owning_org_unit_id AND (
+        NOT confirmed OR NULLIF(btrim(current_setting('app.change_reason', true)), '') IS NULL
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE='P0001',
+            MESSAGE='ownership-changing aggregation moves require a reason and explicit confirmation';
+    END IF;
+    NEW.owning_org_unit_id := target_owner;
+    RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION propagate_aggregation_ownership()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE previous_context text;
+BEGIN
+    IF NEW.owning_org_unit_id IS NOT DISTINCT FROM OLD.owning_org_unit_id
+       OR current_setting('app.ownership_propagation', true) = 'authorized' THEN
+        RETURN NEW;
+    END IF;
+    previous_context := current_setting('app.ownership_propagation', true);
+    PERFORM set_config('app.ownership_propagation', 'authorized', true);
+    WITH RECURSIVE descendants(id) AS (
+        SELECT child.id FROM aggregations child WHERE child.parent_aggregation_id = NEW.id
+        UNION ALL
+        SELECT child.id FROM descendants parent
+        JOIN aggregations child ON child.parent_aggregation_id = parent.id
+    )
+    UPDATE aggregations child SET owning_org_unit_id = NEW.owning_org_unit_id
+    FROM descendants WHERE child.id = descendants.id
+      AND child.owning_org_unit_id IS DISTINCT FROM NEW.owning_org_unit_id;
+    WITH RECURSIVE subtree(id) AS (
+        SELECT NEW.id
+        UNION ALL
+        SELECT child.id FROM subtree parent
+        JOIN aggregations child ON child.parent_aggregation_id = parent.id
+    )
+    UPDATE records record SET owning_org_unit_id = NEW.owning_org_unit_id
+    FROM subtree WHERE record.aggregation_id = subtree.id
+      AND record.owning_org_unit_id IS DISTINCT FROM NEW.owning_org_unit_id;
+    PERFORM set_config('app.ownership_propagation', COALESCE(previous_context, ''), true);
+    RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION enforce_record_ownership()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    target_owner bigint;
+    confirmed boolean := COALESCE(NULLIF(current_setting('app.ownership_move_confirmed', true), '')::boolean, false);
+    propagating boolean := current_setting('app.ownership_propagation', true) = 'authorized';
+BEGIN
+    IF TG_OP = 'UPDATE' AND propagating THEN RETURN NEW; END IF;
+    IF NEW.aggregation_id IS NULL THEN RETURN NEW; END IF;
+    SELECT owning_org_unit_id INTO STRICT target_owner
+    FROM aggregations WHERE id = NEW.aggregation_id FOR UPDATE;
+    IF TG_OP = 'INSERT' THEN
+        NEW.owning_org_unit_id := target_owner;
+        RETURN NEW;
+    END IF;
+    IF NEW.aggregation_id IS NOT DISTINCT FROM OLD.aggregation_id THEN
+        IF NEW.owning_org_unit_id IS DISTINCT FROM OLD.owning_org_unit_id THEN
+            RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='owning_org_unit_id cannot be changed directly';
+        END IF;
+        RETURN NEW;
+    END IF;
+    IF target_owner IS DISTINCT FROM OLD.owning_org_unit_id AND (
+        NOT confirmed OR NULLIF(btrim(current_setting('app.change_reason', true)), '') IS NULL
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE='P0001',
+            MESSAGE='ownership-changing record moves require a reason and explicit confirmation';
+    END IF;
+    NEW.owning_org_unit_id := target_owner;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER aggregations_enforce_ownership
+BEFORE INSERT OR UPDATE OF parent_aggregation_id, owning_org_unit_id ON aggregations
+FOR EACH ROW EXECUTE FUNCTION enforce_aggregation_ownership();
+CREATE TRIGGER aggregations_propagate_ownership
+AFTER UPDATE OF parent_aggregation_id, owning_org_unit_id ON aggregations
+FOR EACH ROW EXECUTE FUNCTION propagate_aggregation_ownership();
+CREATE TRIGGER records_enforce_ownership
+BEFORE INSERT OR UPDATE OF aggregation_id, owning_org_unit_id ON records
+FOR EACH ROW EXECUTE FUNCTION enforce_record_ownership();
+
+INSERT INTO schema_migrations(version) VALUES ('046_enforce_organizational_ownership');
+
+-- 047_expose_organizational_ownership_in_search.sql
+CREATE OR REPLACE VIEW authorized_aggregations_for_search AS
+SELECT resource.id,
+       CASE WHEN resource.parent_aggregation_id IS NULL
+                  OR current_user_can_view_aggregation(resource.parent_aggregation_id)
+            THEN resource.parent_aggregation_id END AS parent_aggregation_id,
+       resource.classification_id,resource.aggregation_number,resource.title,
+       resource.description,resource.date_created,resource.date_opened,resource.date_closed,
+       resource.security_level_id,resource.inherit_acl_from_parent,
+       resource.default_child_aggregation_acl_mode,resource.resource_acl_version,
+       resource.child_aggregation_acl_version,resource.child_record_acl_version,resource.version,
+       resource.owning_org_unit_id
+FROM aggregations resource;
+
+CREATE OR REPLACE VIEW authorized_records_for_search AS
+SELECT resource.id,
+       CASE WHEN current_user_can_view_aggregation(resource.aggregation_id)
+            THEN resource.aggregation_id END AS aggregation_id,
+       resource.record_number,resource.title,resource.description,resource.date_created,
+       resource.date_originated,resource.security_level_id,resource.inherit_acl_from_parent,
+       resource.resource_acl_version,resource.version,resource.owning_org_unit_id
+FROM records resource;
+
+INSERT INTO schema_migrations(version)
+VALUES ('047_expose_organizational_ownership_in_search');
+
+-- 048_add_org_unit_members_acl_principal.sql
+CREATE OR REPLACE FUNCTION user_has_aggregation_permission(
+  p_user_id bigint, p_aggregation_id bigint, p_permission text
+) RETURNS boolean LANGUAGE plpgsql STABLE AS $$
+DECLARE
+  cursor_row aggregations%ROWTYPE;
+  parent_row aggregations%ROWTYPE;
+  source_id bigint;
+  source_kind text;
+  target_owner_id bigint;
+BEGIN
+  SELECT * INTO cursor_row FROM aggregations WHERE id=p_aggregation_id;
+  IF NOT FOUND THEN RETURN false; END IF;
+  target_owner_id := cursor_row.owning_org_unit_id;
+  IF NOT cursor_row.inherit_acl_from_parent OR cursor_row.parent_aggregation_id IS NULL THEN
+    source_id := cursor_row.id; source_kind := 'resource';
+  ELSE
+    LOOP
+      SELECT * INTO parent_row FROM aggregations WHERE id=cursor_row.parent_aggregation_id;
+      IF NOT FOUND THEN RETURN false; END IF;
+      IF parent_row.default_child_aggregation_acl_mode='custom' THEN
+        source_id := parent_row.id; source_kind := 'child_default'; EXIT;
+      ELSIF NOT parent_row.inherit_acl_from_parent OR parent_row.parent_aggregation_id IS NULL THEN
+        source_id := parent_row.id; source_kind := 'resource'; EXIT;
+      END IF;
+      cursor_row := parent_row;
+    END LOOP;
+  END IF;
+
+  IF source_kind='resource' THEN
+    RETURN EXISTS (
+      SELECT 1 FROM aggregation_acl_grants grant_row
+      JOIN permissions permission ON permission.id=grant_row.permission_id
+      WHERE grant_row.aggregation_id=source_id AND permission.code=p_permission
+        AND (grant_row.principal_type='everyone'
+          OR (grant_row.principal_type='role' AND EXISTS (
+            SELECT 1 FROM user_role_assignments assignment
+            WHERE assignment.user_id=p_user_id AND assignment.role_id=grant_row.role_id
+              AND assignment.valid_from<=CURRENT_TIMESTAMP
+              AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+              AND role_effectively_active(assignment.role_id)))
+          OR (grant_row.principal_type='org_unit_members' AND EXISTS (
+            SELECT 1 FROM user_role_assignments assignment
+            JOIN roles role ON role.id=assignment.role_id
+            WHERE assignment.user_id=p_user_id AND role.org_unit_id=target_owner_id
+              AND assignment.valid_from<=CURRENT_TIMESTAMP
+              AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+              AND role_effectively_active(role.id))))
+    );
+  END IF;
+  RETURN EXISTS (
+    SELECT 1 FROM aggregation_child_aggregation_acl_defaults grant_row
+    JOIN permissions permission ON permission.id=grant_row.permission_id
+    WHERE grant_row.aggregation_id=source_id AND permission.code=p_permission
+      AND (grant_row.principal_type='everyone'
+        OR (grant_row.principal_type='role' AND EXISTS (
+          SELECT 1 FROM user_role_assignments assignment
+          WHERE assignment.user_id=p_user_id AND assignment.role_id=grant_row.role_id
+            AND assignment.valid_from<=CURRENT_TIMESTAMP
+            AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+            AND role_effectively_active(assignment.role_id)))
+        OR (grant_row.principal_type='org_unit_members' AND EXISTS (
+          SELECT 1 FROM user_role_assignments assignment
+          JOIN roles role ON role.id=assignment.role_id
+          WHERE assignment.user_id=p_user_id AND role.org_unit_id=target_owner_id
+            AND assignment.valid_from<=CURRENT_TIMESTAMP
+            AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+            AND role_effectively_active(role.id))))
+  );
+END $$;
+
+CREATE OR REPLACE FUNCTION user_has_record_permission(
+  p_user_id bigint, p_record_id bigint, p_permission text
+) RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM records resource
+    JOIN permissions permission ON permission.code=p_permission
+    JOIN record_acl_grants grant_row ON NOT resource.inherit_acl_from_parent
+      AND grant_row.record_id=resource.id AND grant_row.permission_id=permission.id
+    WHERE resource.id=p_record_id AND
+      (grant_row.principal_type='everyone'
+       OR (grant_row.principal_type='role' AND EXISTS (
+         SELECT 1 FROM user_role_assignments assignment
+         WHERE assignment.user_id=p_user_id AND assignment.role_id=grant_row.role_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(assignment.role_id)))
+       OR (grant_row.principal_type='org_unit_members' AND EXISTS (
+         SELECT 1 FROM user_role_assignments assignment
+         JOIN roles role ON role.id=assignment.role_id
+         WHERE assignment.user_id=p_user_id AND role.org_unit_id=resource.owning_org_unit_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(role.id))))
+  ) OR EXISTS (
+    SELECT 1 FROM records resource
+    JOIN permissions permission ON permission.code=p_permission
+    JOIN aggregation_child_record_acl_defaults grant_row
+      ON resource.inherit_acl_from_parent AND grant_row.aggregation_id=resource.aggregation_id
+      AND grant_row.permission_id=permission.id
+    WHERE resource.id=p_record_id AND
+      (grant_row.principal_type='everyone'
+       OR (grant_row.principal_type='role' AND EXISTS (
+         SELECT 1 FROM user_role_assignments assignment
+         WHERE assignment.user_id=p_user_id AND assignment.role_id=grant_row.role_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(assignment.role_id)))
+       OR (grant_row.principal_type='org_unit_members' AND EXISTS (
+         SELECT 1 FROM user_role_assignments assignment
+         JOIN roles role ON role.id=assignment.role_id
+         WHERE assignment.user_id=p_user_id AND role.org_unit_id=resource.owning_org_unit_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(role.id))))
+  )
+$$;
+
+CREATE OR REPLACE FUNCTION user_has_destination_record_permission(
+  p_user_id bigint,p_aggregation_id bigint,p_permission text
+) RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT EXISTS(
+    SELECT 1 FROM aggregations resource
+    JOIN aggregation_child_record_acl_defaults grant_row
+      ON grant_row.aggregation_id=resource.id
+    JOIN permissions permission ON permission.id=grant_row.permission_id
+    WHERE resource.id=p_aggregation_id AND permission.code=p_permission
+      AND (grant_row.principal_type='everyone'
+       OR (grant_row.principal_type='role' AND EXISTS(
+         SELECT 1 FROM user_role_assignments assignment
+         WHERE assignment.user_id=p_user_id AND assignment.role_id=grant_row.role_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(assignment.role_id)))
+       OR (grant_row.principal_type='org_unit_members' AND EXISTS(
+         SELECT 1 FROM user_role_assignments assignment
+         JOIN roles role ON role.id=assignment.role_id
+         WHERE assignment.user_id=p_user_id AND role.org_unit_id=resource.owning_org_unit_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(role.id))))
+  )
+$$;
+
+INSERT INTO schema_migrations(version)
+VALUES ('048_add_org_unit_members_acl_principal');
+
+INSERT INTO schema_migrations(version)
+VALUES ('049_initialize_organizational_acl_defaults');
+
+INSERT INTO schema_migrations(version)
+VALUES ('050_add_root_ownership_correction');
 
 COMMIT;

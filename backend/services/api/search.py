@@ -53,6 +53,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "date_opened": DATETIME,
         "date_closed": NULLABLE_DATETIME,
         "security_level_id": INTEGER,
+        "owning_org_unit_id": INTEGER,
     },
     "records": {
         "id": INTEGER,
@@ -64,6 +65,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "date_created": DATETIME,
         "date_originated": DATETIME,
         "security_level_id": INTEGER,
+        "owning_org_unit_id": INTEGER,
     },
     "digital_components": {
         "id": INTEGER,

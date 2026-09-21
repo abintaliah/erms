@@ -188,6 +188,8 @@ AGGREGATION_SOURCE = """
            classification.title AS classification_title,
            a.aggregation_number, a.title, a.description, a.date_created,
            a.date_opened, a.date_closed,
+           a.owning_org_unit_id, owning_unit.code AS owning_org_unit_code,
+           owning_unit.name AS owning_org_unit_name,
            (SELECT count(*) FROM aggregations child
              WHERE child.parent_aggregation_id = a.id
                AND current_user_can_view_aggregation(child.id)) AS child_aggregation_count,
@@ -196,6 +198,7 @@ AGGREGATION_SOURCE = """
                AND current_user_can_view_record(record.id)) AS record_count
       FROM aggregations a
  LEFT JOIN classifications classification ON classification.id = a.classification_id
+      JOIN org_units owning_unit ON owning_unit.id = a.owning_org_unit_id
      WHERE current_user_can_view_aggregation(a.id)
 """
 
@@ -206,10 +209,13 @@ RECORD_SOURCE = """
            CASE WHEN current_user_can_view_aggregation(r.aggregation_id) THEN owner.title END AS aggregation_title,
            r.record_number, r.title, r.description,
            r.date_created, r.date_originated,
+           r.owning_org_unit_id, owning_unit.code AS owning_org_unit_code,
+           owning_unit.name AS owning_org_unit_name,
            (SELECT count(*) FROM digital_components component
              WHERE component.record_id = r.id) AS digital_component_count
       FROM records r
       JOIN aggregations owner ON owner.id = r.aggregation_id
+      JOIN org_units owning_unit ON owning_unit.id = r.owning_org_unit_id
      WHERE current_user_can_view_record(r.id)
 """
 
@@ -272,6 +278,7 @@ def browse_classification_children(
 def browse_classification_aggregations(
     classification_id: int, limit: int = Query(50, ge=1, le=100), cursor: str | None = None,
     query: str = Query("", max_length=200),
+    owning_org_unit_id: int | None = None,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     classification = connection.execute(
@@ -281,10 +288,11 @@ def browse_classification_aggregations(
         raise HTTPException(status_code=404, detail="classification not found")
     if not classification["is_terminal"]:
         raise HTTPException(status_code=409, detail="only terminal classifications govern aggregations")
+    owner_sql = " AND a.owning_org_unit_id=%s" if owning_org_unit_id is not None else ""
     return _page(
-        connection, scope=f"classification:{classification_id}:aggregations",
-        source_sql=AGGREGATION_SOURCE + " AND a.classification_id=%s AND a.parent_aggregation_id IS NULL",
-        parameters=[classification_id], key_column="aggregation_number", query=query,
+        connection, scope=f"classification:{classification_id}:aggregations:owner:{owning_org_unit_id}",
+        source_sql=AGGREGATION_SOURCE + " AND a.classification_id=%s AND a.parent_aggregation_id IS NULL" + owner_sql,
+        parameters=[classification_id, *([owning_org_unit_id] if owning_org_unit_id is not None else [])], key_column="aggregation_number", query=query,
         query_columns=("aggregation_number", "title"), limit=limit, cursor=cursor,
     )
 
@@ -296,14 +304,16 @@ def browse_classification_aggregations(
 def browse_aggregation_children(
     aggregation_id: int, limit: int = Query(50, ge=1, le=100), cursor: str | None = None,
     query: str = Query("", max_length=200),
+    owning_org_unit_id: int | None = None,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     if connection.execute("SELECT 1 FROM aggregations WHERE id=%s AND current_user_can_view_aggregation(id)", (aggregation_id,)).fetchone() is None:
         raise HTTPException(status_code=404, detail="aggregation not found")
+    owner_sql = " AND a.owning_org_unit_id=%s" if owning_org_unit_id is not None else ""
     return _page(
-        connection, scope=f"aggregation:{aggregation_id}:children",
-        source_sql=AGGREGATION_SOURCE + " AND a.parent_aggregation_id=%s",
-        parameters=[aggregation_id], key_column="aggregation_number", query=query,
+        connection, scope=f"aggregation:{aggregation_id}:children:owner:{owning_org_unit_id}",
+        source_sql=AGGREGATION_SOURCE + " AND a.parent_aggregation_id=%s" + owner_sql,
+        parameters=[aggregation_id, *([owning_org_unit_id] if owning_org_unit_id is not None else [])], key_column="aggregation_number", query=query,
         query_columns=("aggregation_number", "title"), limit=limit, cursor=cursor,
     )
 
@@ -315,14 +325,16 @@ def browse_aggregation_children(
 def browse_aggregation_records(
     aggregation_id: int, limit: int = Query(50, ge=1, le=100), cursor: str | None = None,
     query: str = Query("", max_length=200),
+    owning_org_unit_id: int | None = None,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     if connection.execute("SELECT 1 FROM aggregations WHERE id=%s AND current_user_can_view_aggregation(id)", (aggregation_id,)).fetchone() is None:
         raise HTTPException(status_code=404, detail="aggregation not found")
+    owner_sql = " AND r.owning_org_unit_id=%s" if owning_org_unit_id is not None else ""
     return _page(
-        connection, scope=f"aggregation:{aggregation_id}:records",
-        source_sql=RECORD_SOURCE + " AND r.aggregation_id=%s",
-        parameters=[aggregation_id], key_column="record_number", query=query,
+        connection, scope=f"aggregation:{aggregation_id}:records:owner:{owning_org_unit_id}",
+        source_sql=RECORD_SOURCE + " AND r.aggregation_id=%s" + owner_sql,
+        parameters=[aggregation_id, *([owning_org_unit_id] if owning_org_unit_id is not None else [])], key_column="record_number", query=query,
         query_columns=("record_number", "title"), limit=limit, cursor=cursor,
     )
 

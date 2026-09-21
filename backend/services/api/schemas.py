@@ -94,7 +94,7 @@ class PermissionRead(ApiModel):
 
 
 class AclPrincipalGrant(ApiModel):
-    principal_type: Literal["role", "everyone"]
+    principal_type: Literal["role", "everyone", "org_unit_members"]
     role_id: int | None = None
     permission_codes: list[str]
 
@@ -128,7 +128,7 @@ class ChildRecordAclReplace(ApiModel):
 
 
 class AclPrincipalRead(ApiModel):
-    principal_type: Literal["role", "everyone"]
+    principal_type: Literal["role", "everyone", "org_unit_members"]
     role_id: int | None
     display_name: str
     role_code: str | None
@@ -193,6 +193,7 @@ class EffectiveAuthorizationRoleRead(ApiModel):
     role_id: int
     role_code: str
     role_name: str
+    org_unit_id: int
     profile_id: int
     profile_code: str
     profile_name: str
@@ -218,7 +219,7 @@ class AuthorizationSubjectRead(ApiModel):
 
 class EffectiveAclGrantRowRead(ApiModel):
     id: int
-    principal_type: Literal["role", "everyone"]
+    principal_type: Literal["role", "everyone", "org_unit_members"]
     role_id: int | None
     role_code: str | None
     role_name: str | None
@@ -240,6 +241,8 @@ class AccessContributorsRead(ApiModel):
     clearance_role_ids: list[int]
     acl_role_ids_by_permission: dict[str, list[int]]
     everyone_permissions: list[str]
+    org_unit_member_permissions: list[str]
+    org_unit_member_role_ids_by_permission: dict[str, list[int]]
     governance_bypass_role_ids: list[int]
 
 
@@ -413,6 +416,8 @@ class SecurityReconciliationRead(ApiModel):
     active_authorization_administrators: list[ContinuityPersonRead]
     highest_clearance_governance_custodians: list[GovernanceCustodianRead]
     hierarchy_violation_count: int
+    ownership_invariant_violation_count: int
+    ownership_invariant_violations_by_type: dict[str, int]
     findings: list[SecurityFindingRead]
 
 
@@ -420,7 +425,26 @@ class AclMoveRequest(ApiModel):
     destination_aggregation_id: int
     resource_version: int = Field(gt=0)
     keep_current_access_as_override: bool = False
+    confirm_ownership_change: bool = False
     reason: NonBlankString
+
+
+class OwnershipCorrectionRequest(ApiModel):
+    destination_role_id: int
+    reason: NonBlankString
+
+
+class OwnershipCorrectionPreviewRead(ApiModel):
+    root_aggregation_id: int
+    source_owning_org_unit_id: int
+    destination_owning_org_unit_id: int
+    destination_role_id: int
+    destination_role_code: str
+    destination_role_name: str
+    affected_aggregation_count: int
+    affected_record_count: int
+    creator_role_id: int | None
+    creator_role_grant_count: int
 
 
 class SecurityLevelChangePreviewRequest(ApiModel):
@@ -445,6 +469,7 @@ class SecurityLevelChangePreviewRead(ApiModel):
 
 
 class AggregationCreate(ApiModel):
+    creator_acl_role_id: int | None = None
     parent_aggregation_id: int | None = None
     classification_id: int | None = None
     aggregation_number: NonBlankString
@@ -485,6 +510,8 @@ class AggregationUpdate(ApiModel):
 
 
 class AggregationRead(ApiModel):
+    model_config = ConfigDict(extra="ignore")
+
     id: int
     parent_aggregation_id: int | None
     classification_id: int | None
@@ -495,6 +522,9 @@ class AggregationRead(ApiModel):
     date_opened: datetime
     date_closed: datetime | None
     security_level_id: int
+    owning_org_unit_id: int
+    owning_org_unit_code: str
+    owning_org_unit_name: str
     inherit_acl_from_parent: bool
     default_child_aggregation_acl_mode: Literal["mirror_resource_acl", "custom"]
     resource_acl_version: int
@@ -573,6 +603,9 @@ class BrowseAggregationNode(ApiModel):
     date_created: datetime
     date_opened: datetime
     date_closed: datetime | None
+    owning_org_unit_id: int
+    owning_org_unit_code: str
+    owning_org_unit_name: str
     child_aggregation_count: int
     record_count: int
 
@@ -587,6 +620,9 @@ class BrowseRecordNode(ApiModel):
     description: str | None
     date_created: datetime
     date_originated: datetime
+    owning_org_unit_id: int
+    owning_org_unit_code: str
+    owning_org_unit_name: str
     digital_component_count: int
 
 
@@ -706,12 +742,23 @@ class EffectiveRetentionRuleRead(ApiModel):
 
 
 class RecordCreate(ApiModel):
+    creator_acl_role_id: int | None = None
     aggregation_id: int
     record_number: NonBlankString
     title: NonBlankString
     description: str | None = None
     date_originated: datetime | None = None
     security_level_id: int | None = None
+
+
+class CreationRoleOption(ApiModel):
+    role_id: int
+    role_code: str
+    role_name: str
+    org_unit_id: int
+    org_unit_code: str
+    org_unit_name: str
+    label: str
 
 
 class RecordUpdate(ApiModel):
@@ -728,6 +775,8 @@ class RecordPlacementCorrection(ApiModel):
 
 
 class RecordRead(ApiModel):
+    model_config = ConfigDict(extra="ignore")
+
     id: int
     aggregation_id: int | None
     record_number: str
@@ -736,6 +785,9 @@ class RecordRead(ApiModel):
     date_created: datetime
     date_originated: datetime
     security_level_id: int
+    owning_org_unit_id: int
+    owning_org_unit_code: str
+    owning_org_unit_name: str
     inherit_acl_from_parent: bool
     resource_acl_version: int
     version: int
@@ -863,6 +915,14 @@ class SelfRecentActivityRead(ApiModel):
     entity_id: int
     operation: Literal["CREATE", "UPDATE"]
     occurred_at: datetime
+
+
+class OwnershipDashboardCount(ApiModel):
+    org_unit_id: int
+    org_unit_code: str
+    org_unit_name: str
+    aggregation_count: int
+    record_count: int
 
 
 class DeletionBlocker(ApiModel):
