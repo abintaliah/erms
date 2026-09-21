@@ -543,15 +543,16 @@ def relationship_select(
 
 
 def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | None = None):
+    display_label = f"{field.label} *" if field.required else field.label
     if field.kind == "account_type":
         return ui.select(
             {"person": "Person", "service": "Service"},
-            label=field.label, value=value or "person",
+            label=display_label, value=value or "person",
         ).props("outlined").classes("w-full")
     if field.kind == "classification_type":
         return ui.select(
             {False: "Branch — may contain children", True: "Terminal — assignable to root aggregations"},
-            label=field.label, value=False if value is None else value,
+            label=display_label, value=False if value is None else value,
         ).props("outlined").classes("w-full")
     if field.kind == "disposition":
         return ui.select({
@@ -559,21 +560,21 @@ def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | N
             "transfer_to_external_archive": "Permanent preservation — external archive",
             "selective_preservation": "Selective preservation",
             "retain_as_local_archives": "Retain as local archives",
-        }, label=field.label, value=value, clearable=True).props("outlined").classes("w-full")
+        }, label=display_label, value=value, clearable=True).props("outlined").classes("w-full")
     if field.kind == "textarea":
-        return ui.textarea(field.label, value=value or "").props("outlined autogrow").classes("w-full")
+        return ui.textarea(display_label, value=value or "").props("outlined autogrow").classes("w-full")
     if field.kind == "int":
-        return ui.number(field.label, value=value, format="%.0f").props("outlined").classes("w-full")
+        return ui.number(display_label, value=value, format="%.0f").props("outlined").classes("w-full")
     if field.kind == "bool":
-        return ui.checkbox(field.label, value=bool(value))
+        return ui.checkbox(display_label, value=bool(value))
     if field.kind in {"lookup", "classification"}:
         return relationship_select(
-            field.label, options or {}, value=value, required=field.required
+            display_label, options or {}, value=value, required=field.required
         )
     if field.kind == "datetime":
         rendered = str(value or "")[:16]
-        return ui.input(field.label, value=rendered).props("outlined type=datetime-local").classes("w-full")
-    return ui.input(field.label, value=value or "").props("outlined").classes("w-full")
+        return ui.input(display_label, value=rendered).props("outlined type=datetime-local").classes("w-full")
+    return ui.input(display_label, value=value or "").props("outlined").classes("w-full")
 
 
 def form_payload(spec: EntitySpec, controls: dict[str, Any], *, creating: bool) -> dict[str, Any]:
@@ -3268,21 +3269,59 @@ def index() -> None:
                 ui.badge("Draft", color="primary").props("outline")
             with ui.element("div").classes("w-full overflow-y-auto px-6 pb-2 max-h-[calc(100vh-190px)]"):
                 ui.label("Record details").classes("text-base font-semibold mt-4 mb-2")
+                ui.label("* Required fields").classes("text-xs text-slate-500 -mt-1 mb-2")
                 with ui.grid(columns=2).classes("w-full gap-3"):
+                    aggregation_field = next(
+                        field for field in spec.fields if field.name == "aggregation_id"
+                    )
+                    controls["aggregation_id"] = field_input(
+                        aggregation_field,
+                        value=target_aggregation_id,
+                        options=relationship_options(
+                            aggregations, aggregation_field.lookup_label_fields,
+                        ),
+                    )
+                    controls["aggregation_id"].classes("col-span-2")
+                    if target_aggregation_id is not None:
+                        controls["aggregation_id"].disable()
+
                     role_options = {
                         item["role_id"]: item["label"] for item in creation_roles
-                    }
+                    } if target_aggregation_id is not None else {}
                     controls["creator_acl_role_id"] = ui.select(
                         role_options,
-                        value=(creation_roles[0]["role_id"] if len(creation_roles) == 1 else None),
-                        label="Create for",
+                        value=(
+                            creation_roles[0]["role_id"]
+                            if target_aggregation_id is not None and len(creation_roles) == 1
+                            else None
+                        ),
+                        label="Create for *",
                     ).props("outlined options-dense").classes("w-full col-span-2")
-                    if len(creation_roles) == 1:
+                    if target_aggregation_id is None or len(creation_roles) <= 1:
                         controls["creator_acl_role_id"].disable()
                     ui.label(
-                        "This choice identifies the owning organizational unit and the role that receives creator access."
+                        "Select the role that will receive creator access. The record belongs to the "
+                        "parent aggregation's organizational unit."
                     ).classes("text-xs leading-5 text-slate-500 col-span-2 -mt-2")
+                    creation_role_status = ui.label(
+                        "Select a parent aggregation before choosing Create for."
+                        if target_aggregation_id is None
+                        else (
+                            "Create for was set automatically because you have one eligible role."
+                            if len(creation_roles) == 1
+                            else (
+                                "You do not have an effective role in the parent aggregation's "
+                                "organizational unit, so you cannot create a record there."
+                                if not creation_roles
+                                else "Choose one of your roles in the parent aggregation's organizational unit."
+                            )
+                        )
+                    ).props('role="status" aria-live="polite"').classes(
+                        "text-xs leading-5 text-amber-800 col-span-2 -mt-2"
+                    )
                     for field in spec.fields:
+                        if field.name == "aggregation_id":
+                            continue
                         lookup_rows = (
                             aggregations if field.lookup_resource == "aggregations"
                             else security_levels if field.lookup_resource == "security-levels"
@@ -3295,9 +3334,6 @@ def index() -> None:
                                 security_levels, key=lambda item: (item["level_number"], item["id"])
                             )["id"]
                         controls[field.name] = field_input(field, value=initial_value, options=options)
-                        if field.name == "aggregation_id" and target_aggregation_id is not None:
-                            controls[field.name].value = target_aggregation_id
-                            controls[field.name].disable()
                         if field.kind == "textarea":
                             controls[field.name].classes("col-span-2")
                     def constrain_record_security_levels() -> None:
@@ -3323,23 +3359,56 @@ def index() -> None:
                     )
                     async def refresh_record_creation_roles() -> None:
                         aggregation_id = controls["aggregation_id"].value
+                        role_control = controls["creator_acl_role_id"]
+                        previous_role_id = role_control.value
                         if aggregation_id is None:
-                            controls["creator_acl_role_id"].set_options({}, value=None)
-                            controls["creator_acl_role_id"].enable()
+                            role_control.set_options({}, value=None)
+                            role_control.disable()
+                            creation_role_status.set_text(
+                                "Select a parent aggregation before choosing Create for."
+                            )
                             return
                         try:
                             rows = await api.creation_role_options(int(aggregation_id))
                         except ApiError as error:
                             ui.notify(error_message(error), color="negative", close_button=True)
                             return
-                        role_control = controls["creator_acl_role_id"]
+                        eligible_role_ids = {item["role_id"] for item in rows}
+                        previous_role_was_cleared = (
+                            previous_role_id is not None
+                            and previous_role_id not in eligible_role_ids
+                        )
+                        selected_role_id = (
+                            previous_role_id if previous_role_id in eligible_role_ids
+                            else rows[0]["role_id"] if len(rows) == 1
+                            else None
+                        )
                         role_control.set_options(
                             {item["role_id"]: item["label"] for item in rows},
-                            value=(rows[0]["role_id"] if len(rows) == 1 else None),
+                            value=selected_role_id,
                         )
-                        role_control.enable()
-                        if len(rows) == 1:
+                        if len(rows) <= 1:
                             role_control.disable()
+                        else:
+                            role_control.enable()
+                        if not rows:
+                            creation_role_status.set_text(
+                                "You do not have an effective role in the parent aggregation's "
+                                "organizational unit, so you cannot create a record there."
+                            )
+                        elif previous_role_was_cleared:
+                            creation_role_status.set_text(
+                                "Your previous Create for selection was cleared because it does not "
+                                "belong to the parent aggregation's organizational unit."
+                            )
+                        elif len(rows) == 1:
+                            creation_role_status.set_text(
+                                "Create for was set automatically because you have one eligible role."
+                            )
+                        else:
+                            creation_role_status.set_text(
+                                "Choose one of your roles in the parent aggregation's organizational unit."
+                            )
 
                     controls["aggregation_id"].on_value_change(
                         lambda _: refresh_record_creation_roles()
@@ -3573,6 +3642,7 @@ def index() -> None:
         controls: dict[str, Any] = {}
         with dialog, ui.card().classes("w-[620px] max-w-full"):
             ui.label(f"{'Add' if creating else 'Edit'} {spec.singular}").classes("text-xl font-semibold")
+            ui.label("* Required fields").classes("text-xs text-slate-500 -mt-2")
             with ui.column().classes("w-full gap-3"):
                 if not creating and spec.key in {"aggregations", "records"}:
                     owner_label = " — ".join(filter(None, (
@@ -3586,6 +3656,21 @@ def index() -> None:
                         "Ownership is determined by placement. Move the resource through the governed move action to change it."
                     ).classes("text-xs leading-5 text-slate-500 -mt-2")
                 if creating and spec.key == "aggregations":
+                    parent_field = next(
+                        field for field in spec.fields if field.name == "parent_aggregation_id"
+                    )
+                    initial_parent_id = (initial_values or {}).get("parent_aggregation_id")
+                    controls["parent_aggregation_id"] = field_input(
+                        parent_field,
+                        initial_parent_id,
+                        lookup_options.get("parent_aggregation_id"),
+                    )
+                    ui.label(
+                        "Optional. Leave this blank to create a root aggregation; select a parent "
+                        "to create a child aggregation beneath it."
+                    ).classes("text-xs leading-5 text-slate-500 -mt-2")
+                    if "parent_aggregation_id" in effective_locked_fields:
+                        controls["parent_aggregation_id"].disable()
                     role_options = {
                         item["role_id"]: item["label"] for item in creation_roles
                     }
@@ -3593,14 +3678,37 @@ def index() -> None:
                         creation_roles[0]["role_id"] if len(creation_roles) == 1 else None
                     )
                     controls["creator_acl_role_id"] = ui.select(
-                        role_options, value=initial_role_id, label="Create for",
+                        role_options, value=initial_role_id, label="Create for *",
                     ).props("outlined options-dense").classes("w-full")
                     if len(creation_roles) == 1:
                         controls["creator_acl_role_id"].disable()
                     ui.label(
-                        "This choice sets the owning organizational unit and the role that receives creator access."
+                        "For a child aggregation, the parent determines the owning organizational unit "
+                        "and Create for selects the role that receives creator access. For a root "
+                        "aggregation, Create for determines both."
                     ).classes("text-xs leading-5 text-slate-500 -mt-2")
+                    aggregation_creation_role_status = ui.label(
+                        (
+                            (
+                                "You do not have an eligible role in the parent aggregation's "
+                                "organizational unit, so you cannot add a child aggregation there."
+                                if initial_parent_id is not None
+                                else "You do not have an eligible role, so you cannot create a root aggregation."
+                            )
+                            if not creation_roles
+                            else "Choose one of your roles in the parent aggregation's organizational unit."
+                            if initial_parent_id is not None and len(creation_roles) > 1
+                            else "Create for was set automatically because you have one eligible role."
+                            if initial_parent_id is not None
+                            else "No parent is selected, so this will be a root aggregation and the "
+                            "selected role's organizational unit will become its owner."
+                        )
+                    ).props('role="status" aria-live="polite"').classes(
+                        "text-xs leading-5 text-amber-800 -mt-2"
+                    )
                 for field in spec.fields:
+                    if creating and spec.key == "aggregations" and field.name == "parent_aggregation_id":
+                        continue
                     source = retention_rule if field.name in {
                         "current_period_years", "intermediate_period_years",
                         "final_disposition", "instructions",
@@ -3754,22 +3862,63 @@ def index() -> None:
                     )
                     if creating:
                         async def refresh_aggregation_creation_roles() -> None:
+                            control = controls["creator_acl_role_id"]
+                            previous_role_id = control.value
+                            parent_id = controls["parent_aggregation_id"].value
                             try:
                                 rows = await api.creation_role_options(
-                                    controls["parent_aggregation_id"].value
+                                    parent_id
                                 )
                             except ApiError as error:
                                 ui.notify(error_message(error), color="negative", close_button=True)
                                 return
-                            control = controls["creator_acl_role_id"]
                             options = {item["role_id"]: item["label"] for item in rows}
+                            eligible_role_ids = set(options)
+                            previous_role_was_cleared = (
+                                previous_role_id is not None
+                                and previous_role_id not in eligible_role_ids
+                            )
+                            selected_role_id = (
+                                previous_role_id if previous_role_id in eligible_role_ids
+                                else rows[0]["role_id"] if len(rows) == 1
+                                else None
+                            )
                             control.set_options(
                                 options,
-                                value=(rows[0]["role_id"] if len(rows) == 1 else None),
+                                value=selected_role_id,
                             )
-                            control.enable()
-                            if len(rows) == 1:
+                            if len(rows) <= 1:
                                 control.disable()
+                            else:
+                                control.enable()
+                            if not rows:
+                                aggregation_creation_role_status.set_text(
+                                    "You do not have an eligible role"
+                                    + (
+                                        " in the parent aggregation's organizational unit, so you "
+                                        "cannot add a child aggregation there."
+                                        if parent_id is not None
+                                        else ", so you cannot create a root aggregation."
+                                    )
+                                )
+                            elif previous_role_was_cleared:
+                                aggregation_creation_role_status.set_text(
+                                    "Your previous Create for selection was cleared because it does not "
+                                    "belong to the parent aggregation's organizational unit."
+                                )
+                            elif parent_id is None:
+                                aggregation_creation_role_status.set_text(
+                                    "No parent is selected, so this will be a root aggregation and the "
+                                    "selected role's organizational unit will become its owner."
+                                )
+                            elif len(rows) == 1:
+                                aggregation_creation_role_status.set_text(
+                                    "Create for was set automatically because you have one eligible role."
+                                )
+                            else:
+                                aggregation_creation_role_status.set_text(
+                                    "Choose one of your roles in the parent aggregation's organizational unit."
+                                )
 
                         controls["parent_aggregation_id"].on_value_change(
                             lambda _: refresh_aggregation_creation_roles()

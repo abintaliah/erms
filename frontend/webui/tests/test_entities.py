@@ -24,6 +24,7 @@ from frontend.webui.app import (
     decorate_relationship_rows,
     display_value,
     error_message,
+    field_input,
     format_file_size,
     form_payload,
     format_timestamp,
@@ -562,6 +563,45 @@ def test_metadata_editor_shows_read_only_owning_org_unit_context():
     assert '"Owning organizational unit", value=owner_label' in source
     assert '.props("outlined readonly")' in source
     assert "Move the resource through the governed move action to change it." in source
+
+
+def test_record_creation_explains_and_enforces_parent_owner_role_context():
+    source = inspect.getsource(index)
+    parent_position = source.index('controls["aggregation_id"] = field_input(')
+    create_for_position = source.index('label="Create for *"', parent_position)
+    assert parent_position < create_for_position
+    assert "Select the role that will receive creator access. The record belongs to the" in source
+    assert "parent aggregation's organizational unit." in source
+    assert 'role="status" aria-live="polite"' in source
+    assert "previous Create for selection was cleared" in source
+    assert "you cannot create a record there" in source
+    assert "previous_role_id in eligible_role_ids" in source
+
+
+def test_aggregation_creation_places_parent_before_role_and_explains_ownership():
+    source = inspect.getsource(index)
+    aggregation_parent_position = source.index(
+        'controls["parent_aggregation_id"] = field_input('
+    )
+    aggregation_create_for_position = source.index(
+        'label="Create for *"', aggregation_parent_position
+    )
+    assert aggregation_parent_position < aggregation_create_for_position
+    assert "Optional. Leave this blank to create a root aggregation" in source
+    assert "select a parent" in source
+    assert "For a child aggregation, the parent determines the owning organizational unit" in source
+    assert "For a root" in source
+    assert "aggregation, Create for determines both." in source
+    assert "cannot add a child aggregation there" in source
+    assert "previous Create for selection was cleared" in source
+
+
+def test_required_fields_are_visually_marked_and_explained():
+    source = inspect.getsource(index)
+    field_source = inspect.getsource(field_input)
+    assert 'f"{field.label} *" if field.required else field.label' in field_source
+    assert source.count('ui.label("* Required fields")') >= 2
+    assert source.count('label="Create for *"') == 2
 
 
 def test_governed_move_and_root_ownership_correction_are_exposed():
