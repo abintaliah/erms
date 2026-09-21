@@ -22,6 +22,13 @@ The full disposable-database pipeline separately verifies canonical-schema and
 migration parity, authorization, clearance, lifecycle, concurrency, history,
 search, dashboard counts, backup/restore, and repeat-safe imports.
 
+Dashboard operational hardening consolidates the former multi-request fan-out
+into `GET /api/v1/dashboard/summary`. One refresh now uses one HTTP request and
+one database-pool checkout, returns recent activity already hydrated for
+display, and rejects overlapping refresh work within the same browser page.
+This prevents multiple open dashboards from multiplying per-card and N+1
+activity requests against the API pool.
+
 ## Monitoring and operations
 
 `GET /api/v1/security-operations/reconciliation` now reports:

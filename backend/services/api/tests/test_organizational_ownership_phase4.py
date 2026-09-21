@@ -113,3 +113,19 @@ def test_browse_and_dashboard_present_organizational_owner(client: TestClient):
         "record_count": 1,
     }]
     assert record["owning_org_unit_id"] == dashboard.json()[0]["org_unit_id"]
+
+    summary = client.get("/api/v1/dashboard/summary", params={"recent_limit": 7})
+    assert summary.status_code == 200, summary.text
+    payload = summary.json()
+    assert payload["overview_counts"]["aggregations"] == 1
+    assert payload["overview_counts"]["records"] == 1
+    assert payload["ownership_counts"] == dashboard.json()
+    assert payload["unclassified_root_count"] == 0
+    assert payload["classification_metrics"]["terminal_count"] == 1
+    assert {
+        (item["entity_type"], item["entity_id"], item["operation"])
+        for item in payload["recent_activity"]
+    } >= {
+        ("aggregation", root["id"], "CREATE"),
+        ("record", record["id"], "CREATE"),
+    }

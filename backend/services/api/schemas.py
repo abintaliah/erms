@@ -925,6 +925,36 @@ class OwnershipDashboardCount(ApiModel):
     record_count: int
 
 
+class DashboardClassificationMetrics(ApiModel):
+    published_scheme_count: int
+    draft_scheme_count: int
+    inactive_scheme_count: int
+    branch_count: int
+    terminal_count: int
+    assignable_terminal_count: int
+    draft_terminal_count: int
+    inactive_classification_count: int
+
+
+class DashboardRecentItem(ApiModel):
+    entity_type: Literal["aggregation", "record"]
+    entity_id: int
+    operation: Literal["CREATE", "UPDATE"]
+    occurred_at: datetime
+    title: str
+    aggregation_number: str | None
+    record_number: str | None
+
+
+class DashboardSummaryRead(ApiModel):
+    overview_counts: dict[str, int]
+    classification_metrics: DashboardClassificationMetrics
+    unclassified_root_count: int
+    ownership_counts: list[OwnershipDashboardCount]
+    favourites: FavouritesRead
+    recent_activity: list[DashboardRecentItem]
+
+
 class DeletionBlocker(ApiModel):
     code: str
     message: str
