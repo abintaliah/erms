@@ -114,6 +114,29 @@ def test_browse_and_dashboard_present_organizational_owner(client: TestClient):
     }]
     assert record["owning_org_unit_id"] == dashboard.json()[0]["org_unit_id"]
 
+    first_update = client.patch(
+        f"/api/v1/records/{record['id']}",
+        json={"title": "Dashboard record, revised"},
+        headers={"If-Match": str(record["version"])},
+    )
+    assert first_update.status_code == 200, first_update.text
+    second_update = client.patch(
+        f"/api/v1/records/{record['id']}",
+        json={"title": "Dashboard record, revised again"},
+        headers={"If-Match": str(first_update.json()["version"])},
+    )
+    assert second_update.status_code == 200, second_update.text
+
+    recent_activity = client.get(
+        "/api/v1/auth/me/recent-activity", params={"limit": 7},
+    )
+    assert recent_activity.status_code == 200, recent_activity.text
+    assert [
+        (item["entity_type"], item["entity_id"], item["operation"])
+        for item in recent_activity.json()
+        if item["entity_type"] == "record" and item["operation"] == "UPDATE"
+    ] == [("record", record["id"], "UPDATE")]
+
     summary = client.get("/api/v1/dashboard/summary", params={"recent_limit": 7})
     assert summary.status_code == 200, summary.text
     payload = summary.json()
@@ -129,3 +152,8 @@ def test_browse_and_dashboard_present_organizational_owner(client: TestClient):
         ("aggregation", root["id"], "CREATE"),
         ("record", record["id"], "CREATE"),
     }
+    assert [
+        (item["entity_type"], item["entity_id"], item["operation"])
+        for item in payload["recent_activity"]
+        if item["entity_type"] == "record" and item["operation"] == "UPDATE"
+    ] == [("record", record["id"], "UPDATE")]

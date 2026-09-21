@@ -19,6 +19,7 @@ def redact_hidden_relationships(
 ) -> list[dict[str, Any]]:
     """Remove protected parent identifiers with one bounded set query."""
     relation = {"aggregations": "parent_aggregation_id", "records": "aggregation_id"}.get(table)
+    aggregation_context: dict[int, dict[str, Any]] = {}
     if table in {"aggregations", "records"} and rows:
         owner_ids = sorted({row["owning_org_unit_id"] for row in rows if row.get("owning_org_unit_id")})
         owners = {
@@ -30,16 +31,50 @@ def redact_hidden_relationships(
             owner = owners.get(row.get("owning_org_unit_id"), {})
             row["owning_org_unit_code"] = owner.get("code")
             row["owning_org_unit_name"] = owner.get("name")
+        aggregation_ids = {
+            row["id"] if table == "aggregations" else row.get("aggregation_id")
+            for row in rows
+            if (row["id"] if table == "aggregations" else row.get("aggregation_id")) is not None
+        }
+        if relation is not None:
+            aggregation_ids.update(row[relation] for row in rows if row.get(relation) is not None)
+        aggregation_context = {
+            row["id"]: row for row in connection.execute(
+                """SELECT id,
+                          current_user_can_view_aggregation(id) AS visible,
+                          aggregation_effective_assigned_location(id) AS effective_assigned_location,
+                          aggregation_effective_current_location(id) AS effective_current_location
+                          ,CASE WHEN current_user_can_view_aggregation(aggregation_effective_assigned_location_source_id(id)) THEN aggregation_effective_assigned_location_source_id(id) END AS effective_assigned_location_source_aggregation_id
+                          ,CASE WHEN current_user_can_view_aggregation(aggregation_effective_current_location_source_id(id)) THEN aggregation_effective_current_location_source_id(id) END AS effective_current_location_source_aggregation_id
+                     FROM aggregations WHERE id=ANY(%s)""",
+                (sorted(aggregation_ids),),
+            ).fetchall()
+        } if aggregation_ids else {}
+        for row in rows:
+            aggregation_id = row["id"] if table == "aggregations" else row.get("aggregation_id")
+            locations = aggregation_context.get(aggregation_id, {})
+            row["effective_assigned_location"] = locations.get("effective_assigned_location")
+            row["effective_current_location"] = locations.get("effective_current_location")
+            row["effective_assigned_location_source_aggregation_id"] = locations.get("effective_assigned_location_source_aggregation_id")
+            row["effective_current_location_source_aggregation_id"] = locations.get("effective_current_location_source_aggregation_id")
+        if table == "aggregations":
+            vital_ids = [row["id"] for row in rows]
+            descendants = {
+                row["id"]: row["has_vital_descendants"] for row in connection.execute(
+                    "SELECT id,aggregation_has_vital_descendants(id) AS has_vital_descendants FROM aggregations WHERE id=ANY(%s)",
+                    (vital_ids,),
+                ).fetchall()
+            }
+            for row in rows:
+                row["has_vital_descendants"] = descendants.get(row["id"], False)
     if relation is None:
         return rows
     parent_ids = sorted({row[relation] for row in rows if row.get(relation) is not None})
     if not parent_ids:
         return rows
     visible = {
-        row["id"] for row in connection.execute(
-            "SELECT id FROM aggregations WHERE id=ANY(%s) AND current_user_can_view_aggregation(id)",
-            (parent_ids,),
-        ).fetchall()
+        entity_id for entity_id in parent_ids
+        if aggregation_context.get(entity_id, {}).get("visible", bool(aggregation_context.get(entity_id)))
     }
     for row in rows:
         if row.get(relation) is not None and row[relation] not in visible:

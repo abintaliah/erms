@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 
 NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+LocationCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
 
 def _is_future(value: datetime) -> bool:
@@ -180,6 +181,7 @@ class ResourceCapabilitiesRead(ApiModel):
     resource_type: Literal["aggregation", "record"]
     resource_id: int
     capabilities: dict[str, bool]
+    capability_reasons: dict[str, str] = Field(default_factory=dict)
 
 
 class AuthorizationGateRead(ApiModel):
@@ -478,6 +480,11 @@ class AggregationCreate(ApiModel):
     date_opened: datetime | None = None
     date_closed: datetime | None = None
     security_level_id: int | None = None
+    medium: Literal["digital", "physical", "mixed"] | None = None
+    is_vital: bool = False
+    date_of_next_review: datetime | None = None
+    assigned_location: LocationCode | None = None
+    current_location: LocationCode | None = None
 
     @model_validator(mode="after")
     def validate_dates(self):
@@ -489,6 +496,8 @@ class AggregationCreate(ApiModel):
             and self.date_closed < self.date_opened
         ):
             raise ValueError("date_closed cannot be earlier than date_opened")
+        if self.date_of_next_review is not None and not _is_future(self.date_of_next_review):
+            raise ValueError("date_of_next_review must be in the future")
         return self
 
 
@@ -501,6 +510,7 @@ class AggregationUpdate(ApiModel):
     date_opened: datetime | None = None
     date_closed: datetime | None = None
     security_level_id: int | None = None
+    medium: Literal["digital", "physical", "mixed"] | None = None
 
     @model_validator(mode="after")
     def validate_closed_date(self):
@@ -521,6 +531,16 @@ class AggregationRead(ApiModel):
     date_created: datetime
     date_opened: datetime
     date_closed: datetime | None
+    medium: Literal["digital", "physical", "mixed"] = "mixed"
+    is_vital: bool = False
+    has_vital_descendants: bool = False
+    date_of_next_review: datetime | None = None
+    assigned_location: str | None = None
+    current_location: str | None = None
+    effective_assigned_location: str | None = None
+    effective_current_location: str | None = None
+    effective_assigned_location_source_aggregation_id: int | None = None
+    effective_current_location_source_aggregation_id: int | None = None
     security_level_id: int
     owning_org_unit_id: int
     owning_org_unit_code: str
@@ -603,6 +623,16 @@ class BrowseAggregationNode(ApiModel):
     date_created: datetime
     date_opened: datetime
     date_closed: datetime | None
+    medium: Literal["digital", "physical", "mixed"] = "mixed"
+    is_vital: bool = False
+    has_vital_descendants: bool = False
+    date_of_next_review: datetime | None = None
+    assigned_location: str | None = None
+    current_location: str | None = None
+    effective_assigned_location: str | None = None
+    effective_current_location: str | None = None
+    effective_assigned_location_source_aggregation_id: int | None = None
+    effective_current_location_source_aggregation_id: int | None = None
     owning_org_unit_id: int
     owning_org_unit_code: str
     owning_org_unit_name: str
@@ -620,6 +650,13 @@ class BrowseRecordNode(ApiModel):
     description: str | None
     date_created: datetime
     date_originated: datetime
+    medium: Literal["digital", "physical", "mixed"] = "mixed"
+    is_vital: bool = False
+    date_of_next_review: datetime | None = None
+    effective_assigned_location: str | None = None
+    effective_current_location: str | None = None
+    effective_assigned_location_source_aggregation_id: int | None = None
+    effective_current_location_source_aggregation_id: int | None = None
     owning_org_unit_id: int
     owning_org_unit_code: str
     owning_org_unit_name: str
@@ -749,6 +786,15 @@ class RecordCreate(ApiModel):
     description: str | None = None
     date_originated: datetime | None = None
     security_level_id: int | None = None
+    medium: Literal["digital", "physical", "mixed"] | None = None
+    is_vital: bool = False
+    date_of_next_review: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_review_date(self):
+        if self.date_of_next_review is not None and not _is_future(self.date_of_next_review):
+            raise ValueError("date_of_next_review must be in the future")
+        return self
 
 
 class CreationRoleOption(ApiModel):
@@ -768,10 +814,63 @@ class RecordUpdate(ApiModel):
     description: str | None = None
     date_originated: datetime | None = None
     security_level_id: int | None = None
+    medium: Literal["digital", "physical", "mixed"] | None = None
 
 
 class RecordPlacementCorrection(ApiModel):
     destination_aggregation_id: int
+
+
+class VitalStatusChange(ApiModel):
+    is_vital: bool
+    reason: NonBlankString
+
+
+class ReviewDateChange(ApiModel):
+    date_of_next_review: datetime | None = None
+    reason: NonBlankString
+
+    @model_validator(mode="after")
+    def validate_review_date(self):
+        if self.date_of_next_review is not None and not _is_future(self.date_of_next_review):
+            raise ValueError("date_of_next_review must be in the future")
+        return self
+
+
+class AggregationLocationChange(ApiModel):
+    assigned_location: LocationCode | None = None
+    current_location: LocationCode | None = None
+    reason: NonBlankString
+
+    @model_validator(mode="after")
+    def require_location_change(self):
+        if not self.model_fields_set & {"assigned_location", "current_location"}:
+            raise ValueError("provide assigned_location, current_location, or both")
+        return self
+
+
+class AggregationLocationPreview(ApiModel):
+    assigned_location: LocationCode | None = None
+    current_location: LocationCode | None = None
+
+    @model_validator(mode="after")
+    def require_location_change(self):
+        if not self.model_fields_set & {"assigned_location", "current_location"}:
+            raise ValueError("provide assigned_location, current_location, or both")
+        return self
+
+
+class AggregationLocationImpactItem(ApiModel):
+    entity_type: Literal["aggregation", "record"]
+    entity_id: int
+    number: str
+    title: str
+
+
+class AggregationLocationPreviewRead(ApiModel):
+    affected_descendant_count: int
+    affected_descendants: list[AggregationLocationImpactItem]
+    preview_truncated: bool
 
 
 class RecordRead(ApiModel):
@@ -784,6 +883,13 @@ class RecordRead(ApiModel):
     description: str | None
     date_created: datetime
     date_originated: datetime
+    medium: Literal["digital", "physical", "mixed"] = "mixed"
+    is_vital: bool = False
+    date_of_next_review: datetime | None = None
+    effective_assigned_location: str | None = None
+    effective_current_location: str | None = None
+    effective_assigned_location_source_aggregation_id: int | None = None
+    effective_current_location_source_aggregation_id: int | None = None
     security_level_id: int
     owning_org_unit_id: int
     owning_org_unit_code: str
@@ -800,6 +906,15 @@ class RecordDraftCreate(ApiModel):
     title: NonBlankString | None = None
     description: str | None = None
     date_originated: datetime | None = None
+    medium: Literal["digital", "physical", "mixed"] | None = None
+    is_vital: bool = False
+    date_of_next_review: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_review_date(self):
+        if self.date_of_next_review is not None and not _is_future(self.date_of_next_review):
+            raise ValueError("date_of_next_review must be in the future")
+        return self
 
 
 class RecordDraftUpdate(RecordDraftCreate):
@@ -815,6 +930,9 @@ class RecordDraftRead(ApiModel):
     title: str | None
     description: str | None
     date_originated: datetime | None
+    medium: Literal["digital", "physical", "mixed"] | None = None
+    is_vital: bool = False
+    date_of_next_review: datetime | None = None
     date_created: datetime
     date_updated: datetime
     expires_at: datetime
@@ -946,6 +1064,15 @@ class DashboardRecentItem(ApiModel):
     record_number: str | None
 
 
+class DashboardReviewItem(ApiModel):
+    entity_type: Literal["aggregation", "record"]
+    entity_id: int
+    date_of_next_review: datetime
+    title: str
+    aggregation_number: str | None = None
+    record_number: str | None = None
+
+
 class DashboardSummaryRead(ApiModel):
     overview_counts: dict[str, int]
     classification_metrics: DashboardClassificationMetrics
@@ -953,6 +1080,11 @@ class DashboardSummaryRead(ApiModel):
     ownership_counts: list[OwnershipDashboardCount]
     favourites: FavouritesRead
     recent_activity: list[DashboardRecentItem]
+    review_warning_window_days: int
+    overdue_review_count: int
+    upcoming_review_count: int
+    overdue_reviews: list[DashboardReviewItem]
+    upcoming_reviews: list[DashboardReviewItem]
 
 
 class DeletionBlocker(ApiModel):

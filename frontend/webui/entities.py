@@ -25,14 +25,14 @@ class EntitySpec:
 ENTITIES = {
     "aggregations": EntitySpec(
         "aggregations", "Aggregations", "aggregation",
-        (("aggregation_number", "Number"), ("title", "Title"), ("date_opened", "Opened"), ("date_closed", "Closed")),
-        (FieldSpec("parent_aggregation_id", "Parent aggregation", "lookup", lookup_resource="aggregations", lookup_label_fields=("aggregation_number", "title")), FieldSpec("classification_id", "Classification", "classification", lookup_resource="classifications", lookup_label_fields=("code", "title")), FieldSpec("security_level_id", "Security level", "lookup", True, "security-levels", ("code", "name")), FieldSpec("aggregation_number", "Aggregation number", required=True), FieldSpec("title", "Title", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("date_opened", "Date opened", "datetime"), FieldSpec("date_closed", "Date closed", "datetime")),
+        (("aggregation_number", "Number"), ("title", "Title"), ("medium_display", "Medium"), ("vital_display", "Vital"), ("review_display", "Review"), ("location_display", "Location")),
+        (FieldSpec("parent_aggregation_id", "Parent aggregation", "lookup", lookup_resource="aggregations", lookup_label_fields=("aggregation_number", "title")), FieldSpec("classification_id", "Classification", "classification", lookup_resource="classifications", lookup_label_fields=("code", "title")), FieldSpec("security_level_id", "Security level", "lookup", True, "security-levels", ("code", "name")), FieldSpec("medium", "Medium", "medium", True), FieldSpec("is_vital", "Vital aggregation", "bool"), FieldSpec("aggregation_number", "Aggregation number", required=True), FieldSpec("title", "Title", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("date_opened", "Date opened", "datetime"), FieldSpec("date_closed", "Date closed", "datetime"), FieldSpec("date_of_next_review", "Date of next review", "datetime"), FieldSpec("assigned_location", "Assigned location"), FieldSpec("current_location", "Current location")),
         True, ("aggregation_number", "title", "description"),
     ),
     "records": EntitySpec(
         "records", "Records", "record",
-        (("record_number", "Number"), ("title", "Title"), ("aggregation_display", "Aggregation"), ("date_originated", "Originated")),
-        (FieldSpec("aggregation_id", "Aggregation", "lookup", True, "aggregations", ("aggregation_number", "title")), FieldSpec("security_level_id", "Security level", "lookup", True, "security-levels", ("code", "name")), FieldSpec("record_number", "Record number", required=True), FieldSpec("title", "Title", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("date_originated", "Date originated", "datetime")),
+        (("record_number", "Number"), ("title", "Title"), ("aggregation_display", "Aggregation"), ("medium_display", "Medium"), ("vital_display", "Vital"), ("review_display", "Review"), ("location_display", "Inherited location")),
+        (FieldSpec("aggregation_id", "Aggregation", "lookup", True, "aggregations", ("aggregation_number", "title")), FieldSpec("security_level_id", "Security level", "lookup", True, "security-levels", ("code", "name")), FieldSpec("medium", "Medium", "medium", True), FieldSpec("is_vital", "Vital record", "bool"), FieldSpec("record_number", "Record number", required=True), FieldSpec("title", "Title", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("date_originated", "Date originated", "datetime"), FieldSpec("date_of_next_review", "Date of next review", "datetime")),
         True, ("record_number", "title", "description"),
     ),
     "classification-schemes": EntitySpec(

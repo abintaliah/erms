@@ -196,10 +196,10 @@ BEGIN
 
     INSERT INTO aggregations (
         classification_id, aggregation_number, title, description,
-        date_created, date_opened, owning_org_unit_id
+        date_created, date_opened, owning_org_unit_id, medium, is_vital
     )
     SELECT classification_id, aggregation_number, title, description,
-           date_created, date_opened, owner.org_unit_id
+           date_created, date_opened, owner.org_unit_id, 'mixed', false
     FROM (
         SELECT seed.*,
                row_number() OVER (ORDER BY seed_group, sequence_no) AS stable_ordinal
@@ -222,7 +222,7 @@ BEGIN
 
     INSERT INTO records (
         aggregation_id, record_number, title, description,
-        date_created, date_originated
+        date_created, date_originated, medium, is_vital
     )
     SELECT
         aggregation.id,
@@ -258,7 +258,9 @@ BEGIN
             (generated.sequence_no * 13) % 60,
             0,
             'Asia/Dubai'
-        )
+        ),
+        'mixed',
+        false
     FROM generate_series(1, 300) AS generated(sequence_no)
     JOIN inserted_seed_aggregations aggregation
       ON aggregation.seed_group = 'distributed'
@@ -266,7 +268,7 @@ BEGIN
 
     INSERT INTO records (
         aggregation_id, record_number, title, description,
-        date_created, date_originated
+        date_created, date_originated, medium, is_vital
     )
     SELECT
         aggregation.id,
@@ -300,7 +302,9 @@ BEGIN
             (generated.sequence_no * 17) % 60,
             0,
             'Asia/Dubai'
-        )
+        ),
+        'mixed',
+        false
     FROM generate_series(1, 100) AS generated(sequence_no)
     JOIN inserted_seed_aggregations aggregation
       ON aggregation.seed_group = 'focused'

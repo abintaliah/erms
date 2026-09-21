@@ -392,6 +392,8 @@ def aggregation_acl_move_preview(aggregation_id:int,destination_aggregation_id:i
     require_resource_operation(connection,"aggregation",aggregation_id,"aggregation.move","aggregation.move",lock=False)
     require_resource_operation(connection,"aggregation",destination_aggregation_id,"aggregation.move","aggregation.receive_child",lock=False)
     aggregation=_resource(connection,"aggregations",aggregation_id); destination=_resource(connection,"aggregations",destination_aggregation_id)
+    if aggregation["medium"] != destination["medium"]:
+        raise HTTPException(status_code=422,detail={"code":"aggregation_medium_mismatch","message":"This aggregation and all its descendants must be compatible with the destination medium.","source_medium":aggregation["medium"],"destination_medium":destination["medium"]})
     current=_effective_aggregation(connection,aggregation_id)[2]
     if not aggregation["inherit_acl_from_parent"] or keep_current_access_as_override: proposed=current
     elif destination["default_child_aggregation_acl_mode"]=="custom": proposed=_grant_rows(connection,"child_aggregation",destination_aggregation_id)
@@ -410,6 +412,8 @@ def move_aggregation_with_acl(aggregation_id:int,payload:AclMoveRequest,connecti
     require_resource_operation(connection,"aggregation",aggregation_id,"aggregation.move","aggregation.move")
     require_resource_operation(connection,"aggregation",payload.destination_aggregation_id,"aggregation.move","aggregation.receive_child")
     aggregation=_resource(connection,"aggregations",aggregation_id); destination=_resource(connection,"aggregations",payload.destination_aggregation_id)
+    if aggregation["medium"] != destination["medium"]:
+        raise HTTPException(status_code=422,detail={"code":"aggregation_medium_mismatch","message":"This aggregation and all its descendants must be compatible with the destination medium.","source_medium":aggregation["medium"],"destination_medium":destination["medium"]})
     ownership_changes=aggregation["owning_org_unit_id"]!=destination["owning_org_unit_id"]
     if ownership_changes and not payload.confirm_ownership_change:
         raise HTTPException(status_code=422,detail={"code":"ownership_change_requires_confirmation","message":"Confirm the organizational ownership change before moving this aggregation."})
@@ -431,6 +435,8 @@ def record_acl_move_preview(record_id:int,destination_aggregation_id:int,keep_cu
     require_resource_operation(connection,"record",record_id,"record.move","record.move",lock=False)
     require_resource_operation(connection,"aggregation",destination_aggregation_id,"record.move","aggregation.receive_record",lock=False)
     record=_resource(connection,"records",record_id); destination=_resource(connection,"aggregations",destination_aggregation_id)
+    if destination["medium"] != "mixed" and record["medium"] != destination["medium"]:
+        raise HTTPException(status_code=422,detail={"code":"record_medium_not_allowed_by_parent","message":f"A {destination['medium']} aggregation can only contain {destination['medium']} records.","record_medium":record["medium"],"destination_medium":destination["medium"]})
     current=_effective_record(connection,record_id)[2]
     proposed=current if not record["inherit_acl_from_parent"] or keep_current_access_as_override else _grant_rows(connection,"child_record",destination_aggregation_id)
     old=_permission_set(current); new=_permission_set(proposed)
@@ -445,6 +451,8 @@ def move_record_with_acl(record_id:int,payload:AclMoveRequest,connection:Connect
     require_resource_operation(connection,"record",record_id,"record.move","record.move")
     require_resource_operation(connection,"aggregation",payload.destination_aggregation_id,"record.move","aggregation.receive_record")
     record=_resource(connection,"records",record_id); destination=_resource(connection,"aggregations",payload.destination_aggregation_id)
+    if destination["medium"] != "mixed" and record["medium"] != destination["medium"]:
+        raise HTTPException(status_code=422,detail={"code":"record_medium_not_allowed_by_parent","message":f"A {destination['medium']} aggregation can only contain {destination['medium']} records.","record_medium":record["medium"],"destination_medium":destination["medium"]})
     ownership_changes=record["owning_org_unit_id"]!=destination["owning_org_unit_id"]
     if ownership_changes and not payload.confirm_ownership_change:
         raise HTTPException(status_code=422,detail={"code":"ownership_change_requires_confirmation","message":"Confirm the organizational ownership change before moving this record."})

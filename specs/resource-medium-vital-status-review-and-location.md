@@ -214,6 +214,10 @@ source aggregation where authorized, and preview which inheriting descendants
 will acquire a different effective value before a governed parent-location
 change is confirmed.
 
+The impact preview includes both descendant aggregations and records whose
+effective assigned or current location would change. It reports only resources
+the caller may view and indicates when the displayed list is truncated.
+
 ## 5. Medium hierarchy invariants
 
 The following matrix is authoritative:
@@ -480,7 +484,7 @@ The new rules compose with existing gates; they do not replace them.
 | Change medium | Existing metadata authorization plus reason | Empty-aggregation/parent/component/closure constraints |
 | Delete aggregation/record | Existing delete privilege, ACL permission, clearance, closure, and dependency rules | Resource and aggregation descendants must not be vital |
 | Change vital status | Matching global privilege and effective ACL permission, or information-governance ACL bypass | Reason and governance qualification required; permitted on closed resources |
-| Change next-review date | Existing metadata authorization | Value must be null or strictly in the future; the change is scheduling only, not review completion |
+| Change next-review date | Matching `aggregation.review_date.change` or `record.review_date.change` global privilege and effective ACL permission, or information-governance ACL bypass | Governed reason required; value must be null or strictly in the future; permitted on closed resources; scheduling only, not review completion |
 | Change aggregation location | `aggregation.location.change` global privilege and effective ACL permission, or information-governance ACL bypass | Governed, reasoned action permitted on open or closed aggregations |
 
 Capability endpoints and access explanations must identify the relevant
@@ -500,6 +504,10 @@ requires:
 - immutable event history containing the old and new location values, reason,
   actor, timestamp, and authorization basis.
 
+The governed command produces one `RESOURCE_LOCATION_CHANGED` event. The same
+row mutation must not also produce a generic `UPDATE` event. The same
+single-event rule applies to `VITAL_STATUS_CHANGED` and `REVIEW_DATE_CHANGED`.
+
 The action may update either or both location fields atomically. It is allowed
 when an aggregation is closed because closure of its contents does not imply
 that its physical files or containers can no longer move. Location authority
@@ -511,7 +519,7 @@ hierarchy, or other metadata. Records have no equivalent command in this phase.
 ### 12.1 Resource representations
 
 Aggregation and record create/read/update/search schemas expose `medium`,
-`is_vital`, and `date_of_next_review`. Create requests require medium and may
+`is_vital`, and `date_of_next_review`. Creation forms require medium and may
 omit `is_vital` to receive the false default. Read responses always contain
 `medium` and `is_vital`. Aggregation representations additionally expose stored
 and effective assigned/current locations. Record read and search representations
@@ -678,8 +686,12 @@ These exceptions do not permit medium, content, component, hierarchy, or
 unrelated metadata changes. Each changed value must pass its own authorization
 rule, including the new vital-status or location privilege and permission. Each
 governed action requires a non-blank reason and immutable event history. Medium
-and `date_of_next_review` remain subject to ordinary closed-resource metadata
-restrictions in this phase. A future review subsystem may define a narrower
+remain subject to ordinary closed-resource metadata restrictions in this
+phase. `date_of_next_review` is changed through the separately governed
+`aggregation.review_date.change` or `record.review_date.change` action, with a
+mandatory reason and immutable `REVIEW_DATE_CHANGED` event. That action is
+permitted on closed resources because closed holdings still require governance
+review of security and vital status. A future review subsystem may define a narrower
 rescheduling exception.
 
 ## 17. Migration and existing data

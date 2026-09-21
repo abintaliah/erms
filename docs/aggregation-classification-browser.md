@@ -138,7 +138,7 @@ request for a branch classification returns `409`.
 ## Database support
 
 Migration
-[`026_add_classification_browser_indexes.sql`](../database/migrations/026_add_classification_browser_indexes.sql)
+The canonical schema defines dedicated classification-browser indexes.
 adds compound indexes for each parent relationship and its deterministic browse
 order: classification scheme/parent and classification code; classification
 and aggregation number; parent aggregation and aggregation number; and

@@ -22,6 +22,15 @@ def test_explanation_operation_policy_maps_every_ui_operation_to_the_correct_req
         "aggregation.security_level.change": (
             "aggregation.security_level.change", "aggregation.security_level.change",
         ),
+        "aggregation.vital_status.change": (
+            "aggregation.vital_status.change", "aggregation.vital_status.change",
+        ),
+        "aggregation.location.change": (
+            "aggregation.location.change", "aggregation.location.change",
+        ),
+        "aggregation.review_date.change": (
+            "aggregation.review_date.change", "aggregation.review_date.change",
+        ),
         "aggregation.acl.manage": ("aggregation.acl.manage", "aggregation.acl.manage"),
         "aggregation.add_child": ("aggregation.create_child", "aggregation.add_child"),
         "aggregation.add_record": ("record.create", "aggregation.add_record"),
@@ -31,6 +40,12 @@ def test_explanation_operation_policy_maps_every_ui_operation_to_the_correct_req
         "record.move": ("record.move", "record.move"),
         "record.security_level.change": (
             "record.security_level.change", "record.security_level.change",
+        ),
+        "record.vital_status.change": (
+            "record.vital_status.change", "record.vital_status.change",
+        ),
+        "record.review_date.change": (
+            "record.review_date.change", "record.review_date.change",
         ),
         "record.acl.manage": ("record.acl.manage", "record.acl.manage"),
         "record.component.list": ("record.view", "record.component.list"),

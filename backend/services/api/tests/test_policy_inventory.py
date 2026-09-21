@@ -28,8 +28,11 @@ def test_canonical_schema_is_self_contained_and_current():
 
     assert "\\i " not in schema
     assert "\\ir " not in schema
-    for version in range(33, 39):
-        assert f"'{version:03d}_" in schema
+    assert "CREATE TABLE schema_migrations" in schema
+    assert "INSERT INTO schema_migrations" not in schema
+    assert "aggregation.location.change" in schema
+    assert "aggregations_protect_vital_deletion" in schema
+    assert "aggregations_owner_review_due_idx" in schema
 
 
 def test_seed_utilities_are_distinct_from_migrations():

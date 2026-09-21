@@ -1,6 +1,9 @@
 
 BEGIN;
 
+INSERT INTO org_units(code,name)
+VALUES ('PHASE2-SEGMENT','Core records test unit');
+
 INSERT INTO classification_schemes (code, title, date_published)
 VALUES ('CORE-TEST', 'Core test scheme', CURRENT_TIMESTAMP)
 RETURNING id AS test_scheme_id \gset
