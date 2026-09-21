@@ -56,6 +56,22 @@ must provide the same explicit move context when ownership changes.
 - Information-governance staff can inspect the immutable event history and the
   reconciliation report when reviewing a move.
 
+## Governed correction and advanced-action presentation
+
+An authorized information-governance user may use **Correct ownership** on a
+root aggregation created for the wrong organizational unit. The action requires
+`organization.ownership.correct`, sufficient clearance, a destination
+`{org unit} — {role}`, preview, reason, and confirmation. It propagates the new
+owner through the subtree, reassigns the original creator-role grants, preserves
+unrelated named-role and `Everyone` grants, and records
+`OWNERSHIP_CORRECTED`. Child aggregations and records change ownership only by
+moving to another parent.
+
+Aggregation details place **Move**, **Correct ownership**, **Child defaults**,
+and **Record defaults** in a collapsed **Advanced** section. Record details put
+**Move** there as well. This reduces clutter only; existing capability and
+authorization checks remain authoritative.
+
 ## Deployment and rollback
 
 Deployment rehearsal builds both a new database from `database/schema.sql` and

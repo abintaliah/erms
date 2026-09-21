@@ -554,6 +554,8 @@ def test_organizational_ownership_is_presented_on_details_and_dashboard():
     assert '"Owning organizational unit"' in source
     assert '"/api/v1/dashboard/ownership-counts"' in source
     assert 'ui.label("Holdings by organizational unit")' in source
+    assert "where you currently have an effective" in source
+    assert "Counts include only aggregations and records you are allowed to view." in source
     assert "owner_count['aggregation_count']" in source
     assert "owner_count['record_count']" in source
 

@@ -16,7 +16,9 @@ reporting dimension. It does not use ownership as an authorization boundary.
   source and destination owner identifiers for confirmation interfaces.
 - The dashboard shows separate authorized aggregation and record counts for
   every organizational unit represented by the signed-in user's effective
-  roles. Multiple roles in one unit produce one dashboard row.
+  roles. Multiple roles in one unit produce one dashboard row. Explanatory text
+  beneath the heading states both this effective-role scope and that counts
+  include only resources the signed-in user is allowed to view.
 
 The application has no separate server-side holdings-export operation at this
 phase. Consumers exporting list, search, or browse results receive the same

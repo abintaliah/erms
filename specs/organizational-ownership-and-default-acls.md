@@ -645,6 +645,9 @@ Each org unit appears once even when the user has several effective roles in
 that unit. Counts include only aggregations and records the user is authorized
 to view; ownership alone must not reveal inaccessible holdings. A qualifying
 org unit with no authorized resources displays zero rather than disappearing.
+The dashboard heading must include adjacent explanatory text making clear that
+the listed units come from the signed-in user's currently effective roles and
+that the counts contain only resources the user is authorized to view.
 
 ## 13. UI requirements
 
@@ -657,6 +660,19 @@ org unit with no authorized resources displays zero rather than disappearing.
   populated with that role and its org unit and is read-only.
 - For child aggregation and record creation, the selector lists only roles in
   the parent's owning org unit.
+- Child-aggregation and record forms present the parent selector before
+  **Create for**. Record creation keeps **Create for** disabled until a parent
+  is selected. Aggregation creation keeps it available when Parent is blank
+  because the selected role determines a new root's owner.
+- The aggregation Parent field states that it is optional and that leaving it
+  blank creates a root aggregation.
+- Changing a parent preserves the selected role only while that role remains
+  eligible. Otherwise the UI clears it and announces why in an accessible live
+  status message. When no eligible role exists, the UI explains that creation
+  under that parent is unavailable.
+- Required fields use an asterisk in their label, and each creation or metadata
+  form includes a visible `* Required fields` legend. Optional fields remain
+  unmarked unless their blank value needs an explanatory hint.
 - Child aggregation and record forms display the inherited owner as read-only
   context or omit the field entirely.
 - Aggregation and record details display the owning org unit.
@@ -667,6 +683,15 @@ org unit with no authorized resources displays zero rather than disappearing.
 - Search and list pages may filter and group by owning org unit.
 - Move confirmation displays an ownership change when the destination owner
   differs.
+
+### 13.1.1 Advanced governed actions
+
+To reduce visual clutter without changing authorization, aggregation details
+place **Move**, **Correct ownership**, **Child defaults**, and **Record
+defaults** in an **Advanced** section that is collapsed by default. Record
+details place **Move** in the same kind of collapsed section. The server-issued
+capability checks still determine whether each action is rendered; collapsing
+the section is presentation only and is not a security control.
 
 ### 13.2 ACL editor
 

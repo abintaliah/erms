@@ -6132,6 +6132,10 @@ def index() -> None:
                                         )
 
                 ui.label("Holdings by organizational unit").classes("text-lg font-semibold mt-2")
+                ui.label(
+                    "Shows holdings for organizational units where you currently have an effective "
+                    "role. Counts include only aggregations and records you are allowed to view."
+                ).classes("text-sm leading-5 text-slate-500 -mt-1")
                 if ownership_counts:
                     with ui.card().classes("w-full shadow-none border border-slate-200 p-0 gap-0"):
                         for index, owner_count in enumerate(ownership_counts):
