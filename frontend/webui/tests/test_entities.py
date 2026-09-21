@@ -552,7 +552,9 @@ def test_dashboard_recent_configuration_rejects_non_positive_values(monkeypatch)
 def test_organizational_ownership_is_presented_on_details_and_dashboard():
     source = inspect.getsource(index)
     assert '"Owning organizational unit"' in source
-    assert '"/api/v1/dashboard/ownership-counts"' in source
+    assert "await api.dashboard_summary(" in source
+    assert 'dashboard_load_state = {"running": False}' in source
+    assert 'if dashboard_load_state["running"]:' in source
     assert 'ui.label("Holdings by organizational unit")' in source
     assert "where you currently have an effective" in source
     assert "Counts include only aggregations and records you are allowed to view." in source

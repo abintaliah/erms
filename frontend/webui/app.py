@@ -16,7 +16,6 @@ from .capabilities import (
     capability_allowed,
     can_navigate,
     can_open_organization_detail,
-    dashboard_administration_resources,
 )
 from .acl_editor import dependents_of, permission_closure
 from .authorization_ui import (
@@ -5917,6 +5916,7 @@ def index() -> None:
         table_container.clear()
         with table_container:
             dashboard_content = ui.column().classes("w-full px-5 pb-5 pt-0 gap-4")
+        dashboard_load_state = {"running": False}
 
         async def show_unclassified_roots() -> None:
             await select_entity("aggregations")
@@ -5942,6 +5942,9 @@ def index() -> None:
                 ui.notify(error_message(error), color="negative", close_button=True)
 
         async def load_dashboard() -> None:
+            if dashboard_load_state["running"]:
+                return
+            dashboard_load_state["running"] = True
             dashboard_content.clear()
             with dashboard_content:
                 with ui.row().classes("w-full items-center"):
@@ -5959,113 +5962,47 @@ def index() -> None:
                 can_organize = "organization.administer" in privileges
                 can_administer_users = "identity.users.administer" in privileges
 
-                async def available(value: Any) -> Any:
-                    return value
-
-                count_resources = [
-                    "aggregations", "records",
-                ]
-                count_resources += list(dashboard_administration_resources(privileges))
-                count_results, scheme_rows, scheme_classification_counts, inactive_result, unclassified_result, favourites, ownership_counts = await asyncio.gather(
-                    asyncio.gather(*(api.count(resource) for resource in count_resources)),
-                    api.list("classification-schemes") if can_classify else available([]),
-                    api.request("GET", "/api/v1/classification-schemes/classification-counts") if can_classify else available([]),
-                    api.search_request("classifications", {
-                        "where": {"field": "date_deactivated", "operator": "is_not_null"},
-                        "limit": 1,
-                    }) if can_classify else available({"total": 0}),
-                    api.search_request("aggregations", {
-                        "where": {"and": [
-                            {"field": "parent_aggregation_id", "operator": "is_null"},
-                            {"field": "classification_id", "operator": "is_null"},
-                        ]},
-                        "limit": 1,
-                    }),
-                    reload_favourites(),
-                    api.request("GET", "/api/v1/dashboard/ownership-counts"),
-                )
                 recent_limit = dashboard_recent_item_limit()
                 recent_days = dashboard_recent_days()
                 recent_since = datetime.now(timezone.utc) - timedelta(days=recent_days)
-                # A dashboard must remain useful while a local API process is
-                # being restarted during an upgrade.  Older API processes do
-                # not yet expose this optional, self-only activity endpoint;
-                # the overview and favourites must not become a "Not Found"
-                # page as a result.  Other errors are still surfaced normally.
-                try:
-                    activity = await api.my_recent_activity(
-                        limit=recent_limit, since=recent_since,
-                    )
-                except ApiError as error:
-                    if error.status_code != 404:
-                        raise
-                    activity = []
-
-                async def activity_rows(entity_type: str, operation: str) -> list[dict[str, Any]]:
-                    resource = "aggregations" if entity_type == "aggregation" else "records"
-                    entries = [item for item in activity if item["entity_type"] == entity_type
-                               and item["operation"] == operation]
-                    rows = await asyncio.gather(
-                        *(api.get(resource, entry["entity_id"]) for entry in entries),
-                        return_exceptions=True,
-                    )
-                    return [
-                        {**row, "_activity_at": entry["occurred_at"]}
-                        for entry, row in zip(entries, rows)
-                        if isinstance(row, dict)
-                    ]
-
-                recent_results = await asyncio.gather(
-                    activity_rows("aggregation", "CREATE"),
-                    activity_rows("aggregation", "UPDATE"),
-                    activity_rows("record", "CREATE"),
-                    activity_rows("record", "UPDATE"),
+                summary = await api.dashboard_summary(
+                    recent_limit=recent_limit, recent_since=recent_since,
                 )
-                counts = dict(zip(count_resources, count_results))
-                branch_count = sum(int(row["branch_count"]) for row in scheme_classification_counts)
-                terminal_count = sum(int(row["terminal_count"]) for row in scheme_classification_counts)
-                assignable_terminal_count = sum(
-                    int(row["eligible_terminal_count"])
-                    for row in scheme_classification_counts
-                )
-                inactive_classification_count = int(inactive_result["total"])
-                unclassified_root_count = int(unclassified_result["total"])
-                now = datetime.now(timezone.utc)
-                published_scheme_count = 0
-                inactive_scheme_count = 0
-                draft_scheme_count = 0
-                draft_scheme_ids: set[int] = set()
-                for scheme in scheme_rows:
-                    if scheme.get("date_deactivated"):
-                        inactive_scheme_count += 1
-                        continue
-                    published = scheme.get("date_published")
-                    try:
-                        published_at = datetime.fromisoformat(
-                            str(published).replace("Z", "+00:00")
-                        ) if published else None
-                    except (TypeError, ValueError):
-                        published_at = None
-                    if published_at and published_at <= now:
-                        published_scheme_count += 1
-                    else:
-                        draft_scheme_count += 1
-                        draft_scheme_ids.add(int(scheme["id"]))
-                draft_terminal_count = sum(
-                    int(row["terminal_count"])
-                    for row in scheme_classification_counts
-                    if int(row["classification_scheme_id"]) in draft_scheme_ids
-                )
-                recent = {
-                    "aggregations": (recent_results[0], recent_results[1]),
-                    "records": (recent_results[2], recent_results[3]),
+                counts = summary["overview_counts"]
+                metrics = summary["classification_metrics"]
+                published_scheme_count = int(metrics["published_scheme_count"])
+                draft_scheme_count = int(metrics["draft_scheme_count"])
+                inactive_scheme_count = int(metrics["inactive_scheme_count"])
+                branch_count = int(metrics["branch_count"])
+                terminal_count = int(metrics["terminal_count"])
+                assignable_terminal_count = int(metrics["assignable_terminal_count"])
+                draft_terminal_count = int(metrics["draft_terminal_count"])
+                inactive_classification_count = int(metrics["inactive_classification_count"])
+                unclassified_root_count = int(summary["unclassified_root_count"])
+                ownership_counts = summary["ownership_counts"]
+                favourites = summary["favourites"]
+                state["favourites"] = favourites
+                state["favourite_ids"] = {
+                    resource: {int(item["id"]) for item in favourites[resource]}
+                    for resource in ("aggregations", "records")
                 }
+                activity = summary["recent_activity"]
                 recent = {
-                    resource: (
-                        await decorate_for_spec(ENTITIES[resource], created),
-                        await decorate_for_spec(ENTITIES[resource], updated),
+                    resource: tuple([
+                        {
+                            "id": item["entity_id"],
+                            "title": item["title"],
+                            "aggregation_number": item.get("aggregation_number"),
+                            "record_number": item.get("record_number"),
+                            "_activity_at": item["occurred_at"],
+                        }
+                        for item in activity
+                        if item["entity_type"] == entity_type
+                        and item["operation"] == operation
+                    ] for operation in ("CREATE", "UPDATE"))
+                    for resource, entity_type in (
+                        ("aggregations", "aggregation"), ("records", "record"),
                     )
-                    for resource, (created, updated) in recent.items()
                 }
                 favourite_limit = dashboard_favourite_item_limit()
             except ApiError as error:
@@ -6079,6 +6016,8 @@ def index() -> None:
                     ui.label(error_message(error)).classes("text-negative p-5")
                 set_connection_status(False)
                 return
+            finally:
+                dashboard_load_state["running"] = False
 
             if getattr(page_client, "_deleted", False):
                 return
@@ -6337,9 +6276,8 @@ def index() -> None:
                                     ui.label("Nothing here yet").classes("text-sm text-slate-400")
                                 for item in items:
                                     handler = (
-                                        (lambda _, entry=item: open_aggregation(entry))
-                                        if resource == "aggregations"
-                                        else (lambda _, entry=item: show_record_details(entry))
+                                        lambda _, entry=item, kind=resource:
+                                            open_dashboard_favourite(kind, entry)
                                     )
                                     with ui.row().classes(
                                         "recent-card cursor-pointer w-full items-center no-wrap px-3 py-2 gap-3"

@@ -335,6 +335,17 @@ class ErmsApiClient:
         result = await self.search_request(resource, {"limit": 1, "offset": 0})
         return int(result["total"])
 
+    async def dashboard_summary(
+        self, *, recent_limit: int, recent_since: datetime,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "GET", "/api/v1/dashboard/summary",
+            params={
+                "recent_limit": recent_limit,
+                "recent_since": recent_since.isoformat(),
+            },
+        )
+
     async def search(
         self, resource: str, query: str, fields: tuple[str, ...],
         *, owning_org_unit_id: int | None = None,

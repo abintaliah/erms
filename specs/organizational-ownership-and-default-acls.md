@@ -649,6 +649,14 @@ The dashboard heading must include adjacent explanatory text making clear that
 the listed units come from the signed-in user's currently effective roles and
 that the counts contain only resources the user is authorized to view.
 
+Dashboard loading must use a consolidated, self-only summary operation rather
+than issuing one search request per card or hydrating recent activity through
+per-resource requests. A refresh may have only one in-flight summary request
+per browser page; repeated refresh actions while it is running are ignored.
+The consolidated operation applies the same privilege, resource-visibility,
+and clearance rules as the individual source operations and uses one database
+pool checkout for the complete summary.
+
 ## 13. UI requirements
 
 ### 13.1 Ownership
@@ -741,6 +749,13 @@ move commands must obey these rules:
 ACL responses and authorization explanations must identify whether a required
 permission was supplied by a named role, `Everyone`, `org_unit_members`, or
 information-governance bypass.
+
+`GET /api/v1/dashboard/summary` returns the authorized overview counts,
+classification metrics available to classification administrators, governance
+attention counts, per-effective-org-unit holdings, favourites, and hydrated
+self-only recent activity. This endpoint exists to bound dashboard database
+concurrency; it must not broaden any source dataset merely because several
+dashboard sections share one response.
 
 ## 15. Event history and audit
 

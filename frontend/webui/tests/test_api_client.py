@@ -1,5 +1,6 @@
 import json
 import asyncio
+from datetime import datetime, timezone
 
 import httpx
 import pytest
@@ -163,6 +164,32 @@ def test_my_recent_activity_uses_the_self_only_endpoint():
     assert captured == {
         "path": "/api/v1/auth/me/recent-activity",
         "params": {"limit": "5"},
+    }
+
+
+def test_dashboard_summary_uses_one_consolidated_request():
+    captured = {}
+    expected = {"overview_counts": {"records": 3}}
+    since = datetime(2026, 9, 1, tzinfo=timezone.utc)
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json=expected)
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.dashboard_summary(recent_limit=7, recent_since=since)
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise()) == expected
+    assert captured == {
+        "method": "GET",
+        "path": "/api/v1/dashboard/summary",
+        "params": {"recent_limit": "7", "recent_since": since.isoformat()},
     }
 
 

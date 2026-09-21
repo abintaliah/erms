@@ -71,6 +71,7 @@ from .authorization_admin import router as authorization_admin_router
 from .resource_acls import router as resource_acl_router
 from .governance_authorization import router as governance_authorization_router
 from .security_operations import router as security_operations_router
+from .dashboard import router as dashboard_router
 from .authorization_policy import load_policy_context, require_audit_view
 
 
@@ -99,6 +100,7 @@ app.include_router(authorization_admin_router)
 app.include_router(resource_acl_router)
 app.include_router(governance_authorization_router)
 app.include_router(security_operations_router)
+app.include_router(dashboard_router)
 
 EVENT_SOURCES = {
     "api", "web_ui", "bulk_import", "background_worker", "scheduled_job",
