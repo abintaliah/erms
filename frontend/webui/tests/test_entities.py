@@ -24,6 +24,8 @@ from frontend.webui.app import (
     component_uploader,
     component_file_icon,
     decorate_relationship_rows,
+    deletion_blocked_report,
+    deletion_identity,
     display_value,
     error_message,
     show_api_error,
@@ -521,6 +523,25 @@ def test_lowering_role_clearance_requires_the_audit_reason():
     assert role_change_requires_reason(
         current, {"profile_id": 5}, levels,
     )
+
+
+def test_permanent_deletion_uses_stable_identity_and_preserves_blocker_reports():
+    assert deletion_identity({
+        "id": 7, "name": "Alex Example", "email": "alex@example.test",
+    }) == "Alex Example — alex@example.test"
+    assert deletion_identity({
+        "id": 8, "name": "Records Team", "code": "RECORDS",
+    }) == "Records Team — RECORDS"
+    report = {"code": "deletion_blocked", "blockers": [{"code": "self_deletion"}]}
+    assert deletion_blocked_report(ApiError(409, report)) == report
+    assert deletion_blocked_report(ApiError(409, "another conflict")) is None
+
+
+def test_identity_detail_actions_are_explicitly_permanent():
+    source = inspect.getsource(index)
+    assert source.count('"Permanently delete", icon="delete_forever"') >= 3
+    assert "if deletion_blocked_report(error) is not None:" in source
+    assert "await confirm_identity_deletion(" in source
 
 
 def test_aggregation_browser_load_more_preserves_the_previous_last_child_anchor():

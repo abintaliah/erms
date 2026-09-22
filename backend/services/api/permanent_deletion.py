@@ -204,7 +204,8 @@ def permanently_delete(
     table = {"user": "users", "role": "roles", "org_unit": "org_units"}[kind]
     if kind == "user":
         session_snapshots = list(connection.execute(
-            """SELECT id AS session_id,client_ip::text AS client_ip,user_agent,
+            """SELECT id AS session_id,client_ip::text AS client_ip,
+                      left(user_agent,1000) AS user_agent,
                       date_created AS session_created_at,last_seen_at,expires_at,
                       absolute_expires_at,revoked_at
                FROM login_sessions WHERE user_id=%s ORDER BY id""", (entity_id,),
