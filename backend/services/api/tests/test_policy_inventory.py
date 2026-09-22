@@ -1,9 +1,10 @@
 import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
-from tools.generate_policy_inventory import PROJECT_ROOT, build_inventory
+from tools.generate_policy_inventory import PROJECT_ROOT, _target_policy, build_inventory
 
 
 REGISTRY_PATH = PROJECT_ROOT / "security" / "operation-policy-registry.json"
@@ -48,25 +49,24 @@ def test_seed_utilities_are_distinct_from_migrations():
     assert '"seed": SEED_NAME' in importer
 
 
-def test_operation_and_ui_inventory_is_complete_and_current():
+def test_api_operation_inventory_is_complete_and_current():
     committed = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
     generated = build_inventory()
 
     assert committed == generated, (
-        "API routes or Web UI actions changed without policy review; run "
+        "API routes or policy classifications changed without security review; run "
         "PYTHONPATH=. backend/services/api/.venv/bin/python "
         "tools/generate_policy_inventory.py and review the diff"
     )
+    assert committed["schema_version"] == 2
+    assert committed["scope"] == "api_authorization_boundary"
+    assert "ui_actions" not in committed
     assert committed["enforcement_status"] == "authorization_dependent_permanent_deletion_enforced"
     assert committed["phase"] == 12
     assert len(committed["api_operations"]) == len(
         {(item["method"], item["path"]) for item in committed["api_operations"]}
     )
-    assert len(committed["ui_actions"]) == len(
-        {item["id"] for item in committed["ui_actions"]}
-    )
     assert all(item["phase_0_enforced"] is False for item in committed["api_operations"])
-    assert all(item["phase_0_enforced"] is False for item in committed["ui_actions"])
     assert all(
         item["phase_4_enforced"] == (item["target_policy_class"] == "globally_privileged")
         for item in committed["api_operations"]
@@ -76,7 +76,6 @@ def test_operation_and_ui_inventory_is_complete_and_current():
     assert all("phase_9_enforced" in item for item in committed["api_operations"])
     assert all("phase_11_enforced" in item for item in committed["api_operations"])
     assert all("phase_12_enforced" in item for item in committed["api_operations"])
-    assert all("phase_12_enforced" in item for item in committed["ui_actions"])
     assert all(
         item["phase_5_enforced"] == (
             item["path"] == "/api/v1/permissions"
@@ -84,6 +83,11 @@ def test_operation_and_ui_inventory_is_complete_and_current():
         )
         for item in committed["api_operations"]
     )
+
+
+def test_unclassified_api_operation_is_rejected_instead_of_getting_a_fallback():
+    with pytest.raises(ValueError, match="has no explicit policy classification"):
+        _target_policy("POST", "/api/v1/new-unreviewed-operation")
 
 
 def test_every_target_policy_reference_exists_in_approved_seed():

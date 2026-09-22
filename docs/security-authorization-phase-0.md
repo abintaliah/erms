@@ -10,8 +10,8 @@ revision 0.6.
 ## Machine-readable artefacts
 
 - [`security/operation-policy-registry.json`](../security/operation-policy-registry.json)
-  inventories every FastAPI operation and every NiceGUI button, link, or menu
-  action declared in `frontend/webui/app.py`.
+  inventories every FastAPI operation at the authoritative authorization
+  boundary. Client controls are deliberately outside this registry.
 - [`security/catalogue-seed.json`](../security/catalogue-seed.json) freezes the
   approved initial security levels, global privileges, aggregation and record
   permissions, permission dependencies, and initial profiles. It is a Phase 0
@@ -35,8 +35,8 @@ The current access classes are:
 
 ## Completeness guard
 
-Run the generator after deliberately adding, removing, or relocating a route or
-interactive control:
+Run the generator after deliberately adding or removing an API route, or
+changing an operation's policy classification:
 
 ```bash
 PYTHONPATH=. backend/services/api/.venv/bin/python tools/generate_policy_inventory.py
@@ -44,8 +44,9 @@ PYTHONPATH=. backend/services/api/.venv/bin/python tools/generate_policy_invento
 
 The resulting diff must be reviewed as a security-policy change. The Phase 0
 test regenerates the inventory in memory and fails when it differs from the
-committed file. This prevents a new API operation or UI action from silently
-escaping the inventory.
+committed file. This prevents a new API operation from silently escaping the
+inventory. Moving, renaming, or adding client controls does not create an API
+policy change and therefore does not churn this artefact.
 
 ### Ownership and review workflow
 
@@ -56,8 +57,8 @@ and not a runtime authorization mechanism. Its generator is
 `backend/services/api/tests/test_policy_inventory.py` is the completeness
 guard that compares the committed JSON with freshly generated output.
 
-The developer or coding agent that deliberately changes an API route or an
-interactive UI control must:
+The developer or coding agent that deliberately changes an API route or its
+policy classification must:
 
 1. implement the real authorization check in the API and, where applicable,
    the database;
@@ -75,11 +76,21 @@ because the generator ran or the JSON changed.
 
 The registry is defence-in-depth for visibility, traceability, and regression
 detection. It does not grant or deny access. Runtime enforcement remains in the
-API authorization functions and database integrity rules. The UI portion is a
-structural inventory of controls and callbacks and currently labels controls
-only at a broad access-class level; reviewers must trace security-sensitive UI
-actions to their protected API operation rather than treating the UI entry as
-proof of authorization.
+API authorization functions and database integrity rules.
+
+### Client applications
+
+NiceGUI, Flutter, and any future frontend are untrusted API consumers. They do
+not receive separate copies of the authorization policy and cannot grant access
+by rendering a control. Every request is re-authorized by the API against live
+roles, privileges, clearance, ACLs, lifecycle state, and integrity rules.
+
+A client may maintain an optional action inventory for UX coverage—for example,
+to check that destructive actions handle `403`, `409`, and stale-policy
+responses—but that inventory is not security evidence and is not part of this
+registry. Client-only changes require ordinary product review, not API policy
+approval. A client change requires security review when it also adds or
+reclassifies an API operation.
 
 ## Characterized existing behavior
 

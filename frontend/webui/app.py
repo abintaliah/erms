@@ -54,8 +54,15 @@ RECORD_UPLOAD_WAIT_MESSAGE = "Please wait until all files have finished uploadin
 AGGREGATION_SUMMARY_LAYOUT_CLASSES = (
     "detail-surface shadow-none flex-1 min-w-[360px] p-5 gap-4"
 )
-RECORD_DETAIL_HEADER_CLASSES = "w-full items-start gap-2 no-wrap"
-RECORD_DETAIL_TITLE_CLASSES = "gap-0 grow min-w-0"
+RECORD_DETAIL_HEADER_CLASSES = "w-full items-start gap-3 flex-wrap"
+RECORD_DETAIL_TITLE_CLASSES = "gap-0 flex-1 min-w-0 sm:min-w-[420px] basis-[520px] max-w-full"
+RELATIONSHIP_DISPLAY_FIELDS = frozenset({
+    "aggregation_display",
+    "org_unit_display",
+    "parent_org_unit_display",
+    "profile_display",
+    "scheme_display",
+})
 NAVIGATION_TRAIL_LIMIT = 20
 NAVIGATION_VISIBLE_LIMIT = 5
 STOP_PROPAGATION_CLICK_HANDLER = "(event) => { event.stopPropagation(); emit(); }"
@@ -3751,6 +3758,20 @@ def index() -> None:
         spec = ENTITIES[resolved_resource]
         creating = row is None
         effective_locked_fields = set(locked_fields or set())
+        if row and spec.key in {"aggregations", "records"}:
+            try:
+                editor_capabilities = await api.resource_capabilities(
+                    spec.key, row["id"]
+                )
+            except ApiError as error:
+                show_api_error(error)
+                return
+            if not editor_capabilities.get("modify_metadata"):
+                ui.notify(
+                    f"Your effective roles do not allow editing this {spec.singular}'s metadata.",
+                    color="warning", close_button=True,
+                )
+                return
         if row and spec.key in {"aggregations", "records"} and row.get("_effectively_closed"):
             ui.notify(
                 f"Closed {spec.singular} metadata cannot be changed",
@@ -3758,13 +3779,6 @@ def index() -> None:
             )
             return
         if row and spec.key == "aggregations" and row.get("date_closed") is None:
-            try:
-                editor_capabilities = await api.resource_capabilities(
-                    "aggregations", row["id"]
-                )
-            except ApiError as error:
-                ui.notify(error_message(error), color="negative", close_button=True)
-                return
             if not editor_capabilities.get("close"):
                 effective_locked_fields.add("date_closed")
         if creating and spec.key == "records":
@@ -5800,6 +5814,8 @@ def index() -> None:
                         </q-td>
                     """)
                     continue
+                if key not in RELATIONSHIP_DISPLAY_FIELDS:
+                    continue
                 relationship_icon = {
                     "parent_org_unit_display": "corporate_fare",
                     "org_unit_display": "corporate_fare",
@@ -5844,9 +5860,7 @@ def index() -> None:
                     </q-td>
                 ''')
             if spec.key in {"records", "aggregations"}:
-                closed_label = f"Closed {spec.singular} metadata cannot be changed"
                 buttons = '<q-btn flat round dense :icon="props.row._is_favourite ? \'favorite\' : \'favorite_border\'" :color="props.row._is_favourite ? \'red\' : \'primary\'" :aria-label="props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\'" @click.stop="$parent.$emit(\'toggle_favourite\', props.row)"><q-tooltip>{{ props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\' }}</q-tooltip></q-btn>'
-                buttons += f'<q-btn flat round dense icon="edit" color="primary" :disable="props.row._effectively_closed" @click="$parent.$emit(\'edit\', props.row)"><q-tooltip>{{{{ props.row._effectively_closed ? \'{closed_label}\' : \'Edit\' }}}}</q-tooltip></q-btn>'
             elif spec.key in {"privileges", "permissions"}:
                 buttons = ''
             else:
@@ -5858,6 +5872,7 @@ def index() -> None:
             if spec.key not in {"privileges", "permissions"}:
                 buttons += '<q-btn flat round dense icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn>'
             if spec.key == "records":
+                buttons = '<q-btn flat round dense icon="open_in_new" color="primary" @click="$parent.$emit(\'open_record\', props.row)"><q-tooltip>Open record</q-tooltip></q-btn>' + buttons
                 buttons += '<q-btn flat round dense icon="attach_file" color="secondary" @click="$parent.$emit(\'components\', props.row)"><q-tooltip>Digital components</q-tooltip></q-btn>'
             if spec.key == "aggregations":
                 buttons = '<q-btn flat round dense icon="folder_open" color="secondary" @click="$parent.$emit(\'open_aggregation\', props.row)"><q-tooltip>Open aggregation</q-tooltip></q-btn>' + buttons
@@ -5899,6 +5914,7 @@ def index() -> None:
                         render_table(spec)
                 table.on("toggle_favourite", toggle_table_favourite)
             if spec.key == "records":
+                table.on("open_record", lambda event: show_record_details(event.args))
                 table.on("components", lambda event: show_components(event.args))
             if spec.key == "aggregations":
                 table.on("open_aggregation", lambda event: open_aggregation(event.args))
