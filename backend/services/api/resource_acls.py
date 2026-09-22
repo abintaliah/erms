@@ -425,8 +425,12 @@ def move_aggregation_with_acl(aggregation_id:int,payload:AclMoveRequest,connecti
         inherit=False
     else: inherit=aggregation["inherit_acl_from_parent"]
     _assert_continuity(connection,aggregation["security_level_id"])
+    old_hold_ids=[row["hold_id"] for row in connection.execute("SELECT hold_id FROM effective_holds_for_aggregation(%s) ORDER BY hold_id",(aggregation_id,)).fetchall()]
     updated=connection.execute("UPDATE aggregations SET parent_aggregation_id=%s,inherit_acl_from_parent=%s,resource_acl_version=resource_acl_version+1 WHERE id=%s RETURNING *",(payload.destination_aggregation_id,inherit,aggregation_id)).fetchone()
+    new_hold_ids=[row["hold_id"] for row in connection.execute("SELECT hold_id FROM effective_holds_for_aggregation(%s) ORDER BY hold_id",(aggregation_id,)).fetchall()]
     connection.execute("SELECT append_domain_event('aggregation',%s,'MOVED_WITH_ACL_POLICY',%s::jsonb,%s)",(aggregation_id,json.dumps({"destination_aggregation_id":payload.destination_aggregation_id,"keep_current_access_as_override":payload.keep_current_access_as_override,"ownership_changed":ownership_changes,"old_owning_org_unit_id":aggregation["owning_org_unit_id"],"new_owning_org_unit_id":destination["owning_org_unit_id"]}),payload.reason))
+    if old_hold_ids or new_hold_ids:
+        connection.execute("SELECT append_domain_event('aggregation',%s,'HELD_RESOURCE_MOVED',%s::jsonb,%s)",(aggregation_id,json.dumps({"old_parent_aggregation_id":aggregation["parent_aggregation_id"],"new_parent_aggregation_id":payload.destination_aggregation_id,"old_effective_hold_ids":old_hold_ids,"new_effective_hold_ids":new_hold_ids}),payload.reason))
     return updated
 
 
@@ -463,8 +467,12 @@ def move_record_with_acl(record_id:int,payload:AclMoveRequest,connection:Connect
         _replace(connection,"record",record_id,_rows_as_inputs(_effective_record(connection,record_id)[2])); inherit=False
     else: inherit=record["inherit_acl_from_parent"]
     _assert_continuity(connection,record["security_level_id"])
+    old_hold_ids=[row["hold_id"] for row in connection.execute("SELECT hold_id FROM effective_holds_for_record(%s) ORDER BY hold_id",(record_id,)).fetchall()]
     updated=connection.execute("UPDATE records SET aggregation_id=%s,inherit_acl_from_parent=%s,resource_acl_version=resource_acl_version+1 WHERE id=%s RETURNING *",(payload.destination_aggregation_id,inherit,record_id)).fetchone()
+    new_hold_ids=[row["hold_id"] for row in connection.execute("SELECT hold_id FROM effective_holds_for_record(%s) ORDER BY hold_id",(record_id,)).fetchall()]
     connection.execute("SELECT append_domain_event('record',%s,'MOVED_WITH_ACL_POLICY',%s::jsonb,%s)",(record_id,json.dumps({"destination_aggregation_id":payload.destination_aggregation_id,"keep_current_access_as_override":payload.keep_current_access_as_override,"ownership_changed":ownership_changes,"old_owning_org_unit_id":record["owning_org_unit_id"],"new_owning_org_unit_id":destination["owning_org_unit_id"]}),payload.reason))
+    if old_hold_ids or new_hold_ids:
+        connection.execute("SELECT append_domain_event('record',%s,'HELD_RESOURCE_MOVED',%s::jsonb,%s)",(record_id,json.dumps({"old_aggregation_id":record["aggregation_id"],"new_aggregation_id":payload.destination_aggregation_id,"old_effective_hold_ids":old_hold_ids,"new_effective_hold_ids":new_hold_ids}),payload.reason))
     return updated
 
 

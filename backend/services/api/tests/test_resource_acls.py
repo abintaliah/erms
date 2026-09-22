@@ -236,7 +236,7 @@ def test_role_grant_cannot_exceed_role_clearance(client: TestClient, aggregation
     upgraded = client.patch(
         f"/api/v1/aggregations/{aggregation['id']}",
         json={"security_level_id": levels["S"]["id"]},
-        headers={"If-Match": str(aggregation["version"])},
+        headers={"If-Match": str(aggregation["version"]), "X-Change-Reason": "Classification changed"},
     )
     assert upgraded.status_code == 200, upgraded.text
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:

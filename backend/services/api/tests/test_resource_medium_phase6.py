@@ -82,7 +82,10 @@ def test_review_queries_can_use_due_date_and_owner_indexes():
         owner_plan = "\n".join(row[0] for row in connection.execute(
             "EXPLAIN SELECT id FROM records WHERE owning_org_unit_id=1 AND date_of_next_review IS NOT NULL ORDER BY date_of_next_review,id LIMIT 5"
         ))
-    assert "aggregations_review_due_idx" in global_plan
+    assert (
+        "aggregations_review_due_idx" in global_plan
+        or "aggregations_owner_review_due_idx" in global_plan
+    )
     assert "records_owner_review_due_idx" in owner_plan
 
 

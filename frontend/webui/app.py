@@ -469,6 +469,8 @@ def error_message(error: ApiError) -> str:
         return "The item version is missing. Reload it and try again."
     if error.message == "X-Change-Reason is required when lowering a security level":
         return "Please explain why the security level is being lowered, then try again."
+    if error.message == "X-Change-Reason is required when changing a security level":
+        return "Please explain why the security level is being changed, then try again."
     if isinstance(error.detail, dict):
         messages = {
             "insufficient_privilege": "You do not have the required system privilege for this action.",
@@ -948,6 +950,23 @@ def index() -> None:
         .governance-table .q-table td { text-align: left; }
         .governance-table .q-table th:last-child,
         .governance-table .q-table td:last-child { text-align: right; white-space: nowrap; }
+        .hold-selection-table .q-table th:first-child,
+        .hold-selection-table .q-table td:first-child {
+            width: 52px !important;
+            min-width: 52px !important;
+            max-width: 52px !important;
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+            text-align: center !important;
+        }
+        .hold-candidate-selection-table .q-table th:first-child,
+        .hold-candidate-selection-table .q-table td:first-child {
+            width: 32px !important;
+            min-width: 32px !important;
+            max-width: 32px !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
         .security-operations-table .q-table th:last-child,
         .security-operations-table .q-table td:last-child { text-align: left; white-space: normal; }
         .login-sessions-table .q-table th {
@@ -1179,7 +1198,7 @@ def index() -> None:
             drawer_headings.append(system_heading)
             drawer_sections.append((system_heading, (
                 "audit-trail", "login-sessions", "security-operations",
-                "security-levels", "profiles", "governance-custody",
+                "security-levels", "profiles", "governance-custody", "holds",
             )))
             audit_navigation = drawer_link(
                 "Audit trail", "manage_history", navigation_key="audit-trail",
@@ -1198,6 +1217,9 @@ def index() -> None:
             )
             custody_navigation = drawer_link(
                 "Governance custody", "shield_person", navigation_key="governance-custody",
+            )
+            holds_navigation = drawer_link(
+                "Holds", "gavel", navigation_key="holds",
             )
 
     def set_active_drawer_link(page: str) -> None:
@@ -1475,6 +1497,10 @@ def index() -> None:
             await select_login_sessions()
         elif page == "governance-custody":
             await select_governance_custody()
+        elif page == "holds":
+            await select_holds()
+        elif page == "hold-details" and entity_id is not None:
+            await select_hold_details(entity_id)
         elif page == "security-operations":
             await select_security_operations()
         elif page == "aggregation-details" and entity_id is not None:
@@ -2652,6 +2678,27 @@ def index() -> None:
                             with ui.column().classes("gap-0 grow"):
                                 ui.label(GATE_LABELS.get(gate["gate"], gate["gate"].replace("_", " ").title())).classes("font-medium")
                                 ui.label(gate_detail(gate)).classes("text-xs text-slate-500")
+                    constraints = result.get("resource_state_constraints", [])
+                    if constraints:
+                        ui.label("Resource state restrictions").classes("text-base font-semibold mt-4")
+                        for constraint in constraints:
+                            effect = str(constraint.get("effect", "change")).replace("_", " ")
+                            with ui.column().classes("w-full gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3"):
+                                with ui.row().classes("items-center gap-2"):
+                                    ui.icon("gavel", color="warning")
+                                    ui.label(
+                                        f"An effective legal hold prevents this {resource_type} from undergoing {effect}."
+                                    ).classes("font-medium text-amber-900")
+                                ui.label(
+                                    f"Coverage: {constraint.get('source', 'unknown')}; "
+                                    f"{constraint.get('effective_hold_count', 0)} effective hold(s)."
+                                ).classes("text-xs text-amber-800")
+                                for hold in constraint.get("holds", []):
+                                    preservation = " — preserves metadata and state" if hold.get("preserve_resource_state") else ""
+                                    ui.label(
+                                        f"{hold.get('code', '')} — {hold.get('name', '')} "
+                                        f"({hold.get('source', 'unknown')}){preservation}"
+                                    ).classes("text-sm text-amber-900")
                     ui.label("Contributing context").classes("text-base font-semibold mt-4")
                     with ui.grid(columns=2).classes("w-full gap-3"):
                         with ui.column().classes("gap-0 rounded-lg border border-slate-200 p-3"):
@@ -3013,6 +3060,145 @@ def index() -> None:
                 )
         dialog.open()
 
+    async def show_security_level_change(
+        resource_type: str, resource: dict[str, Any], on_saved: Any,
+    ) -> None:
+        try:
+            levels = await api.list("security-levels", limit=500)
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+        options = {
+            item["id"]: f"{item['code']} — {item['name']}"
+            for item in levels
+        }
+        dialog = ui.dialog().props("persistent")
+        preview_state: dict[str, Any] = {}
+        with dialog, ui.card().classes("w-[620px] max-w-[calc(100vw-32px)]"):
+            ui.label("Change security level").classes("text-xl font-semibold")
+            ui.label(
+                "This governed action remains available when ordinary metadata editing is restricted."
+            ).classes("text-sm text-slate-500")
+            target = ui.select(
+                options, value=resource["security_level_id"], label="Security level",
+            ).props("outlined options-dense").classes("w-full")
+            remedy_options = {
+                "none": "Change only this resource",
+                "raise_ancestors": "Also raise parent aggregations as needed",
+                "downgrade_subtree": "Also lower contained resources as needed",
+            }
+            remedy_descriptions = {
+                "none": (
+                    "Changes only this resource. If that would violate the hierarchy’s security "
+                    "rules, the review rejects the change and nothing is updated."
+                ),
+                "raise_ancestors": (
+                    "If this resource is being raised, Wathiq also raises any parent aggregations "
+                    "whose security levels are too low. It never lowers anything."
+                ),
+                "downgrade_subtree": (
+                    "If an aggregation is being lowered, Wathiq also lowers child aggregations "
+                    "and records whose security levels would otherwise be too high. This can "
+                    "affect many resources and is therefore shown during review."
+                ),
+            }
+            remedy = ui.select(
+                remedy_options, value="none", label="Hierarchy remedy",
+            ).props(
+                'outlined options-dense '
+                'popup-content-style="width:572px;max-width:calc(100vw - 64px)"'
+            ).classes("w-full")
+            remedy.add_slot("option", """
+                <q-item v-bind="props.itemProps" class="q-py-sm" style="width:100%; max-width:100%;">
+                  <q-item-section style="min-width:0; max-width:100%;">
+                    <q-item-label class="text-weight-medium" style="white-space:normal; overflow-wrap:anywhere;">{{ props.opt.label }}</q-item-label>
+                    <q-item-label caption style="white-space:normal; overflow-wrap:anywhere; line-height:1.35;">
+                      {{ props.opt.value === 0
+                          ? 'Changes only this resource. If that would violate the hierarchy’s security rules, the review rejects the change and nothing is updated.'
+                          : props.opt.value === 1
+                            ? 'If this resource is being raised, Wathiq also raises any parent aggregations whose security levels are too low. It never lowers anything.'
+                            : 'If an aggregation is being lowered, Wathiq also lowers child aggregations and records whose security levels would otherwise be too high. This can affect many resources and is therefore shown during review.' }}
+                    </q-item-label>
+                  </q-item-section>
+                </q-item>
+            """)
+            remedy_description = ui.label(remedy_descriptions["none"]).classes(
+                "-mt-2 px-3 text-xs leading-relaxed text-slate-500"
+            )
+            reason = ui.textarea("Reason *").props("outlined autogrow maxlength=2000").classes("w-full")
+            impact = ui.column().classes("w-full gap-1 rounded-lg bg-slate-50 p-3")
+            apply_button: Any = None
+
+            def invalidate_preview() -> None:
+                preview_state.clear()
+                impact.clear()
+                with impact:
+                    ui.label("Review the change before applying it.").classes("text-sm text-slate-500")
+                if apply_button is not None:
+                    apply_button.disable()
+
+            async def review() -> None:
+                if target.value == resource["security_level_id"]:
+                    ui.notify("Choose a different security level", color="warning")
+                    return
+                try:
+                    preview = await api.preview_security_level_change({
+                        "resource_type": resource_type,
+                        "resource_id": resource["id"],
+                        "target_security_level_id": int(target.value),
+                        "remedy": remedy.value,
+                    })
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+                    return
+                preview_state.clear(); preview_state.update(preview)
+                impact.clear()
+                with impact:
+                    if preview["conflict"] and remedy.value == "none":
+                        ui.label("This change conflicts with the security-level hierarchy. Select a remedy and review again.").classes("text-sm font-medium text-negative")
+                    else:
+                        ui.label("Security-level change reviewed").classes("text-sm font-semibold")
+                        affected = len(preview["affected_aggregations"]) + len(preview["affected_records"])
+                        ui.label(f"{affected} related resource{'s' if affected != 1 else ''} will also change.").classes("text-xs text-slate-600")
+                apply_button.set_enabled(not preview["conflict"] or remedy.value != "none")
+
+            async def apply_change() -> None:
+                change_reason = (reason.value or "").strip()
+                if not change_reason:
+                    ui.notify("A reason is required", color="warning")
+                    return
+                if not preview_state:
+                    ui.notify("Review the change before applying it", color="warning")
+                    return
+                try:
+                    result = await api.apply_security_level_change({
+                        "resource_type": resource_type,
+                        "resource_id": resource["id"],
+                        "target_security_level_id": int(target.value),
+                        "remedy": remedy.value,
+                        "preview_token": preview_state["preview_token"],
+                    }, reason=change_reason)
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+                    return
+                dialog.close()
+                ui.notify("Security level changed", color="positive")
+                await on_saved(result["resource"])
+
+            target.on_value_change(lambda _: invalidate_preview())
+            def remedy_changed() -> None:
+                remedy_description.set_text(remedy_descriptions.get(remedy.value, ""))
+                invalidate_preview()
+
+            remedy.on_value_change(lambda _: remedy_changed())
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                ui.button("Review change", icon="fact_check", on_click=review).props("outline no-caps")
+                apply_button = ui.button("Apply change", icon="security", on_click=apply_change).props("unelevated no-caps")
+                apply_button.disable()
+            invalidate_preview()
+        dialog.open()
+
     async def show_record_details(record: dict[str, Any]) -> None:
         """Navigate to the dedicated details page for a record."""
         await select_record_details(record["id"])
@@ -3037,6 +3223,7 @@ def index() -> None:
             record = (await decorate_for_spec(ENTITIES["records"], [fetched]))[0]
             security_level = await api.get("security-levels", record["security_level_id"])
             capabilities = await api.resource_capabilities("records", record_id)
+            effective_holds = await api.effective_holds("record", record_id)
             location_source_ids = {
                 record.get("effective_assigned_location_source_aggregation_id"),
                 record.get("effective_current_location_source_aggregation_id"),
@@ -3105,6 +3292,18 @@ def index() -> None:
                     ).props("unelevated no-caps")
             confirmation.open()
 
+        async def remove_record_from_all_holds() -> None:
+            async def remove(reason: str) -> None:
+                await api.remove_all_direct_holds("record", record_id, reason)
+                ui.notify("Record removed from all directly assigned holds", color="positive")
+                await select_record_details(record_id)
+
+            await hold_reason_dialog(
+                "Remove from all holds? Inherited protection from its aggregation hierarchy will remain.",
+                "Remove from all holds",
+                remove,
+            )
+
         with table_container, ui.column().classes("w-full p-5 gap-5"):
             with ui.card().classes("detail-surface w-full shadow-none p-0 gap-0 overflow-hidden"):
                 with ui.row().classes("w-full items-center px-5 py-3 border-b border-slate-100"):
@@ -3117,6 +3316,13 @@ def index() -> None:
                         ui.label(record["record_number"]).classes("text-sm text-slate-500 font-medium mt-1")
                     favourite_button("records", record["id"])
                     ui.button("Back", icon="arrow_back", on_click=leave_record_page).props("flat no-caps color=blue-grey-8")
+                    if capabilities.get("change_security_level"):
+                        ui.button(
+                            "Security level", icon="security",
+                            on_click=lambda: show_security_level_change(
+                                "record", record, refresh_record_view,
+                            ),
+                        ).props("flat no-caps").tooltip("Change the record security level")
                     if not record.get("_effectively_closed") and capabilities.get("modify_metadata"):
                         ui.button(
                             "Edit metadata", icon="edit",
@@ -3218,6 +3424,42 @@ def index() -> None:
                             ui.label(record["description"]).classes(
                                 "w-full text-sm leading-6 text-slate-600 whitespace-pre-wrap"
                             )
+                    if effective_holds:
+                        with ui.row().classes(
+                            "w-fit max-w-full items-center gap-2 flex-wrap rounded-xl "
+                            "border border-amber-200 bg-amber-50 px-3 py-2"
+                        ):
+                            ui.icon("gavel", color="warning").classes("shrink-0")
+                            hold_count = len(effective_holds)
+                            ui.label(
+                                f"Protected by {hold_count} effective {'hold' if hold_count == 1 else 'holds'}"
+                            ).classes("text-sm font-semibold text-amber-900")
+                            ui.button(
+                                "View holds", icon="visibility",
+                                on_click=lambda: show_effective_holds_dialog(
+                                    effective_holds, "record", record_id,
+                                    lambda: select_record_details(record_id),
+                                ),
+                            ).props("flat dense no-caps color=warning")
+                            if capabilities.get("add_to_hold"):
+                                ui.button(
+                                    "Add to hold", icon="add_link",
+                                    on_click=lambda: add_resource_to_hold_dialog(
+                                        "record", record_id, lambda: select_record_details(record_id),
+                                    ),
+                                ).props("flat dense no-caps color=primary")
+                            if capabilities.get("remove_all_direct_hold_assignments"):
+                                ui.button(
+                                    "Remove from all holds", icon="link_off",
+                                    on_click=remove_record_from_all_holds,
+                                ).props("flat dense no-caps color=negative")
+                    elif capabilities.get("add_to_hold"):
+                        ui.button(
+                            "Add to hold", icon="add_link",
+                            on_click=lambda: add_resource_to_hold_dialog(
+                                "record", record_id, lambda: select_record_details(record_id),
+                            ),
+                        ).props("outline dense no-caps")
                     with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
                         for label, value in (
                             ("Security level", f"{security_level['code']} — {security_level['name']}"),
@@ -3772,6 +4014,8 @@ def index() -> None:
                     color="warning", close_button=True,
                 )
                 return
+            if not editor_capabilities.get("change_security_level"):
+                effective_locked_fields.add("security_level_id")
         if row and spec.key in {"aggregations", "records"} and row.get("_effectively_closed"):
             ui.notify(
                 f"Closed {spec.singular} metadata cannot be changed",
@@ -4022,6 +4266,7 @@ def index() -> None:
                 for field in spec.fields:
                     if not creating and spec.key in {"aggregations", "records"} and field.name in {
                         "date_of_next_review", "is_vital", "assigned_location", "current_location",
+                        "security_level_id",
                     }:
                         continue
                     if creating and spec.key == "aggregations" and field.name == "parent_aggregation_id":
@@ -4300,14 +4545,11 @@ def index() -> None:
             if not creating and spec.key in {"aggregations", "records"}:
                 resource_change_reason = ui.textarea(
                     "Reason for change",
-                    placeholder=(
-                        "Required when lowering the security level or changing the medium"
-                        if spec.key == "records"
-                        else "Required when lowering the security level or changing the medium"
-                    ),
+                    placeholder="Required when changing the medium",
                 ).props("outlined autogrow").classes("w-full")
                 ui.label(
-                    "A reason is required only when lowering the security level or changing the medium."
+                    "A reason is required when changing the medium. Use the separate Security "
+                    "Level action for a reviewed security-level change."
                 ).classes("text-xs text-slate-500 -mt-2")
             security_change_reason = None
             if not creating and spec.key == "roles":
@@ -4355,15 +4597,6 @@ def index() -> None:
                         if spec.key == "profiles":
                             payload.pop("code", None)
                         change_reason = None
-                        if resource_change_reason is not None and "security_level_id" in payload:
-                            levels = lookup_rows_by_field.get("security_level_id", [])
-                            level_numbers = {item["id"]: item["level_number"] for item in levels}
-                            old_number = level_numbers.get(row.get("security_level_id"))
-                            new_number = level_numbers.get(payload.get("security_level_id"))
-                            if old_number is not None and new_number is not None and new_number < old_number:
-                                change_reason = (resource_change_reason.value or "").strip()
-                                if not change_reason:
-                                    raise ValueError("A reason is required when lowering the security level")
                         if (
                             resource_change_reason is not None
                             and spec.key in {"aggregations", "records"}
@@ -4726,6 +4959,7 @@ def index() -> None:
             current = by_id.get(aggregation["id"], aggregation)
             security_level = await api.get("security-levels", current["security_level_id"])
             capabilities = await api.resource_capabilities("aggregations", current["id"])
+            effective_holds = await api.effective_holds("aggregation", current["id"])
             closure = effective_closure(current, by_id)
             ancestors = []
             seen = {current["id"]}
@@ -4777,6 +5011,18 @@ def index() -> None:
             with table_container:
                 async def leave_aggregation_page() -> None:
                     await breadcrumb_back(lambda: select_entity("aggregations"))
+
+                async def remove_aggregation_from_all_holds() -> None:
+                    async def remove(reason: str) -> None:
+                        await api.remove_all_direct_holds("aggregation", current["id"], reason)
+                        ui.notify("Aggregation removed from all directly assigned holds", color="positive")
+                        await open_aggregation(current)
+
+                    await hold_reason_dialog(
+                        "Remove from all holds? Inherited protection from parent aggregations will remain.",
+                        "Remove from all holds",
+                        remove,
+                    )
 
                 async def reopen_current() -> None:
                     async def reopened(saved: dict[str, Any]) -> None:
@@ -4966,6 +5212,42 @@ def index() -> None:
                             with ui.column().classes("w-full gap-1 rounded-xl bg-slate-50 px-4 py-3"):
                                 ui.label("DESCRIPTION").classes("detail-field-label")
                                 ui.label(current["description"]).classes("text-sm leading-6 text-slate-600")
+                        if effective_holds:
+                            with ui.row().classes(
+                                "w-fit max-w-full items-center gap-2 flex-wrap rounded-xl "
+                                "border border-amber-200 bg-amber-50 px-3 py-2"
+                            ):
+                                ui.icon("gavel", color="warning").classes("shrink-0")
+                                hold_count = len(effective_holds)
+                                ui.label(
+                                    f"Protected by {hold_count} effective {'hold' if hold_count == 1 else 'holds'}"
+                                ).classes("text-sm font-semibold text-amber-900")
+                                ui.button(
+                                    "View holds", icon="visibility",
+                                    on_click=lambda: show_effective_holds_dialog(
+                                        effective_holds, "aggregation", current["id"],
+                                        lambda: open_aggregation(current),
+                                    ),
+                                ).props("flat dense no-caps color=warning")
+                                if capabilities.get("add_to_hold"):
+                                    ui.button(
+                                        "Add to hold", icon="add_link",
+                                        on_click=lambda: add_resource_to_hold_dialog(
+                                            "aggregation", current["id"], lambda: open_aggregation(current),
+                                        ),
+                                    ).props("flat dense no-caps color=primary")
+                                if capabilities.get("remove_all_direct_hold_assignments"):
+                                    ui.button(
+                                        "Remove from all holds", icon="link_off",
+                                        on_click=remove_aggregation_from_all_holds,
+                                    ).props("flat dense no-caps color=negative")
+                        elif capabilities.get("add_to_hold"):
+                            ui.button(
+                                "Add to hold", icon="add_link",
+                                on_click=lambda: add_resource_to_hold_dialog(
+                                    "aggregation", current["id"], lambda: open_aggregation(current),
+                                ),
+                            ).props("outline dense no-caps")
                         with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
                             aggregation_metadata = (
                                 ("Status", "Closed" if closure else "Open"),
@@ -5127,6 +5409,16 @@ def index() -> None:
                                     delete_button.tooltip(
                                         "Remove or move all child aggregations and records before deleting"
                                     )
+                            if capabilities.get("change_security_level"):
+                                ui.button(
+                                    "Security level", icon="security",
+                                    on_click=lambda: show_security_level_change(
+                                        "aggregation", current,
+                                        lambda saved: open_aggregation(saved),
+                                    ),
+                                ).props("flat dense no-caps").tooltip(
+                                    "Change the aggregation security level"
+                                )
                             if closure is None and capabilities.get("modify_metadata"):
                                 ui.button(
                                     "Edit metadata", icon="edit",
@@ -6093,6 +6385,7 @@ def index() -> None:
         auth_state["principal"] = principal
         privileges = set(principal.get("global_privileges", []))
         refresh_drawer_visibility(privileges)
+        holds_navigation.set_visibility(False)
         user = principal["user"]
         current_user_name.text = user["name"]
         current_user_email.text = user.get("email") or user["account_type"].title()
@@ -6115,6 +6408,16 @@ def index() -> None:
                     with ui.column().classes("gap-0 min-w-0"):
                         ui.label(role["name"]).classes("text-sm font-medium line-clamp-1")
                         ui.label(role["org_unit"]["name"]).classes("text-xs text-slate-400 line-clamp-1")
+
+    async def refresh_hold_navigation() -> None:
+        privileges=set((auth_state.get("principal") or {}).get("global_privileges",[]))
+        if "holds.administer" in privileges:
+            holds_navigation.set_visibility(True); return
+        try:
+            page=await api.holds_page(limit=1)
+            holds_navigation.set_visibility(bool(page["total"]))
+        except ApiError:
+            holds_navigation.set_visibility(False)
 
     async def show_change_password() -> None:
         forced_change = bool(
@@ -10107,6 +10410,617 @@ def index() -> None:
         add_scheme_button.on("click", create_scheme)
         await reload_workspace(initial_scheme_id, initial_classification_id)
 
+    async def hold_reason_dialog(title_text: str, action_label: str, action: Any) -> None:
+        dialog = ui.dialog()
+        with dialog, ui.card().classes("w-[520px] max-w-full"):
+            ui.label(title_text).classes("text-xl font-semibold")
+            reason = ui.textarea("Reason", validation={"A reason is required": lambda value: bool((value or "").strip())}).props("outlined autogrow maxlength=2000").classes("w-full")
+
+            async def submit() -> None:
+                if not (reason.value or "").strip():
+                    ui.notify("A reason is required", color="warning"); return
+                try:
+                    result = action(reason.value.strip())
+                    if asyncio.iscoroutine(result): await result
+                    dialog.close()
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                ui.button(action_label, icon="check", on_click=submit).props("unelevated no-caps")
+        dialog.open()
+
+    async def open_hold_editor(hold: dict[str, Any] | None = None) -> None:
+        editing = hold is not None
+        try:
+            users = await api.list("users", limit=500)
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True); return
+        people = {item["id"]: f"{item['name']} — {item.get('email') or 'no email'}" for item in users if item.get("account_type") == "person" and item.get("status") == "active"}
+        async def local_datetime_value(value: str | None) -> str:
+            if not value:
+                return ""
+            return await ui.run_javascript(
+                f"(() => {{ const d=new Date({json.dumps(value)}); "
+                "const p=n=>String(n).padStart(2,'0'); "
+                "return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }})()"
+            )
+        initial_valid_from = await local_datetime_value((hold or {}).get("valid_from"))
+        initial_valid_to = await local_datetime_value((hold or {}).get("valid_to"))
+        dialog = ui.dialog()
+        with dialog, ui.card().classes("w-[760px] max-w-[95vw] max-h-[90vh] overflow-y-auto"):
+            ui.label("Edit hold" if editing else "Create hold").classes("text-xl font-semibold")
+            with ui.grid(columns=2).classes("w-full gap-3"):
+                code = ui.input("Code", value=(hold or {}).get("code", "")).props("outlined maxlength=100").classes("w-full")
+                name = ui.input("Name", value=(hold or {}).get("name", "")).props("outlined maxlength=300").classes("w-full")
+                valid_from = ui.input("Valid from", value=initial_valid_from).props("outlined type=datetime-local").classes("w-full")
+                valid_to = ui.input("Valid to (exclusive)", value=initial_valid_to).props("outlined type=datetime-local").classes("w-full")
+            owner = ui.select(people, value=(hold or {}).get("owner_user_id"), label="Owner", with_input=True).props("outlined use-input").classes("w-full")
+            contributor_people = {key: value for key, value in people.items() if key != owner.value}
+            contributors = ui.select(
+                contributor_people,
+                value=[item["id"] for item in (hold or {}).get("contributors", [])],
+                multiple=True, label="Contributors", with_input=True,
+            ).props("outlined use-chips use-input").classes("w-full")
+            description = ui.textarea("Description", value=(hold or {}).get("description") or "").props("outlined autogrow maxlength=4000").classes("w-full")
+            preserve = ui.checkbox("Preserve resource metadata and state", value=(hold or {}).get("preserve_resource_state", False))
+            ui.label("Valid-to is exclusive. Dates are interpreted in your browser timezone and sent with an offset.").classes("text-xs text-slate-500")
+
+            async def iso_value(value: str, *, required: bool) -> str | None:
+                if not value:
+                    if required: raise ValueError("Valid from is required")
+                    return None
+                # A datetime-local value has no offset. Parse it in the browser,
+                # where the user's actual timezone is known, then send UTC.
+                return await ui.run_javascript(f"new Date({json.dumps(value)}).toISOString()")
+
+            async def persist(reason: str | None = None) -> None:
+                if not (code.value or "").strip() or not (name.value or "").strip() or owner.value is None:
+                    ui.notify("Code, name, owner, and valid-from are required", color="warning"); return
+                try:
+                    payload = {"code": code.value.strip(), "name": name.value.strip(), "description": (description.value or "").strip() or None,
+                               "valid_from": await iso_value(valid_from.value, required=True), "valid_to": await iso_value(valid_to.value, required=False),
+                               "owner_user_id": int(owner.value), "preserve_resource_state": bool(preserve.value)}
+                    contributor_ids = [int(value) for value in (contributors.value or []) if int(value) != int(owner.value)]
+                    if not editing:
+                        payload["contributor_user_ids"] = contributor_ids
+                    saved = await (api.update_hold(hold["id"], hold["version"], payload, reason or "") if editing else api.create_hold(payload))
+                    if editing and contributor_ids != [item["id"] for item in hold.get("contributors", [])]:
+                        saved = await api.replace_hold_contributors(
+                            hold["id"], saved["version"], contributor_ids, reason or "",
+                        )
+                    dialog.close(); ui.notify("Hold updated" if editing else "Hold created", color="positive")
+                    await select_hold_details(saved["id"])
+                except (ApiError, ValueError) as error:
+                    ui.notify(error_message(error) if isinstance(error, ApiError) else str(error), color="negative", close_button=True)
+
+            async def save() -> None:
+                if editing:
+                    await hold_reason_dialog("Reason for updating this hold", "Update hold", persist)
+                else:
+                    await persist()
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                ui.button("Save hold", icon="save", on_click=save).props("unelevated no-caps")
+        dialog.open()
+
+    async def add_resource_to_hold_dialog(resource_type: str, resource_id: int, refresh_page: Any) -> None:
+        try:
+            available = [item for item in await api.holds(limit=100) if item.get("capabilities", {}).get("manage_members")]
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True); return
+        dialog = ui.dialog()
+        with dialog, ui.card().classes("w-[520px] max-w-full"):
+            ui.label("Add to hold").classes("text-xl font-semibold")
+            selected = ui.select({item["id"]: f"{item['code']} — {item['name']}" for item in available}, label="Hold", with_input=True).props("outlined use-input").classes("w-full")
+            reason = ui.textarea("Reason").props("outlined autogrow maxlength=2000").classes("w-full")
+            async def submit() -> None:
+                if selected.value is None or not (reason.value or "").strip(): ui.notify("Hold and reason are required", color="warning"); return
+                try:
+                    await api.add_resource_to_hold(resource_type, resource_id, int(selected.value), reason.value.strip())
+                    dialog.close(); ui.notify("Resource added to hold", color="positive")
+                    result = refresh_page()
+                    if asyncio.iscoroutine(result): await result
+                except ApiError as error: ui.notify(error_message(error), color="negative", close_button=True)
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                ui.button("Add", icon="add_link", on_click=submit).props("unelevated no-caps")
+        dialog.open()
+
+    def show_effective_holds_dialog(
+        effective_holds: list[dict[str, Any]], resource_type: str | None = None,
+        resource_id: int | None = None, refresh_page: Any = None,
+    ) -> None:
+        dialog=ui.dialog()
+        with dialog,ui.card().classes("w-[720px] max-w-[94vw] max-h-[85vh]"):
+            with ui.row().classes("w-full items-center gap-3"):
+                ui.avatar(icon="gavel",color="amber-2",text_color="amber-9",size="44px")
+                with ui.column().classes("gap-0 grow"):
+                    ui.label("Effective legal holds").classes("text-xl font-semibold")
+                    ui.label("These holds currently restrict deletion, disposition, and component changes.").classes("text-sm text-slate-600")
+            ui.separator()
+            with ui.column().classes("w-full gap-3 overflow-y-auto"):
+                for item in effective_holds:
+                    with ui.card().classes("w-full shadow-none border border-amber-200 bg-amber-50 p-4"):
+                        if item.get("code"):
+                            with ui.row().classes("w-full items-center gap-2"):
+                                ui.badge(item["code"],color="amber").props("outline")
+                                ui.label(item["name"]).classes("font-semibold text-slate-900")
+                            ui.label(f"Protection source: {item['source'].title()}").classes("text-sm text-slate-600")
+                            if item.get("preserve_resource_state"):
+                                ui.label("Also preserves metadata and governed state changes").classes("text-sm text-amber-900")
+                            with ui.row().classes("w-full justify-end gap-2"):
+                                async def open_this_hold(selected_id: int = item["hold_id"]) -> None:
+                                    dialog.close(); await select_hold_details(selected_id)
+                                ui.button("Open hold", icon="open_in_new", on_click=open_this_hold).props("flat no-caps")
+                                if item.get("is_inherited") and item.get("nearest_assigned_aggregation_id"):
+                                    async def open_source(source_id: int = item["nearest_assigned_aggregation_id"]) -> None:
+                                        dialog.close(); await open_aggregation(await api.get("aggregations", source_id))
+                                    ui.button("Open assigning aggregation", icon="account_tree", on_click=open_source).props("flat no-caps")
+                                if (resource_type and resource_id is not None and item.get("is_direct")
+                                        and item.get("can_manage_members") and item.get("direct_assignment_version") is not None):
+                                    async def remove_this(selected: dict[str, Any] = item) -> None:
+                                        async def remove(reason: str) -> None:
+                                            await api.remove_hold_member(selected["hold_id"],resource_type,resource_id,selected["direct_assignment_version"],reason)
+                                            dialog.close(); ui.notify("Direct hold assignment removed",color="positive")
+                                            if refresh_page:
+                                                result=refresh_page()
+                                                if asyncio.iscoroutine(result): await result
+                                        await hold_reason_dialog("Reason for removing this direct assignment","Remove",remove)
+                                    ui.button("Remove from this hold",icon="link_off",color="negative",on_click=remove_this).props("flat no-caps")
+                        else:
+                            ui.label("Effective hold — details restricted").classes("font-semibold text-amber-900")
+                            ui.label(f"Protection source: {item['source'].title()}").classes("text-sm text-slate-600")
+            ui.button("Close",on_click=dialog.close).props("flat no-caps").classes("self-end")
+        dialog.open()
+
+    async def select_holds() -> None:
+        register_navigation("holds", "Holds")
+        show_authenticated_view(); state.update(resource="holds", rows=[], searched=True)
+        search_bar.set_visibility(False); aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False); add_record_button.set_visibility(False)
+        title.text = "Holds"; subtitle.text = "Legal and regulatory preservation instructions"; guidance.text = ""
+        table_container.clear()
+        try:
+            hold_people=await api.hold_people()
+        except ApiError:
+            hold_people=[]
+        people_options={item["id"]:item["name"] for item in hold_people}
+        owner_options={None:"All owners"}; owner_options.update(people_options)
+        contributor_options={None:"All contributors"}; contributor_options.update(people_options)
+        privileges = set((auth_state.get("principal") or {}).get("global_privileges", []))
+        with table_container, ui.column().classes("w-full p-5 gap-4"):
+            paging = {"offset": 0, "total": 0, "limit": 25}
+            with ui.row().classes("w-full items-end gap-3"):
+                query = ui.input("Search code or name").props("outlined clearable debounce=300").classes("grow")
+                hold_state = ui.select({None:"All states","scheduled":"Scheduled","active":"Active","expired":"Expired"}, value=None, label="State").props("outlined").classes("w-44")
+                preservation = ui.select({None:"All protection","false":"Core protection","true":"Enhanced state preservation"},value=None,label="Protection").props("outlined").classes("w-56")
+                hold_sort = ui.select({"code":"Code","name":"Name","state":"State","valid_from":"Valid from","valid_to":"Valid until","owner":"Owner","created":"Created","updated":"Updated"},value="code",label="Sort by").props("outlined").classes("w-44")
+                refresh = ui.button("Refresh", icon="refresh").props("flat no-caps")
+                if "holds.administer" in privileges:
+                    ui.button("Create hold", icon="add", on_click=lambda: open_hold_editor()).props("unelevated no-caps")
+            with ui.row().classes("w-full items-end gap-3"):
+                owner_filter=ui.select(owner_options,value=None,label="Owner").props("outlined clearable").classes("w-56")
+                contributor_filter=ui.select(contributor_options,value=None,label="Contributor").props("outlined clearable").classes("w-56")
+                valid_from_filter=ui.input("Valid from on/after").props("outlined clearable type=datetime-local").classes("w-56")
+                valid_to_filter=ui.input("Valid until before").props("outlined clearable type=datetime-local").classes("w-56")
+            host = ui.column().classes("w-full")
+            with ui.row().classes("w-full items-center justify-between"):
+                page_status = ui.label().classes("text-sm text-slate-600")
+                with ui.row().classes("gap-1"):
+                    first_page = ui.button("First",icon="first_page").props("flat no-caps")
+                    previous_page = ui.button("Previous",icon="chevron_left").props("flat no-caps")
+                    next_page = ui.button("Next",icon="chevron_right").props("flat no-caps")
+                    last_page = ui.button("Last",icon="last_page").props("flat no-caps")
+
+            async def load(*, reset: bool = False) -> None:
+                if reset: paging["offset"] = 0
+                try:
+                    async def browser_iso(value: str | None) -> str | None:
+                        return await ui.run_javascript(f"new Date({json.dumps(value)}).toISOString()") if value else None
+                    result = await api.holds_page(q=(query.value or "").strip() or None,state=hold_state.value,
+                        preserve_resource_state=(None if preservation.value is None else preservation.value=="true"),
+                        owner_user_id=owner_filter.value,contributor_user_id=contributor_filter.value,
+                        valid_from_gte=await browser_iso(valid_from_filter.value),valid_to_lt=await browser_iso(valid_to_filter.value),
+                        sort=hold_sort.value,limit=paging["limit"],offset=paging["offset"])
+                except ApiError as error:
+                    ui.notify(error_message(error), color="negative", close_button=True); return
+                rows=result["items"]; paging["total"]=result["total"]
+                host.clear()
+                with host:
+                    if not rows:
+                        ui.label("No holds are available.").classes("text-slate-500 p-6")
+                        return
+                    table = ui.table(columns=[
+                        {"name":"code","label":"Code","field":"code","sortable":True}, {"name":"name","label":"Name","field":"name","sortable":True},
+                        {"name":"state","label":"State","field":"state","sortable":True}, {"name":"valid_from","label":"Valid from","field":"valid_from","sortable":True},
+                        {"name":"valid_to","label":"Valid to","field":"valid_to","sortable":True}, {"name":"direct_member_count","label":"Direct members","field":"direct_member_count","sortable":True},
+                        {"name":"actions","label":"","field":"actions"},
+                    ], rows=rows, row_key="id", pagination={"rowsPerPage":25,"sortBy":"code"}).props('flat bordered wrap-cells separator=horizontal hide-pagination').classes("w-full governance-table")
+                    table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round icon="open_in_new" color="primary" @click="$parent.$emit(\'open_hold\', props.row)"><q-tooltip>Open hold</q-tooltip></q-btn></q-td>')
+                    table.on("open_hold", lambda event: select_hold_details(event.args["id"]))
+                start=paging["offset"]+1 if paging["total"] else 0; end=min(paging["offset"]+len(rows),paging["total"])
+                page_status.text=f"Showing {start}–{end} of {paging['total']} holds"
+                first_page.set_enabled(paging["offset"]>0); previous_page.set_enabled(paging["offset"]>0)
+                next_page.set_enabled(paging["offset"]+paging["limit"]<paging["total"]); last_page.set_enabled(paging["offset"]+paging["limit"]<paging["total"])
+            async def move_hold_page(delta: int) -> None:
+                paging["offset"]=max(0,paging["offset"]+delta*paging["limit"]); await load()
+            async def hold_page_edge(last: bool) -> None:
+                paging["offset"]=(max(0,(paging["total"]-1)//paging["limit"])*paging["limit"] if last else 0); await load()
+            refresh.on("click", load); query.on_value_change(lambda:load(reset=True)); hold_state.on_value_change(lambda:load(reset=True)); preservation.on_value_change(lambda:load(reset=True)); hold_sort.on_value_change(lambda:load(reset=True))
+            owner_filter.on_value_change(lambda:load(reset=True)); contributor_filter.on_value_change(lambda:load(reset=True)); valid_from_filter.on_value_change(lambda:load(reset=True)); valid_to_filter.on_value_change(lambda:load(reset=True))
+            first_page.on("click",lambda:hold_page_edge(False)); previous_page.on("click",lambda:move_hold_page(-1)); next_page.on("click",lambda:move_hold_page(1)); last_page.on("click",lambda:hold_page_edge(True))
+            await load()
+
+    async def select_hold_details(hold_id: int) -> None:
+        try:
+            hold = await api.hold(hold_id)
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True); return
+        register_navigation("hold-details", hold["name"], entity_id=hold_id, accessible_label=f"{hold['name']} — {hold['code']}")
+        show_authenticated_view(); state.update(resource="hold-details", rows=[], searched=True)
+        search_bar.set_visibility(False); aggregation_mode_bar.set_visibility(False); add_button.set_visibility(False); add_record_button.set_visibility(False)
+        title.text=hold["name"]; subtitle.text=f"{hold['code']} · {hold['state'].title()}"; guidance.text=""; table_container.clear()
+
+        async def manage_contributors() -> None:
+            try:
+                users = await api.list("users", limit=500)
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True); return
+            people = {item["id"]: f"{item['name']} — {item.get('email') or 'no email'}" for item in users if item.get("account_type") == "person" and item.get("status") == "active" and item["id"] != hold["owner_user_id"]}
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("w-[620px] max-w-full"):
+                ui.label("Manage contributors").classes("text-xl font-semibold")
+                selected = ui.select(people, value=[item["id"] for item in hold["contributors"]], multiple=True, label="Active contributors").props("outlined use-chips use-input").classes("w-full")
+                reason = ui.textarea("Reason").props("outlined autogrow maxlength=2000").classes("w-full")
+                async def submit() -> None:
+                    if not (reason.value or "").strip(): ui.notify("A reason is required", color="warning"); return
+                    try:
+                        saved = await api.replace_hold_contributors(hold_id, hold["version"], [int(value) for value in (selected.value or [])], reason.value.strip())
+                        dialog.close(); ui.notify("Contributors updated", color="positive"); await select_hold_details(saved["id"])
+                    except ApiError as error: ui.notify(error_message(error), color="negative", close_button=True)
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button("Save contributors", icon="group", on_click=submit).props("unelevated no-caps")
+            dialog.open()
+
+        async def delete_current_hold() -> None:
+            async def remove(reason: str) -> None:
+                await api.delete_hold(hold_id, hold["version"], reason); ui.notify("Hold deleted", color="positive"); await select_holds()
+            await hold_reason_dialog("Reason for deleting this empty hold", "Delete hold", remove)
+
+        async def show_hold_history() -> None:
+            try: rows = await api.hold_history(hold_id)
+            except ApiError as error: ui.notify(error_message(error), color="negative", close_button=True); return
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("w-[920px] max-w-[95vw] max-h-[85vh]"):
+                ui.label("Hold history").classes("text-xl font-semibold")
+                history_filter = ui.input("Filter history", placeholder="Event, actor, or reason").props("outlined dense clearable debounce=250").classes("w-full")
+                history_table = ui.table(columns=[{"name":"event_timestamp","label":"When","field":"event_timestamp","sortable":True},{"name":"operation","label":"Event","field":"operation","sortable":True},{"name":"actor_name","label":"Actor","field":"actor_name","sortable":True},{"name":"reason","label":"Reason","field":"reason","sortable":True}], rows=rows, row_key="id", pagination={"rowsPerPage":10,"sortBy":"event_timestamp","descending":True}).props('flat bordered wrap-cells separator=horizontal :rows-per-page-options="[10,25,50]"').classes("w-full governance-table")
+                history_table.bind_filter_from(history_filter, "value")
+                ui.button("Close", on_click=dialog.close).props("flat no-caps").classes("self-end")
+            dialog.open()
+        with table_container, ui.column().classes("w-full p-4 gap-3"):
+            with ui.card().classes("detail-surface w-full shadow-none overflow-hidden p-0"):
+                with ui.row().classes("w-full items-center px-4 py-2 border-b border-slate-100"):
+                    ui.icon("gavel", color="primary", size="21px")
+                    ui.label("Hold details").classes("font-semibold")
+                with ui.row().classes(f"w-full {RECORD_DETAIL_HEADER_CLASSES} gap-3 px-4 py-4"):
+                    ui.avatar(icon="gavel",color="blue-1",text_color="primary",size="50px")
+                    with ui.column().classes("gap-1 grow"):
+                        with ui.row().classes("items-center gap-3"):
+                            ui.label(hold["name"]).classes("text-2xl font-semibold text-slate-900")
+                            ui.badge(
+                                hold["state"].title(),
+                                color="positive" if hold["state"]=="active" else "blue-grey",
+                            ).props("outline")
+                        ui.label(hold["code"]).classes("text-sm font-medium tracking-wide text-slate-500")
+                        ui.label(hold.get("description") or "No description provided").classes("text-base text-slate-700 mt-2 max-w-3xl")
+                    with ui.row().classes("gap-1"):
+                        if hold["capabilities"].get("update"): ui.button(icon="edit",on_click=lambda:open_hold_editor(hold)).props("flat round").tooltip("Edit hold")
+                        if hold["capabilities"].get("manage_contributors"): ui.button(icon="group",on_click=manage_contributors).props("flat round").tooltip("Manage contributors")
+                        ui.button(icon="history",on_click=show_hold_history).props("flat round").tooltip("View hold history")
+                        delete_button = ui.button(icon="delete",color="negative",on_click=delete_current_hold).props("flat round")
+                        if hold["capabilities"].get("delete"):
+                            delete_button.tooltip("Delete empty hold")
+                        else:
+                            delete_button.disable()
+                            delete_button.tooltip("Remove all direct members before deleting this hold" if hold["capability_reasons"].get("delete") == "hold_not_empty" else "You are not authorized to delete this hold")
+                ui.separator()
+                with ui.grid(columns=4).classes("w-full gap-0 divide-x divide-slate-200"):
+                    for icon,label,value in [
+                        ("event_available","Valid from",format_timestamp(hold["valid_from"])),
+                        ("event_busy","Valid until",format_timestamp(hold["valid_to"]) if hold.get("valid_to") else "No scheduled end"),
+                        ("person","Owner",hold["owner"]["name"]),
+                        ("shield","Protection",("Prevents disposition, deletion, and component changes; also preserves metadata and governed state"
+                                                  if hold["preserve_resource_state"] else
+                                                  "Prevents disposition, deletion, and component changes")),
+                    ]:
+                        with ui.row().classes("items-start gap-3 p-4 no-wrap min-w-0"):
+                            ui.icon(icon).classes("text-primary text-xl mt-1 shrink-0")
+                            with ui.column().classes("gap-0 min-w-0"):
+                                ui.label(label).classes("text-xs uppercase tracking-wide text-slate-500")
+                                if label == "Owner":
+                                    with ui.button(
+                                        on_click=lambda: select_user_details(hold["owner"]["id"]),
+                                    ).props("flat dense no-caps color=blue-grey-9").classes("self-start -ml-2 gap-2"):
+                                        render_user_avatar(hold["owner"], size="28px").style(
+                                            "margin-right:8px !important"
+                                        )
+                                        ui.label(value).classes("text-sm font-medium")
+                                else:
+                                    ui.label(value).classes("text-sm font-medium text-slate-800")
+                ui.separator()
+                with ui.row().classes("w-full items-center gap-3 px-4 py-3"):
+                    ui.icon("groups").classes("text-primary text-xl")
+                    with ui.column().classes("gap-1"):
+                        ui.label("Contributors").classes("text-xs uppercase tracking-wide text-slate-500")
+                        with ui.row().classes("gap-2"):
+                            if hold["contributors"]:
+                                for contributor in hold["contributors"]:
+                                    with ui.button(
+                                        on_click=lambda _, user_id=contributor["id"]: select_user_details(user_id),
+                                    ).props("flat dense no-caps color=blue-grey-9").classes("gap-2"):
+                                        render_user_avatar(contributor, size="28px").style(
+                                            "margin-right:8px !important"
+                                        )
+                                        ui.label(contributor["name"]).classes("text-sm text-slate-700")
+                            else: ui.label("No contributors assigned").classes("text-sm text-slate-500")
+            with ui.row().classes("w-full items-end gap-3 flex-wrap"):
+                member_query=ui.input("Filter direct members").props("outlined clearable").classes("grow")
+                member_type=ui.select({None:"All types","aggregation":"Aggregations","record":"Records"},value=None,label="Type").props("outlined").classes("w-44")
+                member_sort=ui.select({"assigned_at":"Assigned","number":"Number","title":"Title","type":"Type","assigned_by":"Assigned by","security_level":"Security level"},value="assigned_at",label="Sort by").props("outlined").classes("w-44")
+                assigned_by_options={None:"Any assigning user",hold["owner"]["id"]:hold["owner"]["name"]}
+                assigned_by_options.update({item["id"]:item["name"] for item in hold["contributors"]})
+                member_assigned_by=ui.select(assigned_by_options,value=None,label="Assigned by").props("outlined clearable").classes("w-52")
+                member_refresh=ui.button("Refresh",icon="refresh").props("flat no-caps")
+                if hold["capabilities"].get("manage_members"):
+                    add_member=ui.button("Add Members",icon="add").props("unelevated no-caps")
+                    remove_selected_members=ui.button("Remove selected",icon="link_off",color="negative").props("outline no-caps")
+                member_assigned_from=ui.input("Assignment date from").props("outlined clearable type=datetime-local").classes("w-56")
+                member_assigned_before=ui.input("Assignment date before").props("outlined clearable type=datetime-local").classes("w-56")
+            member_host=ui.column().classes("w-full")
+            member_paging={"offset":0,"total":0,"limit":25}
+            member_selection:dict[str,dict[str,Any]]={}
+            with ui.row().classes("w-full items-center justify-between"):
+                member_page_status=ui.label().classes("text-sm text-slate-600")
+                with ui.row().classes("gap-1"):
+                    member_first=ui.button("First",icon="first_page").props("flat no-caps")
+                    member_previous=ui.button("Previous",icon="chevron_left").props("flat no-caps")
+                    member_next=ui.button("Next",icon="chevron_right").props("flat no-caps")
+                    member_last=ui.button("Last",icon="last_page").props("flat no-caps")
+
+            async def load_members(*,reset:bool=False) -> None:
+                if reset: member_paging["offset"]=0
+                async def browser_iso(value:str|None)->str|None:
+                    return await ui.run_javascript(f"new Date({json.dumps(value)}).toISOString()") if value else None
+                result=await api.hold_members_page(hold_id,q=(member_query.value or "").strip() or None,resource_type=member_type.value,
+                    assigned_by_user_id=member_assigned_by.value,assigned_from=await browser_iso(member_assigned_from.value),assigned_before=await browser_iso(member_assigned_before.value),
+                    sort=member_sort.value,descending=member_sort.value=="assigned_at",limit=member_paging["limit"],offset=member_paging["offset"])
+                rows=result["items"]; member_paging["total"]=result["total"]
+                member_host.clear()
+                with member_host:
+                    for row in rows:
+                        row["selection_key"]=f"{row['resource_type']}:{row['resource_id']}"
+                        row["security_level_display"] = f"{row['security_level_code']} — {row['security_level_name']}"
+                        row["assigned_at_display"] = format_timestamp(row["assigned_at"])
+                        row["assigned_by_avatar"] = user_avatar({
+                            "id": row.get("assigned_by_user_id"),
+                            "name": row.get("assigned_by_name") or "System",
+                        })
+                    table=ui.table(columns=[
+                        {"name":"resource_type","label":"Type","field":"resource_type","sortable":True,"align":"left","style":"width: 88px; max-width: 88px; text-align: center","headerStyle":"width: 88px; max-width: 88px; text-align: left; white-space: nowrap"},
+                        {"name":"number","label":"Number","field":"number","sortable":True,"align":"left","style":"width: 190px; min-width: 190px; text-align: left","headerStyle":"width: 190px; min-width: 190px; text-align: left"},
+                        {"name":"title","label":"Title","field":"title","sortable":True,"align":"left","style":"width: 250px; min-width: 250px; text-align: left","headerStyle":"width: 250px; min-width: 250px; text-align: left"},
+                        {"name":"description","label":"Description","field":"description","sortable":True,"align":"left","style":"width: 270px; min-width: 270px; text-align: left","headerStyle":"width: 270px; min-width: 270px; text-align: left"},
+                        {"name":"security_level_display","label":"Security level","field":"security_level_display","sortable":True,"align":"left","style":"width: 190px; min-width: 190px; text-align: left","headerStyle":"width: 190px; min-width: 190px; text-align: left"},
+                        {"name":"assigned_at","label":"Assigned","field":"assigned_at","sortable":True,"align":"left","style":"width: 210px; min-width: 210px; text-align: left","headerStyle":"width: 210px; min-width: 210px; text-align: left"},
+                        {"name":"assigned_by_name","label":"Assigned by","field":"assigned_by_name","sortable":True,"align":"left","style":"width: 210px; min-width: 210px; text-align: left","headerStyle":"width: 210px; min-width: 210px; text-align: left"},
+                        {"name":"actions","label":"Actions","field":"actions","align":"right","headerStyle":"text-align: right"},
+                    ],rows=rows,row_key="selection_key",selection="multiple" if hold["capabilities"].get("manage_members") else None,pagination={"rowsPerPage":25}).props('flat bordered wrap-cells separator=horizontal hide-pagination').classes(
+                        "w-full governance-table hold-selection-table"
+                        if hold["capabilities"].get("manage_members")
+                        else "w-full governance-table"
+                    )
+                    table.selected=[row for row in rows if row["selection_key"] in member_selection]
+                    def member_selection_changed() -> None:
+                        page_keys={row["selection_key"] for row in rows}
+                        for key in page_keys: member_selection.pop(key,None)
+                        for row in table.selected: member_selection[row["selection_key"]]=dict(row)
+                    table.on("selection",lambda _:member_selection_changed())
+                    table.add_slot("body-cell-resource_type", '''
+                        <q-td :props="props" class="text-left" style="width:88px;max-width:88px;text-align:left">
+                          <q-icon :name="props.row.resource_type === 'aggregation' ? 'folder' : 'description'" color="primary" size="24px">
+                            <q-tooltip>{{ props.row.resource_type === 'aggregation' ? 'Aggregation' : 'Record' }}</q-tooltip>
+                          </q-icon>
+                        </q-td>
+                    ''')
+                    table.add_slot("body-cell-description", '''
+                        <q-td :props="props" class="text-left">
+                          <div style="height:88px;overflow-y:auto;white-space:normal;overflow-wrap:anywhere;text-align:left;padding-right:6px">
+                            {{ props.row.description || '—' }}
+                          </div>
+                        </q-td>
+                    ''')
+                    table.add_slot("body-cell-title", '''
+                        <q-td :props="props" class="text-left">
+                          <div style="height:88px;overflow-y:auto;white-space:normal;overflow-wrap:anywhere;text-align:left;padding-right:6px">
+                            {{ props.row.title || '—' }}
+                          </div>
+                        </q-td>
+                    ''')
+                    table.add_slot("body-cell-assigned_at", '''
+                        <q-td :props="props" class="text-left">
+                          <div class="row items-center no-wrap q-gutter-sm">
+                            <q-icon name="schedule" color="primary" size="20px" />
+                            <span>{{ props.row.assigned_at_display }}</span>
+                          </div>
+                        </q-td>
+                    ''')
+                    table.add_slot("body-cell-assigned_by_name", '''
+                        <q-td :props="props" class="text-left">
+                          <q-btn v-if="props.row.assigned_by_user_id" flat dense no-caps color="blue-grey-9" @click="$parent.$emit('open_user', props.row.assigned_by_user_id)">
+                            <q-avatar size="30px" :style="{ backgroundColor: props.row.assigned_by_avatar.color, color: 'white' }">
+                              {{ props.row.assigned_by_avatar.initials }}
+                            </q-avatar>
+                            <span class="q-ml-sm">{{ props.row.assigned_by_name }}</span>
+                            <q-tooltip>Open user details</q-tooltip>
+                          </q-btn>
+                          <span v-else>{{ props.row.assigned_by_name || 'System' }}</span>
+                        </q-td>
+                    ''')
+                    table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round icon="open_in_new" color="primary" aria-label="Open resource" @click="$parent.$emit(\'open_member\', props.row)"><q-tooltip>Open resource</q-tooltip></q-btn><q-btn v-if="'+str(bool(hold["capabilities"].get("manage_members"))).lower()+'" flat round icon="link_off" color="negative" aria-label="Remove from this hold" @click="$parent.$emit(\'remove_member\', props.row)"><q-tooltip>Remove from this hold</q-tooltip></q-btn></q-td>')
+                    async def open_member(event: Any) -> None:
+                        row=event.args
+                        if row["resource_type"]=="aggregation": await open_aggregation(await api.get("aggregations",row["resource_id"]))
+                        else: await select_record_details(row["resource_id"])
+                    async def remove_member(event: Any) -> None:
+                        row=event.args
+                        async def remove(reason: str) -> None:
+                            await api.remove_hold_member(hold_id,row["resource_type"],row["resource_id"],row["version"],reason); ui.notify("Member removed",color="positive"); await select_hold_details(hold_id)
+                        await hold_reason_dialog("Reason for removing this direct assignment","Remove",remove)
+                    table.on("open_member",open_member); table.on("remove_member",remove_member)
+                    table.on("open_user", lambda event: select_user_details(int(event.args)))
+                start=member_paging["offset"]+1 if member_paging["total"] else 0; end=min(member_paging["offset"]+len(rows),member_paging["total"])
+                member_page_status.text=f"Showing {start}–{end} of {member_paging['total']} direct members"
+                member_first.set_enabled(member_paging["offset"]>0); member_previous.set_enabled(member_paging["offset"]>0)
+                member_next.set_enabled(member_paging["offset"]+member_paging["limit"]<member_paging["total"]); member_last.set_enabled(member_paging["offset"]+member_paging["limit"]<member_paging["total"])
+            async def move_member_page(delta:int)->None:
+                member_paging["offset"]=max(0,member_paging["offset"]+delta*member_paging["limit"]); await load_members()
+            async def member_page_edge(last:bool)->None:
+                member_paging["offset"]=(max(0,(member_paging["total"]-1)//member_paging["limit"])*member_paging["limit"] if last else 0); await load_members()
+            async def show_add_member() -> None:
+                page_size = 50
+                picker = {"offset": 0, "total": 0, "selected": {}}
+                dialog=ui.dialog().props("persistent")
+                with dialog,ui.card().style(
+                    "width:1280px;max-width:calc(100vw - 48px)"
+                ).classes("max-h-[94vh]"):
+                    ui.label("Add resources to hold").classes("text-xl font-semibold")
+                    ui.label("Search the resources you can view, select any number across pages, then add them as one batch.").classes("text-sm text-slate-600")
+                    with ui.row().classes("w-full items-end gap-3"):
+                        candidate_query=ui.input("Search number, title or description",placeholder="For example: CASE-2026 or contract").props("outlined clearable debounce=350").classes("grow")
+                        candidate_type=ui.select({None:"Aggregations and records","aggregation":"Aggregations only","record":"Records only"},value="aggregation",label="Resource type").props("outlined").classes("w-56")
+                    selection_summary=ui.label("No resources selected").classes("text-sm font-medium text-primary")
+                    candidate_host=ui.column().classes("w-full min-h-[360px]")
+                    with ui.row().classes("w-full items-center justify-between"):
+                        page_status=ui.label().classes("text-sm text-slate-600")
+                        with ui.row().classes("gap-1"):
+                            first_page=ui.button("First",icon="first_page").props("flat no-caps")
+                            previous_page=ui.button("Previous",icon="chevron_left").props("flat no-caps")
+                            next_page=ui.button("Next",icon="chevron_right").props("flat no-caps")
+                            last_page=ui.button("Last",icon="last_page").props("flat no-caps")
+                    reason=ui.textarea("Reason for adding these resources").props("outlined autogrow maxlength=2000").classes("w-full")
+
+                    def update_selection_summary() -> None:
+                        count=len(picker["selected"])
+                        selection_summary.text=f"{count} resource{'s' if count != 1 else ''} selected"
+
+                    async def load_candidates(*, reset: bool=False) -> None:
+                        if reset: picker["offset"]=0
+                        try:
+                            result=await api.hold_member_candidates(
+                                hold_id,q=(candidate_query.value or "").strip() or None,
+                                resource_type=candidate_type.value,limit=page_size,offset=picker["offset"],
+                            )
+                        except ApiError as error:
+                            ui.notify(error_message(error),color="negative",close_button=True); return
+                        rows=result["items"]
+                        for row in rows: row["selection_key"]=f"{row['resource_type']}:{row['resource_id']}"
+                        picker["total"]=result["total"]
+                        candidate_host.clear()
+                        with candidate_host:
+                            if not rows:
+                                ui.label("No matching resources are available to add.").classes("text-slate-500 p-8 self-center")
+                            else:
+                                candidate_table=ui.table(
+                                    columns=[
+                                        {"name":"resource_type","label":"Type","field":"resource_type","sortable":True,"align":"left","style":"width: 38px; max-width: 38px; text-align: left","headerStyle":"width: 38px; max-width: 38px; text-align: left; white-space: nowrap"},
+                                        {"name":"number","label":"Number","field":"number","sortable":True,"align":"left","style":"width: 90px; white-space: normal; text-align: left","headerStyle":"width: 90px; text-align: left"},
+                                        {"name":"title","label":"Title","field":"title","sortable":True,"align":"left","style":"width: 240px; min-width: 240px; text-align: left","headerStyle":"width: 240px; min-width: 240px; text-align: left"},
+                                        {"name":"description","label":"Description","field":"description","sortable":True,"align":"left","style":"width: 260px; min-width: 260px; text-align: left","headerStyle":"width: 260px; min-width: 260px; text-align: left"},
+                                    ],rows=rows,row_key="selection_key",selection="multiple",
+                                    pagination={"rowsPerPage":page_size,"sortBy":"number"},
+                                ).props("flat bordered wrap-cells separator=horizontal hide-pagination").classes(
+                                    "w-full governance-table hold-selection-table hold-candidate-selection-table"
+                                )
+                                candidate_table.add_slot("body-cell-resource_type", '''
+                                    <q-td :props="props" class="text-left" style="width:38px;max-width:38px;text-align:left">
+                                      <q-icon :name="props.row.resource_type === 'aggregation' ? 'folder' : 'description'" color="primary" size="24px">
+                                        <q-tooltip>{{ props.row.resource_type === 'aggregation' ? 'Aggregation' : 'Record' }}</q-tooltip>
+                                      </q-icon>
+                                    </q-td>
+                                ''')
+                                candidate_table.add_slot("body-cell-title", '''
+                                    <q-td :props="props" class="text-left">
+                                      <div style="height:88px;overflow-y:auto;white-space:normal;overflow-wrap:anywhere;text-align:left;padding-right:6px">
+                                        {{ props.row.title || '—' }}
+                                      </div>
+                                    </q-td>
+                                ''')
+                                candidate_table.add_slot("body-cell-description", '''
+                                    <q-td :props="props" class="text-left">
+                                      <div style="height:88px;overflow-y:auto;white-space:normal;overflow-wrap:anywhere;text-align:left;padding-right:6px">
+                                        {{ props.row.description || '—' }}
+                                      </div>
+                                    </q-td>
+                                ''')
+                                candidate_table.selected=[row for row in rows if row["selection_key"] in picker["selected"]]
+                                def selection_changed() -> None:
+                                    page_keys={row["selection_key"] for row in rows}
+                                    for key in page_keys: picker["selected"].pop(key,None)
+                                    for row in candidate_table.selected: picker["selected"][row["selection_key"]]=dict(row)
+                                    update_selection_summary()
+                                candidate_table.on("selection",lambda _:selection_changed())
+                        start=picker["offset"]+1 if result["total"] else 0
+                        end=min(picker["offset"]+len(rows),result["total"])
+                        page_status.text=f"Showing {start}–{end} of {result['total']} matching resources"
+                        first_page.set_enabled(picker["offset"]>0)
+                        previous_page.set_enabled(picker["offset"]>0)
+                        next_page.set_enabled(picker["offset"]+page_size<result["total"])
+                        last_page.set_enabled(picker["offset"]+page_size<result["total"])
+
+                    async def move_page(direction: int) -> None:
+                        picker["offset"]=max(0,picker["offset"]+direction*page_size)
+                        await load_candidates()
+
+                    async def move_to_edge(last: bool) -> None:
+                        picker["offset"]=(max(0,(picker["total"]-1)//page_size)*page_size if last else 0)
+                        await load_candidates()
+
+                    async def submit() -> None:
+                        if not picker["selected"]: ui.notify("Select at least one resource",color="warning"); return
+                        if not(reason.value or "").strip(): ui.notify("A reason is required",color="warning"); return
+                        members=[{"resource_type":row["resource_type"],"resource_id":row["resource_id"]} for row in picker["selected"].values()]
+                        try:
+                            result=await api.add_hold_members_bulk(hold_id,members,reason.value.strip())
+                            dialog.close(); ui.notify(f"{result['added']} resources added to the hold",color="positive"); await select_hold_details(hold_id)
+                        except ApiError as error: ui.notify(error_message(error),color="negative",close_button=True)
+                    candidate_query.on_value_change(lambda:load_candidates(reset=True))
+                    candidate_type.on_value_change(lambda:load_candidates(reset=True))
+                    first_page.on("click",lambda:move_to_edge(False)); previous_page.on("click",lambda:move_page(-1))
+                    next_page.on("click",lambda:move_page(1)); last_page.on("click",lambda:move_to_edge(True))
+                    with ui.row().classes("w-full justify-end gap-2"):
+                        ui.button("Cancel",on_click=dialog.close).props("flat no-caps")
+                        ui.button("Add Members",icon="playlist_add",on_click=submit).props("unelevated no-caps")
+                    await load_candidates()
+                dialog.open()
+            member_refresh.on("click",load_members); member_query.on_value_change(lambda:load_members(reset=True)); member_type.on_value_change(lambda:load_members(reset=True)); member_sort.on_value_change(lambda:load_members(reset=True))
+            member_assigned_by.on_value_change(lambda:load_members(reset=True)); member_assigned_from.on_value_change(lambda:load_members(reset=True)); member_assigned_before.on_value_change(lambda:load_members(reset=True))
+            member_first.on("click",lambda:member_page_edge(False)); member_previous.on("click",lambda:move_member_page(-1)); member_next.on("click",lambda:move_member_page(1)); member_last.on("click",lambda:member_page_edge(True))
+            if hold["capabilities"].get("manage_members"): add_member.on("click",show_add_member)
+            if hold["capabilities"].get("manage_members"):
+                async def remove_selected() -> None:
+                    selected=list(member_selection.values())
+                    if not selected: ui.notify("Select one or more direct members",color="warning"); return
+                    async def remove(reason:str)->None:
+                        await api.remove_hold_members_bulk(hold_id,[{"resource_type":row["resource_type"],"resource_id":row["resource_id"],"version":row["version"]} for row in selected],reason)
+                        member_selection.clear(); ui.notify(f"{len(selected)} direct members removed from {hold['name']}",color="positive"); await select_hold_details(hold_id)
+                    await hold_reason_dialog(f"Remove {len(selected)} selected direct members from {hold['name']}?","Remove members",remove)
+                remove_selected_members.on("click",remove_selected)
+            await load_members()
+
     for key, button in navigation.items():
         if key == "classification-schemes":
             button.on("click", select_classification_workspace)
@@ -10120,6 +11034,7 @@ def index() -> None:
     sessions_navigation.on("click", lambda: select_login_sessions())
     security_operations_navigation.on("click", select_security_operations)
     custody_navigation.on("click", select_governance_custody)
+    holds_navigation.on("click", select_holds)
     change_password_menu.on("click", show_change_password)
     sign_out_menu.on("click", sign_out)
 
@@ -10222,6 +11137,7 @@ def index() -> None:
                 app.storage.user["session_token"] = token
                 api.set_session_token(token)
                 populate_user_menu(principal)
+                await refresh_hold_navigation()
                 navigation_state["trail"] = []
                 app.storage.user.pop("navigation_trail", None)
                 login_password.value = ""
@@ -10280,6 +11196,7 @@ def index() -> None:
             try:
                 principal = await api.me()
                 populate_user_menu(principal)
+                await refresh_hold_navigation()
                 if principal["must_change_password"]:
                     drawer.hide()
                     with table_container:

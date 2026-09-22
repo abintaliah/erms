@@ -17,6 +17,7 @@
     {"code": "organization.administer", "category": "administration"},
     {"code": "organization.ownership.correct", "category": "exceptional"},
     {"code": "classifications.administer", "category": "administration"},
+    {"code": "holds.administer", "category": "administration"},
     {"code": "audit.view", "category": "administration"},
     {"code": "aggregation.view", "category": "aggregation"},
     {"code": "aggregation.create_root", "category": "aggregation"},

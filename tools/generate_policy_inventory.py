@@ -45,6 +45,15 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         if "/users/" in path or path in {"/api/v1/auth/sessions", "/api/v1/auth/sessions/page"}:
             return "globally_privileged", "identity.sessions.administer", None
         return "authenticated_only", None, None
+    if path.startswith("/api/v1/holds"):
+        if method in {"POST", "PATCH", "DELETE", "PUT"} and not "/members" in path:
+            return "globally_privileged", "holds.administer", None
+        return "relationship_scoped", None, None
+    if path.startswith(("/api/v1/aggregations/", "/api/v1/records/")) and (
+        path.endswith("/effective-holds") or "/holds" in path
+    ):
+        resource_type = "aggregation" if path.startswith("/api/v1/aggregations/") else "record"
+        return "resource_scoped", f"{resource_type}.view", f"{resource_type}.view"
     if path.startswith("/api/v1/event-history") or path.endswith("/history"):
         permission = None
         if path.startswith("/api/v1/aggregations/"):
@@ -106,7 +115,9 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         return "globally_privileged", "classifications.administer", None
     if method == "GET" and path.startswith("/api/v1/security-levels"):
         return "authenticated_only", None, None
-    if path.startswith(("/api/v1/security-levels", "/api/v1/security-level-changes")):
+    if path.startswith("/api/v1/security-level-changes"):
+        return "resource_scoped", None, None
+    if path.startswith("/api/v1/security-levels"):
         return "globally_privileged", "security_levels.administer", None
     if path.startswith("/api/v1/browse/organization"):
         return "globally_privileged", "organization.browse", None
