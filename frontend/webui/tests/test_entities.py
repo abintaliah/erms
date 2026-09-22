@@ -13,6 +13,8 @@ from frontend.webui.app import (
     RECORD_DETAIL_HEADER_CLASSES,
     RECORD_DETAIL_TITLE_CLASSES,
     LIFECYCLE_ACTION_BUTTONS,
+    LAST_CUSTODIAN_MESSAGE,
+    LAST_CUSTODIAN_TITLE,
     NAVIGATION_TRAIL_LIMIT,
     NAVIGATION_VISIBLE_LIMIT,
     USER_SUSPENSION_ACTION_BUTTONS,
@@ -24,6 +26,7 @@ from frontend.webui.app import (
     decorate_relationship_rows,
     display_value,
     error_message,
+    show_api_error,
     field_input,
     format_file_size,
     form_payload,
@@ -33,6 +36,7 @@ from frontend.webui.app import (
     medium_label,
     user_avatar,
     relationship_options,
+    role_change_requires_reason,
     append_navigation_entry,
     visible_navigation_indices,
 )
@@ -484,6 +488,38 @@ def test_structured_api_errors_prefer_the_accessible_message():
     })
     assert error_message(error) == (
         "The aggregation's closing date cannot be earlier than its opening date."
+    )
+    assert error_message(ApiError(
+        422, "X-Change-Reason is required when lowering a security level",
+    )) == "Please explain why the security level is being lowered, then try again."
+
+
+def test_last_custodian_block_uses_a_persistent_explanatory_dialog():
+    source = inspect.getsource(show_api_error)
+    assert 'detail_code != "last_governance_custodian"' in source
+    assert 'ui.dialog().props("persistent")' in source
+    assert 'ui.button("I understand"' in source
+    assert LAST_CUSTODIAN_TITLE == "This change can’t be made yet"
+    assert "only active person" in LAST_CUSTODIAN_MESSAGE
+    assert "No changes were saved" in LAST_CUSTODIAN_MESSAGE
+    assert "Assign another active person" in LAST_CUSTODIAN_MESSAGE
+
+
+def test_lowering_role_clearance_requires_the_audit_reason():
+    levels = [
+        {"id": 1, "level_number": 10},
+        {"id": 2, "level_number": 20},
+    ]
+    current = {"security_level_id": 2, "profile_id": 4,
+               "is_information_governance": True}
+    assert role_change_requires_reason(
+        current, {"security_level_id": 1}, levels,
+    )
+    assert not role_change_requires_reason(
+        current, {"security_level_id": 2}, levels,
+    )
+    assert role_change_requires_reason(
+        current, {"profile_id": 5}, levels,
     )
 
 

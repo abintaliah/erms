@@ -83,6 +83,15 @@ AUTHORIZATION_DENIAL_HELP = (
     "an inactive account or organization relationship, or repeated unauthorized activity."
 )
 
+LAST_CUSTODIAN_TITLE = "This change can’t be made yet"
+LAST_CUSTODIAN_MESSAGE = (
+    "This change would remove the only active person who can act as the universal "
+    "information custodian. Protected records and aggregations must always have at "
+    "least one person who can manage their governance and access. No changes were "
+    "saved. Assign another active person to a qualifying information-governance role, "
+    "then try again."
+)
+
 
 def navigation_entry_identity(entry: dict[str, Any]) -> tuple[str, int | None]:
     return str(entry["page"]), entry.get("entity_id")
@@ -451,6 +460,8 @@ def error_message(error: ApiError) -> str:
         return "This item changed after you opened it. Reload it before saving again."
     if error.status_code == 428:
         return "The item version is missing. Reload it and try again."
+    if error.message == "X-Change-Reason is required when lowering a security level":
+        return "Please explain why the security level is being lowered, then try again."
     if isinstance(error.detail, dict):
         messages = {
             "insufficient_privilege": "You do not have the required system privilege for this action.",
@@ -460,6 +471,54 @@ def error_message(error: ApiError) -> str:
         if error.detail.get("code") in messages:
             return messages[error.detail["code"]]
     return error.message
+
+
+def show_api_error(error: ApiError) -> None:
+    """Present continuity blocks persistently; keep ordinary API errors as notices."""
+    detail_code = (
+        error.detail.get("code") if isinstance(error.detail, dict) else error.detail
+    )
+    if detail_code != "last_governance_custodian":
+        ui.notify(error_message(error), color="negative", close_button=True)
+        return
+
+    dialog = ui.dialog().props("persistent")
+    with dialog, ui.card().classes("w-[560px] max-w-full p-5 gap-4"):
+        with ui.row().classes("w-full items-start gap-3 no-wrap"):
+            ui.icon("shield", color="negative", size="32px").classes("shrink-0")
+            with ui.column().classes("gap-2"):
+                ui.label(LAST_CUSTODIAN_TITLE).classes("text-xl font-semibold")
+                ui.label(LAST_CUSTODIAN_MESSAGE).classes(
+                    "text-sm leading-6 text-slate-700"
+                )
+        with ui.row().classes("w-full justify-end"):
+            ui.button("I understand", on_click=dialog.close).props(
+                "unelevated no-caps autofocus color=primary"
+            )
+    dialog.open()
+
+
+def role_change_requires_reason(
+    current: dict[str, Any], proposed: dict[str, Any],
+    security_levels: list[dict[str, Any]],
+) -> bool:
+    """Return whether a role edit is sensitive enough to require an audit reason."""
+    if any(
+        proposed.get(name) != current.get(name)
+        for name in ("profile_id", "is_information_governance")
+        if name in proposed
+    ):
+        return True
+    if "security_level_id" not in proposed:
+        return False
+    level_numbers = {item["id"]: item["level_number"] for item in security_levels}
+    old_number = level_numbers.get(current.get("security_level_id"))
+    new_number = level_numbers.get(proposed.get("security_level_id"))
+    return (
+        old_number is not None
+        and new_number is not None
+        and new_number < old_number
+    )
 
 
 def relationship_options(
@@ -4279,15 +4338,15 @@ def index() -> None:
                             change_reason = (resource_change_reason.value or "").strip()
                             if not change_reason:
                                 raise ValueError("A reason is required when changing the record medium")
-                        if spec.key == "roles" and any(
-                            payload.get(name) != row.get(name)
-                            for name in ("profile_id", "is_information_governance")
-                            if name in payload
+                        if spec.key == "roles" and role_change_requires_reason(
+                            row, payload,
+                            lookup_rows_by_field.get("security_level_id", []),
                         ):
                             change_reason = (security_change_reason.value or "").strip()
                             if not change_reason:
                                 raise ValueError(
-                                    "A reason is required when changing a role's profile or governance status"
+                                    "A reason is required when changing a role's profile, "
+                                    "governance status, or lowering its security clearance"
                                 )
                         if profile_change_reason is not None:
                             change_reason = (profile_change_reason.value or "").strip()
@@ -4331,7 +4390,7 @@ def index() -> None:
                 except ValueError as error:
                     ui.notify(str(error), color="warning")
                 except ApiError as error:
-                    ui.notify(error_message(error), color="negative", close_button=True)
+                    show_api_error(error)
 
             with ui.row().classes("w-full justify-end gap-2"):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
@@ -4558,7 +4617,7 @@ def index() -> None:
                                 ui.notify("Assignment removed", color="positive")
                                 await load_memberships()
                             except ApiError as error:
-                                ui.notify(error_message(error), color="negative", close_button=True)
+                                show_api_error(error)
 
                         membership_table.on("remove", remove_assignment)
             except ApiError as error:
@@ -5495,7 +5554,7 @@ def index() -> None:
                     ui.notify("Profile privileges saved", color="positive")
                     await select_entity("profiles")
                 except ApiError as error:
-                    ui.notify(error_message(error), color="negative", close_button=True)
+                    show_api_error(error)
 
             with ui.row().classes("w-full justify-end gap-2"):
                 ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
@@ -5921,7 +5980,7 @@ def index() -> None:
                                 render_table(spec)
                                 ui.notify(f"User {action.lower()}ed", color="positive")
                             except ApiError as error:
-                                ui.notify(error_message(error), color="negative", close_button=True)
+                                show_api_error(error)
 
                         with ui.row().classes("w-full justify-end gap-2"):
                             ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
@@ -5982,7 +6041,7 @@ def index() -> None:
                                 render_table(spec)
                                 ui.notify(f"{spec.singular.capitalize()} {action.lower()}d", color="positive")
                             except ApiError as error:
-                                ui.notify(error_message(error), color="negative", close_button=True)
+                                show_api_error(error)
 
                         with ui.row().classes("w-full justify-end gap-2"):
                             ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
@@ -7594,7 +7653,7 @@ def index() -> None:
                 )
                 await refresh()
             except ApiError as error:
-                ui.notify(error_message(error), color="negative", close_button=True)
+                show_api_error(error)
 
         with table_container, ui.column().classes("w-full p-5 gap-4"):
             with ui.card().classes("w-full shadow-none border border-slate-200 p-5 gap-4"):
@@ -7661,7 +7720,7 @@ def index() -> None:
                 await api.set_active("roles", role_id, role["version"], active=role["status"] == "inactive")
                 await refresh()
             except ApiError as error:
-                ui.notify(error_message(error), color="negative", close_button=True)
+                show_api_error(error)
 
         with table_container, ui.column().classes("w-full p-5 gap-4"):
             with ui.card().classes("w-full shadow-none border border-slate-200 p-5 gap-4"):
@@ -7767,7 +7826,7 @@ def index() -> None:
                 ui.notify(f"User {action}d", color="positive")
                 await refresh_user()
             except ApiError as error:
-                ui.notify(error_message(error), color="negative", close_button=True)
+                show_api_error(error)
 
         async def issue_password() -> None:
             try:
