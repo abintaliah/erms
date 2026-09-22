@@ -132,6 +132,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "status": TEXT,
         "date_created": DATETIME,
         "date_deactivated": NULLABLE_DATETIME,
+        "date_suspended": NULLABLE_DATETIME,
     },
     "roles": {
         "id": INTEGER,

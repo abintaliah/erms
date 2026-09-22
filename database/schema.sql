@@ -634,13 +634,14 @@ CREATE TABLE org_units (
     code               text NOT NULL,
     name               text NOT NULL,
     description        text,
-    status             text NOT NULL DEFAULT 'active',
     date_created       timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_deactivated   timestamptz,
+    status             text GENERATED ALWAYS AS (
+        CASE WHEN date_deactivated IS NULL THEN 'active' ELSE 'inactive' END
+    ) STORED,
 
     CONSTRAINT org_units_code_not_blank CHECK (btrim(code) <> ''),
     CONSTRAINT org_units_name_not_blank CHECK (btrim(name) <> ''),
-    CONSTRAINT org_units_status_valid CHECK (status IN ('active', 'inactive')),
     CONSTRAINT org_units_not_own_parent
         CHECK (parent_org_unit_id IS NULL OR parent_org_unit_id <> id),
     CONSTRAINT org_units_dates_in_order
@@ -660,9 +661,16 @@ CREATE TABLE users (
     email            text,
     external_id      text,
     account_type     text NOT NULL DEFAULT 'person',
-    status           text NOT NULL DEFAULT 'active',
     date_created     timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_deactivated timestamptz,
+    date_suspended   timestamptz,
+    status           text GENERATED ALWAYS AS (
+        CASE
+            WHEN date_deactivated IS NOT NULL THEN 'inactive'
+            WHEN date_suspended IS NOT NULL THEN 'suspended'
+            ELSE 'active'
+        END
+    ) STORED,
 
     CONSTRAINT users_name_not_blank CHECK (btrim(name) <> ''),
     CONSTRAINT users_email_not_blank CHECK (email IS NULL OR btrim(email) <> ''),
@@ -670,10 +678,13 @@ CREATE TABLE users (
         CHECK (external_id IS NULL OR btrim(external_id) <> ''),
     CONSTRAINT users_account_type_valid
         CHECK (account_type IN ('person', 'service')),
-    CONSTRAINT users_status_valid
-        CHECK (status IN ('active', 'inactive', 'suspended')),
     CONSTRAINT users_dates_in_order
-        CHECK (date_deactivated IS NULL OR date_deactivated >= date_created)
+        CHECK (
+            (date_deactivated IS NULL OR date_deactivated >= date_created)
+            AND (date_suspended IS NULL OR date_suspended >= date_created)
+        ),
+    CONSTRAINT users_lifecycle_dates_exclusive
+        CHECK (date_deactivated IS NULL OR date_suspended IS NULL)
 );
 
 CREATE UNIQUE INDEX users_email_ci_unique
@@ -688,13 +699,14 @@ CREATE TABLE roles (
     code               text NOT NULL,
     name               text NOT NULL,
     description        text,
-    status             text NOT NULL DEFAULT 'active',
     date_created       timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_deactivated   timestamptz,
+    status             text GENERATED ALWAYS AS (
+        CASE WHEN date_deactivated IS NULL THEN 'active' ELSE 'inactive' END
+    ) STORED,
 
     CONSTRAINT roles_code_not_blank CHECK (btrim(code) <> ''),
     CONSTRAINT roles_name_not_blank CHECK (btrim(name) <> ''),
-    CONSTRAINT roles_status_valid CHECK (status IN ('active', 'inactive')),
     CONSTRAINT roles_not_own_supervisor
         CHECK (supervisor_role_id IS NULL OR supervisor_role_id <> id),
     CONSTRAINT roles_dates_in_order
@@ -1525,50 +1537,30 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 CREATE OR REPLACE FUNCTION org_unit_effectively_active(p_org_unit_id bigint)
 RETURNS boolean LANGUAGE sql STABLE AS $$
     WITH RECURSIVE ancestors AS (
-        SELECT id, parent_org_unit_id, status FROM org_units WHERE id = p_org_unit_id
+        SELECT id, parent_org_unit_id, date_deactivated FROM org_units WHERE id = p_org_unit_id
         UNION ALL
-        SELECT parent.id, parent.parent_org_unit_id, parent.status
+        SELECT parent.id, parent.parent_org_unit_id, parent.date_deactivated
         FROM org_units parent JOIN ancestors child ON parent.id = child.parent_org_unit_id
     )
-    SELECT COALESCE(bool_and(status = 'active'), false) FROM ancestors;
+    SELECT COALESCE(bool_and(date_deactivated IS NULL), false) FROM ancestors;
 $$;
 
 CREATE OR REPLACE FUNCTION role_effectively_active(p_role_id bigint)
 RETURNS boolean LANGUAGE sql STABLE AS $$
-    SELECT COALESCE(r.status = 'active' AND org_unit_effectively_active(r.org_unit_id), false)
+    SELECT COALESCE(r.date_deactivated IS NULL AND org_unit_effectively_active(r.org_unit_id), false)
     FROM roles r WHERE r.id = p_role_id;
 $$;
 
-CREATE OR REPLACE FUNCTION normalize_user_management_lifecycle()
+CREATE OR REPLACE FUNCTION validate_user_management_lifecycle_dates()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-    IF TG_TABLE_NAME = 'org_units' THEN
-        IF NEW.status = 'inactive' THEN
-            NEW.date_deactivated := COALESCE(NEW.date_deactivated, CURRENT_TIMESTAMP);
-            IF NEW.date_deactivated > CURRENT_TIMESTAMP THEN
-                RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='organization unit deactivation date cannot be in the future';
-            END IF;
-        ELSE
-            NEW.date_deactivated := NULL;
-        END IF;
-    ELSIF TG_TABLE_NAME = 'users' THEN
-        IF NEW.status = 'inactive' THEN
-            NEW.date_deactivated := COALESCE(NEW.date_deactivated, CURRENT_TIMESTAMP);
-            IF NEW.date_deactivated > CURRENT_TIMESTAMP THEN
-                RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='user deactivation date cannot be in the future';
-            END IF;
-        ELSE
-            NEW.date_deactivated := NULL;
-        END IF;
-    ELSE
-        IF NEW.status = 'inactive' THEN
-            NEW.date_deactivated := COALESCE(NEW.date_deactivated, CURRENT_TIMESTAMP);
-            IF NEW.date_deactivated > CURRENT_TIMESTAMP THEN
-                RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='role deactivation date cannot be in the future';
-            END IF;
-        ELSE
-            NEW.date_deactivated := NULL;
-        END IF;
+    IF NEW.date_deactivated IS NOT NULL AND NEW.date_deactivated > clock_timestamp() THEN
+        RAISE EXCEPTION USING ERRCODE='P0001',
+            MESSAGE=TG_TABLE_NAME || ' deactivation date cannot be in the future';
+    END IF;
+    IF TG_TABLE_NAME = 'users'
+       AND NULLIF(to_jsonb(NEW)->>'date_suspended', '')::timestamptz > clock_timestamp() THEN
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='user suspension date cannot be in the future';
     END IF;
     RETURN NEW;
 END;
@@ -1577,7 +1569,12 @@ $$;
 CREATE OR REPLACE FUNCTION validate_active_role_assignment()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM users WHERE id=NEW.user_id AND status='active') THEN
+    IF NOT EXISTS (
+        SELECT 1 FROM users
+        WHERE id=NEW.user_id
+          AND date_deactivated IS NULL
+          AND date_suspended IS NULL
+    ) THEN
         RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='role assignments require an active user';
     END IF;
     IF NOT role_effectively_active(NEW.role_id) THEN
@@ -1588,43 +1585,24 @@ END;
 $$;
 
 DROP TRIGGER IF EXISTS org_units_normalize_lifecycle ON org_units;
-CREATE TRIGGER org_units_normalize_lifecycle
-BEFORE INSERT OR UPDATE OF status, date_deactivated ON org_units
-FOR EACH ROW EXECUTE FUNCTION normalize_user_management_lifecycle();
+CREATE TRIGGER org_units_validate_lifecycle_dates
+BEFORE INSERT OR UPDATE OF date_deactivated ON org_units
+FOR EACH ROW EXECUTE FUNCTION validate_user_management_lifecycle_dates();
 
 DROP TRIGGER IF EXISTS users_normalize_lifecycle ON users;
-CREATE TRIGGER users_normalize_lifecycle
-BEFORE INSERT OR UPDATE OF status, date_deactivated ON users
-FOR EACH ROW EXECUTE FUNCTION normalize_user_management_lifecycle();
+CREATE TRIGGER users_validate_lifecycle_dates
+BEFORE INSERT OR UPDATE OF date_deactivated, date_suspended ON users
+FOR EACH ROW EXECUTE FUNCTION validate_user_management_lifecycle_dates();
 
 DROP TRIGGER IF EXISTS roles_normalize_lifecycle ON roles;
-CREATE TRIGGER roles_normalize_lifecycle
-BEFORE INSERT OR UPDATE OF status, date_deactivated ON roles
-FOR EACH ROW EXECUTE FUNCTION normalize_user_management_lifecycle();
+CREATE TRIGGER roles_validate_lifecycle_dates
+BEFORE INSERT OR UPDATE OF date_deactivated ON roles
+FOR EACH ROW EXECUTE FUNCTION validate_user_management_lifecycle_dates();
 
 DROP TRIGGER IF EXISTS user_role_assignments_validate_active ON user_role_assignments;
 CREATE TRIGGER user_role_assignments_validate_active
 BEFORE INSERT OR UPDATE OF user_id, role_id ON user_role_assignments
 FOR EACH ROW EXECUTE FUNCTION validate_active_role_assignment();
-
-
-UPDATE org_units
-SET date_deactivated = CASE WHEN status = 'inactive' THEN COALESCE(date_deactivated, CURRENT_TIMESTAMP) ELSE NULL END;
-UPDATE users
-SET date_deactivated = CASE WHEN status = 'inactive' THEN COALESCE(date_deactivated, CURRENT_TIMESTAMP) ELSE NULL END;
-UPDATE roles
-SET date_deactivated = CASE WHEN status = 'inactive' THEN COALESCE(date_deactivated, CURRENT_TIMESTAMP) ELSE NULL END;
-
-ALTER TABLE org_units DROP CONSTRAINT IF EXISTS org_units_lifecycle_consistent;
-ALTER TABLE org_units ADD CONSTRAINT org_units_lifecycle_consistent
-    CHECK ((status = 'inactive') = (date_deactivated IS NOT NULL));
-ALTER TABLE users DROP CONSTRAINT IF EXISTS users_lifecycle_consistent;
-ALTER TABLE users ADD CONSTRAINT users_lifecycle_consistent
-    CHECK ((status = 'inactive') = (date_deactivated IS NOT NULL));
-ALTER TABLE roles DROP CONSTRAINT IF EXISTS roles_lifecycle_consistent;
-ALTER TABLE roles ADD CONSTRAINT roles_lifecycle_consistent
-    CHECK ((status = 'inactive') = (date_deactivated IS NOT NULL));
-
 
 CREATE TABLE classification_schemes (
     id               bigserial PRIMARY KEY,

@@ -1115,8 +1115,6 @@ class OrgUnitUpdate(ApiModel):
     code: NonBlankString | None = None
     name: NonBlankString | None = None
     description: str | None = None
-    status: Literal["active", "inactive"] | None = None
-    date_deactivated: datetime | None = None
 
 
 class OrgUnitRead(ApiModel):
@@ -1154,6 +1152,7 @@ class UserRead(ApiModel):
     status: Literal["active", "inactive", "suspended"]
     date_created: datetime
     date_deactivated: datetime | None
+    date_suspended: datetime | None
     version: int
 
 
@@ -1228,8 +1227,6 @@ class RoleUpdate(ApiModel):
     code: NonBlankString | None = None
     name: NonBlankString | None = None
     description: str | None = None
-    status: Literal["active", "inactive"] | None = None
-    date_deactivated: datetime | None = None
     security_level_id: int | None = None
     profile_id: int | None = None
     is_information_governance: bool | None = None

@@ -93,6 +93,7 @@ def test_user_crud_neutral_name_and_explicit_lifecycle(client: TestClient, user:
     )
     assert response.status_code == 200
     assert response.json()["status"] == "suspended"
+    assert response.json()["date_suspended"] is not None
 
     bypass = client.patch(
         f"/api/v1/users/{user['id']}",

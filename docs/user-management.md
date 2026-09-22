@@ -29,9 +29,10 @@ current assignments to effective roles.
 | `name` | Culturally neutral complete name |
 | `email` | Optional, globally unique ignoring case |
 | `external_id` | Optional stable identifier from an external system |
-| `status` | `active`, `inactive`, or `suspended` |
 | `date_created` | Automatically assigned creation timestamp |
 | `date_deactivated` | Timestamp at which the user was deactivated |
+| `date_suspended` | Timestamp at which the user was temporarily suspended |
+| `status` | Read-only generated projection: `active`, `inactive`, or `suspended` |
 
 Names are not unique. The model makes no assumptions about given names, family
 names, ordering, or number of name components.
@@ -51,9 +52,9 @@ an email address or login name into the person's permanent identity.
 | `code` | Globally unique, case-insensitive stable code |
 | `name` | Globally unique, case-insensitive name |
 | `description` | Optional description |
-| `status` | `active` or `inactive` |
 | `date_created` | Automatically assigned creation timestamp |
 | `date_deactivated` | Timestamp at which the organizational unit was deactivated |
+| `status` | Read-only generated projection: `active` or `inactive` |
 
 The parent relationship supports an organizational hierarchy. PostgreSQL
 rejects direct self-parenting and longer cycles.
@@ -70,9 +71,9 @@ rejects direct self-parenting and longer cycles.
 | `code` | Globally unique, case-insensitive stable code |
 | `name` | Globally unique, case-insensitive administrator-facing name |
 | `description` | Optional description |
-| `status` | `active` or `inactive` |
 | `date_created` | Automatically assigned creation timestamp |
 | `date_deactivated` | Optional deactivation timestamp |
+| `status` | Read-only generated projection: `active` or `inactive` |
 
 Supervising and subordinate roles may belong to different organizational units.
 PostgreSQL rejects direct self-supervision and longer supervisory cycles.
@@ -107,7 +108,7 @@ not duplicate that actor identity.
 User account status, role effectiveness, and assignment validity are separate
 concepts and must not be presented as interchangeable statuses:
 
-- A user has one account status: `active`, `inactive`, or `suspended`. A user
+- A user has one derived account status: `active`, `inactive`, or `suspended`. A user
   does not have a derived or inherited “effective status.”
 - An inactive or suspended user cannot authenticate. This restriction comes
   from the user's own account status, not from an organization unit or role.
@@ -176,7 +177,8 @@ security-safe summary of transient session data removed with a user.
 - Reactivation clears `date_deactivated`; retained assignments can become
   effective again when their dates, roles, and organization hierarchy permit.
 - A suspended user is also unable to authenticate, but suspension is distinct
-  from deactivation and does not set `date_deactivated`.
+  from deactivation: it sets `date_suspended` and leaves `date_deactivated`
+  null.
 - Explicit `POST .../{id}/suspend` and `POST .../{id}/unsuspend` operations
   govern suspension. Suspending revokes active sessions; unsuspending does not
   restore them.
@@ -215,10 +217,12 @@ active role. Existing assignments are retained across lifecycle transitions.
 The database enforces these requirements so alternate clients cannot bypass
 the UI.
 
-Lifecycle timestamps are database-normalized and constrained: inactive users
-and roles have `date_deactivated`, as do inactive organizational units. Active
-or suspended entities have no deactivation timestamp. Future lifecycle
-timestamps are rejected.
+Lifecycle timestamps are authoritative and constrained. `status` is generated
+by PostgreSQL for query and API compatibility; clients cannot write it. An
+organizational unit or role is inactive exactly when `date_deactivated` is not
+null. A user is inactive when `date_deactivated` is not null, suspended when
+`date_suspended` is not null, and otherwise active. The two user lifecycle
+timestamps are mutually exclusive. Future lifecycle timestamps are rejected.
 
 ### Administrative UI behavior
 

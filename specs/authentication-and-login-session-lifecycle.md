@@ -1,6 +1,6 @@
 # Authentication and Login-Session Lifecycle — Technical Specification
 
-**Status:** Draft for discussion  
+**Status:** Implemented
 **Project:** ERMS  
 **Prepared:** 18 September 2026  
 **Revision:** 0.1
@@ -33,8 +33,8 @@ defined separately in
 An active person account may authenticate and use an otherwise valid session.
 
 ```text
-users.status = 'active'
 users.date_deactivated IS NULL
+users.date_suspended IS NULL
 ```
 
 ### 2.2 Inactive or deactivated
@@ -42,8 +42,8 @@ users.date_deactivated IS NULL
 Deactivation is a reversible account-lifecycle operation. It produces:
 
 ```text
-users.status = 'inactive'
 users.date_deactivated IS NOT NULL
+users.date_suspended IS NULL
 ```
 
 An inactive user cannot authenticate or use an existing session. Deactivation
@@ -56,11 +56,12 @@ Suspension is a deliberate administrative security operation that temporarily
 prevents account use without representing that the account has left service.
 
 ```text
-users.status = 'suspended'
 users.date_deactivated IS NULL
+users.date_suspended IS NOT NULL
 ```
 
-Suspension is appropriate for a security investigation, suspected compromise,
+`date_suspended` is the authoritative stored suspension state. Suspension is
+appropriate for a security investigation, suspected compromise,
 or another temporary administrative hold. It must revoke every active session
 in the same transaction. Role assignments remain stored but cannot contribute
 effective authorization while the user is suspended.
@@ -109,7 +110,10 @@ Calling an endpoint from an incompatible state returns `409 Conflict`. Every
 operation requires the current version through `If-Match` and a non-blank change
 reason.
 
-Generic user updates must not accept `status` or `date_deactivated`. Lifecycle
+`users.status` is a read-only generated projection derived from
+`date_deactivated` and `date_suspended`; it is retained for stable query and API
+contracts but is never written independently. Generic user updates must not
+accept `status`, `date_deactivated`, or `date_suspended`. Lifecycle
 state may be changed only through these endpoints so session revocation and
 audit behavior cannot be bypassed.
 

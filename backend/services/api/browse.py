@@ -437,7 +437,7 @@ def browse_role_users(
                    role.code AS role_code, role.name AS role_name,
                    person.id, person.name, person.email, person.external_id,
                    person.account_type, person.status, person.date_created,
-                   person.date_deactivated, person.version
+                   person.date_deactivated, person.date_suspended, person.version
               FROM user_role_assignments assignment
               JOIN users person ON person.id=assignment.user_id
               JOIN roles role ON role.id=assignment.role_id

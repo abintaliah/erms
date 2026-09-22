@@ -207,7 +207,7 @@ records with “draft” in the title:
 ### Users
 
 `id`, `name`, `email`, `external_id`, `status`, `date_created`,
-`date_deactivated`
+`date_deactivated`, `date_suspended`
 
 ### Organizational units
 

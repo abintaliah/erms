@@ -7896,6 +7896,14 @@ def index() -> None:
                             with ui.row().classes("gap-2"):
                                 ui.badge(person["account_type"].title(), color="blue-grey").props("outline")
                                 ui.badge(person["status"].title(), color={"active": "positive", "suspended": "warning"}.get(person["status"], "grey-7"))
+                            if person.get("date_suspended"):
+                                ui.label(
+                                    f"Suspended {format_timestamp(person['date_suspended'])}"
+                                ).classes("text-xs text-amber-700")
+                            elif person.get("date_deactivated"):
+                                ui.label(
+                                    f"Deactivated {format_timestamp(person['date_deactivated'])}"
+                                ).classes("text-xs text-slate-500")
                         with ui.row().classes("gap-1"):
                             ui.button(
                                 "Back", icon="arrow_back",

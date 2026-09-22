@@ -27,18 +27,18 @@ The design has four objectives:
 ### 2.1 Deactivate and inactive
 
 **Deactivate** is a reversible lifecycle operation. For a user, role, or
-organizational unit, successful deactivation produces this stored state:
+organizational unit, successful deactivation produces this authoritative
+stored state:
 
 ```text
-status = 'inactive'
 date_deactivated IS NOT NULL
 ```
 
 **Inactive** describes that resulting state. In this specification, an inactive
 entity and a deactivated entity refer to the same lifecycle condition.
 
-A suspended user is not deactivated. Suspension is a separate user state and
-does not set `date_deactivated`.
+A suspended user is not deactivated. Suspension is represented by
+`date_suspended IS NOT NULL` while `date_deactivated` remains null.
 
 ### 2.2 Suspend and unsuspend
 
@@ -53,9 +53,11 @@ Suspension is not a prerequisite for, or blocker to, permanent deletion.
 **Reactivate** is the reversible operation that restores a deactivated entity:
 
 ```text
-status = 'active'
 date_deactivated IS NULL
 ```
+
+`status` is exposed as a read-only generated projection for stable API and
+search contracts. It is not independent lifecycle state.
 
 ### 2.4 Credential lock
 
@@ -340,7 +342,8 @@ The existing behavior in which `DELETE` acts as a compatibility alias for
 deactivation must be removed. This is a greenfield project with no production
 deployment requiring that compatibility behavior.
 
-Generic user updates must not accept `status` or `date_deactivated`. Lifecycle
+Generic user updates must not accept `status`, `date_deactivated`, or
+`date_suspended`. Lifecycle
 state may be changed only through the explicit lifecycle endpoints so session
 revocation and audit behavior cannot be bypassed.
 
