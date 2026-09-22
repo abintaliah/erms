@@ -199,6 +199,7 @@ def test_suspend_and_unsuspend_revoke_existing_sessions(client: TestClient):
     assert suspended.status_code == 200
     assert suspended.json()["status"] == "suspended"
     assert suspended.json()["date_deactivated"] is None
+    assert suspended.json()["date_suspended"] is not None
     assert user_client.get("/api/v1/auth/me").status_code == 401
     assert user_client.post(
         "/api/v1/auth/login",
@@ -211,6 +212,7 @@ def test_suspend_and_unsuspend_revoke_existing_sessions(client: TestClient):
     )
     assert unsuspended.status_code == 200
     assert unsuspended.json()["status"] == "active"
+    assert unsuspended.json()["date_suspended"] is None
     assert user_client.get("/api/v1/auth/me").status_code == 401
     assert user_client.post(
         "/api/v1/auth/login",

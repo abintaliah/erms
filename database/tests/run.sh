@@ -13,10 +13,19 @@ readonly POSTGRES_IMAGE="${POSTGRES_TEST_IMAGE:-postgres:17-alpine}"
 readonly POSTGRES_USER="erms_test"
 readonly POSTGRES_PASSWORD="erms_test_password"
 readonly POSTGRES_DB="erms_test"
+readonly LIFECYCLE_MIGRATION_DB="erms_lifecycle_migration_test_$$"
+LIFECYCLE_MIGRATION_DB_CREATED=false
 
 cleanup() {
     local exit_code=$?
     trap - EXIT INT TERM
+    if [[ "${LIFECYCLE_MIGRATION_DB_CREATED}" == true ]]; then
+        if ! docker exec "${CONTAINER_NAME}" dropdb --force --if-exists \
+            --username "${POSTGRES_USER}" "${LIFECYCLE_MIGRATION_DB}" >/dev/null; then
+            echo "Failed to drop disposable database ${LIFECYCLE_MIGRATION_DB}" >&2
+            exit_code=1
+        fi
+    fi
     docker rm --force "${CONTAINER_NAME}" >/dev/null 2>&1 || true
     exit "${exit_code}"
 }
@@ -66,6 +75,20 @@ done
 
 readonly HOST_PORT="$(docker port "${CONTAINER_NAME}" 5432/tcp | sed 's/.*://')"
 readonly DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${POSTGRES_DB}"
+readonly LIFECYCLE_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${LIFECYCLE_MIGRATION_DB}"
+
+docker exec "${CONTAINER_NAME}" createdb \
+    --username "${POSTGRES_USER}" "${LIFECYCLE_MIGRATION_DB}"
+LIFECYCLE_MIGRATION_DB_CREATED=true
+psql "${LIFECYCLE_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${SCRIPT_DIR}/lifecycle_migration_before.sql"
+psql "${LIFECYCLE_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/004_normalize_user_management_lifecycle.sql"
+psql "${LIFECYCLE_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${SCRIPT_DIR}/lifecycle_migration_after.sql"
+docker exec "${CONTAINER_NAME}" dropdb --force \
+    --username "${POSTGRES_USER}" "${LIFECYCLE_MIGRATION_DB}"
+LIFECYCLE_MIGRATION_DB_CREATED=false
 
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/schema.sql"
 "${SCRIPT_DIR}/check_security_schema_parity.sh" "${DATABASE_URL}" "${DATABASE_DIR}/schema.sql"

@@ -1,7 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from psycopg import Connection
+from psycopg import Connection, sql
 
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .concurrency import expected_version
@@ -47,13 +47,44 @@ router = APIRouter(prefix="/api/v1")
 
 def _change_lifecycle(
     connection: Connection, table: str, entity_id: int, version: int,
-    *, active: bool, date_field: str,
+    *, active: bool,
 ):
-    return update_row(
-        connection, table, entity_id,
-        ({"status": "active", date_field: None} if active else {"status": "inactive"}),
-        version,
+    return _update_lifecycle_dates(
+        connection, table, entity_id, version,
+        {"date_deactivated": "NULL" if active else "clock_timestamp()"},
     )
+
+
+def _update_lifecycle_dates(
+    connection: Connection,
+    table: str,
+    entity_id: int,
+    version: int,
+    assignments: dict[str, str],
+):
+    if table not in {"org_units", "users", "roles"}:
+        raise ValueError("unsupported lifecycle table")
+    allowed_columns = {"date_deactivated", "date_suspended"}
+    if not assignments or not set(assignments).issubset(allowed_columns):
+        raise ValueError("unsupported lifecycle assignment")
+    allowed_expressions = {"NULL", "clock_timestamp()"}
+    if not set(assignments.values()).issubset(allowed_expressions):
+        raise ValueError("unsupported lifecycle expression")
+    updates = sql.SQL(", ").join(
+        sql.Identifier(column) + sql.SQL(" = ") + sql.SQL(expression)
+        for column, expression in assignments.items()
+    )
+    query = sql.SQL(
+        "UPDATE {} SET {} WHERE id = %s AND version = %s RETURNING *"
+    ).format(sql.Identifier(table), updates)
+    changed = connection.execute(query, (entity_id, version)).fetchone()
+    if changed is None:
+        current = get_or_404(connection, table, entity_id)
+        raise HTTPException(
+            status_code=412,
+            detail={"message": "entity has changed", "current_version": current["version"]},
+        )
+    return changed
 
 
 def _continuity_snapshot(connection: Connection) -> tuple[int, int]:
@@ -162,14 +193,14 @@ def update_org_unit(
 def explicitly_deactivate_org_unit(org_unit_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     acquire_continuity_lock(connection)
     snapshot = _continuity_snapshot(connection)
-    changed = _change_lifecycle(connection, "org_units", org_unit_id, version, active=False, date_field="date_deactivated")
+    changed = _change_lifecycle(connection, "org_units", org_unit_id, version, active=False)
     _assert_snapshot_continuity(connection, snapshot)
     return changed
 
 
 @router.post("/org-units/{org_unit_id}/activate", response_model=OrgUnitRead, tags=["org units"], dependencies=[Depends(require_organization_admin)])
 def activate_org_unit(org_unit_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
-    return _change_lifecycle(connection, "org_units", org_unit_id, version, active=True, date_field="date_deactivated")
+    return _change_lifecycle(connection, "org_units", org_unit_id, version, active=True)
 
 
 @router.get(
@@ -262,12 +293,21 @@ def _set_user_lifecycle(
             status_code=409,
             detail=f"cannot {action} a user whose status is {current['status']}",
         )
-    values = {"status": target_status}
     if target_status == "inactive":
-        values["date_deactivated"] = None
-    elif target_status in {"active", "suspended"}:
-        values["date_deactivated"] = None
-    changed = update_row(connection, "users", user_id, values, version)
+        values = {
+            "date_deactivated": "clock_timestamp()",
+            "date_suspended": "NULL",
+        }
+    elif target_status == "suspended":
+        values = {
+            "date_deactivated": "NULL",
+            "date_suspended": "clock_timestamp()",
+        }
+    else:
+        values = {"date_deactivated": "NULL", "date_suspended": "NULL"}
+    changed = _update_lifecycle_dates(
+        connection, "users", user_id, version, values,
+    )
     if revocation_reason:
         principal = getattr(request.state, "principal", None)
         revoke_sessions_for_user(
@@ -420,14 +460,14 @@ def update_role(
 def explicitly_deactivate_role(role_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     acquire_continuity_lock(connection)
     snapshot = _continuity_snapshot(connection)
-    changed = _change_lifecycle(connection, "roles", role_id, version, active=False, date_field="date_deactivated")
+    changed = _change_lifecycle(connection, "roles", role_id, version, active=False)
     _assert_snapshot_continuity(connection, snapshot)
     return changed
 
 
 @router.post("/roles/{role_id}/activate", response_model=RoleRead, tags=["roles"], dependencies=[Depends(require_organization_admin)])
 def activate_role(role_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
-    return _change_lifecycle(connection, "roles", role_id, version, active=True, date_field="date_deactivated")
+    return _change_lifecycle(connection, "roles", role_id, version, active=True)
 
 
 @router.get(

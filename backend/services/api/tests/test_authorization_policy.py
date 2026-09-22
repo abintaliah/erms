@@ -252,7 +252,10 @@ def test_database_loader_materializes_profile_privileges_and_request_time_roles(
         assert "authorization.administer" in loaded_role.privileges
         assert loaded_role.security_level_code == "G"
 
-        connection.execute("UPDATE roles SET status='inactive' WHERE id=%s", (loaded_role.role_id,))
+        connection.execute(
+            "UPDATE roles SET date_deactivated=CURRENT_TIMESTAMP WHERE id=%s",
+            (loaded_role.role_id,),
+        )
         refreshed = load_policy_context(connection, principal, evaluated_at=datetime.now(timezone.utc))
         assert loaded.effective_roles  # the already-materialized request remains stable
         assert refreshed.effective_roles == ()

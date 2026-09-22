@@ -93,13 +93,18 @@ def test_inactive_role_and_expired_assignment_take_effect_on_next_request(client
     governed_path = f"/api/v1/users/{user_id}/deletion-preflight"
     assert client.get(governed_path, headers=_bearer(token)).status_code == 200
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
-        connection.execute("UPDATE roles SET status='inactive' WHERE id=%s", (role_id,))
+        connection.execute(
+            "UPDATE roles SET date_deactivated=CURRENT_TIMESTAMP WHERE id=%s",
+            (role_id,),
+        )
     inactive = client.get(governed_path, headers=_bearer(token))
     assert inactive.status_code == 403
     assert inactive.json()["detail"]["code"] == "no_effective_role"
 
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
-        connection.execute("UPDATE roles SET status='active' WHERE id=%s", (role_id,))
+        connection.execute(
+            "UPDATE roles SET date_deactivated=NULL WHERE id=%s", (role_id,)
+        )
         connection.execute(
             """UPDATE user_role_assignments
                   SET valid_from=%s, valid_until=%s
