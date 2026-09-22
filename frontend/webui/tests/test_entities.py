@@ -12,6 +12,7 @@ from frontend.webui.app import (
     RECORD_UPLOAD_WAIT_MESSAGE,
     RECORD_DETAIL_HEADER_CLASSES,
     RECORD_DETAIL_TITLE_CLASSES,
+    RELATIONSHIP_DISPLAY_FIELDS,
     LIFECYCLE_ACTION_BUTTONS,
     LAST_CUSTODIAN_MESSAGE,
     LAST_CUSTODIAN_TITLE,
@@ -243,10 +244,68 @@ def test_aggregation_summary_has_non_collapsing_flex_layout():
     assert "min-w-[360px]" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
 
 
-def test_record_detail_header_keeps_controls_visible_beside_long_titles():
-    assert "no-wrap" in RECORD_DETAIL_HEADER_CLASSES
-    assert "grow" in RECORD_DETAIL_TITLE_CLASSES
-    assert "min-w-0" in RECORD_DETAIL_TITLE_CLASSES
+def test_record_detail_header_wraps_actions_before_crowding_long_titles():
+    assert "flex-wrap" in RECORD_DETAIL_HEADER_CLASSES
+    assert "no-wrap" not in RECORD_DETAIL_HEADER_CLASSES
+    assert "flex-1" in RECORD_DETAIL_TITLE_CLASSES
+    assert "sm:min-w-[420px]" in RECORD_DETAIL_TITLE_CLASSES
+    assert "max-w-full" in RECORD_DETAIL_TITLE_CLASSES
+    assert "basis-[520px]" in RECORD_DETAIL_TITLE_CLASSES
+
+
+def test_scalar_display_columns_are_not_rendered_as_relationship_links():
+    assert RELATIONSHIP_DISPLAY_FIELDS == {
+        "aggregation_display",
+        "org_unit_display",
+        "parent_org_unit_display",
+        "profile_display",
+        "scheme_display",
+    }
+    scalar_fields = {
+        "medium_display", "vital_display", "review_display", "location_display",
+    }
+    assert scalar_fields.isdisjoint(RELATIONSHIP_DISPLAY_FIELDS)
+    assert "if key not in RELATIONSHIP_DISPLAY_FIELDS:" in APP_SOURCE
+
+
+def test_record_and_aggregation_scalar_columns_remain_plain_text():
+    for resource in ("records", "aggregations"):
+        displayed_fields = {
+            key for key, _ in ENTITIES[resource].columns if key.endswith("_display")
+        }
+        assert {
+            "medium_display", "vital_display", "review_display", "location_display",
+        } <= displayed_fields
+        assert (
+            displayed_fields - {"aggregation_display"}
+        ).isdisjoint(RELATIONSHIP_DISPLAY_FIELDS)
+
+
+def test_governed_collection_rows_open_details_instead_of_direct_editors():
+    collection_actions = APP_SOURCE[
+        APP_SOURCE.index('if spec.key in {"records", "aggregations"}:'):
+        APP_SOURCE.index('elif spec.key in {"privileges", "permissions"}:')
+    ]
+    assert "$parent.$emit(\\'edit\\', props.row)" not in collection_actions
+    assert 'icon="open_in_new"' in APP_SOURCE
+    assert "$parent.$emit(\\'open_record\\', props.row)" in APP_SOURCE
+    assert 'table.on("open_record", lambda event: show_record_details(event.args))' in APP_SOURCE
+
+
+def test_governed_metadata_editor_fails_closed_without_modify_capability():
+    editor = APP_SOURCE[
+        APP_SOURCE.index("async def open_editor("):
+        APP_SOURCE.index("async def show_memberships(")
+    ]
+    capability_check = editor.index(
+        'editor_capabilities = await api.resource_capabilities('
+    )
+    denial_check = editor.index(
+        'if not editor_capabilities.get("modify_metadata"):'
+    )
+    dialog_open = editor.index("dialog.open()")
+    assert capability_check < denial_check < dialog_open
+    assert "Your effective roles do not allow editing this" in editor
 
 
 def test_detail_pages_use_light_blue_metadata_and_retention_visual_system():

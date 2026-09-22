@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Generate the Phase 0 API and Web UI policy inventory.
+"""Generate the authoritative API operation-policy inventory.
 
-The output is deliberately deterministic. A route or interactive UI control
-change therefore fails the characterization test until this inventory is
-reviewed and regenerated.
+The output is deliberately deterministic. An API route or policy-classification
+change therefore fails the characterization test until the security impact is
+reviewed and the inventory is regenerated. Client controls are intentionally
+excluded: authorization is enforced at the API/database boundary, and each
+client may evolve independently without creating security-policy churn.
 """
 
 from __future__ import annotations
 
-import ast
 import json
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,6 @@ from backend.services.api.main import app
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = PROJECT_ROOT / "security" / "operation-policy-registry.json"
-WEB_UI = PROJECT_ROOT / "frontend" / "webui" / "app.py"
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 
 
@@ -74,6 +74,15 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         ("GET", "/api/v1/classifications/{classification_id}/effective-retention-rule"),
     }
     if (method, path) in reference_operations:
+        return "authenticated_only", None, None
+    authenticated_operations = {
+        ("GET", "/api/v1/authorization/explainable-users"),
+        ("GET", "/api/v1/creation-role-options"),
+        ("GET", "/api/v1/dashboard/ownership-counts"),
+        ("GET", "/api/v1/dashboard/reviews"),
+        ("GET", "/api/v1/dashboard/summary"),
+    }
+    if (method, path) in authenticated_operations:
         return "authenticated_only", None, None
     if path.startswith("/api/v1/users"):
         return "globally_privileged", "identity.users.administer", None
@@ -170,7 +179,9 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         }
         privilege, permission = mapping[method]
         return "resource_scoped", privilege, permission
-    return "authenticated_only", None, None
+    raise ValueError(
+        f"API operation {method} {path} has no explicit policy classification"
+    )
 
 
 def api_operations() -> list[dict[str, Any]]:
@@ -251,54 +262,17 @@ def api_operations() -> list[dict[str, Any]]:
     return sorted(operations, key=lambda item: (item["path"], item["method"]))
 
 
-def _expression(source: str, node: ast.AST | None) -> str | None:
-    if node is None:
-        return None
-    value = ast.get_source_segment(source, node)
-    return " ".join(value.split()) if value else None
-
-
-def ui_actions() -> list[dict[str, Any]]:
-    source = WEB_UI.read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(WEB_UI))
-    actions: list[dict[str, Any]] = []
-    constructors = {"button", "link", "menu_item"}
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        function = node.func
-        if not (
-            isinstance(function, ast.Attribute)
-            and isinstance(function.value, ast.Name)
-            and function.value.id == "ui"
-            and function.attr in constructors
-        ):
-            continue
-        keywords = {keyword.arg: keyword.value for keyword in node.keywords if keyword.arg}
-        label_node = node.args[0] if node.args else keywords.get("text") or keywords.get("label")
-        actions.append(
-            {
-                "id": f"webui.app:{node.lineno}:{function.attr}",
-                "control": function.attr,
-                "line": node.lineno,
-                "label_expression": _expression(source, label_node),
-                "icon_expression": _expression(source, keywords.get("icon")),
-                "callback_expression": _expression(source, keywords.get("on_click")),
-                "current_access_class": "authenticated_only",
-                "phase_0_enforced": False,
-                "phase_4_enforced": False,
-                "phase_12_enforced": "confirm_identity_deletion" in (_expression(source, keywords.get("on_click")) or ""),
-            }
-        )
-    return sorted(actions, key=lambda item: (item["line"], item["control"]))
-
-
 def build_inventory() -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "specification_revision": "0.6",
         "phase": 12,
         "enforcement_status": "authorization_dependent_permanent_deletion_enforced",
+        "scope": "api_authorization_boundary",
+        "client_policy": (
+            "Clients are untrusted API consumers. Client action inventories are optional "
+            "UX artefacts and are not part of this security registry."
+        ),
         "access_classes": [
             "public",
             "authenticated_only",
@@ -307,7 +281,6 @@ def build_inventory() -> dict[str, Any]:
             "resource_scoped",
         ],
         "api_operations": api_operations(),
-        "ui_actions": ui_actions(),
     }
 
 
