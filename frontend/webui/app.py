@@ -521,6 +521,26 @@ def role_change_requires_reason(
     )
 
 
+def deletion_identity(item: dict[str, Any]) -> str:
+    """Identify a deletion target by its display name and stable identifier."""
+    name = str(item.get("name") or "").strip()
+    stable_identifier = str(item.get("email") or item.get("code") or "").strip()
+    if name and stable_identifier and stable_identifier != name:
+        return f"{name} — {stable_identifier}"
+    return name or stable_identifier or f"Item #{item['id']}"
+
+
+def deletion_blocked_report(error: ApiError) -> dict[str, Any] | None:
+    """Extract the server's authoritative deletion report from a race conflict."""
+    if (
+        error.status_code == 409
+        and isinstance(error.detail, dict)
+        and error.detail.get("code") == "deletion_blocked"
+    ):
+        return error.detail
+    return None
+
+
 def relationship_options(
     rows: list[dict[str, Any]], label_fields: tuple[str, ...]
 ) -> dict[int, str]:
@@ -7582,7 +7602,7 @@ def index() -> None:
         dialog = ui.dialog().props("persistent")
         with dialog, ui.card().classes("w-[620px] max-w-full gap-4 p-5"):
             ui.label(f"Permanently delete {label}?").classes("text-xl font-semibold")
-            ui.label(item.get("name") or item.get("code") or str(item["id"])).classes("font-medium")
+            ui.label(deletion_identity(item)).classes("font-medium")
             if report["blockers"]:
                 ui.label("Deletion is currently blocked").classes("text-negative font-semibold")
                 for blocker in report["blockers"]:
@@ -7611,8 +7631,13 @@ def index() -> None:
                     try:
                         await api.delete(resource, item["id"], report["entity_version"], reason=change_reason)
                     except ApiError as error:
-                        ui.notify(error_message(error), color="negative", close_button=True)
                         dialog.close()
+                        if deletion_blocked_report(error) is not None:
+                            await confirm_identity_deletion(
+                                resource, item, label=label, on_deleted=on_deleted,
+                            )
+                        else:
+                            show_api_error(error)
                         return
                     dialog.close()
                     ui.notify(f"{label.title()} permanently deleted", color="positive")
@@ -7671,7 +7696,7 @@ def index() -> None:
                     ui.button("History", icon="history", on_click=lambda: show_entity_history("org-units", unit)).props("flat no-caps")
                     ui.button("Activate" if unit["status"] == "inactive" else "Deactivate", icon="toggle_on" if unit["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline no-caps")
                     ui.button(
-                        "Delete", icon="delete_outline", color="negative",
+                        "Permanently delete", icon="delete_forever", color="negative",
                         on_click=lambda: confirm_identity_deletion(
                             "org-units", unit, label="organization unit",
                             on_deleted=lambda: select_entity("org-units"),
@@ -7739,7 +7764,7 @@ def index() -> None:
                     ui.button("History", icon="history", on_click=lambda: show_entity_history("roles", role)).props("flat no-caps")
                     ui.button("Activate" if role["status"] == "inactive" else "Deactivate", icon="toggle_on" if role["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline no-caps")
                     ui.button(
-                        "Delete", icon="delete_outline", color="negative",
+                        "Permanently delete", icon="delete_forever", color="negative",
                         on_click=lambda: confirm_identity_deletion(
                             "roles", role, label="role", on_deleted=lambda: select_entity("roles"),
                         ),
@@ -7865,7 +7890,7 @@ def index() -> None:
                             ui.button("Temporary password", icon="password", on_click=issue_password).props("flat no-caps color=orange")
                             ui.button("History", icon="history", on_click=lambda: show_entity_history("users", person)).props("flat no-caps")
                             ui.button(
-                                "Delete", icon="delete_outline", color="negative",
+                                "Permanently delete", icon="delete_forever", color="negative",
                                 on_click=lambda: confirm_identity_deletion(
                                     "users", person, label="user", on_deleted=lambda: select_entity("users"),
                                 ),
