@@ -142,7 +142,36 @@ def test_browse_and_dashboard_present_organizational_owner(client: TestClient):
     payload = summary.json()
     assert payload["overview_counts"]["aggregations"] == 1
     assert payload["overview_counts"]["records"] == 1
-    assert payload["ownership_counts"] == dashboard.json()
+    assert payload["overview_counts"]["holds"] == 0
+    assert payload["overview_medium_counts"] == {
+        "aggregations": {"physical": 0, "digital": 0, "mixed": 1},
+        "records": {"physical": 0, "digital": 0, "mixed": 1},
+    }
+    assert payload["overview_aggregation_status_counts"] == {"open": 1, "closed": 0}
+    assert payload["overview_resource_attention_counts"] == {
+        "aggregations": {"vital": 0, "held": 0},
+        "records": {"vital": 0, "held": 0},
+    }
+    assert payload["overview_digital_component_metrics"] == {
+        "component_count": 0, "storage_size_in_bytes": 0,
+    }
+    expected_ownership_metrics = {
+        "open_aggregation_count": 1,
+        "closed_aggregation_count": 0,
+        "physical_record_count": 0,
+        "digital_record_count": 0,
+        "mixed_record_count": 1,
+        "vital_record_count": 0,
+        "storage_size_in_bytes": 0,
+    }
+    assert {
+        key: payload["ownership_counts"][0][key]
+        for key in expected_ownership_metrics
+    } == expected_ownership_metrics
+    assert {
+        key: payload["ownership_counts"][0][key]
+        for key in dashboard.json()[0]
+    } == dashboard.json()[0]
     assert payload["unclassified_root_count"] == 0
     assert payload["classification_metrics"]["terminal_count"] == 1
     assert {

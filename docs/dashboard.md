@@ -28,7 +28,20 @@ The response has this stable top-level shape:
 
 ```json
 {
-  "overview_counts": {"aggregations": 12, "records": 48},
+  "overview_counts": {"aggregations": 12, "records": 48, "holds": 3},
+  "overview_medium_counts": {
+    "aggregations": {"physical": 3, "digital": 5, "mixed": 4},
+    "records": {"physical": 8, "digital": 32, "mixed": 8}
+  },
+  "overview_resource_attention_counts": {
+    "aggregations": {"vital": 2, "held": 3},
+    "records": {"vital": 7, "held": 11}
+  },
+  "overview_aggregation_status_counts": {"open": 9, "closed": 3},
+  "overview_digital_component_metrics": {
+    "component_count": 126,
+    "storage_size_in_bytes": 58300824
+  },
   "classification_metrics": {
     "published_scheme_count": 1,
     "draft_scheme_count": 0,
@@ -46,7 +59,14 @@ The response has this stable top-level shape:
       "org_unit_code": "FIN",
       "org_unit_name": "Finance",
       "aggregation_count": 6,
-      "record_count": 31
+      "open_aggregation_count": 5,
+      "closed_aggregation_count": 1,
+      "record_count": 31,
+      "physical_record_count": 8,
+      "digital_record_count": 20,
+      "mixed_record_count": 3,
+      "vital_record_count": 4,
+      "storage_size_in_bytes": 21048120
     }
   ],
   "favourites": {"aggregations": [], "records": []},
@@ -55,8 +75,15 @@ The response has this stable top-level shape:
 ```
 
 `overview_counts` always includes the aggregation and record counts visible to
-the caller. Administrative entity totals are included only when the caller has
-their corresponding global privileges; classification metrics remain zero
+the caller. `overview_medium_counts` breaks those visible totals down by
+physical, digital, and mixed medium. `overview_aggregation_status_counts`
+breaks the visible aggregation total down by open and closed state, using
+whether `date_closed` is null. The attention counts report visible vital and
+effectively held aggregations and records. Digital-component count and storage
+size include components belonging to visible records only. The absolute system-wide hold total is
+included only when the caller has `holds.administer`. Other administrative
+entity totals are included only when the caller has their corresponding global
+privileges; classification metrics remain zero
 without classification-administration privilege. Holdings,
 favourites, and recent activity use the same resource-visibility rules as their
 normal APIs. `ownership_counts` contains only organizational units in which the
@@ -101,10 +128,13 @@ relationships.
 An item qualifies when its immutable event-history entry:
 
 - has `actor_user_id` equal to the authenticated user's ID;
-- is a `CREATE` or `UPDATE` event for an aggregation or record; and
+- is a `CREATE` or `UPDATE` event for an aggregation or record, or a
+  `CONTENT_VIEWED` event for one of a record's digital components; and
 - occurred within the configured rolling period.
 
-Each category is ordered by `event_history.occurred_at`, newest first. The time
+`CONTENT_VIEWED` activity is presented as activity on the containing record.
+Only the newest qualifying view for each record is retained in the recent
+preview. Each category is ordered by `event_history.occurred_at`, newest first. The time
 shown on a card is that activity timestamp. Deleted entities are omitted because
 there is no current entity to open.
 
@@ -116,7 +146,7 @@ project `.env` file:
 | Variable | Default | Meaning |
 | --- | ---: | --- |
 | `DASHBOARD_FAVOURITE_ITEM_LIMIT` | `5` | Maximum entries in each Dashboard and entity-listing favourites preview |
-| `DASHBOARD_RECENT_ITEM_LIMIT` | `4` | Maximum items shown in each created/updated aggregation/record category |
+| `DASHBOARD_RECENT_ITEM_LIMIT` | `4` | Maximum records shown in the combined created, updated, and content-viewed Dashboard preview |
 | `DASHBOARD_RECENT_DAYS` | `30` | Rolling number of days included in personal recent activity |
 
 All values must be positive integers. Actual process environment variables

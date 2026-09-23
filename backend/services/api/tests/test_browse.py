@@ -164,6 +164,28 @@ def test_organization_browser_is_lazy_bounded_and_reports_assignment_context(cli
     )
     assert [item["id"] for item in child_children.json()["roles"]] == [role["id"]]
 
+    child_summary = client.get(
+        f"/api/v1/browse/organization/org-units/{child['id']}/summary"
+    )
+    assert child_summary.status_code == 200, child_summary.text
+    assert child_summary.json()["ancestors"] == [{
+        "id": root["id"], "code": "OB", "name": "Organization Browser",
+    }]
+    assert child_summary.json()["holdings_metrics"] == {
+        "aggregation_count": 0,
+        "open_aggregation_count": 0,
+        "closed_aggregation_count": 0,
+        "physical_aggregation_count": 0,
+        "digital_aggregation_count": 0,
+        "mixed_aggregation_count": 0,
+        "record_count": 0,
+        "physical_record_count": 0,
+        "digital_record_count": 0,
+        "mixed_record_count": 0,
+        "vital_record_count": 0,
+        "storage_size_in_bytes": 0,
+    }
+
     users = client.get(f"/api/v1/browse/organization/roles/{role['id']}/users")
     assert users.status_code == 200, users.text
     assert users.json()[0]["id"] == person["id"]
@@ -173,6 +195,10 @@ def test_organization_browser_is_lazy_bounded_and_reports_assignment_context(cli
     role_summary = client.get(f"/api/v1/browse/organization/roles/{role['id']}/summary")
     assert role_summary.json()["assigned_user_count"] == 1
     assert role_summary.json()["current_assignment_count"] == 1
+    assert role_summary.json()["profile_privileges"]
+    assert {
+        "code", "name", "description", "category", "is_reserved",
+    } <= role_summary.json()["profile_privileges"][0].keys()
 
     found = client.get("/api/v1/browse/organization/search", params={"query": "Browse Person"})
     user_result = next(

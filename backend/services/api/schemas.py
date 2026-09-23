@@ -1053,6 +1053,16 @@ class OwnershipDashboardCount(ApiModel):
     record_count: int
 
 
+class DashboardOwnershipCount(OwnershipDashboardCount):
+    open_aggregation_count: int
+    closed_aggregation_count: int
+    physical_record_count: int
+    digital_record_count: int
+    mixed_record_count: int
+    vital_record_count: int
+    storage_size_in_bytes: int
+
+
 class DashboardClassificationMetrics(ApiModel):
     published_scheme_count: int
     draft_scheme_count: int
@@ -1067,7 +1077,7 @@ class DashboardClassificationMetrics(ApiModel):
 class DashboardRecentItem(ApiModel):
     entity_type: Literal["aggregation", "record"]
     entity_id: int
-    operation: Literal["CREATE", "UPDATE"]
+    operation: Literal["CREATE", "UPDATE", "CONTENT_VIEWED"]
     occurred_at: datetime
     title: str
     aggregation_number: str | None
@@ -1085,9 +1095,15 @@ class DashboardReviewItem(ApiModel):
 
 class DashboardSummaryRead(ApiModel):
     overview_counts: dict[str, int]
+    overview_medium_counts: dict[str, dict[Literal["physical", "digital", "mixed"], int]]
+    overview_resource_attention_counts: dict[str, dict[Literal["vital", "held"], int]]
+    overview_aggregation_status_counts: dict[Literal["open", "closed"], int]
+    overview_digital_component_metrics: dict[
+        Literal["component_count", "storage_size_in_bytes"], int
+    ]
     classification_metrics: DashboardClassificationMetrics
     unclassified_root_count: int
-    ownership_counts: list[OwnershipDashboardCount]
+    ownership_counts: list[DashboardOwnershipCount]
     favourites: FavouritesRead
     recent_activity: list[DashboardRecentItem]
     review_warning_window_days: int
