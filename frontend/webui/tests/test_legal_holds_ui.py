@@ -12,6 +12,8 @@ def test_holds_workspace_and_navigation_are_wired():
     assert 'async def select_hold_details(hold_id: int)' in source
     assert 'async def open_hold_editor(' in source
     assert '"Create hold"' in source
+    assert 'ui.label("Filter holds").classes("text-lg font-semibold text-slate-800")' in source
+    assert 'with ui.row().classes("w-full items-center"):' in source
     assert '"Add Members"' in source
     assert '"Search number, title or description"' in source
     assert 'first_page=ui.button("First"' in source
@@ -63,10 +65,23 @@ def test_hold_mutations_collect_reasons_and_refresh_live_state():
     assert 'Remove from this hold' in source
 
 
+def test_hold_editor_datetime_conversion_uses_application_timezone_without_javascript():
+    source = APP.read_text(encoding="utf-8")
+    hold_editor = source[source.index("async def open_hold_editor("):source.index("async def add_resource_to_hold_dialog(")]
+    assert "ui.run_javascript" not in hold_editor
+    assert 'return parsed.astimezone().strftime("%Y-%m-%dT%H:%M")' in hold_editor
+    assert "parsed.replace(tzinfo=local_timezone).astimezone(timezone.utc).isoformat()" in source
+    assert "Dates currently use the application timezone." in source
+
+
 def test_aggregation_command_centre_matches_the_approved_two_column_layout():
     source = APP.read_text(encoding="utf-8")
     assert '"aggregation-command-layout w-full p-5"' in source
     assert '"Aggregation overview"' in source
+    assert '"detail-surface aggregation-actions-panel shadow-none p-4 gap-3"' in source
+    assert '"Metadata and review"' in source
+    assert '"Lifecycle"' in source
+    assert '"Security, access and audit"' in source
     assert '"detail-surface aggregation-hold-controls shadow-none p-4 gap-3"' in source
     assert '"Hold controls"' in source
     assert '"Remove direct holds"' in source
@@ -77,6 +92,9 @@ def test_aggregation_command_centre_matches_the_approved_two_column_layout():
     assert '"aggregation-retention-footer w-full"' in source
     assert 'grid-column: 1 / -1; grid-row: 2' in source
     assert '"w-full text-sm font-semibold text-slate-800"' in source
+    assert '("Permanent Transfer", "External archive")' in source
+    assert '("Selective Transfer", "Appraise and transfer")' in source
+    assert '("Destruction", "Destroy after retention")' in source
     assert '.aggregation-retention-stage:not(:last-child)::after' in source
     assert '.aggregation-overview-actions .q-btn' in source
 

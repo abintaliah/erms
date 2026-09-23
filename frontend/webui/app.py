@@ -54,8 +54,8 @@ RECORD_UPLOAD_WAIT_MESSAGE = "Please wait until all files have finished uploadin
 AGGREGATION_SUMMARY_LAYOUT_CLASSES = (
     "detail-surface aggregation-command-summary shadow-none flex-1 min-w-[520px] p-5 gap-4"
 )
-RECORD_DETAIL_HEADER_CLASSES = "w-full items-start gap-3 flex-wrap"
-RECORD_DETAIL_TITLE_CLASSES = "gap-0 flex-1 min-w-0 sm:min-w-[420px] basis-[520px] max-w-full"
+RECORD_DETAIL_HEADER_CLASSES = "w-full items-center gap-3 no-wrap"
+RECORD_DETAIL_TITLE_CLASSES = "gap-0 grow min-w-0"
 RELATIONSHIP_DISPLAY_FIELDS = frozenset({
     "aggregation_display",
     "org_unit_display",
@@ -359,7 +359,10 @@ def render_component_cards(
             with ui.row().classes("w-full items-start no-wrap gap-3"):
                 ui.avatar(icon=component_file_icon(component.get("mime_type")), color="blue-1", text_color="primary").props("rounded")
                 with ui.column().classes("gap-1 grow min-w-0"):
-                    ui.label(component.get("file_name") or "Unnamed file").classes("component-filename font-semibold text-slate-800")
+                    component_name = component.get("file_name") or "Unnamed file"
+                    ui.label(component_name).classes(
+                        "component-filename font-semibold text-slate-800"
+                    ).tooltip(component_name)
                     ui.label(component.get("mime_type") or "Unknown file type").classes("text-xs text-slate-500")
                 with ui.column().classes("items-end gap-1"):
                     ui.badge(f"#{component.get('component_order', '—')}").props("outline color=primary")
@@ -1009,6 +1012,13 @@ def index() -> None:
         }
         .erms-page-table .q-table tbody td { color: #334155; font-size: .875rem; }
         .erms-page-table .q-table tbody tr:hover { background: #f7fbfe; }
+        .aggregation-records-table .q-table { table-layout: fixed; width: 100%; }
+        .aggregation-records-table .q-table th,
+        .aggregation-records-table .q-table td { overflow: hidden; }
+        .aggregation-record-cell-value {
+            display: block; min-width: 0; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
+        }
         .erms-results-divider { width: calc(100% - 40px) !important; margin: 8px 20px 0; }
         .q-table thead tr { background: #f7f8f8; }
         .q-table th { color: #657184; font-size: .72rem; font-weight: 700; letter-spacing: .035em; }
@@ -1046,7 +1056,15 @@ def index() -> None:
         }
         .aggregation-command-summary { grid-column: 1; grid-row: 1; min-width: 0 !important; }
         .aggregation-command-side { display: contents; }
-        .aggregation-hold-controls { grid-column: 2; grid-row: 1; min-width: 0; width: 100%; }
+        .aggregation-command-controls {
+            grid-column: 2; grid-row: 1; min-width: 0; width: 100%; gap: 12px;
+        }
+        .aggregation-hold-controls, .aggregation-actions-panel { min-width: 0; width: 100%; }
+        .aggregation-actions-panel .q-btn { justify-content: flex-start; }
+        .aggregation-action-group-label {
+            color: #64748b; font-size: .68rem; font-weight: 750;
+            letter-spacing: .07em; text-transform: uppercase;
+        }
         .aggregation-retention-compact {
             grid-column: 1 / -1; grid-row: 2; min-width: 0; width: 100%; margin-top: 4px;
         }
@@ -1094,12 +1112,26 @@ def index() -> None:
             white-space: nowrap; border-radius: 8px; background: rgba(255,255,255,.62);
             padding: 7px 9px; color: #536b7f; font-size: .75rem;
         }
+        .record-command-layout {
+            display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(330px, .72fr);
+            align-items: start; gap: 12px;
+        }
+        .record-command-overview { grid-column: 1; grid-row: 1; min-width: 0; }
+        .record-command-controls { grid-column: 2; grid-row: 1; min-width: 0; width: 100%; gap: 12px; }
+        .record-command-controls .q-btn { justify-content: flex-start; }
+        .record-action-group-label {
+            color: #64748b; font-size: .68rem; font-weight: 750;
+            letter-spacing: .07em; text-transform: uppercase;
+        }
         @media (max-width: 980px) {
             .aggregation-command-layout { display: flex !important; flex-direction: column; }
             .aggregation-command-side { display: contents; }
-            .aggregation-command-summary, .aggregation-retention-compact,
+            .aggregation-command-summary, .aggregation-command-controls,
+            .aggregation-retention-compact,
             .aggregation-hold-controls { min-width: 100%; }
             .aggregation-child-preview-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+            .record-command-layout { display: flex; flex-direction: column; }
+            .record-command-overview, .record-command-controls { min-width: 100%; width: 100%; }
         }
         .relationship-select .q-field__control { min-height: 58px; border-radius: 10px; }
         .relationship-option { min-width: 360px; }
@@ -1116,7 +1148,15 @@ def index() -> None:
         @container (min-width: 760px) { .component-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         .component-card { border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: none; overflow: hidden; }
         .component-card:hover { border-color: #a8bdd8; background: #fafdff; }
-        .component-filename { overflow-wrap: anywhere; line-height: 1.25; }
+        .component-filename {
+            display: -webkit-box; width: min(280px, 100%); height: 2.5em;
+            overflow: hidden; overflow-wrap: anywhere; line-height: 1.25;
+            -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+        }
+        .record-containing-aggregation { width: 100%; text-align: left; }
+        .record-containing-aggregation .q-btn__content {
+            width: 100%; justify-content: flex-start; text-align: left; white-space: normal;
+        }
         .component-meta-label { color: #94a3b8; font-size: .68rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
         .component-meta-value { color: #475569; font-size: .8rem; line-height: 1.3; }
         .record-uploader { border: 2px dashed #a9bfd9; border-radius: 12px; box-shadow: none; background: #fbfdff; }
@@ -3366,51 +3406,107 @@ def index() -> None:
             )
 
         with table_container, ui.column().classes("w-full p-5 gap-5"):
-            with ui.card().classes("detail-surface w-full shadow-none p-0 gap-0 overflow-hidden"):
+            with ui.element("div").classes("record-command-layout w-full"):
+                with ui.column().classes("record-command-controls"):
+                    with ui.card().classes("detail-surface w-full shadow-none p-4 gap-3"):
+                        ui.label("Hold controls").classes("aggregation-panel-heading w-full")
+                        with ui.row().classes("w-full gap-2 flex-wrap"):
+                            if effective_holds:
+                                ui.button(
+                                    "View holds", icon="visibility",
+                                    on_click=lambda: show_effective_holds_dialog(
+                                        effective_holds, "record", record_id,
+                                        lambda: select_record_details(record_id),
+                                    ),
+                                ).props("outline dense no-caps color=primary")
+                            if capabilities.get("add_to_hold"):
+                                ui.button(
+                                    "Add to hold", icon="add_link",
+                                    on_click=lambda: add_resource_to_hold_dialog(
+                                        "record", record_id, lambda: select_record_details(record_id),
+                                    ),
+                                ).props("outline dense no-caps color=primary")
+                            if capabilities.get("remove_all_direct_hold_assignments"):
+                                ui.button(
+                                    "Remove direct holds", icon="link_off",
+                                    on_click=remove_record_from_all_holds,
+                                ).props("outline dense no-caps color=negative")
+                            if not effective_holds and not capabilities.get("add_to_hold"):
+                                ui.label("No hold actions are available.").classes("text-xs text-slate-500")
+                    with ui.card().classes("detail-surface w-full shadow-none p-4 gap-3"):
+                        ui.label("Record actions").classes("aggregation-panel-heading w-full")
+                        ui.label("Metadata and review").classes("record-action-group-label")
+                        record_metadata_actions = ui.row().classes("w-full gap-2 flex-wrap")
+                        ui.label("Security, access and audit").classes("record-action-group-label")
+                        record_security_actions = ui.row().classes("w-full gap-2 flex-wrap")
+                        ui.label("Lifecycle").classes("record-action-group-label")
+                        record_lifecycle_actions = ui.row().classes("w-full gap-2 flex-wrap")
+                        if not record.get("_effectively_closed") and capabilities.get("move"):
+                            with ui.expansion(
+                                "Advanced", caption="Specialist record actions",
+                                icon="tune", value=False,
+                            ).classes("w-full border-t border-slate-100"):
+                                record_advanced_actions = ui.row().classes(
+                                    "w-full justify-start gap-2 pb-2"
+                                )
+                        else:
+                            record_advanced_actions = None
+                record_command_overview = ui.card().classes(
+                    "detail-surface record-command-overview w-full shadow-none p-0 gap-0 overflow-hidden"
+                )
+                record_command_overview.__enter__()
                 with ui.row().classes("w-full items-center px-5 py-3 border-b border-slate-100"):
                     ui.icon("description", color="primary", size="21px")
                     ui.label("Record details").classes("font-semibold")
                 with ui.row().classes(f"w-full {RECORD_DETAIL_HEADER_CLASSES} gap-3 px-5 py-5"):
                     ui.avatar(icon="description", color="blue-1", text_color="primary", size="52px")
                     with ui.column().classes(RECORD_DETAIL_TITLE_CLASSES):
-                        ui.label(record["title"]).classes("text-2xl font-semibold leading-tight break-words")
-                        ui.label(record["record_number"]).classes("text-sm text-slate-500 font-medium mt-1")
-                    favourite_button("records", record["id"])
-                    ui.button("Back", icon="arrow_back", on_click=leave_record_page).props("flat no-caps color=blue-grey-8")
+                        ui.label(record["record_number"]).classes("text-xs text-primary font-semibold")
+                        ui.label(record["title"]).classes("text-lg font-semibold break-words")
+                    with ui.row().classes("items-center no-wrap gap-2 flex-none"):
+                        favourite_button("records", record["id"])
+                        ui.button(
+                            "Back", icon="arrow_back", on_click=leave_record_page,
+                        ).props("flat no-caps color=blue-grey-8")
                     if capabilities.get("change_security_level"):
-                        ui.button(
-                            "Security level", icon="security",
-                            on_click=lambda: show_security_level_change(
-                                "record", record, refresh_record_view,
-                            ),
-                        ).props("flat no-caps").tooltip("Change the record security level")
+                        with record_security_actions:
+                            ui.button(
+                                "Security level", icon="security",
+                                on_click=lambda: show_security_level_change(
+                                    "record", record, refresh_record_view,
+                                ),
+                            ).props("outline dense no-caps").tooltip("Change the record security level")
                     if not record.get("_effectively_closed") and capabilities.get("modify_metadata"):
-                        ui.button(
-                            "Edit metadata", icon="edit",
-                            on_click=lambda: open_editor(
-                                record, on_saved=refresh_record_view, resource_key="records",
-                            ),
-                        ).props("outline no-caps color=primary")
+                        with record_metadata_actions:
+                            ui.button(
+                                "Edit metadata", icon="edit",
+                                on_click=lambda: open_editor(
+                                    record, on_saved=refresh_record_view, resource_key="records",
+                                ),
+                            ).props("outline dense no-caps color=primary")
                     if not record.get("_effectively_closed") and capabilities.get("delete"):
+                        with record_lifecycle_actions:
+                            ui.button(
+                                "Delete", icon="delete_outline", color="negative",
+                                on_click=confirm_delete_record,
+                            ).props("outline dense no-caps")
+                    with record_security_actions:
                         ui.button(
-                            "Delete", icon="delete_outline", color="negative",
-                            on_click=confirm_delete_record,
-                        ).props("flat no-caps")
-                    ui.button(
-                        "Event history", icon="history",
-                        on_click=lambda: show_entity_history("records", record),
-                    ).props("flat no-caps")
-                    ui.button(
-                        "Why this access?", icon="fact_check",
-                        on_click=lambda: show_access_explanation("record", record["id"]),
-                    ).props("flat no-caps").tooltip("Explain the authorization decision gate by gate")
+                            "Event history", icon="history",
+                            on_click=lambda: show_entity_history("records", record),
+                        ).props("outline dense no-caps")
+                        ui.button(
+                            "Why this access?", icon="fact_check",
+                            on_click=lambda: show_access_explanation("record", record["id"]),
+                        ).props("outline dense no-caps").tooltip("Explain the authorization decision gate by gate")
                     if capabilities.get("manage_acl"):
-                        ui.button(
-                            "Access", icon="policy",
-                            on_click=lambda: show_acl_editor(
-                                "records", record["id"], on_saved=lambda: refresh_record_view(),
-                            ),
-                        ).props("flat no-caps")
+                        with record_security_actions:
+                            ui.button(
+                                "Access", icon="policy",
+                                on_click=lambda: show_acl_editor(
+                                    "records", record["id"], on_saved=lambda: refresh_record_view(),
+                                ),
+                            ).props("outline dense no-caps")
                     if capabilities.get("change_vital_status"):
                         async def change_vital() -> None:
                             dialog = ui.dialog()
@@ -3427,11 +3523,12 @@ def index() -> None:
                                     except ApiError as error: ui.notify(error_message(error), color="negative", close_button=True)
                                 ui.button("Save", on_click=submit).props("unelevated")
                             dialog.open()
-                        ui.button(
-                            "Vital status", icon="emergency", on_click=change_vital,
-                        ).props("flat no-caps").tooltip(
-                            "Change whether this record is protected as vital"
-                        )
+                        with record_metadata_actions:
+                            ui.button(
+                                "Vital status", icon="emergency", on_click=change_vital,
+                            ).props("outline dense no-caps").tooltip(
+                                "Change whether this record is protected as vital"
+                            )
                     if capabilities.get("change_review_date"):
                         async def change_record_review_date() -> None:
                             dialog = ui.dialog()
@@ -3449,20 +3546,20 @@ def index() -> None:
                                     except (ApiError, ValueError) as error: ui.notify(error_message(error) if isinstance(error, ApiError) else "Choose a valid future date", color="negative", close_button=True)
                                 ui.button("Save", on_click=submit).props("unelevated")
                             dialog.open()
-                        ui.button("Next review", icon="event", on_click=change_record_review_date).props("flat no-caps").tooltip("Schedule or clear this record's next governance review")
-                if not record.get("_effectively_closed") and capabilities.get("move"):
-                    with ui.expansion(
-                        "Advanced", caption="Specialist record actions", icon="tune", value=False,
-                    ).classes(
-                        "w-full border-t border-slate-100 px-5"
-                    ):
-                        with ui.row().classes("w-full justify-end gap-2 pb-4"):
+                        with record_metadata_actions:
                             ui.button(
-                                "Move", icon="drive_file_move",
-                                on_click=lambda: show_governed_move(
-                                    "records", record, refresh_record_view,
-                                ),
-                            ).props("flat dense no-caps")
+                                "Next review", icon="event", on_click=change_record_review_date,
+                            ).props("outline dense no-caps").tooltip(
+                                "Schedule or clear this record's next governance review"
+                            )
+                if record_advanced_actions is not None:
+                    with record_advanced_actions:
+                        ui.button(
+                            "Move", icon="drive_file_move",
+                            on_click=lambda: show_governed_move(
+                                "records", record, refresh_record_view,
+                            ),
+                        ).props("outline dense no-caps")
                 ui.separator()
                 with ui.column().classes("w-full px-5 py-4 gap-4"):
                     if record.get("_effectively_closed"):
@@ -3502,25 +3599,6 @@ def index() -> None:
                                     lambda: select_record_details(record_id),
                                 ),
                             ).props("flat dense no-caps color=warning")
-                            if capabilities.get("add_to_hold"):
-                                ui.button(
-                                    "Add to hold", icon="add_link",
-                                    on_click=lambda: add_resource_to_hold_dialog(
-                                        "record", record_id, lambda: select_record_details(record_id),
-                                    ),
-                                ).props("flat dense no-caps color=primary")
-                            if capabilities.get("remove_all_direct_hold_assignments"):
-                                ui.button(
-                                    "Remove from all holds", icon="link_off",
-                                    on_click=remove_record_from_all_holds,
-                                ).props("flat dense no-caps color=negative")
-                    elif capabilities.get("add_to_hold"):
-                        ui.button(
-                            "Add to hold", icon="add_link",
-                            on_click=lambda: add_resource_to_hold_dialog(
-                                "record", record_id, lambda: select_record_details(record_id),
-                            ),
-                        ).props("outline dense no-caps")
                     with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
                         for label, value in (
                             ("Security level", f"{security_level['code']} — {security_level['name']}"),
@@ -3545,7 +3623,7 @@ def index() -> None:
                                         aggregation_label,
                                         on_click=open_containing_aggregation,
                                     ).props("flat dense no-caps color=primary align=left").classes(
-                                        "font-semibold self-start -ml-2"
+                                        "record-containing-aggregation font-semibold self-start -ml-2"
                                     )
                                 elif label == "Vital status":
                                     ui.badge(
@@ -3560,6 +3638,7 @@ def index() -> None:
                                         if source:
                                             ui.label(f"Inherited from {source['aggregation_number']} — {source['title']}").classes("text-xs text-slate-500")
 
+                record_command_overview.__exit__(None, None, None)
             with ui.card().classes("detail-surface w-full shadow-none p-5 gap-4"):
                 with ui.row().classes("w-full items-center gap-3"):
                     ui.icon("attach_file", color="primary", size="28px")
@@ -5225,6 +5304,13 @@ def index() -> None:
                     ui.label(current["title"]).classes("font-semibold text-slate-800")
 
                 with ui.element("div").classes("aggregation-command-layout w-full p-5"):
+                    with ui.column().classes("aggregation-command-controls"):
+                        aggregation_hold_host = ui.card().classes(
+                            "detail-surface aggregation-hold-controls shadow-none p-4 gap-3"
+                        )
+                        aggregation_actions_host = ui.card().classes(
+                            "detail-surface aggregation-actions-panel shadow-none p-4 gap-3"
+                        )
                     with ui.card().classes(
                         AGGREGATION_SUMMARY_LAYOUT_CLASSES
                     ):
@@ -5335,6 +5421,9 @@ def index() -> None:
                                                 ui.label("Set on this aggregation").classes("text-xs text-slate-500")
                                             elif source:
                                                 ui.label(f"Inherited from {source['aggregation_number']} — {source['title']}").classes("text-xs text-slate-500")
+                        aggregation_actions_host.__enter__()
+                        ui.label("Aggregation actions").classes("aggregation-panel-heading w-full")
+                        ui.label("Metadata and review").classes("aggregation-action-group-label")
                         with ui.row().classes("aggregation-overview-actions w-full"):
                             if capabilities.get("change_location"):
                                 async def change_location() -> None:
@@ -5438,6 +5527,10 @@ def index() -> None:
                                         ui.button("Save", on_click=submit).props("unelevated")
                                     dialog.open()
                                 ui.button("Next review", icon="event", on_click=change_aggregation_review_date).props("flat dense no-caps").tooltip("Schedule or clear this aggregation's next governance review")
+                            if closure is None and (
+                                capabilities.get("close") or capabilities.get("delete")
+                            ):
+                                ui.label("Lifecycle").classes("aggregation-action-group-label w-full")
                             if closure is None and capabilities.get("close"):
                                 ui.button(
                                     "Close", icon="lock",
@@ -5455,6 +5548,9 @@ def index() -> None:
                                     delete_button.tooltip(
                                         "Remove or move all child aggregations and records before deleting"
                                     )
+                            ui.label("Security, access and audit").classes(
+                                "aggregation-action-group-label w-full"
+                            )
                             if capabilities.get("change_security_level"):
                                 ui.button(
                                     "Security level", icon="security",
@@ -5510,7 +5606,7 @@ def index() -> None:
                             ).classes(
                                 "w-full border-t border-slate-100"
                             ):
-                                with ui.row().classes("w-full justify-end gap-2 pb-2"):
+                                with ui.row().classes("w-full justify-start gap-2 pb-2"):
                                     if show_aggregation_move:
                                         ui.button(
                                             "Move", icon="drive_file_move",
@@ -5540,6 +5636,7 @@ def index() -> None:
                                                 "aggregations", current["id"], scope="record"
                                             )
                                         )
+                        aggregation_actions_host.__exit__(None, None, None)
                     aggregation_command_side = ui.column().classes("aggregation-command-side")
                     aggregation_command_side.__enter__()
                     if effective_rule:
@@ -5569,9 +5666,9 @@ def index() -> None:
                             with ui.element("div").classes("aggregation-retention-stages w-full"):
                                 final_disposition = effective_rule["final_disposition"]
                                 final_value, final_help = {
-                                    "transfer_to_external_archive": ("Permanent", "External archive"),
-                                    "retain_as_local_archives": ("Permanent", "Local archives"),
-                                    "selective_preservation": ("Selective", "Appraise and preserve"),
+                                    "transfer_to_external_archive": ("Permanent Transfer", "External archive"),
+                                    "retain_as_local_archives": ("Retain as Local Archives", "Local archives"),
+                                    "selective_preservation": ("Selective Transfer", "Appraise and transfer"),
                                     "destruction": ("Destruction", "Destroy after retention"),
                                 }.get(
                                     final_disposition,
@@ -5614,9 +5711,7 @@ def index() -> None:
                                     ui.label("Effective retention rule").classes("text-lg font-semibold")
                                     ui.label("No effective retention rule is available.").classes("text-sm text-slate-500")
 
-                    with ui.card().classes(
-                        "detail-surface aggregation-hold-controls shadow-none p-4 gap-3"
-                    ):
+                    with aggregation_hold_host:
                         ui.label("Hold controls").classes("aggregation-panel-heading w-full")
                         with ui.row().classes("w-full gap-2 flex-wrap"):
                             if effective_holds:
@@ -5682,16 +5777,34 @@ def index() -> None:
                         ui.label(f"{len(records)} records").classes("text-sm text-slate-500")
                     record_table = ui.table(
                         columns=[
-                            {"name": "record_number", "label": "Number", "field": "record_number", "align": "left", "sortable": True},
-                            {"name": "title", "label": "Title", "field": "title", "align": "left", "sortable": True},
-                            {"name": "date_originated", "label": "Originated", "field": "date_originated", "align": "left", "sortable": True},
-                            {"name": "actions", "label": "", "field": "actions", "align": "right"},
+                            {"name": "record_number", "label": "Number", "field": "record_number", "align": "left", "sortable": True, "style": "width: 230px; max-width: 230px", "headerStyle": "width: 230px; max-width: 230px"},
+                            {"name": "title", "label": "Title", "field": "title", "align": "left", "sortable": True, "style": "max-width: 520px", "headerStyle": "width: auto"},
+                            {"name": "date_originated", "label": "Originated", "field": "date_originated", "align": "left", "sortable": True, "style": "width: 190px; max-width: 190px", "headerStyle": "width: 190px; max-width: 190px"},
+                            {"name": "actions", "label": "", "field": "actions", "align": "right", "style": "width: 160px; max-width: 160px", "headerStyle": "width: 160px; max-width: 160px"},
                         ],
                         rows=records,
                         row_key="id",
                         pagination=10,
-                    ).props("flat bordered separator=horizontal").classes("erms-page-table")
+                    ).props("flat bordered separator=horizontal").classes(
+                        "erms-page-table aggregation-records-table"
+                    )
                     record_table.bind_filter_from(contained_record_filter, "value")
+                    record_table.add_slot("body-cell-record_number", '''
+                        <q-td :props="props" class="text-left">
+                          <span class="aggregation-record-cell-value">
+                            {{ props.row.record_number || '—' }}
+                            <q-tooltip>{{ props.row.record_number || '—' }}</q-tooltip>
+                          </span>
+                        </q-td>
+                    ''')
+                    record_table.add_slot("body-cell-title", '''
+                        <q-td :props="props" class="text-left">
+                          <span class="aggregation-record-cell-value">
+                            {{ props.row.title || '—' }}
+                            <q-tooltip>{{ props.row.title || '—' }}</q-tooltip>
+                          </span>
+                        </q-td>
+                    ''')
                     add_timestamp_slots(record_table, ["date_originated"])
                     record_table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round :icon="props.row._is_favourite ? \'favorite\' : \'favorite_border\'" :color="props.row._is_favourite ? \'red\' : \'primary\'" :aria-label="props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\'" @click.stop="$parent.$emit(\'toggle_favourite\', props.row)"><q-tooltip>{{ props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\' }}</q-tooltip></q-btn><q-btn flat round icon="open_in_new" color="primary" @click="$parent.$emit(\'open_record\', props.row)"><q-tooltip>Open record</q-tooltip></q-btn><q-btn flat round icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn></q-td>')
                     record_table.on("open_record", lambda event: show_record_details(event.args))
@@ -10530,16 +10643,13 @@ def index() -> None:
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True); return
         people = {item["id"]: f"{item['name']} — {item.get('email') or 'no email'}" for item in users if item.get("account_type") == "person" and item.get("status") == "active"}
-        async def local_datetime_value(value: str | None) -> str:
+        def local_datetime_value(value: str | None) -> str:
             if not value:
                 return ""
-            return await ui.run_javascript(
-                f"(() => {{ const d=new Date({json.dumps(value)}); "
-                "const p=n=>String(n).padStart(2,'0'); "
-                "return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }})()"
-            )
-        initial_valid_from = await local_datetime_value((hold or {}).get("valid_from"))
-        initial_valid_to = await local_datetime_value((hold or {}).get("valid_to"))
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed.astimezone().strftime("%Y-%m-%dT%H:%M")
+        initial_valid_from = local_datetime_value((hold or {}).get("valid_from"))
+        initial_valid_to = local_datetime_value((hold or {}).get("valid_to"))
         dialog = ui.dialog()
         with dialog, ui.card().classes("w-[760px] max-w-[95vw] max-h-[90vh] overflow-y-auto"):
             ui.label("Edit hold" if editing else "Create hold").classes("text-xl font-semibold")
@@ -10557,22 +10667,24 @@ def index() -> None:
             ).props("outlined use-chips use-input").classes("w-full")
             description = ui.textarea("Description", value=(hold or {}).get("description") or "").props("outlined autogrow maxlength=4000").classes("w-full")
             preserve = ui.checkbox("Preserve resource metadata and state", value=(hold or {}).get("preserve_resource_state", False))
-            ui.label("Valid-to is exclusive. Dates are interpreted in your browser timezone and sent with an offset.").classes("text-xs text-slate-500")
+            ui.label("Valid-to is exclusive. Dates currently use the application timezone.").classes("text-xs text-slate-500")
 
-            async def iso_value(value: str, *, required: bool) -> str | None:
+            def iso_value(value: str, *, required: bool) -> str | None:
                 if not value:
                     if required: raise ValueError("Valid from is required")
                     return None
-                # A datetime-local value has no offset. Parse it in the browser,
-                # where the user's actual timezone is known, then send UTC.
-                return await ui.run_javascript(f"new Date({json.dumps(value)}).toISOString()")
+                # A datetime-local value has no offset. Until per-user timezone
+                # preferences exist, interpret it in the application timezone.
+                parsed = datetime.fromisoformat(value)
+                local_timezone = datetime.now().astimezone().tzinfo
+                return parsed.replace(tzinfo=local_timezone).astimezone(timezone.utc).isoformat()
 
             async def persist(reason: str | None = None) -> None:
                 if not (code.value or "").strip() or not (name.value or "").strip() or owner.value is None:
                     ui.notify("Code, name, owner, and valid-from are required", color="warning"); return
                 try:
                     payload = {"code": code.value.strip(), "name": name.value.strip(), "description": (description.value or "").strip() or None,
-                               "valid_from": await iso_value(valid_from.value, required=True), "valid_to": await iso_value(valid_to.value, required=False),
+                               "valid_from": iso_value(valid_from.value, required=True), "valid_to": iso_value(valid_to.value, required=False),
                                "owner_user_id": int(owner.value), "preserve_resource_state": bool(preserve.value)}
                     contributor_ids = [int(value) for value in (contributors.value or []) if int(value) != int(owner.value)]
                     if not editing:
@@ -10684,14 +10796,19 @@ def index() -> None:
         privileges = set((auth_state.get("principal") or {}).get("global_privileges", []))
         with table_container, ui.column().classes("w-full p-5 gap-4"):
             paging = {"offset": 0, "total": 0, "limit": 25}
+            with ui.row().classes("w-full items-center"):
+                ui.label("Filter holds").classes("text-lg font-semibold text-slate-800")
+                ui.space()
+                if "holds.administer" in privileges:
+                    ui.button(
+                        "Create hold", icon="add", on_click=lambda: open_hold_editor(),
+                    ).props("unelevated no-caps")
             with ui.row().classes("w-full items-end gap-3"):
                 query = ui.input("Search code or name").props("outlined clearable debounce=300").classes("grow")
                 hold_state = ui.select({None:"All states","scheduled":"Scheduled","active":"Active","expired":"Expired"}, value=None, label="State").props("outlined").classes("w-44")
                 preservation = ui.select({None:"All protection","false":"Core protection","true":"Enhanced state preservation"},value=None,label="Protection").props("outlined").classes("w-56")
                 hold_sort = ui.select({"code":"Code","name":"Name","state":"State","valid_from":"Valid from","valid_to":"Valid until","owner":"Owner","created":"Created","updated":"Updated"},value="code",label="Sort by").props("outlined").classes("w-44")
                 refresh = ui.button("Refresh", icon="refresh").props("flat no-caps")
-                if "holds.administer" in privileges:
-                    ui.button("Create hold", icon="add", on_click=lambda: open_hold_editor()).props("unelevated no-caps")
             with ui.row().classes("w-full items-end gap-3"):
                 owner_filter=ui.select(owner_options,value=None,label="Owner").props("outlined clearable").classes("w-56")
                 contributor_filter=ui.select(contributor_options,value=None,label="Contributor").props("outlined clearable").classes("w-56")
