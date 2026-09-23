@@ -6365,6 +6365,170 @@ def index() -> None:
 
         render_preview()
 
+    def render_resource_personal_sections(spec: EntitySpec) -> None:
+        """Render resource favourites and activity using the Dashboard treatment."""
+        limit = dashboard_favourite_item_limit()
+        resource = spec.key
+        singular = "aggregation" if resource == "aggregations" else "record"
+        icon = "folder" if resource == "aggregations" else "description"
+        number_field = "aggregation_number" if resource == "aggregations" else "record_number"
+        favourite_items = state["favourites"][resource]
+        recent_items = sorted(
+            [
+                {
+                    **item,
+                    "_operation": operation,
+                    "_activity_at": (
+                        item.get("_activity_at")
+                        or item.get("date_updated" if operation == "UPDATE" else "date_created")
+                    ),
+                }
+                for operation, rows in (
+                    ("CREATE", state["recent_created"]),
+                    ("UPDATE", state["recent_updated"]),
+                )
+                for item in rows
+            ],
+            key=lambda item: str(item.get("_activity_at") or ""),
+            reverse=True,
+        )
+
+        async def open_resource(item: dict[str, Any]) -> None:
+            try:
+                entity = await api.get(resource, item["id"])
+                if resource == "aggregations":
+                    await open_aggregation(entity)
+                else:
+                    await show_record_details(entity)
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        def render_favourite_item(item: dict[str, Any]) -> None:
+            row = ui.element("div").classes("dashboard-personal-item").props(
+                "role=button tabindex=0"
+            ).on(
+                "click", lambda _, selected=item: open_resource(selected),
+            ).on(
+                "keydown.enter", lambda _, selected=item: open_resource(selected),
+            )
+            with row:
+                with ui.element("div").classes("dashboard-overview-icon"):
+                    ui.icon(icon, size="18px")
+                with ui.column().classes("gap-0 grow min-w-0"):
+                    ui.label(item["title"]).classes(
+                        "text-sm font-semibold text-slate-700 truncate w-full"
+                    ).tooltip(item["title"])
+                    ui.label(
+                        f"{singular.title()} · {item.get(number_field) or '—'}"
+                    ).classes("text-xs text-slate-500 truncate w-full")
+                remove_button = ui.button(icon="favorite", color="red").props(
+                    "flat round dense aria-label='Remove from favourites'"
+                )
+                remove_button.tooltip("Remove from favourites")
+                remove_button.on(
+                    "click", lambda _, selected=item: remove_favourite(selected),
+                    js_handler=STOP_PROPAGATION_CLICK_HANDLER,
+                )
+
+        def render_recent_item(item: dict[str, Any]) -> None:
+            operation = item["_operation"]
+            activity_label, activity_icon, activity_class = {
+                "CREATE": ("Created", "add", "dashboard-activity-created"),
+                "UPDATE": ("Updated", "edit", "dashboard-activity-updated"),
+            }[operation]
+            row = ui.element("div").classes("dashboard-personal-item").props(
+                "role=button tabindex=0"
+            ).on(
+                "click", lambda _, selected=item: open_resource(selected),
+            ).on(
+                "keydown.enter", lambda _, selected=item: open_resource(selected),
+            )
+            with row:
+                with ui.element("div").classes("dashboard-overview-icon"):
+                    ui.icon(icon, size="18px")
+                with ui.column().classes("gap-0 grow min-w-0"):
+                    ui.label(item["title"]).classes(
+                        "text-sm font-semibold text-slate-700 truncate w-full"
+                    ).tooltip(item["title"])
+                    ui.label(
+                        f"{item.get(number_field) or '—'} · "
+                        f"{format_timestamp(item.get('_activity_at'))}"
+                    ).classes("text-xs text-slate-500 truncate w-full")
+                with ui.element("div").classes(
+                    f"dashboard-activity-badge {activity_class}"
+                ):
+                    ui.icon(activity_icon, size="13px")
+                    ui.label(activity_label)
+
+        async def remove_favourite(item: dict[str, Any]) -> None:
+            selected = await toggle_favourite(resource, item["id"])
+            if selected:
+                return
+            state["favourites"][resource] = [
+                row for row in state["favourites"][resource]
+                if int(row["id"]) != int(item["id"])
+            ]
+            render_table(spec)
+
+        def show_all_favourites() -> None:
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("w-[760px] max-w-full max-h-[85vh]"):
+                with ui.row().classes("w-full items-center"):
+                    ui.label(f"Favourite {resource}").classes("text-xl font-semibold")
+                    ui.space()
+                    ui.button(icon="close", on_click=dialog.close).props("flat round")
+                with ui.element("div").classes(
+                    "dashboard-personal-panel w-full max-h-[65vh] overflow-y-auto"
+                ):
+                    if not favourite_items:
+                        ui.label(f"No favourite {resource}").classes("text-sm text-slate-400 p-4")
+                    for item in favourite_items:
+                        render_favourite_item(item)
+            dialog.open()
+
+        def show_all_recent() -> None:
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("w-[820px] max-w-full max-h-[85vh]"):
+                with ui.row().classes("w-full items-center"):
+                    ui.label(f"Recent {singular} activity").classes("text-xl font-semibold")
+                    ui.space()
+                    ui.button(icon="close", on_click=dialog.close).props("flat round")
+                with ui.element("div").classes(
+                    "dashboard-personal-panel w-full max-h-[65vh] overflow-y-auto"
+                ):
+                    if not recent_items:
+                        ui.label(f"No recent {singular} activity").classes("text-sm text-slate-400 p-4")
+                    for item in recent_items:
+                        render_recent_item(item)
+            dialog.open()
+
+        with ui.element("div").classes("dashboard-personal-columns w-full px-5 pt-5 pb-5"):
+            with ui.card().classes("dashboard-personal-panel"):
+                with ui.row().classes("dashboard-personal-header w-full items-center gap-2"):
+                    ui.icon("favorite_border", color="primary", size="19px")
+                    ui.label(f"Favourite {resource}").classes("font-semibold text-slate-800")
+                    ui.badge(str(len(favourite_items)), color="blue-grey").props("outline")
+                    ui.space()
+                    ui.button("View all", on_click=show_all_favourites).props(
+                        "flat dense no-caps color=primary"
+                    )
+                if not favourite_items:
+                    ui.label(f"No favourite {resource}").classes("text-sm text-slate-500 p-4")
+                for item in favourite_items[:limit]:
+                    render_favourite_item(item)
+            with ui.card().classes("dashboard-personal-panel"):
+                with ui.row().classes("dashboard-personal-header w-full items-center gap-2"):
+                    ui.icon("history", color="primary", size="19px")
+                    ui.label(f"Recent {singular} activity").classes("font-semibold text-slate-800")
+                    ui.space()
+                    ui.button("View all", on_click=show_all_recent).props(
+                        "flat dense no-caps color=primary"
+                    )
+                if not recent_items:
+                    ui.label(f"No recent {singular} activity").classes("text-sm text-slate-500 p-4")
+                for item in recent_items[:limit]:
+                    render_recent_item(item)
+
     async def show_profile_privilege_editor(profile: dict[str, Any]) -> None:
         try:
             all_privileges, selected, impact = await asyncio.gather(
@@ -6479,6 +6643,9 @@ def index() -> None:
     def render_table(spec: EntitySpec) -> None:
         table_container.clear()
         with table_container:
+            if spec.key in {"aggregations", "records"} and spec.search_first and not state["searched"]:
+                render_resource_personal_sections(spec)
+                return
             if spec.key in {"aggregations", "records"}:
                 render_entity_favourites_section(spec)
             if spec.search_first and not state["searched"]:
