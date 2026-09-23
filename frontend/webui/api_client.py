@@ -239,6 +239,94 @@ class ErmsApiClient:
     async def explain_access(self, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.request("POST", "/api/v1/authorization/explain", json=payload)
 
+    async def holds_page(self, **params: Any) -> dict[str, Any]:
+        return await self.request(
+            "GET", "/api/v1/holds",
+            params={key: value for key, value in params.items() if value is not None and value != ""},
+        )
+
+    async def holds(self, **params: Any) -> list[dict[str, Any]]:
+        return (await self.holds_page(**params))["items"]
+
+    async def hold(self, hold_id: int) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/holds/{hold_id}")
+
+    async def hold_people(self) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/holds/people")
+
+    async def create_hold(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", "/api/v1/holds", json=payload)
+
+    async def update_hold(self, hold_id: int, version: int, payload: dict[str, Any], reason: str) -> dict[str, Any]:
+        return await self.request("PATCH", f"/api/v1/holds/{hold_id}", json=payload,
+                                  headers={"If-Match": str(version), "X-Change-Reason": reason})
+
+    async def delete_hold(self, hold_id: int, version: int, reason: str) -> None:
+        await self.request("DELETE", f"/api/v1/holds/{hold_id}",
+                           headers={"If-Match": str(version), "X-Change-Reason": reason})
+
+    async def hold_members_page(self, hold_id: int, **params: Any) -> dict[str, Any]:
+        return await self.request(
+            "GET", f"/api/v1/holds/{hold_id}/members",
+            params={key: value for key, value in params.items() if value is not None and value != ""},
+        )
+
+    async def hold_members(self, hold_id: int, **params: Any) -> list[dict[str, Any]]:
+        return (await self.hold_members_page(hold_id, **params))["items"]
+
+    async def hold_contributors(self, hold_id: int) -> list[dict[str, Any]]:
+        return await self.request("GET", f"/api/v1/holds/{hold_id}/contributors")
+
+    async def replace_hold_contributors(self, hold_id: int, version: int, user_ids: list[int], reason: str) -> dict[str, Any]:
+        return await self.request("PUT", f"/api/v1/holds/{hold_id}/contributors",
+                                  json={"user_ids": user_ids},
+                                  headers={"If-Match": str(version), "X-Change-Reason": reason})
+
+    async def hold_history(self, hold_id: int, *, limit: int = 100) -> list[dict[str, Any]]:
+        return await self.request("GET", f"/api/v1/holds/{hold_id}/history", params={"limit": limit})
+
+    async def add_hold_member(self, hold_id: int, resource_type: str, resource_id: int, reason: str) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/holds/{hold_id}/members",
+                                  json={"resource_type": resource_type, "resource_id": resource_id},
+                                  headers={"X-Change-Reason": reason})
+
+    async def hold_member_candidates(self, hold_id: int, **params: Any) -> dict[str, Any]:
+        return await self.request(
+            "GET", f"/api/v1/holds/{hold_id}/member-candidates",
+            params={key: value for key, value in params.items() if value is not None and value != ""},
+        )
+
+    async def add_hold_members_bulk(
+        self, hold_id: int, members: list[dict[str, Any]], reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/holds/{hold_id}/members/bulk",
+            json={"members": members}, headers={"X-Change-Reason": reason},
+        )
+
+    async def remove_hold_member(self, hold_id: int, resource_type: str, resource_id: int, version: int, reason: str) -> None:
+        await self.request("DELETE", f"/api/v1/holds/{hold_id}/members/{resource_type}/{resource_id}",
+                           headers={"If-Match": str(version), "X-Change-Reason": reason})
+
+    async def remove_hold_members_bulk(self, hold_id: int, members: list[dict[str, Any]], reason: str) -> dict[str, Any]:
+        return await self.request("POST",f"/api/v1/holds/{hold_id}/members/bulk-remove",
+                                  json={"members":members},headers={"X-Change-Reason":reason})
+
+    async def effective_holds(self, resource_type: str, resource_id: int) -> list[dict[str, Any]]:
+        return await self.request("GET", f"/api/v1/{resource_type}s/{resource_id}/effective-holds")
+
+    async def add_resource_to_hold(self, resource_type: str, resource_id: int, hold_id: int, reason: str) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/{resource_type}s/{resource_id}/holds",
+                                  json={"hold_id": hold_id}, headers={"X-Change-Reason": reason})
+
+    async def remove_resource_from_hold(self, resource_type: str, resource_id: int, hold_id: int, reason: str) -> dict[str, Any]:
+        return await self.request("DELETE", f"/api/v1/{resource_type}s/{resource_id}/holds/{hold_id}",
+                                  headers={"X-Change-Reason": reason})
+
+    async def remove_all_direct_holds(self, resource_type: str, resource_id: int, reason: str) -> dict[str, Any]:
+        return await self.request("DELETE", f"/api/v1/{resource_type}s/{resource_id}/holds",
+                                  headers={"X-Change-Reason": reason})
+
     async def explainable_users(self) -> list[dict[str, Any]]:
         return await self.request("GET", "/api/v1/authorization/explainable-users")
 

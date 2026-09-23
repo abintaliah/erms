@@ -229,7 +229,7 @@ def delete_security_level(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/security-level-changes/preview", response_model=SecurityLevelChangePreviewRead, dependencies=[Depends(require_security_levels_admin)])
+@router.post("/security-level-changes/preview", response_model=SecurityLevelChangePreviewRead)
 def preview_security_level_change(
     payload: SecurityLevelChangePreviewRequest,
     connection: Connection = Depends(get_connection, scope="function"),
@@ -258,7 +258,7 @@ def preview_security_level_change(
     return preview
 
 
-@router.post("/security-level-changes/apply", dependencies=[Depends(require_security_levels_admin)])
+@router.post("/security-level-changes/apply")
 def apply_security_level_change(
     payload: SecurityLevelChangeApplyRequest,
     request: Request,

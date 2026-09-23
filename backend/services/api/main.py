@@ -77,6 +77,7 @@ from .resource_acls import router as resource_acl_router
 from .governance_authorization import router as governance_authorization_router
 from .security_operations import router as security_operations_router
 from .dashboard import router as dashboard_router
+from .holds import router as holds_router
 from .authorization_policy import load_policy_context, require_audit_view
 
 
@@ -157,6 +158,7 @@ app.include_router(resource_acl_router)
 app.include_router(governance_authorization_router)
 app.include_router(security_operations_router)
 app.include_router(dashboard_router)
+app.include_router(holds_router)
 
 EVENT_SOURCES = {
     "api", "web_ui", "bulk_import", "background_worker", "scheduled_job",
@@ -297,13 +299,38 @@ async def database_error_handler(_, exception: psycopg.Error):
         ),
     }
     constraint_name = exception.diag.constraint_name
+    primary = exception.diag.message_primary or "database constraint violated"
+    hold_failure_codes = {
+        "effective_hold_prevents_deletion", "effective_hold_prevents_component_addition",
+        "effective_hold_prevents_component_deletion", "effective_hold_prevents_component_reordering",
+        "effective_hold_prevents_component_replacement", "effective_hold_prevents_metadata_change",
+        "hold_not_empty", "hold_membership_required_for_held_move",
+    }
+    if primary in hold_failure_codes:
+        # The failed write transaction is rolled back, so record the rejected
+        # operation in an independent transaction instead of losing the audit.
+        try:
+            with pool.connection() as audit_connection:
+                audit_connection.execute(
+                    """SELECT set_config('app.user_id',%s,true),set_config('app.actor_name',%s,true),
+                              set_config('app.actor_email',%s,true),set_config('app.actor_type',%s,true),
+                              set_config('app.event_source',%s,true),set_config('app.request_id',%s,true),
+                              set_config('app.correlation_id',%s,true),set_config('app.change_reason',%s,true)""",
+                    (actor_user_id_context.get(),actor_name_context.get(),actor_email_context.get(),actor_type_context.get(),
+                     event_source_context.get(),request_id_context.get(),correlation_id_context.get(),change_reason_context.get()),
+                )
+                audit_connection.execute(
+                    "SELECT append_domain_event('hold_operation',0,'HOLD_OPERATION_BLOCKED',%s::jsonb)",
+                    (json.dumps({"failure_code": primary}),),
+                )
+        except psycopg.Error:
+            pass
     friendly_constraint = constraint_messages.get(constraint_name or "")
     if isinstance(exception, PoolTimeout):
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         detail = "database connection pool is busy; retry shortly"
     elif sqlstate in {"23503", "23505", "P0001"}:
         status_code = status.HTTP_409_CONFLICT
-        primary = exception.diag.message_primary or "database constraint violated"
         detail = (
             {
                 "code": "security_hierarchy_violation",
@@ -560,6 +587,31 @@ def get_aggregation_capabilities(
     vital_descendants = connection.execute("SELECT aggregation_has_vital_descendants(%s) AS value", (aggregation_id,)).fetchone()["value"]
     capabilities["delete"] = capabilities["delete"] and not resource["is_vital"] and not vital_descendants
     capability_reasons = {}
+    hold_status = connection.execute(
+        """SELECT count(*) effective_hold_count,
+                  COALESCE(bool_or(preserve_resource_state),false) state_blocked
+             FROM effective_holds_for_aggregation(%s)""", (aggregation_id,),
+    ).fetchone()
+    direct_holds = connection.execute(
+        "SELECT count(*) count,COALESCE(bool_or(current_hold_actor_is_manager(hold_id)),false) any_manageable,COALESCE(bool_and(current_hold_actor_is_manager(hold_id)),true) all_manageable FROM hold_aggregation_assignments WHERE aggregation_id=%s",
+        (aggregation_id,),
+    ).fetchone()
+    capabilities.update({
+        "is_on_effective_hold": hold_status["effective_hold_count"] > 0,
+        "resource_state_changes_blocked": hold_status["state_blocked"],
+        "add_to_hold": bool(connection.execute("SELECT EXISTS(SELECT 1 FROM holds WHERE current_hold_actor_is_manager(id)) value").fetchone()["value"]),
+        "remove_from_hold": direct_holds["count"] > 0 and direct_holds["any_manageable"],
+        "remove_all_direct_hold_assignments": direct_holds["count"] > 0 and direct_holds["all_manageable"],
+    })
+    capabilities["effective_hold_count"] = hold_status["effective_hold_count"]
+    if not capabilities["add_to_hold"]: capability_reasons["add_to_hold"]="hold_membership_manager_required"
+    if direct_holds["count"] and not capabilities["remove_from_hold"]: capability_reasons["remove_from_hold"]="hold_membership_manager_required"
+    if direct_holds["count"] and not capabilities["remove_all_direct_hold_assignments"]: capability_reasons["remove_all_direct_hold_assignments"]="not_all_direct_holds_manageable"
+    if hold_status["effective_hold_count"]:
+        capabilities["delete"] = False; capability_reasons["delete"] = "effective_hold_prevents_deletion"
+    if hold_status["state_blocked"]:
+        for name in ("modify_metadata","close","reopen","move","reclassify","change_vital_status","change_review_date"):
+            capabilities[name] = False; capability_reasons[name] = "effective_hold_prevents_metadata_change"
     if resource["is_vital"]:
         capability_reasons["delete"] = "vital_resource_deletion_blocked"
     elif vital_descendants:
@@ -689,6 +741,8 @@ def update_aggregation(
         require_resource_operation(connection, "aggregation", aggregation_id,
                                    "aggregation.security_level.change", "aggregation.security_level.change")
         require_clearance_for_level(connection, payload.security_level_id)
+        if not request.headers.get("X-Change-Reason", "").strip():
+            raise HTTPException(status_code=422, detail="X-Change-Reason is required when changing a security level")
     new_level_id = payload.security_level_id if "security_level_id" in payload.model_fields_set else None
     reason, old_number, new_number = validate_security_level_change(
         connection, request, existing["security_level_id"], new_level_id
@@ -891,12 +945,40 @@ def get_record_capabilities(
         "replace_component": ("record.component.replace", "record.component.replace"),
         "remove_component": ("record.component.remove", "record.component.remove"),
         "reorder_components": ("record.component.reorder", "record.component.reorder"),
+        "share_component": ("record.component.share", "record.component.share"),
+        "print_component": ("record.component.print", "record.component.print"),
     }
     capabilities = {name: operation_allowed(connection, "record", record_id, *policy)
                     for name, policy in mappings.items()}
-    capabilities.update({"view": True, "list_components": component_metadata,
-                         "share_component": False, "print_component": False})
+    capabilities.update({"view": True, "list_components": component_metadata})
     capability_reasons = {}
+    hold_status = connection.execute(
+        """SELECT count(*) effective_hold_count,
+                  COALESCE(bool_or(preserve_resource_state),false) state_blocked
+             FROM effective_holds_for_record(%s)""", (record_id,),
+    ).fetchone()
+    direct_holds = connection.execute(
+        "SELECT count(*) count,COALESCE(bool_or(current_hold_actor_is_manager(hold_id)),false) any_manageable,COALESCE(bool_and(current_hold_actor_is_manager(hold_id)),true) all_manageable FROM hold_record_assignments WHERE record_id=%s",
+        (record_id,),
+    ).fetchone()
+    capabilities.update({
+        "is_on_effective_hold": hold_status["effective_hold_count"] > 0,
+        "resource_state_changes_blocked": hold_status["state_blocked"],
+        "add_to_hold": bool(connection.execute("SELECT EXISTS(SELECT 1 FROM holds WHERE current_hold_actor_is_manager(id)) value").fetchone()["value"]),
+        "remove_from_hold": direct_holds["count"] > 0 and direct_holds["any_manageable"],
+        "remove_all_direct_hold_assignments": direct_holds["count"] > 0 and direct_holds["all_manageable"],
+    })
+    capabilities["effective_hold_count"] = hold_status["effective_hold_count"]
+    if not capabilities["add_to_hold"]: capability_reasons["add_to_hold"]="hold_membership_manager_required"
+    if direct_holds["count"] and not capabilities["remove_from_hold"]: capability_reasons["remove_from_hold"]="hold_membership_manager_required"
+    if direct_holds["count"] and not capabilities["remove_all_direct_hold_assignments"]: capability_reasons["remove_all_direct_hold_assignments"]="not_all_direct_holds_manageable"
+    if hold_status["effective_hold_count"]:
+        capabilities["delete"] = False; capability_reasons["delete"] = "effective_hold_prevents_deletion"
+        for name in ("add_component","replace_component","remove_component","reorder_components"):
+            capabilities[name] = False; capability_reasons[name] = "effective_hold_prevents_component_" + ({"add_component":"addition","replace_component":"replacement","remove_component":"deletion","reorder_components":"reordering"}[name])
+    if hold_status["state_blocked"]:
+        for name in ("modify_metadata","move","change_vital_status","change_review_date"):
+            capabilities[name] = False; capability_reasons[name] = "effective_hold_prevents_metadata_change"
     if record["medium"] == "physical":
         capabilities["add_component"] = False
         capabilities["replace_component"] = False
@@ -965,6 +1047,8 @@ def update_record(
         require_resource_operation(connection, "record", record_id,
                                    "record.security_level.change", "record.security_level.change")
         require_clearance_for_level(connection, payload.security_level_id)
+        if not request.headers.get("X-Change-Reason", "").strip():
+            raise HTTPException(status_code=422, detail="X-Change-Reason is required when changing a security level")
     new_level_id = payload.security_level_id if "security_level_id" in payload.model_fields_set else None
     reason, old_number, new_number = validate_security_level_change(
         connection, request, existing["security_level_id"], new_level_id

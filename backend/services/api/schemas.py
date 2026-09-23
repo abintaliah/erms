@@ -180,7 +180,7 @@ class ChildAggregationAclChangePreviewRead(AclChangePreviewRead):
 class ResourceCapabilitiesRead(ApiModel):
     resource_type: Literal["aggregation", "record"]
     resource_id: int
-    capabilities: dict[str, bool]
+    capabilities: dict[str, bool | int]
     capability_reasons: dict[str, str] = Field(default_factory=dict)
 
 
@@ -272,6 +272,7 @@ class AccessExplanationRead(ApiModel):
     required_clearance: int | None
     effective_security_level: AccessSecurityLevelRead | None
     required_security_level: AccessSecurityLevelRead
+    resource_state_constraints: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ExplainableUserRead(ApiModel):
@@ -638,6 +639,8 @@ class BrowseAggregationNode(ApiModel):
     owning_org_unit_name: str
     child_aggregation_count: int
     record_count: int
+    effective_hold_count: int = 0
+    resource_state_changes_blocked: bool = False
 
 
 class BrowseRecordNode(ApiModel):
@@ -661,6 +664,8 @@ class BrowseRecordNode(ApiModel):
     owning_org_unit_code: str
     owning_org_unit_name: str
     digital_component_count: int
+    effective_hold_count: int = 0
+    resource_state_changes_blocked: bool = False
 
 
 class FavouriteAggregationRead(ApiModel):

@@ -39,6 +39,7 @@ from frontend.webui.app import (
     medium_label,
     user_avatar,
     relationship_options,
+    render_component_cards,
     role_change_requires_reason,
     append_navigation_entry,
     visible_navigation_indices,
@@ -239,18 +240,45 @@ def test_contextual_form_help_explains_disabled_controls():
     assert RECORD_UPLOAD_WAIT_MESSAGE == "Please wait until all files have finished uploading."
 
 
-def test_aggregation_summary_has_non_collapsing_flex_layout():
+def test_aggregation_summary_has_command_centre_layout():
     assert "flex-1" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
-    assert "min-w-[360px]" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
+    assert "aggregation-command-summary" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
+    assert "min-w-[520px]" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
 
 
-def test_record_detail_header_wraps_actions_before_crowding_long_titles():
-    assert "flex-wrap" in RECORD_DETAIL_HEADER_CLASSES
-    assert "no-wrap" not in RECORD_DETAIL_HEADER_CLASSES
-    assert "flex-1" in RECORD_DETAIL_TITLE_CLASSES
-    assert "sm:min-w-[420px]" in RECORD_DETAIL_TITLE_CLASSES
-    assert "max-w-full" in RECORD_DETAIL_TITLE_CLASSES
-    assert "basis-[520px]" in RECORD_DETAIL_TITLE_CLASSES
+def test_record_detail_header_matches_aggregation_title_and_action_alignment():
+    assert "items-center" in RECORD_DETAIL_HEADER_CLASSES
+    assert "no-wrap" in RECORD_DETAIL_HEADER_CLASSES
+    assert "flex-wrap" not in RECORD_DETAIL_HEADER_CLASSES
+    assert "grow" in RECORD_DETAIL_TITLE_CLASSES
+    assert "min-w-0" in RECORD_DETAIL_TITLE_CLASSES
+    source = inspect.getsource(index)
+    assert 'ui.label(record["record_number"]).classes("text-xs text-primary font-semibold")' in source
+    assert 'ui.label(record["title"]).classes("text-lg font-semibold break-words")' in source
+
+
+def test_record_details_uses_the_approved_right_hand_control_column():
+    source = inspect.getsource(index)
+    assert '"record-command-layout w-full"' in source
+    assert '"record-command-controls"' in source
+    assert '"detail-surface record-command-overview' in source
+    assert 'ui.label("Hold controls").classes("aggregation-panel-heading w-full")' in source
+    assert 'ui.label("Record actions").classes("aggregation-panel-heading w-full")' in source
+    assert 'ui.label("Metadata and review").classes("record-action-group-label")' in source
+    assert 'ui.label("Security, access and audit").classes("record-action-group-label")' in source
+    assert 'ui.label("Lifecycle").classes("record-action-group-label")' in source
+    assert '"Remove direct holds"' in source
+
+
+def test_record_detail_long_values_are_aligned_and_bounded():
+    source = inspect.getsource(index)
+    component_source = inspect.getsource(render_component_cards)
+    assert ".record-containing-aggregation .q-btn__content" in source
+    assert "justify-content: flex-start; text-align: left; white-space: normal" in source
+    assert '"record-containing-aggregation font-semibold self-start -ml-2"' in source
+    assert "width: min(280px, 100%); height: 2.5em" in source
+    assert "-webkit-line-clamp: 2" in source
+    assert ").tooltip(component_name)" in component_source
 
 
 def test_scalar_display_columns_are_not_rendered_as_relationship_links():
@@ -313,11 +341,11 @@ def test_detail_pages_use_light_blue_metadata_and_retention_visual_system():
     assert 'primary="#268bd2"' in source
     assert ".detail-field-label" in source
     assert ".retention-card" in source
-    assert '"Current (active)"' in source
-    assert '"Intermediate (semi-active)"' in source
-    assert '"Final disposition"' in source
+    assert '("Current",' in source
+    assert '("Intermediate",' in source
+    assert '("Final",' in source
     assert 'ui.label(str(len(children))).classes("text-2xl font-bold text-primary")' not in source
-    assert '"retention-card shadow-none p-5 gap-4 flex-1' in source
+    assert '"retention-card aggregation-retention-compact shadow-none p-4 gap-3"' in source
 
 
 def test_application_shell_is_flat_and_uses_one_background():
@@ -335,7 +363,7 @@ def test_application_shell_is_flat_and_uses_one_background():
     assert ".erms-page-table" in source
     assert ".erms-page-table .q-table thead tr { background: #eef7fd; }" in source
     assert ".erms-page-table .q-table tbody td" in source
-    assert 'classes("erms-page-table")' in source
+    assert '"erms-page-table' in source
     assert ".login-sessions-table .q-table th" in source
     assert "white-space: nowrap" in source
     assert '"label": "Signed in", "field": "date_created", "align": "left", "sortable": True' in source
@@ -347,6 +375,16 @@ def test_application_shell_is_flat_and_uses_one_background():
     assert 'table.bind_filter_from(result_filter, "value")' in source
     assert 'sortable_relationships = {"parent_org_unit_display", "org_unit_display", "profile_display"}' in source
     assert 'not key.endswith("_display") or key in sortable_relationships' in source
+
+
+def test_aggregation_record_table_constrains_long_numbers_and_titles():
+    source = inspect.getsource(index)
+    assert '"erms-page-table aggregation-records-table"' in source
+    assert ".aggregation-records-table .q-table { table-layout: fixed; width: 100%; }" in source
+    assert 'record_table.add_slot("body-cell-record_number"' in source
+    assert 'record_table.add_slot("body-cell-title"' in source
+    assert "<q-tooltip>{{ props.row.record_number || '—' }}</q-tooltip>" in source
+    assert "<q-tooltip>{{ props.row.title || '—' }}</q-tooltip>" in source
     assert '"Search code, name, or parent unit"' in source
     assert '"Search code, name, or organization unit"' in source
     assert '"Search name or email"' in source

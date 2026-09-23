@@ -196,6 +196,8 @@ AGGREGATION_SOURCE = """
            CASE WHEN current_user_can_view_aggregation(aggregation_effective_current_location_source_id(a.id)) THEN aggregation_effective_current_location_source_id(a.id) END AS effective_current_location_source_aggregation_id,
            a.owning_org_unit_id, owning_unit.code AS owning_org_unit_code,
            owning_unit.name AS owning_org_unit_name,
+           hold_status.effective_hold_count,
+           hold_status.resource_state_changes_blocked,
            (SELECT count(*) FROM aggregations child
              WHERE child.parent_aggregation_id = a.id
                AND current_user_can_view_aggregation(child.id)) AS child_aggregation_count,
@@ -205,6 +207,9 @@ AGGREGATION_SOURCE = """
       FROM aggregations a
  LEFT JOIN classifications classification ON classification.id = a.classification_id
       JOIN org_units owning_unit ON owning_unit.id = a.owning_org_unit_id
+ LEFT JOIN LATERAL (SELECT count(*)::integer effective_hold_count,
+                           COALESCE(bool_or(preserve_resource_state),false) resource_state_changes_blocked
+                      FROM effective_holds_for_aggregation(a.id)) hold_status ON true
      WHERE current_user_can_view_aggregation(a.id)
 """
 
@@ -222,11 +227,16 @@ RECORD_SOURCE = """
            CASE WHEN current_user_can_view_aggregation(aggregation_effective_current_location_source_id(r.aggregation_id)) THEN aggregation_effective_current_location_source_id(r.aggregation_id) END AS effective_current_location_source_aggregation_id,
            r.owning_org_unit_id, owning_unit.code AS owning_org_unit_code,
            owning_unit.name AS owning_org_unit_name,
+           hold_status.effective_hold_count,
+           hold_status.resource_state_changes_blocked,
            (SELECT count(*) FROM digital_components component
              WHERE component.record_id = r.id) AS digital_component_count
       FROM records r
       JOIN aggregations owner ON owner.id = r.aggregation_id
       JOIN org_units owning_unit ON owning_unit.id = r.owning_org_unit_id
+ LEFT JOIN LATERAL (SELECT count(*)::integer effective_hold_count,
+                           COALESCE(bool_or(preserve_resource_state),false) resource_state_changes_blocked
+                      FROM effective_holds_for_record(r.id)) hold_status ON true
      WHERE current_user_can_view_record(r.id)
 """
 

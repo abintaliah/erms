@@ -35,7 +35,7 @@ def test_child_aggregation_defaults_to_parent_but_record_defaults_to_baseline(
     upgraded = client.patch(
         f"/api/v1/aggregations/{aggregation['id']}",
         json={"security_level_id": catalogue["S"]["id"]},
-        headers={"If-Match": str(aggregation["version"])},
+        headers={"If-Match": str(aggregation["version"]), "X-Change-Reason": "Classification changed"},
     )
     assert upgraded.status_code == 200, upgraded.text
     child = client.post("/api/v1/aggregations", json={
@@ -61,20 +61,20 @@ def test_parent_must_not_be_lower_than_child_and_lowering_requires_reason(
     invalid = client.patch(
         f"/api/v1/records/{record['id']}",
         json={"security_level_id": catalogue["R"]["id"]},
-        headers={"If-Match": str(record["version"])},
+        headers={"If-Match": str(record["version"]), "X-Change-Reason": "Classification changed"},
     )
     assert invalid.status_code == 409
     parent = client.patch(
         f"/api/v1/aggregations/{aggregation['id']}",
         json={"security_level_id": catalogue["R"]["id"]},
-        headers={"If-Match": str(aggregation["version"])},
+        headers={"If-Match": str(aggregation["version"]), "X-Change-Reason": "Classification changed"},
     )
     assert parent.status_code == 200, parent.text
     record = client.get(f"/api/v1/records/{record['id']}").json()
     raised = client.patch(
         f"/api/v1/records/{record['id']}",
         json={"security_level_id": catalogue["R"]["id"]},
-        headers={"If-Match": str(record["version"])},
+        headers={"If-Match": str(record["version"]), "X-Change-Reason": "Classification changed"},
     )
     assert raised.status_code == 200, raised.text
     no_reason = client.patch(

@@ -138,7 +138,64 @@ def _serialize_context(context) -> dict:
 
 def _integrity_gate(
     connection: Connection, resource_type: str, resource: dict, operation: str,
-) -> tuple[bool, str | None]:
+    subject_user_id: int | None, examiner_user_id: int | None,
+) -> tuple[bool, str | None, list[dict]]:
+    hold_rows = list(connection.execute(
+        f"SELECT * FROM effective_holds_for_{resource_type}(%s) ORDER BY hold_id",
+        (resource["id"],),
+    ).fetchall())
+    hold_effect = None
+    if operation.endswith(".delete") and hold_rows:
+        hold_effect = "deletion"
+    elif operation in {"record.component.add", "record.component.remove", "record.component.replace", "record.component.reorder"} and hold_rows:
+        hold_effect = operation.rsplit(".", 1)[-1].replace("add", "addition").replace("remove", "removal").replace("replace", "replacement").replace("reorder", "reordering")
+    elif operation.endswith(("modify_metadata", ".close", ".reopen", ".reclassify", "vital_status.change", "review_date.change")) and any(row["preserve_resource_state"] for row in hold_rows):
+        hold_effect = "metadata_change"
+    elif operation.endswith(".move") and any(row["preserve_resource_state"] for row in hold_rows):
+        hold_effect = "movement"
+    elif operation.endswith(".move") and hold_rows and subject_user_id is not None:
+        unmanaged = connection.execute(
+            """SELECT EXISTS(SELECT 1 FROM unnest(%s::bigint[]) hold_id
+                 WHERE NOT EXISTS(SELECT 1 FROM holds h WHERE h.id=hold_id AND h.owner_user_id=%s)
+                   AND NOT EXISTS(SELECT 1 FROM hold_contributors c JOIN users u ON u.id=c.user_id
+                     WHERE c.hold_id=hold_id AND c.user_id=%s AND u.date_deactivated IS NULL AND u.date_suspended IS NULL)) value""",
+            ([row["hold_id"] for row in hold_rows], subject_user_id, subject_user_id),
+        ).fetchone()["value"]
+        if unmanaged:
+            hold_effect = "movement_membership"
+    constraints = []
+    if hold_effect:
+        visible_ids = set()
+        if examiner_user_id is not None:
+            visible_ids = {row["id"] for row in connection.execute(
+                """SELECT hold.id FROM holds hold WHERE hold.id=ANY(%s::bigint[]) AND
+                    (user_has_global_privilege(%s,'holds.administer') OR EXISTS(
+                       SELECT 1 FROM user_role_assignments ga JOIN roles gr ON gr.id=ga.role_id
+                       WHERE ga.user_id=%s AND gr.is_information_governance
+                         AND ga.valid_from<=CURRENT_TIMESTAMP AND (ga.valid_until IS NULL OR ga.valid_until>CURRENT_TIMESTAMP)
+                         AND role_effectively_active(gr.id)) OR hold.owner_user_id=%s OR EXISTS(
+                      SELECT 1 FROM hold_contributors c JOIN users u ON u.id=c.user_id
+                      WHERE c.hold_id=hold.id AND c.user_id=%s AND u.date_deactivated IS NULL AND u.date_suspended IS NULL))""",
+                ([row["hold_id"] for row in hold_rows], examiner_user_id, examiner_user_id,
+                 examiner_user_id, examiner_user_id),
+            ).fetchall()}
+        detail = []
+        for row in hold_rows:
+            if row["hold_id"] in visible_ids:
+                detail.append({"id": row["hold_id"], "code": row["code"], "name": row["name"],
+                               "source": "both" if row["is_direct"] and row["is_inherited"] else ("direct" if row["is_direct"] else "inherited"),
+                               "assigning_ancestor_id": row["nearest_assigned_aggregation_id"],
+                               "preserve_resource_state": row["preserve_resource_state"]})
+        constraints.append({"kind": "effective_hold", "effect": "movement" if hold_effect == "movement_membership" else hold_effect,
+                            "source": "both" if any(r["is_direct"] for r in hold_rows) and any(r["is_inherited"] for r in hold_rows) else ("direct" if any(r["is_direct"] for r in hold_rows) else "inherited"),
+                            "effective_hold_count": len(hold_rows), "holds": detail})
+        reason = "hold_membership_required_for_held_move" if hold_effect == "movement_membership" else {
+            "deletion": "effective_hold_prevents_deletion", "metadata_change": "effective_hold_prevents_metadata_change",
+            "movement": "effective_hold_prevents_metadata_change", "addition": "effective_hold_prevents_component_addition",
+            "removal": "effective_hold_prevents_component_deletion", "replacement": "effective_hold_prevents_component_replacement",
+            "reordering": "effective_hold_prevents_component_reordering",
+        }[hold_effect]
+        return False, reason, constraints
     aggregation_id = resource["id"] if resource_type == "aggregation" else resource["aggregation_id"]
     closed = connection.execute(
         """WITH RECURSIVE ancestry AS (
@@ -149,23 +206,23 @@ def _integrity_gate(
         (aggregation_id,),
     ).fetchone()["value"]
     if not closed:
-        return True, None
+        return True, None, constraints
     read_only = {
         "aggregation.view", "record.view", "record.component.list",
         "record.component.view", "record.component.download",
     }
     if operation in read_only:
-        return True, None
+        return True, None, constraints
     governed_closed_exceptions = {
         "aggregation.vital_status.change", "aggregation.location.change",
         "aggregation.review_date.change", "record.vital_status.change",
         "record.review_date.change",
     }
     if operation in governed_closed_exceptions:
-        return True, None
+        return True, None, constraints
     if resource_type == "aggregation" and operation == "aggregation.reopen" and resource["date_closed"] is not None:
-        return True, None
-    return False, "resource_is_effectively_closed"
+        return True, None, constraints
+    return False, "resource_is_effectively_closed", constraints
 
 
 @router.post("/explain", response_model=AccessExplanationRead)
@@ -189,8 +246,9 @@ def explain_access(
     subject = examiner if not other_user else load_user_policy_context(connection, selected_user_id)
     acl, acl_detail = _acl(connection, payload.resource_type, payload.resource_id)
     privilege, permission = policy
-    integrity_allowed, integrity_reason = _integrity_gate(
+    integrity_allowed, integrity_reason, resource_state_constraints = _integrity_gate(
         connection, payload.resource_type, resource, payload.operation,
+        subject.user_id, examiner.user_id,
     )
     decision = authorize(subject, AuthorizationRequest(
         operation=payload.operation, required_privilege=privilege,
@@ -239,6 +297,7 @@ def explain_access(
         "required_clearance": decision.required_clearance,
         "effective_security_level": effective_security_level,
         "required_security_level": required_security_level,
+        "resource_state_constraints": resource_state_constraints,
     }
     if other_user:
         connection.execute(
@@ -247,6 +306,7 @@ def explain_access(
                 "examiner_user_id": examiner.user_id, "selected_user_id": selected_user_id,
                 "operation": payload.operation, "allowed": decision.allowed,
                 "decision_code": decision.code.value,
+                "effective_hold_constraints_evaluated": bool(resource_state_constraints),
             })),
         )
     return result

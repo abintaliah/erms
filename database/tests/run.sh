@@ -14,7 +14,10 @@ readonly POSTGRES_USER="erms_test"
 readonly POSTGRES_PASSWORD="erms_test_password"
 readonly POSTGRES_DB="erms_test"
 readonly LIFECYCLE_MIGRATION_DB="erms_lifecycle_migration_test_$$"
+readonly HOLDS_MIGRATION_DB="erms_holds_migration_test_$$"
+readonly PRE_HOLDS_SCHEMA="$(mktemp "${TMPDIR:-/tmp}/erms-pre-holds-schema.XXXXXX.sql")"
 LIFECYCLE_MIGRATION_DB_CREATED=false
+HOLDS_MIGRATION_DB_CREATED=false
 
 cleanup() {
     local exit_code=$?
@@ -26,6 +29,14 @@ cleanup() {
             exit_code=1
         fi
     fi
+    if [[ "${HOLDS_MIGRATION_DB_CREATED}" == true ]]; then
+        if ! docker exec "${CONTAINER_NAME}" dropdb --force --if-exists \
+            --username "${POSTGRES_USER}" "${HOLDS_MIGRATION_DB}" >/dev/null; then
+            echo "Failed to drop disposable database ${HOLDS_MIGRATION_DB}" >&2
+            exit_code=1
+        fi
+    fi
+    rm -f "${PRE_HOLDS_SCHEMA}"
     docker rm --force "${CONTAINER_NAME}" >/dev/null 2>&1 || true
     exit "${exit_code}"
 }
@@ -76,6 +87,7 @@ done
 readonly HOST_PORT="$(docker port "${CONTAINER_NAME}" 5432/tcp | sed 's/.*://')"
 readonly DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${POSTGRES_DB}"
 readonly LIFECYCLE_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${LIFECYCLE_MIGRATION_DB}"
+readonly HOLDS_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${HOLDS_MIGRATION_DB}"
 
 docker exec "${CONTAINER_NAME}" createdb \
     --username "${POSTGRES_USER}" "${LIFECYCLE_MIGRATION_DB}"
@@ -90,11 +102,35 @@ docker exec "${CONTAINER_NAME}" dropdb --force \
     --username "${POSTGRES_USER}" "${LIFECYCLE_MIGRATION_DB}"
 LIFECYCLE_MIGRATION_DB_CREATED=false
 
+awk '
+    /^-- Legal holds: persistence and non-bypassable policy enforcement\.$/ { skipping=1; next }
+    skipping && /^COMMIT;$/ { skipping=0; next }
+    !skipping { print }
+' "${DATABASE_DIR}/schema.sql" >"${PRE_HOLDS_SCHEMA}"
+docker exec "${CONTAINER_NAME}" createdb \
+    --username "${POSTGRES_USER}" "${HOLDS_MIGRATION_DB}"
+HOLDS_MIGRATION_DB_CREATED=true
+psql "${HOLDS_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --file "${PRE_HOLDS_SCHEMA}"
+psql "${HOLDS_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --command \
+    "INSERT INTO users(name,email) VALUES ('Pre-holds user','pre-holds@test.invalid')"
+psql "${HOLDS_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/005_add_legal_holds_foundation.sql"
+psql "${HOLDS_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/006_correct_legal_hold_authorization.sql"
+psql "${HOLDS_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/007_add_global_hold_membership_management.sql"
+psql "${HOLDS_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --command \
+    "DO \$\$ BEGIN IF (SELECT count(*) FROM users WHERE email='pre-holds@test.invalid')<>1 OR to_regclass('public.holds') IS NULL OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='005_add_legal_holds_foundation') OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='006_correct_legal_hold_authorization') OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='007_add_global_hold_membership_management') OR NOT EXISTS(SELECT 1 FROM privileges WHERE code='holds.membership.manage_all') THEN RAISE EXCEPTION 'legal holds migration verification failed'; END IF; END \$\$"
+docker exec "${CONTAINER_NAME}" dropdb --force \
+    --username "${POSTGRES_USER}" "${HOLDS_MIGRATION_DB}"
+HOLDS_MIGRATION_DB_CREATED=false
+
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/schema.sql"
 "${SCRIPT_DIR}/check_security_schema_parity.sh" "${DATABASE_URL}" "${DATABASE_DIR}/schema.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${SCRIPT_DIR}/organizational_ownership_invariants.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/legal_holds.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/user_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/content_storage_and_concurrency.sql"

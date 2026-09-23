@@ -23,7 +23,9 @@ def _create_profile(client: TestClient, code: str = "RECORDS_EDITOR") -> dict:
 def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient):
     privileges = _by_code(client, "/api/v1/privileges?limit=500")
     profiles = _by_code(client, "/api/v1/profiles?limit=500")
-    assert len(privileges) == 44
+    assert len(privileges) == 46
+    assert "holds.administer" in privileges
+    assert "holds.membership.manage_all" in privileges
     assert "organization.browse" in privileges
     assert set(profiles) >= {
         "ALL_PRIVS", "SYS_ADMIN",
@@ -34,6 +36,14 @@ def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient
     )
     assert all_members.status_code == 200
     assert {item["code"] for item in all_members.json()} == set(privileges)
+    for profile_code in ("INFO_GOV_MGR", "INFO_GOV_OFFICER"):
+        profile_members = client.get(
+            f"/api/v1/profiles/{profiles[profile_code]['id']}/privileges"
+        )
+        assert profile_members.status_code == 200
+        member_codes = {item["code"] for item in profile_members.json()}
+        assert "holds.membership.manage_all" in member_codes
+        assert "holds.administer" not in member_codes
 
     role = client.get("/api/v1/roles/1")
     assert role.status_code == 200

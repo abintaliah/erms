@@ -61,6 +61,9 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "effective_current_location": NULLABLE_TEXT,
         "security_level_id": INTEGER,
         "owning_org_unit_id": INTEGER,
+        "on_effective_hold": BOOLEAN,
+        "resource_state_changes_blocked": BOOLEAN,
+        "effective_hold_id": INTEGER,
     },
     "records": {
         "id": INTEGER,
@@ -78,6 +81,9 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "effective_current_location": NULLABLE_TEXT,
         "security_level_id": INTEGER,
         "owning_org_unit_id": INTEGER,
+        "on_effective_hold": BOOLEAN,
+        "resource_state_changes_blocked": BOOLEAN,
+        "effective_hold_id": INTEGER,
     },
     "digital_components": {
         "id": INTEGER,
@@ -231,6 +237,18 @@ def _compile_comparison(
         raise _invalid(f"field '{field_name}' is not searchable")
 
     field = fields[field_name]
+    if field_name == "effective_hold_id":
+        if operator in {"eq", "ne"}:
+            value = _coerce_value(field_name, field, expression.value)
+            clause = sql.SQL("%s = ANY(effective_hold_ids)")
+            return (sql.SQL("NOT ({})").format(clause) if operator == "ne" else clause), [value]
+        if operator in SET_OPERATORS:
+            if not isinstance(expression.value, list) or not expression.value or len(expression.value) > MAX_IN_VALUES:
+                raise _invalid(f"operator '{operator}' requires 1 to {MAX_IN_VALUES} values")
+            values = [_coerce_value(field_name, field, value) for value in expression.value]
+            clause = sql.SQL("effective_hold_ids && %s::bigint[]")
+            return (sql.SQL("NOT ({})").format(clause) if operator == "not_in" else clause), [values]
+        raise _invalid("effective_hold_id supports eq, ne, in, and not_in")
     identifier = sql.Identifier(field_name)
 
     if operator in TEXT_OPERATORS and field.type is not FieldType.TEXT:
@@ -379,6 +397,10 @@ def search_rows(
         ).fetchall()
     )
     items = redact_hidden_relationships(connection, table, items)
+    for item in items:
+        # This internal array enables effective_hold_id filtering but must not
+        # disclose hold identities through ordinary resource search results.
+        item.pop("effective_hold_ids", None)
     return {
         "items": items,
         "total": total,
