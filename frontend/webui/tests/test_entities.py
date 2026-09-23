@@ -118,6 +118,18 @@ def test_dashboard_uses_compact_favourites_and_recent_record_streams():
     assert 'item["operation"] in {"CREATE", "UPDATE", "CONTENT_VIEWED"}' in APP_SOURCE
     assert '"CONTENT_VIEWED": ("Viewed", "visibility", "dashboard-activity-viewed")' in APP_SOURCE
     assert 'ui.label("Your favourites")' not in APP_SOURCE
+
+
+def test_records_and_aggregations_landing_use_dashboard_personal_panel_treatment():
+    source = inspect.getsource(index)
+    assert 'def render_resource_personal_sections(spec: EntitySpec)' in source
+    assert 'ui.label(f"Favourite {resource}").classes("font-semibold text-slate-800")' in source
+    assert 'ui.label(f"Recent {singular} activity").classes("font-semibold text-slate-800")' in source
+    assert '"dashboard-personal-columns w-full px-5 pt-5 pb-5"' in source
+    assert source.count('"dashboard-personal-item"') >= 4
+    assert 'f"dashboard-activity-badge {activity_class}"' in source
+    assert 'spec.key in {"aggregations", "records"}' in source
+    assert 'render_resource_personal_sections(spec)' in source
     assert 'ui.label("Your recent records activity")' not in APP_SOURCE
 
 
