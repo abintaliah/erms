@@ -304,7 +304,7 @@ async def database_error_handler(_, exception: psycopg.Error):
         "effective_hold_prevents_deletion", "effective_hold_prevents_component_addition",
         "effective_hold_prevents_component_deletion", "effective_hold_prevents_component_reordering",
         "effective_hold_prevents_component_replacement", "effective_hold_prevents_metadata_change",
-        "hold_not_empty", "hold_membership_required_for_held_move",
+        "hold_not_empty", "hold_held_item_management_required_for_held_move",
     }
     if primary in hold_failure_codes:
         # The failed write transaction is rolled back, so record the rejected
@@ -604,8 +604,8 @@ def get_aggregation_capabilities(
         "remove_all_direct_hold_assignments": direct_holds["count"] > 0 and direct_holds["all_manageable"],
     })
     capabilities["effective_hold_count"] = hold_status["effective_hold_count"]
-    if not capabilities["add_to_hold"]: capability_reasons["add_to_hold"]="hold_membership_manager_required"
-    if direct_holds["count"] and not capabilities["remove_from_hold"]: capability_reasons["remove_from_hold"]="hold_membership_manager_required"
+    if not capabilities["add_to_hold"]: capability_reasons["add_to_hold"]="hold_held_item_manager_required"
+    if direct_holds["count"] and not capabilities["remove_from_hold"]: capability_reasons["remove_from_hold"]="hold_held_item_manager_required"
     if direct_holds["count"] and not capabilities["remove_all_direct_hold_assignments"]: capability_reasons["remove_all_direct_hold_assignments"]="not_all_direct_holds_manageable"
     if hold_status["effective_hold_count"]:
         capabilities["delete"] = False; capability_reasons["delete"] = "effective_hold_prevents_deletion"
@@ -969,8 +969,8 @@ def get_record_capabilities(
         "remove_all_direct_hold_assignments": direct_holds["count"] > 0 and direct_holds["all_manageable"],
     })
     capabilities["effective_hold_count"] = hold_status["effective_hold_count"]
-    if not capabilities["add_to_hold"]: capability_reasons["add_to_hold"]="hold_membership_manager_required"
-    if direct_holds["count"] and not capabilities["remove_from_hold"]: capability_reasons["remove_from_hold"]="hold_membership_manager_required"
+    if not capabilities["add_to_hold"]: capability_reasons["add_to_hold"]="hold_held_item_manager_required"
+    if direct_holds["count"] and not capabilities["remove_from_hold"]: capability_reasons["remove_from_hold"]="hold_held_item_manager_required"
     if direct_holds["count"] and not capabilities["remove_all_direct_hold_assignments"]: capability_reasons["remove_all_direct_hold_assignments"]="not_all_direct_holds_manageable"
     if hold_status["effective_hold_count"]:
         capabilities["delete"] = False; capability_reasons["delete"] = "effective_hold_prevents_deletion"

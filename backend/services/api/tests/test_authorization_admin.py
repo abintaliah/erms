@@ -25,7 +25,7 @@ def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient
     profiles = _by_code(client, "/api/v1/profiles?limit=500")
     assert len(privileges) == 46
     assert "holds.administer" in privileges
-    assert "holds.membership.manage_all" in privileges
+    assert "holds.held_items.manage_all" in privileges
     assert "organization.browse" in privileges
     assert set(profiles) >= {
         "ALL_PRIVS", "SYS_ADMIN",
@@ -42,7 +42,7 @@ def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient
         )
         assert profile_members.status_code == 200
         member_codes = {item["code"] for item in profile_members.json()}
-        assert "holds.membership.manage_all" in member_codes
+        assert "holds.held_items.manage_all" in member_codes
         assert "holds.administer" not in member_codes
 
     role = client.get("/api/v1/roles/1")
@@ -100,9 +100,21 @@ def test_composite_profile_dependencies_preview_assignment_and_audit(client: Tes
     assert assigned.status_code == 200, assigned.text
     assert assigned.json()["profile_id"] == profile["id"]
     assert client.get(f"/api/v1/profiles/{profile['id']}/impact").json()["role_count"] == 1
+    listed_profile = next(
+        item for item in client.get("/api/v1/profiles").json()
+        if item["id"] == profile["id"]
+    )
+    assert listed_profile["role_count"] == 1
+    assert listed_profile["privilege_count"] == 2
 
     history = client.get(f"/api/v1/roles/{role['id']}/history").json()
     assert "PROFILE_ASSIGNED" in {event["operation"] for event in history}
+
+    profile_history = client.get(f"/api/v1/profiles/{profile['id']}/history")
+    assert profile_history.status_code == 200, profile_history.text
+    assert "PROFILE_PRIVILEGES_REPLACED" in {
+        event["operation"] for event in profile_history.json()
+    }
 
 
 def test_profile_concurrency_and_referentially_safe_deletion(client: TestClient):

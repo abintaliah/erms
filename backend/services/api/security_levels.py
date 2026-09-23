@@ -11,9 +11,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from psycopg import Connection
 
 from .concurrency import expected_version
-from .crud import create_row, delete_row, get_or_404, update_row
+from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .database import get_connection
 from .schemas import (
+    EventHistoryRead,
     SecurityLevelChangeApplyRequest,
     SecurityLevelChangePreviewRead,
     SecurityLevelChangePreviewRequest,
@@ -35,7 +36,7 @@ def _continuity_snapshot(connection: Connection) -> tuple[int, int]:
         _effective_people_for_privilege(connection, "authorization.administer"),
         _universal_custodian_count(connection),
     )
-from .authorization_policy import require_security_levels_admin
+from .authorization_policy import require_audit_view, require_security_levels_admin
 from .resource_authorization import (
     require_clearance_for_level, require_global, require_resource_operation,
 )
@@ -190,13 +191,35 @@ def list_security_levels(
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     return list(connection.execute(
-        "SELECT * FROM security_levels ORDER BY level_number,id LIMIT %s OFFSET %s", (limit, offset)
+        """SELECT level.*,
+                  (SELECT count(*) FROM roles role WHERE role.security_level_id=level.id) roles_assigned_count,
+                  (SELECT count(*) FROM aggregations aggregation WHERE aggregation.security_level_id=level.id) aggregation_count,
+                  (SELECT count(*) FROM records record WHERE record.security_level_id=level.id) record_count
+             FROM security_levels level ORDER BY level.level_number,level.id LIMIT %s OFFSET %s""",
+        (limit, offset)
     ).fetchall())
 
 
 @router.get("/security-levels/{level_id}", response_model=SecurityLevelRead)
 def get_security_level(level_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "security_levels", level_id)
+
+
+@router.get(
+    "/security-levels/{level_id}/history",
+    response_model=list[EventHistoryRead],
+    tags=["event history"],
+    dependencies=[Depends(require_audit_view)],
+)
+def get_security_level_history(
+    level_id: int, connection: Connection=Depends(get_connection, scope="function"),
+):
+    get_or_404(connection, "security_levels", level_id)
+    return list_rows(
+        connection, "event_history", limit=500, offset=0,
+        filters={"entity_type": "security_level", "entity_id": level_id},
+        order_by=("occurred_at", "id"), descending=True,
+    )
 
 
 @router.patch("/security-levels/{level_id}", response_model=SecurityLevelRead, dependencies=[Depends(require_security_levels_admin)])

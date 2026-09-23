@@ -33,7 +33,7 @@ hiding or validation alone is not sufficient.
 - protect held resources from deletion and future disposition;
 - optionally prevent ordinary and governed resource metadata changes;
 - hold indicators and effective-hold details on aggregation and record UIs;
-- a filterable, sortable, pageable membership table on the hold detail page;
+- a filterable, sortable, pageable held-items table on the hold detail page;
 - privilege, authorization, capability, concurrency, and non-disclosure rules;
 - immutable event history and proposed domain event types; and
 - database, API, authorization, and UI test requirements.
@@ -43,7 +43,7 @@ hiding or validation alone is not sufficient.
 - the disposition workflow itself;
 - notifications, acknowledgements, custodian questionnaires, legal discovery,
   export, collection, review, or production workflows;
-- automatic membership based on search criteria;
+- automatic held-item management based on search criteria;
 - holds on digital components independently of their record;
 - hold approval or multi-stage release workflows;
 - scheduled jobs that copy effective status onto resource rows; and
@@ -110,7 +110,7 @@ activate, expire, or reactivate a hold immediately.
 8. A hold cannot be deleted while it has any direct assignment, regardless of
    whether it is scheduled, active, or expired. The assignments must first be
    explicitly removed.
-9. Deleting a hold never cascades to resources or silently removes membership.
+9. Deleting a hold never cascades to resources or silently removes held-item management.
 10. Hold protection never grants access to a resource and never bypasses
     security clearance, ACL, lifecycle, or other integrity rules.
 
@@ -131,10 +131,10 @@ changes governed containment, not merely display metadata, but moving a held
 resource out of scope could circumvent preservation controls. Therefore:
 
 1. A resource that is protected by any effective hold must not be moved unless
-   the caller has the ordinary move authorization and may manage membership for
+   the caller has the ordinary move authorization and may manage held-item management for
    every effective hold whose coverage would change because of the move.
 2. If any applicable effective hold has `preserve_resource_state = true`, the
-   move is prohibited; the extra membership authority is not an override.
+   move is prohibited; the extra held-item management authority is not an override.
 3. The move must not remove any **direct** hold assignment.
 4. Moving into or out of inherited coverage is allowed with those authorities
    and produces a `HELD_RESOURCE_MOVED` domain event containing the effective
@@ -271,7 +271,7 @@ does not alter the hold, its owner, its other contributors, or its resource
 assignments.
 
 A contributor must be an active person account when added. Later deactivation
-makes the contributor ineffective for membership actions but preserves the
+makes the contributor ineffective for held-item management actions but preserves the
 designation until a hold administrator removes it or the user is deleted. The
 owner must not also be stored as a contributor: ownership already supplies the
 same hold-specific eligibility, and the API rejects that duplicate
@@ -292,10 +292,10 @@ resource authorization remains independently mandatory for every candidate.
 
 Only `holds.administer` may change the owner or contributor roster. Updating
 the roster uses hold optimistic concurrency and is audited. A hold administrator
-may also change membership. Users with `holds.membership.manage_all` may change
-membership on every hold without being appointed as its owner. The built-in
+may also manage held items. Users with `holds.held_items.manage_all` may change
+held-item management on every hold without being appointed as its owner. The built-in
 Information Governance Manager and Information Governance Officer profiles
-include `holds.membership.manage_all` by default.
+include `holds.held_items.manage_all` by default.
 
 ### 6.3 `hold_aggregation_assignments`
 
@@ -329,7 +329,7 @@ clear query plans.
 
 ### 6.5 Derived state
 
-Do not store `is_on_hold` or copy inherited memberships onto descendants.
+Do not store `is_on_hold` or copy inherited assignments onto descendants.
 Effective state is derived from assignments, the current hierarchy, and server
 time. Central SQL functions/views must provide one authoritative calculation,
 including:
@@ -353,7 +353,7 @@ At minimum:
 - case-insensitive unique index on `holds.code`;
 - indexes on `(valid_from, valid_to)` suitable for effective-state filtering;
 - unique and reverse-lookup indexes for hold contributors;
-- both directions of each membership relation;
+- both directions of each held-item assignment relation;
 - aggregation ancestry indexes already used by hierarchy traversal; and
 - partial or covering indexes justified by query plans for the hold detail and
   resource indicator queries.
@@ -365,10 +365,10 @@ Add this global privilege in category `administration`:
 | Privilege | Meaning |
 | --- | --- |
 | `holds.administer` | Create, update, and delete empty holds |
-| `holds.membership.manage_all` | Add or remove resources from any hold |
+| `holds.held_items.manage_all` | Add or remove resources from any hold |
 
-No separate `holds.view`, `holds.membership.manage`, or hold ACL is required.
-Hold visibility and membership authority are derived from the hold relationship
+No separate `holds.view`, `holds.held_items.manage`, or hold ACL is required.
+Hold visibility and held-item management authority are derived from the hold relationship
 and the governance rules below. This avoids requiring two independent grants
 for a delegation that the hold administrator already makes explicitly and
 audits when appointing an owner or contributor.
@@ -376,19 +376,19 @@ audits when appointing an owner or contributor.
 ### 7.1 Hold visibility
 
 There is no ACL on a hold. A user may view the complete hold definition and its
-authorized membership rows when any of these is true:
+authorized held-item rows when any of these is true:
 
 - the user is the hold's owner;
 - the user is an active contributor;
 - the user has `holds.administer`; or
-- the user has `holds.membership.manage_all`; or
+- the user has `holds.held_items.manage_all`; or
 - any of the user's effective roles is an information-governance role.
 
-Information-governance visibility is universal across holds. Membership authority
-is granted separately through the built-in profiles' `holds.membership.manage_all`
+Information-governance visibility is universal across holds. Held-item management authority
+is granted separately through the built-in profiles' `holds.held_items.manage_all`
 privilege so custom information-governance roles may remain visibility-only.
 
-Every membership list is filtered through resource visibility: the viewer sees
+Every held-item list is filtered through resource visibility: the viewer sees
 only aggregations and records they are independently authorized to view.
 Counts must likewise be authorized counts or be omitted, so hidden resources
 are not leaked. Hold administration, ownership, contribution, and governance
@@ -399,23 +399,23 @@ by an effective hold** state restriction. They do not receive the hold's code,
 name, description, owner, contributors, dates, assigning ancestor identity, or
 a link to the hold detail.
 
-### 7.2 Membership authorization
+### 7.2 Held-item management authorization
 
 Adding or removing a resource requires all of:
 
 1. the caller is the hold's active owner, an active contributor, has
-   `holds.administer`, or has `holds.membership.manage_all`;
+   `holds.administer`, or has `holds.held_items.manage_all`;
 2. current authorization to view the resource, including clearance;
 3. the resource's type-specific view privilege and ACL permission (or the
    existing information-governance ACL bypass); and
 4. optimistic-concurrency and integrity checks.
 
-Membership management intentionally does not require `record.modify` or
+Held-item management intentionally does not require `record.modify` or
 `aggregation.modify`, because it is a separate governed action. It is not
 blocked by the hold's own resource-state preservation option.
 
 A remove-all request is atomic and succeeds only if the caller may manage the
-membership of every direct hold assignment it would remove. It must not silently
+held-item management of every direct hold assignment it would remove. It must not silently
 skip unauthorized assignments. The UI offers
 remove-all only when the caller is eligible for all affected direct holds;
 otherwise it offers per-hold removal for the eligible subset.
@@ -473,8 +473,8 @@ effective_hold_prevents_component_replacement
 effective_hold_prevents_metadata_change
 hold_not_empty
 hold_assignment_not_found
-hold_membership_manager_required
-hold_membership_required_for_held_move
+hold_held_item_manager_required
+hold_held_item_management_required_for_held_move
 ```
 
 Authorization or concealed-resource failures follow the existing non-leaking
@@ -521,12 +521,12 @@ List filters include `q`, `state`, `owner_user_id`, `contributor_user_id`,
 `preserve_resource_state`, `valid_from`, and `valid_to`. Supported sort keys
 include code, name, state, valid-from, valid-to, owner, created, and updated.
 
-Responses include computed `state`, `is_effective`, `direct_member_count` only
+Responses include computed `state`, `is_effective`, `direct_held_item_count` only
 when its value can be disclosed without leaking hidden resources, and
 capabilities such as `update`, `delete`, `manage_contributors`, and
-`manage_members` with reason codes. `manage_members` is true when the caller is
+`manage_held_items` with reason codes. `manage_held_items` is true when the caller is
 the hold's active owner or contributor, has `holds.administer`, or has
-`holds.membership.manage_all`; every operation remains subject to per-resource
+`holds.held_items.manage_all`; every operation remains subject to per-resource
 authorization.
 
 Contributor administration may be represented within hold create/update
@@ -541,16 +541,16 @@ Whichever representation is chosen, replacement is atomic, rejects unknown,
 inactive, non-person, duplicate, or owner user IDs, and returns the updated
 hold version.
 
-### 9.2 Hold membership
+### 9.2 Held-item management
 
 ```text
-GET    /api/v1/holds/{hold_id}/members
-POST   /api/v1/holds/{hold_id}/members
-DELETE /api/v1/holds/{hold_id}/members/{resource_type}/{resource_id}
+GET    /api/v1/holds/{hold_id}/held-items
+POST   /api/v1/holds/{hold_id}/held-items
+DELETE /api/v1/holds/{hold_id}/held-items/{resource_type}/{resource_id}
 ```
 
 `resource_type` is `aggregation` or `record`. The first release lists direct
-members only; it does not expand every effectively protected descendant. An
+held items only; it does not expand every effectively protected descendant. An
 expanded query may be specified in a later release after scale and disclosure
 requirements are measured. Each row contains the type, identifier, number,
 title, security level if otherwise visible, assignment time, assigning actor
@@ -614,7 +614,7 @@ both the current user and another selected subject. At minimum it evaluates:
 - aggregation and record movement;
 - digital-component addition, removal, replacement, and reordering through
   their containing record;
-- hold membership changes; and
+- held-item management changes; and
 - future disposition operations.
 
 The integrity evaluator must use the same centralized effective-hold SQL and
@@ -629,8 +629,8 @@ effective_hold_prevents_component_deletion
 effective_hold_prevents_component_reordering
 effective_hold_prevents_component_replacement
 effective_hold_prevents_metadata_change
-hold_membership_manager_required
-hold_membership_required_for_held_move
+hold_held_item_manager_required
+hold_held_item_management_required_for_held_move
 ```
 
 For an effective-hold denial, the explanation response adds structured
@@ -664,8 +664,8 @@ caused the denial. It must distinguish an effective-hold denial from closure,
 vital-resource, retention, and other state restrictions. The dialog refreshes
 the explanation after a hold is added, removed, edited, expires, or becomes
 effective; it must not reuse a stale explanation as an authorization decision.
-For membership operations it separately explains whether the subject has
-hold-membership authority and whether the subject can view the target resource.
+For held-item management operations it separately explains whether the subject has
+hold-held-item management authority and whether the subject can view the target resource.
 Hold authority cannot compensate for a failed resource-visibility gate.
 
 ## 10. User interface
@@ -689,7 +689,7 @@ language.
 ### 10.2 Hold detail
 
 The page header shows code, name, state badge, validity, owner, contributors,
-resource-state-preservation setting, and description. The members table is
+resource-state-preservation setting, and description. The held items table is
 filterable, sortable, and
 pageable, using the application's standard `ui.table` treatment. Columns are:
 
@@ -705,19 +705,19 @@ pageable, using the application's standard `ui.table` treatment. Columns are:
 Filters include free text, resource type, assignment date, and assigning user.
 The explicit **Open** action navigates to that aggregation or record when the
 caller remains authorized; it is hidden or disabled otherwise. Users with
-membership authority under Section 7.2 receive:
+held-item management authority under Section 7.2 receive:
 
 - **Add aggregations or records**, opening an authorized resource picker;
 - per-row **Remove from this hold**; and
 - multi-select removal after a confirmation that names the hold and count.
 
 The add picker excludes or marks already-directly-assigned resources and never
-searches above the caller's visibility. Removing membership requires a
+searches above the caller's visibility. Removing a held item requires a
 confirmation because it may release protection. If other effective holds or
 ancestor assignments remain, the dialog says the resource will remain held.
 
-Delete is disabled with “Remove all direct members before deleting this hold”
-when any direct member exists. The server remains authoritative.
+Delete is disabled with “Remove all direct held items before deleting this hold”
+when any direct held item exists. The server remains authoritative.
 
 ### 10.3 Aggregation and record pages
 
@@ -733,14 +733,14 @@ For users without full visibility of that hold under Section 7.1, the panel
 shows only the generic protection explanation. For authorized users, hold
 names link to their details.
 
-Users with membership authority under Section 7.2 receive actions to:
+Users with held-item management authority under Section 7.2 receive actions to:
 
 - add the resource to a selected hold;
 - remove a selected direct assignment; and
 - remove all direct assignments.
 
 Inherited holds cannot be removed from the child. The UI links to the assigning
-ancestor when it is visible and instructs the user to remove membership there.
+ancestor when it is visible and instructs the user to remove the assignment there.
 After every action, both capabilities and effective holds are refreshed.
 
 Blocked ordinary/governed edit, delete, move, component-mutation, and future
@@ -783,7 +783,7 @@ governed actions do, or retain ordinary row events and omit these three. The
 preferred Wathiq convention is one human-meaningful domain event per logical
 action, while low-level assignment row events may remain for forensic detail.
 
-Adding/removing membership must be discoverable from both the hold and resource
+Adding/removing held-item management must be discoverable from both the hold and resource
 history. This may be implemented by two linked events sharing request and
 correlation IDs, or by extending history queries to include related-entity
 metadata. Two linked events are preferred for simple timeline queries.
@@ -818,7 +818,7 @@ a validity boundary.
 The read path must avoid one effective-hold query per result row. Browse and
 search queries should obtain badge Booleans/counts in set-based SQL. Hold
 details use server-side pagination and must not expand an aggregation's entire
-descendant tree merely to list direct members.
+descendant tree merely to list direct held items.
 
 Before release, query plans must be measured on representative deep and broad
 hierarchies with multiple overlapping holds. If recursive ancestry becomes a
@@ -862,12 +862,12 @@ At minimum, automated tests prove:
    exceptional ownership correction, location, and hold operations retain
    their own independently authorized behavior;
 9. no partial update when a request mixes frozen and permitted fields;
-10. hold deletion blocked by any direct membership, including expired holds;
+10. hold deletion blocked by any direct held-item assignment, including expired holds;
 11. remove-all affects only direct assignments and reports remaining inherited
     protection;
 12. separation between hold visibility, `holds.administer`, per-hold owner
-    authority, and `holds.membership.manage_all`;
-13. owner/contributor/administrator/global-manager membership authority and
+    authority, and `holds.held_items.manage_all`;
+13. owner/contributor/administrator/global-manager held-item management authority and
     atomic remove-all behavior;
 14. security-level, ACL, and count non-disclosure in hold lists and pickers;
 15. optimistic-concurrency behavior for holds, contributor rosters, and
@@ -881,10 +881,10 @@ At minimum, automated tests prove:
 19. creation without a reason, mandatory non-blank reasons for every post-
     creation hold mutation, and reason propagation to cascaded and domain
     events;
-20. direct-member-only listing and an authorized **Open** action for every
-    navigable member row;
+20. direct-held-item-only listing and an authorized **Open** action for every
+    navigable held item row;
 21. UI badges, effective-hold panel, disabled actions, inherited-source
-    explanation, and refresh after membership changes; and
+    explanation, and refresh after held-item management changes; and
 22. Access Explainer API and frontend results for direct, inherited,
     resource-state-preserving, destructive-component, movement, and disposition
     hold restrictions, including disclosure redaction and another-user
@@ -908,7 +908,7 @@ Implement the complete database and authorization foundation:
 
 - add the canonical-schema and portable migration definitions for `holds`,
   `hold_contributors`, and both typed assignment tables;
-- add `holds.administer` and `holds.membership.manage_all` to the privilege
+- add `holds.administer` and `holds.held_items.manage_all` to the privilege
   catalogue and approved profiles;
 - implement the centralized effective-hold and resource-state-preservation SQL
   functions/views, including direct, inherited, overlapping, scheduled,
@@ -934,9 +934,9 @@ public navigation is enabled.
 Build the server-side feature on the Phase 1 policy primitives:
 
 - add schemas and endpoints for hold administration, contributor replacement,
-  direct membership, resource-centric hold actions, effective-hold status, and
+  direct held-item assignment, resource-centric hold actions, effective-hold status, and
   hold history;
-- enforce owner/contributor, hold-administrator, and global membership-manager
+- enforce owner/contributor, hold-administrator, and global held-item manager
   authority; universal information-governance visibility; ordinary resource
   visibility/clearance/ACL rules; mandatory
   post-creation reasons, optimistic concurrency, and non-disclosing errors;
@@ -961,7 +961,7 @@ ordinary UI navigation.
 Deliver the complete user workflow and verify it end to end:
 
 - add role-aware Holds navigation, the searchable hold list, create/edit forms,
-  hold detail, owner/contributor management, and the direct-members table with
+  hold detail, owner/contributor management, and the direct held-items table with
   filtering, sorting, pagination, selection, removal, and **Open** actions;
 - add aggregation and record hold badges, authorized detail panels, direct and
   inherited-source explanations, add/remove/remove-all actions, and capability-
@@ -970,7 +970,7 @@ Deliver the complete user workflow and verify it end to end:
   explanations and disclosure-safe details;
 - add mandatory-reason dialogs for every post-creation hold mutation;
 - add focused UI unit tests and browser end-to-end tests for administration,
-  membership, inheritance, overlapping holds, expiry, enhanced preservation,
+  held-item management, inheritance, overlapping holds, expiry, enhanced preservation,
   restricted visibility, and stale-state refresh; and
 - run the complete schema, migration, database, API, authorization, UI, browser,
   accessibility, and performance verification required for release.
@@ -995,7 +995,7 @@ pass.
    to uniqueness, optimistic concurrency, mandatory reason, and audit.
 2. **Held movement follows the proposed controlled rule.** Without enhanced
    resource-state preservation, movement requires normal move authority plus
-   membership authority for every hold whose coverage changes. Enhanced
+   held-item management authority for every hold whose coverage changes. Enhanced
    preservation blocks movement.
 3. **Non-mutating component actions remain available.** Download, share, and
    print continue under their normal authorization because legal discovery and
@@ -1005,6 +1005,6 @@ pass.
 5. **Creation does not require a reason; later changes do.** Updates,
    assignment or removal, post-creation roster changes, and deletion require a
    non-blank reason as specified in Section 8.4.
-6. **The first-release membership table lists direct members only.** Every row
+6. **The first-release held-items table lists direct held items only.** Every row
    provides an authorized **Open** action to navigate to the aggregation or
    record. Effectively protected descendants are not expanded in this table.

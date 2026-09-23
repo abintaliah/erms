@@ -445,13 +445,16 @@ def list_sessions(
 
 @router.get("/sessions/page", dependencies=[Depends(require_identity_sessions_admin)])
 def page_sessions(
-    user_id: int,
-    limit: int = Query(5, ge=1, le=100),
+    user_id: int | None = None,
+    limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     query: str = Query("", max_length=200),
     session_status: str = Query("all", pattern="^(all|active|expired|revoked)$"),
     sort_by: str = Query("date_created", pattern="^(date_created|last_seen_at|expires_at|status|client_ip)$"),
     descending: bool = True,
+    date_field: str = Query("date_created", pattern="^(date_created|last_seen_at)$"),
+    from_timestamp: datetime | None = None,
+    until_timestamp: datetime | None = None,
     principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
@@ -460,16 +463,26 @@ def page_sessions(
         "expires_at": "expires_at", "status": "status", "client_ip": "client_ip",
     }
     normalized_query = query.strip()
-    filters = ["user_id=%s"]
-    parameters: list[Any] = [user_id]
+    filters: list[str] = []
+    parameters: list[Any] = []
+    if user_id is not None:
+        filters.append("user_id=%s")
+        parameters.append(user_id)
     if normalized_query:
         filters.append(
-            "(COALESCE(client_ip,'') ILIKE %s OR COALESCE(user_agent,'') ILIKE %s)"
+            "(COALESCE(user_name,'') ILIKE %s OR COALESCE(user_email,'') ILIKE %s "
+            "OR COALESCE(client_ip,'') ILIKE %s OR COALESCE(user_agent,'') ILIKE %s)"
         )
-        parameters.extend((f"%{normalized_query}%", f"%{normalized_query}%"))
+        parameters.extend((f"%{normalized_query}%",) * 4)
     if session_status != "all":
         filters.append("status=%s")
         parameters.append(session_status)
+    if from_timestamp is not None:
+        filters.append(f"{date_field}>=%s")
+        parameters.append(from_timestamp)
+    if until_timestamp is not None:
+        filters.append(f"{date_field}<=%s")
+        parameters.append(until_timestamp)
     source = """
         SELECT s.id, s.user_id, u.name AS user_name, u.email AS user_email, u.account_type,
                s.date_created, s.last_seen_at, s.expires_at, s.absolute_expires_at,
@@ -480,7 +493,7 @@ def page_sessions(
                     ELSE 'active' END AS status
           FROM login_sessions s JOIN users u ON u.id=s.user_id
     """
-    where_sql = " AND ".join(filters)
+    where_sql = " AND ".join(filters) if filters else "TRUE"
     base_parameters = [principal.session_id, *parameters]
     total = connection.execute(
         f"SELECT count(*) AS total FROM ({source}) session_source WHERE {where_sql}",
@@ -492,7 +505,14 @@ def page_sessions(
         f"ORDER BY {sort_columns[sort_by]} {direction}, id {direction} LIMIT %s OFFSET %s",
         [*base_parameters, limit, offset],
     ).fetchall())
-    return {"items": items, "total": int(total), "limit": limit, "offset": offset}
+    active = connection.execute(
+        f"SELECT count(*) AS total FROM ({source}) session_source WHERE {where_sql} AND status='active'",
+        base_parameters,
+    ).fetchone()["total"]
+    return {
+        "items": items, "total": int(total), "active": int(active),
+        "limit": limit, "offset": offset,
+    }
 
 
 @router.delete("/sessions/{session_id}", status_code=204)

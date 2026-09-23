@@ -37,6 +37,9 @@ class SecurityLevelRead(SecurityLevelCreate):
     date_created: datetime
     date_updated: datetime
     version: int
+    roles_assigned_count: int = 0
+    aggregation_count: int = 0
+    record_count: int = 0
 
 
 class PrivilegeRead(ApiModel):
@@ -71,6 +74,8 @@ class ProfileRead(ApiModel):
     date_created: datetime
     date_updated: datetime
     version: int
+    privilege_count: int = 0
+    role_count: int = 0
 
 
 class ProfileReferenceRead(ProfileRead):

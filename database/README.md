@@ -50,13 +50,30 @@ governance visibility without Hold administration), stable Hold integrity
 failures, component-reordering protection, event metadata, and governed-search
 Hold fields for databases previously upgraded with migration 005.
 
-Migration 007 adds the separately auditable `holds.membership.manage_all`
+Migration 007 added the separately auditable `holds.membership.manage_all`
 privilege, grants it to the built-in Information Governance Manager and Officer
-profiles, and extends Hold membership authority to Hold administrators and
-global membership managers while retaining owner/contributor authority.
+profiles, and extended assignment-management authority to Hold administrators
+and global managers while retaining owner/contributor authority.
+
+Migration 008 renames the original legal-hold membership terminology to the
+canonical **held items** terminology. It updates the global privilege to
+`holds.held_items.manage_all` and refreshes the database authorization function
+without changing existing hold assignments.
 
 Migration files are not initialization scripts and must never be run against a
 new database already created from the latest `schema.sql`.
+
+## Targeted data corrections
+
+Corrective scripts are optional, idempotent repairs for a database exhibiting
+the specific documented data gap. They are not migrations and do not add a
+`schema_migrations` entry. To backfill missing baseline Security Level history
+without duplicating existing `CREATE` events:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/corrections/backfill_security_level_create_history.sql
+```
 
 ## Seed data
 

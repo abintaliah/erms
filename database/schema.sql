@@ -2350,6 +2350,44 @@ CREATE TRIGGER security_levels_record_history
 AFTER INSERT OR UPDATE OR DELETE ON security_levels
 FOR EACH ROW EXECUTE FUNCTION record_entity_history('security_level');
 
+-- The built-in levels are inserted before event-history triggers are
+-- available. Record the baseline events with seed provenance so a database
+-- created from this canonical schema has a complete catalogue timeline.
+INSERT INTO event_history (
+    occurred_at,
+    entity_type,
+    entity_id,
+    operation,
+    actor_type,
+    source,
+    after_state,
+    changed_fields,
+    reason,
+    metadata
+)
+SELECT
+    level.date_created,
+    'security_level',
+    level.id,
+    'CREATE',
+    'automated_process',
+    'seeding',
+    to_jsonb(level),
+    ARRAY[
+        'code', 'date_created', 'date_updated', 'id', 'level_number',
+        'name', 'prevents_disposition'
+    ]::text[],
+    'Baseline CREATE event recorded for a seeded security level.',
+    jsonb_build_object('backfilled', true, 'seeded_baseline', true)
+FROM security_levels level
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM event_history event
+    WHERE event.entity_type = 'security_level'
+      AND event.entity_id = level.id
+      AND event.operation = 'CREATE'
+);
+
 
 
 
@@ -3926,16 +3964,16 @@ INSERT INTO privileges(code,name,description,category,is_reserved)
 VALUES ('holds.administer','Administer Legal Holds',
         'Create, update, and delete legal holds and manage their owners and contributors.',
         'administration',false),
-       ('holds.membership.manage_all','Manage All Legal Hold Memberships',
-        'Add or remove resources from any legal hold.',
+       ('holds.held_items.manage_all','Manage All Legal Hold Items',
+        'Add or remove held items from any legal hold.',
         'administration',false)
 ON CONFLICT DO NOTHING;
 INSERT INTO profile_privileges(profile_id,privilege_id)
 SELECT profile.id,privilege.id
 FROM profiles profile CROSS JOIN privileges privilege
-WHERE (profile.code='ALL_PRIVS' AND privilege.code IN ('holds.administer','holds.membership.manage_all'))
+WHERE (profile.code='ALL_PRIVS' AND privilege.code IN ('holds.administer','holds.held_items.manage_all'))
    OR (profile.code IN ('INFO_GOV_MGR','INFO_GOV_OFFICER')
-       AND privilege.code='holds.membership.manage_all')
+       AND privilege.code='holds.held_items.manage_all')
 ON CONFLICT DO NOTHING;
 
 CREATE FUNCTION hold_is_effective(p_hold_id bigint,p_at_time timestamptz DEFAULT statement_timestamp())
@@ -4038,7 +4076,7 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
         WHERE hold.id=p_hold_id AND actor.account_type='person'
           AND actor.date_deactivated IS NULL AND actor.date_suspended IS NULL
           AND (user_has_global_privilege(actor.id,'holds.administer')
-               OR user_has_global_privilege(actor.id,'holds.membership.manage_all')
+               OR user_has_global_privilege(actor.id,'holds.held_items.manage_all')
                OR hold.owner_user_id=actor.id OR EXISTS(
               SELECT 1 FROM hold_contributors contributor
               WHERE contributor.hold_id=hold.id AND contributor.user_id=actor.id))
@@ -4108,7 +4146,7 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='hold_change_reason_required';
     END IF;
     IF NOT current_hold_actor_is_manager(target_hold_id) THEN
-        RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='hold_membership_manager_required';
+        RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='hold_held_item_manager_required';
     END IF;
     IF TG_OP='INSERT' AND NEW.assigned_by_user_id IS NULL THEN
         NEW.assigned_by_user_id:=NULLIF(current_setting('app.user_id',true),'')::bigint;
@@ -4164,7 +4202,7 @@ BEGIN
                      ), changed AS ((SELECT * FROM old_holds EXCEPT SELECT * FROM new_ancestor_holds)
                                     UNION (SELECT * FROM new_ancestor_holds EXCEPT SELECT * FROM old_holds))
                 SELECT 1 FROM changed WHERE NOT current_hold_actor_is_manager(changed.hold_id)
-            ) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='hold_membership_required_for_held_move'; END IF;
+            ) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='hold_held_item_management_required_for_held_move'; END IF;
         END IF;
         IF blocked THEN
             allowed_old:=to_jsonb(OLD)-ARRAY['security_level_id','owning_org_unit_id','assigned_location','current_location',
@@ -4190,7 +4228,7 @@ BEGIN
                      ), changed AS ((SELECT * FROM old_holds EXCEPT SELECT * FROM new_holds)
                                     UNION (SELECT * FROM new_holds EXCEPT SELECT * FROM old_holds))
                 SELECT 1 FROM changed WHERE NOT current_hold_actor_is_manager(changed.hold_id)
-            ) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='hold_membership_required_for_held_move'; END IF;
+            ) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='hold_held_item_management_required_for_held_move'; END IF;
         END IF;
         IF blocked THEN
             allowed_old:=to_jsonb(OLD)-ARRAY['security_level_id','owning_org_unit_id','inherit_acl_from_parent',

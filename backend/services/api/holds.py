@@ -56,31 +56,31 @@ class ContributorReplace(BaseModel):
     user_ids: list[int]
 
 
-class HoldMemberCreate(BaseModel):
+class HoldHeldItemCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     resource_type: Literal["aggregation", "record"]
     resource_id: int
 
 
-class HoldMembersBulkCreate(BaseModel):
+class HoldHeldItemsBulkCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    members: list[HoldMemberCreate] = Field(min_length=1, max_length=1000)
+    held_items: list[HoldHeldItemCreate] = Field(min_length=1, max_length=1000)
 
     @model_validator(mode="after")
-    def validate_unique_members(self):
-        keys = [(member.resource_type, member.resource_id) for member in self.members]
+    def validate_unique_held_items(self):
+        keys = [(held_item.resource_type, held_item.resource_id) for held_item in self.held_items]
         if len(keys) != len(set(keys)):
-            raise ValueError("members must be unique")
+            raise ValueError("held_items must be unique")
         return self
 
 
-class HoldMemberRemove(HoldMemberCreate):
+class HoldHeldItemRemove(HoldHeldItemCreate):
     version: int = Field(ge=1)
 
 
-class HoldMembersBulkRemove(BaseModel):
+class HoldHeldItemsBulkRemove(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    members: list[HoldMemberRemove] = Field(min_length=1, max_length=1000)
+    held_items: list[HoldHeldItemRemove] = Field(min_length=1, max_length=1000)
 
 
 class ResourceHoldCreate(BaseModel):
@@ -99,7 +99,7 @@ class HoldCapabilities(BaseModel):
     update: bool
     delete: bool
     manage_contributors: bool
-    manage_members: bool
+    manage_held_items: bool
 
 
 class HoldResponse(BaseModel):
@@ -118,7 +118,7 @@ class HoldResponse(BaseModel):
     state: Literal["scheduled", "active", "expired"]
     is_effective: bool
     contributors: list[UserReference]
-    direct_member_count: int
+    direct_held_item_count: int
     capabilities: HoldCapabilities
     capability_reasons: dict[str, str | None]
 
@@ -131,7 +131,7 @@ class HoldPage(BaseModel):
     returned: int
 
 
-class HoldMemberResponse(BaseModel):
+class HoldHeldItemResponse(BaseModel):
     id: int
     version: int
     resource_type: Literal["aggregation", "record"]
@@ -147,8 +147,8 @@ class HoldMemberResponse(BaseModel):
     assigned_by_name: str | None = None
 
 
-class HoldMemberPage(BaseModel):
-    items: list[HoldMemberResponse]
+class HoldHeldItemPage(BaseModel):
+    items: list[HoldHeldItemResponse]
     total: int
     limit: int
     offset: int
@@ -182,7 +182,7 @@ class EffectiveHoldResponse(BaseModel):
     is_inherited: bool | None = None
     nearest_assigned_aggregation_id: int | None = None
     direct_assignment_version: int | None = None
-    can_manage_members: bool = False
+    can_manage_held_items: bool = False
 
 
 def _reason(request: Request) -> str:
@@ -205,7 +205,7 @@ def _require_admin(connection: Connection) -> None:
 
 def _visibility_sql(alias: str = "hold") -> str:
     return f"""(user_has_global_privilege(current_user_id(),'holds.administer')
-      OR user_has_global_privilege(current_user_id(),'holds.membership.manage_all')
+      OR user_has_global_privilege(current_user_id(),'holds.held_items.manage_all')
       OR EXISTS (SELECT 1 FROM user_role_assignments governance_assignment
                  JOIN roles governance_role ON governance_role.id=governance_assignment.role_id
                  WHERE governance_assignment.user_id=current_user_id()
@@ -255,7 +255,7 @@ def _serialize_hold(connection: Connection, row: dict) -> dict:
     ).fetchone()
     if result["owner"] is None:
         raise RuntimeError(f"hold {row['id']} references a missing owner")
-    result["direct_member_count"] = connection.execute(
+    result["direct_held_item_count"] = connection.execute(
         """SELECT (SELECT count(*) FROM hold_aggregation_assignments assignment
                     WHERE assignment.hold_id=%s AND current_user_can_view_aggregation(assignment.aggregation_id))
                 + (SELECT count(*) FROM hold_record_assignments assignment
@@ -267,15 +267,15 @@ def _serialize_hold(connection: Connection, row: dict) -> dict:
     ).fetchone()["value"]
     admin = _is_admin(connection)
     result["capabilities"] = {
-        "update": admin, "delete": admin and result["direct_member_count"] == 0, "manage_contributors": admin,
-        "manage_members": manager,
+        "update": admin, "delete": admin and result["direct_held_item_count"] == 0, "manage_contributors": admin,
+        "manage_held_items": manager,
     }
     result["capability_reasons"] = {
         "update": None if admin else "holds_administer_required",
-        "delete": (None if admin and result["direct_member_count"] == 0
+        "delete": (None if admin and result["direct_held_item_count"] == 0
                    else "hold_not_empty" if admin else "holds_administer_required"),
         "manage_contributors": None if admin else "holds_administer_required",
-        "manage_members": None if manager else "hold_membership_manager_required",
+        "manage_held_items": None if manager else "hold_held_item_manager_required",
     }
     return result
 
@@ -310,12 +310,12 @@ def _serialize_holds(connection: Connection, rows: list[dict]) -> list[dict]:
         result=dict(row); result.pop("server_time",None)
         result["state"]=_state(row); result["is_effective"]=result["state"]=="active"
         result["owner"]=owners[row["owner_user_id"]]; result["contributors"]=contributors[row["id"]]
-        result["direct_member_count"]=counts[row["id"]]; manager=managers[row["id"]]
-        result["capabilities"]={"update":admin,"delete":admin and not counts[row["id"]],"manage_contributors":admin,"manage_members":manager}
+        result["direct_held_item_count"]=counts[row["id"]]; manager=managers[row["id"]]
+        result["capabilities"]={"update":admin,"delete":admin and not counts[row["id"]],"manage_contributors":admin,"manage_held_items":manager}
         result["capability_reasons"]={"update":None if admin else "holds_administer_required",
             "delete":None if admin and not counts[row["id"]] else "hold_not_empty" if admin else "holds_administer_required",
             "manage_contributors":None if admin else "holds_administer_required",
-            "manage_members":None if manager else "hold_membership_manager_required"}
+            "manage_held_items":None if manager else "hold_held_item_manager_required"}
         results.append(result)
     return results
 
@@ -423,13 +423,13 @@ def update_hold(hold_id: int, payload: HoldUpdate, request: Request, version: in
 @router.delete("/holds/{hold_id}", status_code=204, dependencies=[Depends(require_holds_administer)])
 def delete_hold(hold_id: int, request: Request, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     _require_admin(connection); _reason(request); _hold(connection, hold_id, lock=True)
-    member_count = connection.execute(
+    held_item_count = connection.execute(
         "SELECT (SELECT count(*) FROM hold_aggregation_assignments WHERE hold_id=%s) + "
         "(SELECT count(*) FROM hold_record_assignments WHERE hold_id=%s) value",
         (hold_id, hold_id),
     ).fetchone()["value"]
-    if member_count:
-        raise HTTPException(status_code=409, detail={"code": "hold_not_empty", "member_count": member_count})
+    if held_item_count:
+        raise HTTPException(status_code=409, detail={"code": "hold_not_empty", "held_item_count": held_item_count})
     row = connection.execute("DELETE FROM holds WHERE id=%s AND version=%s RETURNING id", (hold_id,version)).fetchone()
     if row is None: raise HTTPException(status_code=409, detail={"code": "stale_version"})
     return Response(status_code=204)
@@ -469,7 +469,7 @@ def _resource_visible(connection: Connection, resource_type: str, resource_id: i
     return connection.execute(f"SELECT * FROM {table} WHERE id=%s", (resource_id,)).fetchone()
 
 
-def _member(connection: Connection, hold_id: int, resource_type: str, resource_id: int) -> dict:
+def _held_item(connection: Connection, hold_id: int, resource_type: str, resource_id: int) -> dict:
     table = f"hold_{resource_type}_assignments" if resource_type == "record" else "hold_aggregation_assignments"
     column = f"{resource_type}_id"
     return connection.execute(f"SELECT * FROM {table} WHERE hold_id=%s AND {column}=%s", (hold_id,resource_id)).fetchone()
@@ -479,11 +479,11 @@ def _require_hold_manager(connection: Connection, hold_id: int) -> None:
     if not connection.execute(
         "SELECT current_hold_actor_is_manager(%s) AS allowed", (hold_id,),
     ).fetchone()["allowed"]:
-        raise HTTPException(status_code=403, detail={"code": "hold_membership_manager_required"})
+        raise HTTPException(status_code=403, detail={"code": "hold_held_item_manager_required"})
 
 
-@router.get("/holds/{hold_id}/member-candidates", response_model=CandidatePage)
-def list_hold_member_candidates(
+@router.get("/holds/{hold_id}/held-item-candidates", response_model=CandidatePage)
+def list_hold_held_item_candidates(
     hold_id: int, q: str | None = None,
     resource_type: Literal["aggregation", "record"] | None = None,
     limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0),
@@ -519,8 +519,8 @@ def list_hold_member_candidates(
     return {"items": list(items), "total": total, "limit": limit, "offset": offset}
 
 
-@router.get("/holds/{hold_id}/members", response_model=HoldMemberPage)
-def list_hold_members(
+@router.get("/holds/{hold_id}/held-items", response_model=HoldHeldItemPage)
+def list_hold_held_items(
     hold_id: int, q: str | None = None,
     resource_type: Literal["aggregation","record"] | None = None,
     assigned_by_user_id: int | None = None,
@@ -532,7 +532,7 @@ def list_hold_members(
     _hold(connection,hold_id)
     order={"number":"lower(number)","title":"lower(title)","type":"resource_type","assigned_at":"assigned_at",
            "assigned_by":"lower(assigned_by_name)","security_level":"security_level_number"}[sort]
-    cte = """WITH members AS (
+    cte = """WITH held_items AS (
       SELECT x.id,x.version,'aggregation'::text resource_type,a.id resource_id,a.aggregation_number number,
              a.title,a.description,a.security_level_id,x.assigned_at,x.assigned_by_user_id
       FROM hold_aggregation_assignments x JOIN aggregations a ON a.id=x.aggregation_id
@@ -541,9 +541,9 @@ def list_hold_members(
       SELECT x.id,x.version,'record',r.id,r.record_number,r.title,r.description,r.security_level_id,x.assigned_at,x.assigned_by_user_id
       FROM hold_record_assignments x JOIN records r ON r.id=x.record_id
       WHERE x.hold_id=%s AND current_user_can_view_record(r.id)), enriched AS (
-      SELECT members.*,u.name assigned_by_name,sl.code security_level_code,
+      SELECT held_items.*,u.name assigned_by_name,sl.code security_level_code,
              sl.name security_level_name,sl.level_number security_level_number
-      FROM members LEFT JOIN users u ON u.id=assigned_by_user_id JOIN security_levels sl ON sl.id=security_level_id)"""
+      FROM held_items LEFT JOIN users u ON u.id=assigned_by_user_id JOIN security_levels sl ON sl.id=security_level_id)"""
     where = """ WHERE (%s::text IS NULL OR resource_type=%s)
       AND (%s::text IS NULL OR number ILIKE '%%'||%s||'%%' OR title ILIKE '%%'||%s||'%%' OR description ILIKE '%%'||%s||'%%')
       AND (%s::bigint IS NULL OR assigned_by_user_id=%s)
@@ -560,68 +560,68 @@ def list_hold_members(
     return {"items": list(rows), "total": total, "limit": limit, "offset": offset, "returned": len(rows)}
 
 
-def _add_member(connection: Connection, hold_id: int, resource_type: str, resource_id: int, request: Request):
+def _add_held_item(connection: Connection, hold_id: int, resource_type: str, resource_id: int, request: Request):
     _hold(connection,hold_id); _reason(request); _resource_visible(connection,resource_type,resource_id)
-    existing=_member(connection,hold_id,resource_type,resource_id)
+    existing=_held_item(connection,hold_id,resource_type,resource_id)
     if existing is not None: return existing
     table="hold_aggregation_assignments" if resource_type=="aggregation" else "hold_record_assignments"; column=f"{resource_type}_id"
     return connection.execute(f"INSERT INTO {table}(hold_id,{column}) VALUES (%s,%s) RETURNING *",(hold_id,resource_id)).fetchone()
 
 
-@router.post("/holds/{hold_id}/members", status_code=201)
-def add_hold_member(hold_id:int,payload:HoldMemberCreate,request:Request,connection:Connection=Depends(get_connection,scope="function")):
+@router.post("/holds/{hold_id}/held-items", status_code=201)
+def add_hold_held_item(hold_id:int,payload:HoldHeldItemCreate,request:Request,connection:Connection=Depends(get_connection,scope="function")):
     _require_hold_manager(connection, hold_id)
-    return _add_member(connection,hold_id,payload.resource_type,payload.resource_id,request)
+    return _add_held_item(connection,hold_id,payload.resource_type,payload.resource_id,request)
 
 
-@router.post("/holds/{hold_id}/members/bulk", status_code=201)
-def add_hold_members_bulk(
-    hold_id: int, payload: HoldMembersBulkCreate, request: Request,
+@router.post("/holds/{hold_id}/held-items/bulk", status_code=201)
+def add_hold_held_items_bulk(
+    hold_id: int, payload: HoldHeldItemsBulkCreate, request: Request,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     _hold(connection, hold_id)
     _require_hold_manager(connection, hold_id)
     _reason(request)
     added = 0
-    already_members = 0
-    for member in payload.members:
-        _resource_visible(connection, member.resource_type, member.resource_id)
-        table = ("hold_aggregation_assignments" if member.resource_type == "aggregation"
+    already_held_items = 0
+    for held_item in payload.held_items:
+        _resource_visible(connection, held_item.resource_type, held_item.resource_id)
+        table = ("hold_aggregation_assignments" if held_item.resource_type == "aggregation"
                  else "hold_record_assignments")
-        column = f"{member.resource_type}_id"
+        column = f"{held_item.resource_type}_id"
         row = connection.execute(
             f"INSERT INTO {table}(hold_id,{column}) VALUES (%s,%s) "
             f"ON CONFLICT (hold_id,{column}) DO NOTHING RETURNING id",
-            (hold_id, member.resource_id),
+            (hold_id, held_item.resource_id),
         ).fetchone()
         if row is None:
-            already_members += 1
+            already_held_items += 1
         else:
             added += 1
-    return {"requested": len(payload.members), "added": added,
-            "already_members": already_members}
+    return {"requested": len(payload.held_items), "added": added,
+            "already_held_items": already_held_items}
 
 
-@router.delete("/holds/{hold_id}/members/{resource_type}/{resource_id}",status_code=204)
-def remove_hold_member(hold_id:int,resource_type:Literal["aggregation","record"],resource_id:int,request:Request,version:int=Depends(expected_version),connection:Connection=Depends(get_connection,scope="function")):
+@router.delete("/holds/{hold_id}/held-items/{resource_type}/{resource_id}",status_code=204)
+def remove_hold_held_item(hold_id:int,resource_type:Literal["aggregation","record"],resource_id:int,request:Request,version:int=Depends(expected_version),connection:Connection=Depends(get_connection,scope="function")):
     _hold(connection,hold_id); _require_hold_manager(connection, hold_id); _reason(request); _resource_visible(connection,resource_type,resource_id)
     table="hold_aggregation_assignments" if resource_type=="aggregation" else "hold_record_assignments"; column=f"{resource_type}_id"
     deleted=connection.execute(f"DELETE FROM {table} WHERE hold_id=%s AND {column}=%s AND version=%s RETURNING id",(hold_id,resource_id,version)).fetchone()
     if deleted is None:
-        exists = _member(connection, hold_id, resource_type, resource_id)
+        exists = _held_item(connection, hold_id, resource_type, resource_id)
         raise HTTPException(status_code=409 if exists else 404,detail={"code":"stale_version" if exists else "hold_assignment_not_found"})
     return Response(status_code=204)
 
 
-@router.post("/holds/{hold_id}/members/bulk-remove")
-def remove_hold_members_bulk(
-    hold_id: int, payload: HoldMembersBulkRemove, request: Request,
+@router.post("/holds/{hold_id}/held-items/bulk-remove")
+def remove_hold_held_items_bulk(
+    hold_id: int, payload: HoldHeldItemsBulkRemove, request: Request,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     _hold(connection,hold_id); _require_hold_manager(connection,hold_id); _reason(request)
-    if len({(item.resource_type,item.resource_id) for item in payload.members}) != len(payload.members):
+    if len({(item.resource_type,item.resource_id) for item in payload.held_items}) != len(payload.held_items):
         raise HTTPException(status_code=422,detail={"code":"duplicate_hold_assignments"})
-    for item in payload.members:
+    for item in payload.held_items:
         _resource_visible(connection,item.resource_type,item.resource_id)
         table="hold_aggregation_assignments" if item.resource_type=="aggregation" else "hold_record_assignments"
         column=f"{item.resource_type}_id"
@@ -631,7 +631,7 @@ def remove_hold_members_bulk(
         ).fetchone()
         if deleted is None:
             raise HTTPException(status_code=409,detail={"code":"stale_version","resource_type":item.resource_type,"resource_id":item.resource_id})
-    return {"removed":len(payload.members)}
+    return {"removed":len(payload.held_items)}
 
 
 def _effective_holds(connection:Connection,resource_type:str,resource_id:int):
@@ -641,11 +641,11 @@ def _effective_holds(connection:Connection,resource_type:str,resource_id:int):
     for row in rows:
         visible=connection.execute(f"SELECT {_visibility_sql()} value FROM holds hold WHERE id=%s",(row["hold_id"],)).fetchone()["value"]
         item={"kind":"effective_hold","source":"both" if row["is_direct"] and row["is_inherited"] else ("direct" if row["is_direct"] else "inherited"),"directly_assigned_resource":row["is_direct"],"preserve_resource_state":row["preserve_resource_state"]}
-        item["can_manage_members"] = bool(connection.execute(
+        item["can_manage_held_items"] = bool(connection.execute(
             "SELECT current_hold_actor_is_manager(%s) value", (row["hold_id"],),
         ).fetchone()["value"])
         if row["is_direct"]:
-            assignment = _member(connection, row["hold_id"], resource_type, resource_id)
+            assignment = _held_item(connection, row["hold_id"], resource_type, resource_id)
             item["direct_assignment_version"] = assignment["version"] if assignment else None
         if visible: item.update(dict(row))
         result.append(item)
@@ -658,7 +658,7 @@ def aggregation_effective_holds(resource_id:int,connection:Connection=Depends(ge
 def record_effective_holds(resource_id:int,connection:Connection=Depends(get_connection,scope="function")): return _effective_holds(connection,"record",resource_id)
 
 
-def _resource_add(resource_type:str,resource_id:int,payload:ResourceHoldCreate,request:Request,connection:Connection): return _add_member(connection,payload.hold_id,resource_type,resource_id,request)
+def _resource_add(resource_type:str,resource_id:int,payload:ResourceHoldCreate,request:Request,connection:Connection): return _add_held_item(connection,payload.hold_id,resource_type,resource_id,request)
 @router.post("/aggregations/{resource_id}/holds",status_code=201)
 def add_aggregation_hold(resource_id:int,payload:ResourceHoldCreate,request:Request,connection:Connection=Depends(get_connection,scope="function")): return _resource_add("aggregation",resource_id,payload,request,connection)
 @router.post("/records/{resource_id}/holds",status_code=201)
@@ -670,7 +670,7 @@ def _remove_direct(connection:Connection,resource_type:str,resource_id:int,reque
     table="hold_aggregation_assignments" if resource_type=="aggregation" else "hold_record_assignments"; column=f"{resource_type}_id"
     rows=connection.execute(f"SELECT hold_id FROM {table} WHERE {column}=%s"+(" AND hold_id=%s" if hold_id else "")+" FOR UPDATE",(resource_id,hold_id) if hold_id else (resource_id,)).fetchall()
     if hold_id and not rows: raise HTTPException(status_code=404,detail={"code":"hold_assignment_not_found"})
-    if any(not connection.execute("SELECT current_hold_actor_is_manager(%s) value",(r["hold_id"],)).fetchone()["value"] for r in rows): raise HTTPException(status_code=403,detail={"code":"hold_membership_manager_required"})
+    if any(not connection.execute("SELECT current_hold_actor_is_manager(%s) value",(r["hold_id"],)).fetchone()["value"] for r in rows): raise HTTPException(status_code=403,detail={"code":"hold_held_item_manager_required"})
     connection.execute(f"DELETE FROM {table} WHERE {column}=%s"+(" AND hold_id=%s" if hold_id else ""),(resource_id,hold_id) if hold_id else (resource_id,))
     remaining = _effective_holds(connection,resource_type,resource_id)
     removed_ids = [r["hold_id"] for r in rows]

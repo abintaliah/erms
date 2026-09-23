@@ -85,6 +85,21 @@ def test_first_class_navigation_excludes_digital_components():
     assert ENTITIES["roles"].fields[1].lookup_resource == "roles"
 
 
+def test_identity_administration_lists_use_one_column_governance_cards():
+    assert '{"security-levels", "profiles", "users", "roles", "org-units"}' in APP_SOURCE
+    assert '"users": "Filter users"' in APP_SOURCE
+    assert '"roles": "Filter roles"' in APP_SOURCE
+    assert '"org-units": "Filter organization units"' in APP_SOURCE
+    assert '"users": (' in APP_SOURCE
+    assert '"roles": (' in APP_SOURCE
+    assert '"org-units": (' in APP_SOURCE
+    assert 'select_user_details(item["id"])' in APP_SOURCE
+    assert 'select_role_details(item["id"])' in APP_SOURCE
+    assert 'select_organization_unit_details(item["id"])' in APP_SOURCE
+    assert 'show_memberships(item, for_user=user_view)' in APP_SOURCE
+    assert 'api.list("security-levels")' in APP_SOURCE
+
+
 def test_form_payload_converts_ids_and_omits_empty_create_fields():
     spec = ENTITIES["records"]
     controls = {
@@ -281,6 +296,55 @@ def test_record_detail_long_values_are_aligned_and_bounded():
     assert ").tooltip(component_name)" in component_source
 
 
+def test_identity_details_use_grouped_command_panels():
+    source = inspect.getsource(index)
+    assert source.count('"identity-command-layout w-full"') == 3
+    assert 'ui.label("Organization unit actions")' in source
+    assert 'ui.label("Role actions")' in source
+    assert 'ui.label("User actions")' in source
+    assert 'ui.label("Manage and assignments")' in source
+    assert 'ui.label("Account and assignments")' in source
+    assert 'ui.label("Status and access")' in source
+    assert '"detail-surface identity-command-metadata' in source
+    assert '"detail-surface identity-command-actions' in source
+    assert ".identity-command-metadata { grid-column: 1; grid-row: 1;" in source
+    assert ".identity-command-actions { grid-column: 2; grid-row: 1;" in source
+    assert 'h-[190px] overflow-y-auto governance-table")' in source
+    assert 'h-[190px] overflow-y-auto governance-table login-sessions-table")' in source
+    assert 'label in {"Direct status", "Effective status"}' in source
+
+
+def test_governance_catalogues_use_one_column_cards():
+    source = inspect.getsource(index)
+    assert 'if spec.key in {"security-levels", "profiles", "users", "roles", "org-units"}:' in source
+    assert '"governance-card-list w-full px-5"' in source
+    assert '"governance-list-card shadow-none"' in source
+    assert '"security-levels": "shield"' in source
+    assert '"profiles": "admin_panel_settings"' in source
+    assert 'with ui.element("div").classes("governance-card-icon mt-1")' in source
+    assert "border: 1px solid #add4ec" in source
+    assert '("Roles assigned this level", str(row.get("roles_assigned_count", 0)))' in source
+    assert "Clearance requirement" not in source
+    assert 'if label == "Prevents disposition" and value == "Yes":' in source
+    assert 'ui.badge("Yes", color="warning")' in source
+    assert '("Privileges", f"{row.get(\'privilege_count\', 0)} privileges")' in source
+    assert 'with ui.element("div").classes("governance-card-list w-full")' in source
+    assert '.tooltip("Hold history")' in source
+
+
+def test_hold_held_items_use_one_column_cards():
+    source = inspect.getsource(index)
+    assert 'ui.label("No held items match these filters.")' in source
+    assert 'update_held_item_selection(row: dict[str, Any], selected: bool)' in source
+    assert '.tooltip("Remove from this hold")' in source
+    assert 'update_candidate_selection(row: dict[str, Any], selected: bool)' in source
+    assert 'picker["selected"][row["selection_key"]] = dict(row)' in source
+    assert ".login-sessions-table .q-table { table-layout: fixed; width: 100%; }" in source
+    assert '"body-cell-user_agent"' in source
+    assert 'class="login-session-client-value"' in source
+    assert "<q-tooltip>{{ props.row.user_agent || '—' }}</q-tooltip>" in source
+
+
 def test_scalar_display_columns_are_not_rendered_as_relationship_links():
     assert RELATIONSHIP_DISPLAY_FIELDS == {
         "aggregation_display",
@@ -366,8 +430,17 @@ def test_application_shell_is_flat_and_uses_one_background():
     assert '"erms-page-table' in source
     assert ".login-sessions-table .q-table th" in source
     assert "white-space: nowrap" in source
-    assert '"label": "Signed in", "field": "date_created", "align": "left", "sortable": True' in source
-    assert 'label="Force sign-out"' in source
+    assert 'results = ui.element("div").classes("login-session-card-grid w-full")' in source
+    assert "grid-template-columns: minmax(0, 1fr); gap: 10px;" in source
+    assert '.tooltip("Force sign-out this session")' in source
+    assert '.tooltip("Force sign-out all sessions for this user")' in source
+    assert 'icon="logout", on_click=' in source
+    assert 'icon="person_off", on_click=' in source
+    assert '{20: "20", 50: "50", 100: "100"}' in source
+    assert 'page_range.text = f"Showing {start}–{end} of {page_state[\'total\']} sessions"' in source
+    assert 'await api.login_sessions_page(' in source
+    assert ".login-session-action-button" in source
+    assert "<q-btn-dropdown" not in source
     assert 'ui.row().classes("w-full items-center no-wrap gap-4")' in source
     assert 'ui.row().classes("items-center no-wrap gap-2 flex-none")' in source
     assert 'ui.label("Search results").classes("text-lg font-semibold")' in source
@@ -444,7 +517,7 @@ def test_navigation_drawer_does_not_load_or_render_entity_counts():
     assert "navigation_badges" not in source
     assert "refresh_navigation_counts" not in source
     assert "active_count" not in source
-    assert "sum(row.get('status') == 'active' for row in rows)" in source
+    assert "page_state.update(total=int(page.get(\"total\", 0)), active=int(page.get(\"active\", 0)))" in source
 
 
 def test_navigation_drawer_collapses_to_clickable_icon_rail():

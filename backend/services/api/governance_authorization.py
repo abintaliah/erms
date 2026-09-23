@@ -162,7 +162,7 @@ def _integrity_gate(
             ([row["hold_id"] for row in hold_rows], subject_user_id, subject_user_id),
         ).fetchone()["value"]
         if unmanaged:
-            hold_effect = "movement_membership"
+            hold_effect = "movement_held_item_management"
     constraints = []
     if hold_effect:
         visible_ids = set()
@@ -186,10 +186,10 @@ def _integrity_gate(
                                "source": "both" if row["is_direct"] and row["is_inherited"] else ("direct" if row["is_direct"] else "inherited"),
                                "assigning_ancestor_id": row["nearest_assigned_aggregation_id"],
                                "preserve_resource_state": row["preserve_resource_state"]})
-        constraints.append({"kind": "effective_hold", "effect": "movement" if hold_effect == "movement_membership" else hold_effect,
+        constraints.append({"kind": "effective_hold", "effect": "movement" if hold_effect == "movement_held_item_management" else hold_effect,
                             "source": "both" if any(r["is_direct"] for r in hold_rows) and any(r["is_inherited"] for r in hold_rows) else ("direct" if any(r["is_direct"] for r in hold_rows) else "inherited"),
                             "effective_hold_count": len(hold_rows), "holds": detail})
-        reason = "hold_membership_required_for_held_move" if hold_effect == "movement_membership" else {
+        reason = "hold_held_item_management_required_for_held_move" if hold_effect == "movement_held_item_management" else {
             "deletion": "effective_hold_prevents_deletion", "metadata_change": "effective_hold_prevents_metadata_change",
             "movement": "effective_hold_prevents_metadata_change", "addition": "effective_hold_prevents_component_addition",
             "removal": "effective_hold_prevents_component_deletion", "replacement": "effective_hold_prevents_component_replacement",
