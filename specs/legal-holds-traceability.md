@@ -17,8 +17,8 @@ identified here. “Implemented” without a passing test is not release-ready.
 | 9. Atomic mixed updates | database transaction enforcement | Pending expanded API test | Open |
 | 10. Delete non-empty hold | DB FK plus stable API `hold_not_empty` | API test | Covered |
 | 11. Remove-all direct only | resource-centric API | API test | Covered |
-| 12. Authorization separation | `holds.administer`, effective information-governance role visibility, membership manager | authorization tests | Covered |
-| 13. Active owner/contributor authority | `current_hold_actor_is_manager` | SQL/API tests | Covered |
+| 12. Authorization separation | hold visibility, `holds.administer`, owner authority, `holds.membership.manage_all` | authorization tests | Covered |
+| 13. Membership authority | active owner/contributor, hold administrator, or global membership manager; atomic remove-all | SQL/API tests | Covered |
 | 14. Non-disclosure | visibility-filtered queries and redacted effective holds | API tests | Partial |
 | 15. Optimistic concurrency | hold and contributor `If-Match`; assignments | Pending assignment version test | Open |
 | 16. Race safety | advisory locks and row locks | Pending concurrent DB tests | Open |

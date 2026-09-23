@@ -205,6 +205,7 @@ def _require_admin(connection: Connection) -> None:
 
 def _visibility_sql(alias: str = "hold") -> str:
     return f"""(user_has_global_privilege(current_user_id(),'holds.administer')
+      OR user_has_global_privilege(current_user_id(),'holds.membership.manage_all')
       OR EXISTS (SELECT 1 FROM user_role_assignments governance_assignment
                  JOIN roles governance_role ON governance_role.id=governance_assignment.role_id
                  WHERE governance_assignment.user_id=current_user_id()
@@ -274,7 +275,7 @@ def _serialize_hold(connection: Connection, row: dict) -> dict:
         "delete": (None if admin and result["direct_member_count"] == 0
                    else "hold_not_empty" if admin else "holds_administer_required"),
         "manage_contributors": None if admin else "holds_administer_required",
-        "manage_members": None if manager else "active_hold_owner_or_contributor_required",
+        "manage_members": None if manager else "hold_membership_manager_required",
     }
     return result
 
@@ -314,7 +315,7 @@ def _serialize_holds(connection: Connection, rows: list[dict]) -> list[dict]:
         result["capability_reasons"]={"update":None if admin else "holds_administer_required",
             "delete":None if admin and not counts[row["id"]] else "hold_not_empty" if admin else "holds_administer_required",
             "manage_contributors":None if admin else "holds_administer_required",
-            "manage_members":None if manager else "active_hold_owner_or_contributor_required"}
+            "manage_members":None if manager else "hold_membership_manager_required"}
         results.append(result)
     return results
 
@@ -478,7 +479,7 @@ def _require_hold_manager(connection: Connection, hold_id: int) -> None:
     if not connection.execute(
         "SELECT current_hold_actor_is_manager(%s) AS allowed", (hold_id,),
     ).fetchone()["allowed"]:
-        raise HTTPException(status_code=403, detail={"code": "hold_owner_or_contributor_required"})
+        raise HTTPException(status_code=403, detail={"code": "hold_membership_manager_required"})
 
 
 @router.get("/holds/{hold_id}/member-candidates", response_model=CandidatePage)
@@ -669,7 +670,7 @@ def _remove_direct(connection:Connection,resource_type:str,resource_id:int,reque
     table="hold_aggregation_assignments" if resource_type=="aggregation" else "hold_record_assignments"; column=f"{resource_type}_id"
     rows=connection.execute(f"SELECT hold_id FROM {table} WHERE {column}=%s"+(" AND hold_id=%s" if hold_id else "")+" FOR UPDATE",(resource_id,hold_id) if hold_id else (resource_id,)).fetchall()
     if hold_id and not rows: raise HTTPException(status_code=404,detail={"code":"hold_assignment_not_found"})
-    if any(not connection.execute("SELECT current_hold_actor_is_manager(%s) value",(r["hold_id"],)).fetchone()["value"] for r in rows): raise HTTPException(status_code=403,detail={"code":"hold_owner_or_contributor_required"})
+    if any(not connection.execute("SELECT current_hold_actor_is_manager(%s) value",(r["hold_id"],)).fetchone()["value"] for r in rows): raise HTTPException(status_code=403,detail={"code":"hold_membership_manager_required"})
     connection.execute(f"DELETE FROM {table} WHERE {column}=%s"+(" AND hold_id=%s" if hold_id else ""),(resource_id,hold_id) if hold_id else (resource_id,))
     remaining = _effective_holds(connection,resource_type,resource_id)
     removed_ids = [r["hold_id"] for r in rows]

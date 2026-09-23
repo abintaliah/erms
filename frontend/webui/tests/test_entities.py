@@ -239,9 +239,10 @@ def test_contextual_form_help_explains_disabled_controls():
     assert RECORD_UPLOAD_WAIT_MESSAGE == "Please wait until all files have finished uploading."
 
 
-def test_aggregation_summary_has_non_collapsing_flex_layout():
+def test_aggregation_summary_has_command_centre_layout():
     assert "flex-1" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
-    assert "min-w-[360px]" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
+    assert "aggregation-command-summary" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
+    assert "min-w-[520px]" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
 
 
 def test_record_detail_header_wraps_actions_before_crowding_long_titles():
@@ -313,11 +314,11 @@ def test_detail_pages_use_light_blue_metadata_and_retention_visual_system():
     assert 'primary="#268bd2"' in source
     assert ".detail-field-label" in source
     assert ".retention-card" in source
-    assert '"Current (active)"' in source
-    assert '"Intermediate (semi-active)"' in source
-    assert '"Final disposition"' in source
+    assert '("Current",' in source
+    assert '("Intermediate",' in source
+    assert '("Final",' in source
     assert 'ui.label(str(len(children))).classes("text-2xl font-bold text-primary")' not in source
-    assert '"retention-card shadow-none p-5 gap-4 flex-1' in source
+    assert '"retention-card aggregation-retention-compact shadow-none p-4 gap-3"' in source
 
 
 def test_application_shell_is_flat_and_uses_one_background():

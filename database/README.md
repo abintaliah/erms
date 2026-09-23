@@ -50,6 +50,11 @@ governance visibility without Hold administration), stable Hold integrity
 failures, component-reordering protection, event metadata, and governed-search
 Hold fields for databases previously upgraded with migration 005.
 
+Migration 007 adds the separately auditable `holds.membership.manage_all`
+privilege, grants it to the built-in Information Governance Manager and Officer
+profiles, and extends Hold membership authority to Hold administrators and
+global membership managers while retaining owner/contributor authority.
+
 Migration files are not initialization scripts and must never be run against a
 new database already created from the latest `schema.sql`.
 

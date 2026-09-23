@@ -52,7 +52,7 @@ CHILD_AGGREGATION_CLASSIFICATION_HELP = (
 )
 RECORD_UPLOAD_WAIT_MESSAGE = "Please wait until all files have finished uploading."
 AGGREGATION_SUMMARY_LAYOUT_CLASSES = (
-    "detail-surface shadow-none flex-1 min-w-[360px] p-5 gap-4"
+    "detail-surface aggregation-command-summary shadow-none flex-1 min-w-[520px] p-5 gap-4"
 )
 RECORD_DETAIL_HEADER_CLASSES = "w-full items-start gap-3 flex-wrap"
 RECORD_DETAIL_TITLE_CLASSES = "gap-0 flex-1 min-w-0 sm:min-w-[420px] basis-[520px] max-w-full"
@@ -1040,6 +1040,67 @@ def index() -> None:
         }
         .retention-stage-label { color: #607086; font-size: .75rem; line-height: 1.2; }
         .retention-stage-value { color: #172033; font-size: 1.15rem; font-weight: 750; line-height: 1.25; }
+        .aggregation-command-layout {
+            display: grid !important; grid-template-columns: minmax(0, 1.55fr) minmax(330px, .8fr);
+            align-items: start !important; gap: 12px !important;
+        }
+        .aggregation-command-summary { grid-column: 1; grid-row: 1; min-width: 0 !important; }
+        .aggregation-command-side { display: contents; }
+        .aggregation-hold-controls { grid-column: 2; grid-row: 1; min-width: 0; width: 100%; }
+        .aggregation-retention-compact {
+            grid-column: 1 / -1; grid-row: 2; min-width: 0; width: 100%; margin-top: 4px;
+        }
+        .aggregation-panel-heading {
+            margin: -16px -16px 0; padding: 11px 13px; border-bottom: 1px solid #e5ebf1;
+            color: #172033; font-size: .8rem; font-weight: 750;
+        }
+        .aggregation-command-summary > .aggregation-panel-heading { margin: -20px -20px 0; }
+        .aggregation-overview-actions { justify-content: flex-start !important; gap: 6px; }
+        .aggregation-overview-actions .q-btn {
+            border: 1px solid #cbd9e5; border-radius: 8px; background: #fff;
+            color: #25445d; padding: 0 9px;
+        }
+        .aggregation-overview-actions .q-btn.text-negative {
+            border-color: #e9a8ad; background: #fff7f7; color: #bd3341 !important;
+        }
+        .aggregation-child-preview-grid {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+            max-height: 146px; overflow-y: auto; padding-right: 3px;
+        }
+        .aggregation-child-preview {
+            min-width: 0; min-height: 64px; border: 1px solid #e2e8f0;
+            border-radius: 10px; background: #fff; padding: 8px;
+        }
+        .aggregation-child-preview:hover { border-color: #93b4e8; background: #f8fcff; }
+        .aggregation-retention-stages { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 18px; }
+        .aggregation-retention-stage {
+            position: relative; min-width: 0; padding: 8px 10px 8px 30px;
+            border-radius: 9px; background: rgba(255,255,255,.68);
+        }
+        .aggregation-retention-stage::before {
+            content: ""; position: absolute; left: 11px; top: 13px; width: 9px; height: 9px;
+            border-radius: 999px; background: var(--erms-blue); box-shadow: 0 0 0 4px #dff1fc;
+        }
+        .aggregation-retention-stage:not(:last-child)::after {
+            content: "→"; position: absolute; right: -15px; top: 12px;
+            color: #6f98b4; font-weight: 800;
+        }
+        .aggregation-retention-footer {
+            display: flex; align-items: center; gap: 8px; min-width: 0;
+            padding-top: 9px; border-top: 1px solid #d5eaf8;
+        }
+        .aggregation-retention-chip {
+            min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap; border-radius: 8px; background: rgba(255,255,255,.62);
+            padding: 7px 9px; color: #536b7f; font-size: .75rem;
+        }
+        @media (max-width: 980px) {
+            .aggregation-command-layout { display: flex !important; flex-direction: column; }
+            .aggregation-command-side { display: contents; }
+            .aggregation-command-summary, .aggregation-retention-compact,
+            .aggregation-hold-controls { min-width: 100%; }
+            .aggregation-child-preview-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+        }
         .relationship-select .q-field__control { min-height: 58px; border-radius: 10px; }
         .relationship-option { min-width: 360px; }
         .relationship-option:hover { background: #f3f7ff; }
@@ -5163,10 +5224,14 @@ def index() -> None:
                     ui.icon("chevron_right").classes("text-slate-400")
                     ui.label(current["title"]).classes("font-semibold text-slate-800")
 
-                with ui.row().classes("w-full p-5 gap-4 flex-wrap items-stretch"):
+                with ui.element("div").classes("aggregation-command-layout w-full p-5"):
                     with ui.card().classes(
                         AGGREGATION_SUMMARY_LAYOUT_CLASSES
                     ):
+                        with ui.row().classes("aggregation-panel-heading w-full items-center"):
+                            ui.label("Aggregation overview")
+                            ui.space()
+                            ui.badge("Closed" if closure else "Open", color="amber-8" if closure else "positive").props("outline")
                         with ui.row().classes("w-full items-center gap-3 no-wrap"):
                             ui.avatar(icon="folder", color="primary", text_color="white")
                             with ui.column().classes("gap-0 grow min-w-0"):
@@ -5229,25 +5294,6 @@ def index() -> None:
                                         lambda: open_aggregation(current),
                                     ),
                                 ).props("flat dense no-caps color=warning")
-                                if capabilities.get("add_to_hold"):
-                                    ui.button(
-                                        "Add to hold", icon="add_link",
-                                        on_click=lambda: add_resource_to_hold_dialog(
-                                            "aggregation", current["id"], lambda: open_aggregation(current),
-                                        ),
-                                    ).props("flat dense no-caps color=primary")
-                                if capabilities.get("remove_all_direct_hold_assignments"):
-                                    ui.button(
-                                        "Remove from all holds", icon="link_off",
-                                        on_click=remove_aggregation_from_all_holds,
-                                    ).props("flat dense no-caps color=negative")
-                        elif capabilities.get("add_to_hold"):
-                            ui.button(
-                                "Add to hold", icon="add_link",
-                                on_click=lambda: add_resource_to_hold_dialog(
-                                    "aggregation", current["id"], lambda: open_aggregation(current),
-                                ),
-                            ).props("outline dense no-caps")
                         with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
                             aggregation_metadata = (
                                 ("Status", "Closed" if closure else "Open"),
@@ -5289,7 +5335,7 @@ def index() -> None:
                                                 ui.label("Set on this aggregation").classes("text-xs text-slate-500")
                                             elif source:
                                                 ui.label(f"Inherited from {source['aggregation_number']} — {source['title']}").classes("text-xs text-slate-500")
-                        with ui.row().classes("w-full justify-end"):
+                        with ui.row().classes("aggregation-overview-actions w-full"):
                             if capabilities.get("change_location"):
                                 async def change_location() -> None:
                                     dialog = ui.dialog()
@@ -5494,14 +5540,16 @@ def index() -> None:
                                                 "aggregations", current["id"], scope="record"
                                             )
                                         )
+                    aggregation_command_side = ui.column().classes("aggregation-command-side")
+                    aggregation_command_side.__enter__()
                     if effective_rule:
                         with ui.card().classes(
-                            "retention-card shadow-none p-5 gap-4 flex-1 min-w-[360px] max-w-[560px]"
+                            "retention-card aggregation-retention-compact shadow-none p-4 gap-3"
                         ):
-                            with ui.row().classes("w-full items-start gap-3"):
-                                ui.avatar(icon="schedule", color="blue-1", text_color="primary", size="44px")
+                            with ui.row().classes("w-full items-center gap-3"):
+                                ui.avatar(icon="schedule", color="blue-1", text_color="primary", size="38px")
                                 with ui.column().classes("gap-0 grow"):
-                                    ui.label("Effective retention rule").classes("text-lg font-semibold text-slate-900")
+                                    ui.label("Effective retention rule").classes("text-base font-semibold text-slate-900")
                                     if effective_rule["rule_source"] == "aggregation":
                                         source_text = "Specified locally for the governing root aggregation"
                                     elif effective_rule.get("inheritance_depth", 0) == 0:
@@ -5518,38 +5566,47 @@ def index() -> None:
                                         source_text += f" · governed by root aggregation {root_reference}"
                                     ui.label(source_text).classes("text-xs text-sky-700")
                                 ui.badge("Effective", color="primary").props("outline")
-                            with ui.column().classes("w-full gap-0 pl-1"):
+                            with ui.element("div").classes("aggregation-retention-stages w-full"):
+                                final_disposition = effective_rule["final_disposition"]
+                                final_value, final_help = {
+                                    "transfer_to_external_archive": ("Permanent", "External archive"),
+                                    "retain_as_local_archives": ("Permanent", "Local archives"),
+                                    "selective_preservation": ("Selective", "Appraise and preserve"),
+                                    "destruction": ("Destruction", "Destroy after retention"),
+                                }.get(
+                                    final_disposition,
+                                    (final_disposition.replace("_", " ").title(), "Disposition after retention"),
+                                )
                                 for stage_label, stage_value, stage_help in (
-                                    ("Current (active)", f"{effective_rule['current_period_years']} years", "Kept with the responsible business unit"),
-                                    ("Intermediate (semi-active)", f"{effective_rule['intermediate_period_years']} years", "Retained in intermediate storage"),
-                                    ("Final disposition", effective_rule["final_disposition"].replace("_", " ").title(), "Action applied when the retention periods are complete"),
+                                    ("Current", f"{effective_rule['current_period_years']} years", "Business unit"),
+                                    ("Intermediate", f"{effective_rule['intermediate_period_years']} years", "Records storage"),
+                                    ("Final", final_value, final_help),
                                 ):
-                                    with ui.row().classes("retention-stage w-full items-stretch gap-3 pb-4"):
-                                        with ui.element("div").classes("retention-line"):
-                                            ui.element("div").classes("retention-dot")
-                                        with ui.column().classes("gap-0 grow min-w-0"):
-                                            ui.label(stage_label).classes("retention-stage-label")
-                                            ui.label(stage_value).classes("retention-stage-value")
-                                            ui.label(stage_help).classes("text-xs text-slate-500")
-                            if classification_path:
-                                with ui.column().classes("w-full gap-1 border-t border-sky-100 pt-3"):
-                                    ui.label("GOVERNING CLASSIFICATION").classes("detail-field-label")
-                                    ui.label(" › ".join(
+                                    with ui.column().classes("aggregation-retention-stage gap-0"):
+                                        ui.label(f"{stage_label} · {stage_value}").classes(
+                                            "w-full text-sm font-semibold text-slate-800"
+                                        )
+                                        ui.label(stage_help).classes("w-full text-xs text-slate-500")
+                            with ui.element("div").classes("aggregation-retention-footer w-full"):
+                                if classification_path:
+                                    classification_text = " › ".join(
                                         f"{item['code']} — {item['title']}" for item in classification_path
-                                    )).classes("text-sm text-slate-600")
-                            if effective_rule.get("instructions"):
-                                with ui.column().classes("w-full gap-1 rounded-xl bg-white/70 px-4 py-3"):
-                                    ui.label("INSTRUCTIONS").classes("detail-field-label")
-                                    ui.label(effective_rule["instructions"]).classes("text-sm text-slate-600")
-                            if current.get("parent_aggregation_id") is None and closure is None:
-                                with ui.row().classes("w-full justify-end"):
+                                    )
+                                    ui.label(f"CLASSIFICATION · {classification_text}").classes(
+                                        "aggregation-retention-chip"
+                                    ).tooltip(classification_text)
+                                if effective_rule.get("instructions"):
+                                    ui.label(f"INSTRUCTIONS · {effective_rule['instructions']}").classes(
+                                        "aggregation-retention-chip"
+                                    ).tooltip(effective_rule["instructions"])
+                                if current.get("parent_aggregation_id") is None and closure is None:
                                     ui.button(
-                                        "Edit local override" if local_retention_rule else "Set local override",
+                                        "Edit override" if local_retention_rule else "Set override",
                                         icon="tune", on_click=manage_local_retention_rule,
                                     ).props("flat dense no-caps color=primary")
                     else:
                         with ui.card().classes(
-                            "detail-surface shadow-none p-5 gap-3 flex-1 min-w-[360px] max-w-[560px]"
+                            "detail-surface aggregation-retention-compact shadow-none p-4 gap-3"
                         ):
                             with ui.row().classes("items-center gap-3"):
                                 ui.avatar(icon="schedule", color="blue-1", text_color="primary", size="44px")
@@ -5557,23 +5614,58 @@ def index() -> None:
                                     ui.label("Effective retention rule").classes("text-lg font-semibold")
                                     ui.label("No effective retention rule is available.").classes("text-sm text-slate-500")
 
+                    with ui.card().classes(
+                        "detail-surface aggregation-hold-controls shadow-none p-4 gap-3"
+                    ):
+                        ui.label("Hold controls").classes("aggregation-panel-heading w-full")
+                        with ui.row().classes("w-full gap-2 flex-wrap"):
+                            if effective_holds:
+                                ui.button(
+                                    "View holds", icon="visibility",
+                                    on_click=lambda: show_effective_holds_dialog(
+                                        effective_holds, "aggregation", current["id"],
+                                        lambda: open_aggregation(current),
+                                    ),
+                                ).props("outline dense no-caps color=primary")
+                            if capabilities.get("add_to_hold"):
+                                ui.button(
+                                    "Add to hold", icon="add_link",
+                                    on_click=lambda: add_resource_to_hold_dialog(
+                                        "aggregation", current["id"], lambda: open_aggregation(current),
+                                    ),
+                                ).props("outline dense no-caps color=primary")
+                            if capabilities.get("remove_all_direct_hold_assignments"):
+                                ui.button(
+                                    "Remove direct holds", icon="link_off",
+                                    on_click=remove_aggregation_from_all_holds,
+                                ).props("outline dense no-caps color=negative")
+                            if not effective_holds and not capabilities.get("add_to_hold"):
+                                ui.label("No hold actions are available.").classes("text-xs text-slate-500")
+                    aggregation_command_side.__exit__(None, None, None)
+
+                with ui.row().classes("w-full items-center px-5 pt-1"):
+                    ui.label("Child aggregations").classes("text-base font-semibold text-slate-800")
+                    ui.space()
+                    ui.label(f"{len(children)} children").classes("text-xs text-slate-500")
                 if children:
-                    ui.label("Contained aggregations").classes("px-5 text-base font-semibold")
-                    with ui.grid(columns=3).classes("w-full px-5 pb-4 gap-3"):
+                    with ui.element("div").classes("aggregation-child-preview-grid mx-5 mb-3"):
                         for child in children:
                             child_closure = effective_closure(child, by_id)
-                            with ui.card().classes("recent-card cursor-pointer p-4").on(
-                                "click", lambda _, item=child: open_aggregation(item)
-                            ):
-                                with ui.row().classes("items-center no-wrap gap-3"):
-                                    ui.avatar(icon="folder", color="blue-1", text_color="primary")
-                                    with ui.column().classes("gap-0"):
-                                        ui.label(child["title"]).classes("font-semibold")
-                                        ui.label(child["aggregation_number"]).classes("text-xs text-slate-500")
-                                    ui.space()
-                                    favourite_button("aggregations", child["id"])
-                                    if child_closure:
-                                        ui.badge("Closed", color="amber-8").props("outline")
+                            with ui.element("button").classes(
+                                "aggregation-child-preview cursor-pointer text-left"
+                            ).on("click", lambda _, item=child: open_aggregation(item)):
+                                with ui.row().classes("items-start no-wrap gap-2"):
+                                    ui.icon("folder", color="primary", size="19px").classes("mt-0.5")
+                                    with ui.column().classes("gap-0 min-w-0"):
+                                        ui.label(child["title"]).classes("text-xs font-semibold line-clamp-2")
+                                        child_status = "Closed" if child_closure else (
+                                            "Vital" if child.get("is_vital") else "Open"
+                                        )
+                                        ui.label(
+                                            f"{child['aggregation_number']} · {child_status}"
+                                        ).classes("text-[10px] text-slate-500 truncate")
+                else:
+                    ui.label("No child aggregations").classes("px-5 pb-3 text-sm text-slate-400")
 
                 ui.label("Records in this aggregation").classes("px-5 pt-2 text-base font-semibold")
                 if not records:
@@ -6411,7 +6503,7 @@ def index() -> None:
 
     async def refresh_hold_navigation() -> None:
         privileges=set((auth_state.get("principal") or {}).get("global_privileges",[]))
-        if "holds.administer" in privileges:
+        if {"holds.administer", "holds.membership.manage_all"} & privileges:
             holds_navigation.set_visibility(True); return
         try:
             page=await api.holds_page(limit=1)

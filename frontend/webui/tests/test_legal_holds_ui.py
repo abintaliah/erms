@@ -63,6 +63,24 @@ def test_hold_mutations_collect_reasons_and_refresh_live_state():
     assert 'Remove from this hold' in source
 
 
+def test_aggregation_command_centre_matches_the_approved_two_column_layout():
+    source = APP.read_text(encoding="utf-8")
+    assert '"aggregation-command-layout w-full p-5"' in source
+    assert '"Aggregation overview"' in source
+    assert '"detail-surface aggregation-hold-controls shadow-none p-4 gap-3"' in source
+    assert '"Hold controls"' in source
+    assert '"Remove direct holds"' in source
+    assert '"aggregation-child-preview-grid mx-5 mb-3"' in source
+    assert 'for child in children:' in source
+    assert 'f"{child[\'aggregation_number\']} · {child_status}"' in source
+    assert '"aggregation-retention-stages w-full"' in source
+    assert '"aggregation-retention-footer w-full"' in source
+    assert 'grid-column: 1 / -1; grid-row: 2' in source
+    assert '"w-full text-sm font-semibold text-slate-800"' in source
+    assert '.aggregation-retention-stage:not(:last-child)::after' in source
+    assert '.aggregation-overview-actions .q-btn' in source
+
+
 def test_access_explainer_renders_redaction_safe_hold_constraints():
     source = APP.read_text(encoding="utf-8")
     assert 'result.get("resource_state_constraints", [])' in source

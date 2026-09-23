@@ -3925,13 +3925,17 @@ CREATE INDEX hold_record_assignments_resource_idx
 INSERT INTO privileges(code,name,description,category,is_reserved)
 VALUES ('holds.administer','Administer Legal Holds',
         'Create, update, and delete legal holds and manage their owners and contributors.',
+        'administration',false),
+       ('holds.membership.manage_all','Manage All Legal Hold Memberships',
+        'Add or remove resources from any legal hold.',
         'administration',false)
 ON CONFLICT DO NOTHING;
 INSERT INTO profile_privileges(profile_id,privilege_id)
 SELECT profile.id,privilege.id
 FROM profiles profile CROSS JOIN privileges privilege
-WHERE profile.code='ALL_PRIVS'
-  AND privilege.code='holds.administer'
+WHERE (profile.code='ALL_PRIVS' AND privilege.code IN ('holds.administer','holds.membership.manage_all'))
+   OR (profile.code IN ('INFO_GOV_MGR','INFO_GOV_OFFICER')
+       AND privilege.code='holds.membership.manage_all')
 ON CONFLICT DO NOTHING;
 
 CREATE FUNCTION hold_is_effective(p_hold_id bigint,p_at_time timestamptz DEFAULT statement_timestamp())
@@ -4033,7 +4037,9 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
         SELECT 1 FROM holds hold JOIN users actor ON actor.id=NULLIF(current_setting('app.user_id',true),'')::bigint
         WHERE hold.id=p_hold_id AND actor.account_type='person'
           AND actor.date_deactivated IS NULL AND actor.date_suspended IS NULL
-          AND (hold.owner_user_id=actor.id OR EXISTS(
+          AND (user_has_global_privilege(actor.id,'holds.administer')
+               OR user_has_global_privilege(actor.id,'holds.membership.manage_all')
+               OR hold.owner_user_id=actor.id OR EXISTS(
               SELECT 1 FROM hold_contributors contributor
               WHERE contributor.hold_id=hold.id AND contributor.user_id=actor.id))
     )
@@ -4102,7 +4108,7 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='hold_change_reason_required';
     END IF;
     IF NOT current_hold_actor_is_manager(target_hold_id) THEN
-        RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='hold_owner_or_contributor_required';
+        RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='hold_membership_manager_required';
     END IF;
     IF TG_OP='INSERT' AND NEW.assigned_by_user_id IS NULL THEN
         NEW.assigned_by_user_id:=NULLIF(current_setting('app.user_id',true),'')::bigint;

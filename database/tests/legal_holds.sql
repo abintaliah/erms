@@ -11,6 +11,8 @@ DECLARE
     classification_id bigint;
     owner_id bigint;
     contributor_id bigint;
+    global_manager_id bigint;
+    global_manager_role_id bigint;
     outsider_id bigint;
     root_id bigint;
     child_id bigint;
@@ -35,7 +37,27 @@ BEGIN
 
     INSERT INTO users(name,email) VALUES ('Hold Owner','hold-owner@test.invalid') RETURNING id INTO owner_id;
     INSERT INTO users(name,email) VALUES ('Hold Contributor','hold-contributor@test.invalid') RETURNING id INTO contributor_id;
+    INSERT INTO users(name,email) VALUES ('Global Hold Membership Manager','hold-global-manager@test.invalid') RETURNING id INTO global_manager_id;
     INSERT INTO users(name,email) VALUES ('Hold Outsider','hold-outsider@test.invalid') RETURNING id INTO outsider_id;
+    INSERT INTO roles(org_unit_id,code,name,profile_id,is_information_governance)
+    VALUES (unit_id,'HOLD-GLOBAL-MANAGER','Global Hold Membership Manager',
+            (SELECT id FROM profiles WHERE code='INFO_GOV_OFFICER'),true)
+    RETURNING id INTO global_manager_role_id;
+    INSERT INTO user_role_assignments(user_id,role_id)
+    VALUES (global_manager_id,global_manager_role_id);
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM profile_privileges mapping
+        JOIN profiles profile ON profile.id=mapping.profile_id
+        JOIN privileges privilege ON privilege.id=mapping.privilege_id
+        WHERE profile.code IN ('INFO_GOV_MGR','INFO_GOV_OFFICER')
+          AND privilege.code='holds.membership.manage_all'
+        GROUP BY privilege.code
+        HAVING count(*)=2
+    ) THEN
+        RAISE EXCEPTION 'built-in information-governance profiles lack global hold membership authority';
+    END IF;
 
     INSERT INTO aggregations(aggregation_number,title,classification_id,owning_org_unit_id)
     VALUES ('HOLD-ROOT','Held root',classification_id,unit_id) RETURNING id INTO root_id;
@@ -121,6 +143,15 @@ BEGIN
 
     PERFORM set_config('app.change_reason','Add contributor',true);
     INSERT INTO hold_contributors(hold_id,user_id) VALUES (active_hold_id,contributor_id);
+    PERFORM set_config('app.user_id',contributor_id::text,true);
+    IF NOT current_hold_actor_is_manager(active_hold_id) THEN
+        RAISE EXCEPTION 'active contributor lacks hold membership authority';
+    END IF;
+    PERFORM set_config('app.user_id',global_manager_id::text,true);
+    IF NOT current_hold_actor_is_manager(active_hold_id) THEN
+        RAISE EXCEPTION 'global hold membership manager lacks hold membership authority';
+    END IF;
+    PERFORM set_config('app.user_id',owner_id::text,true);
     DELETE FROM users WHERE id=contributor_id;
     IF EXISTS(SELECT 1 FROM hold_contributors WHERE user_id=contributor_id) THEN
         RAISE EXCEPTION 'contributor user deletion did not cascade';

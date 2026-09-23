@@ -185,7 +185,9 @@ def test_hold_candidate_search_and_atomic_bulk_add(
     assert not (still_assigned & keys)
 
 
-def test_information_governance_visibility_is_not_hold_administration(client: TestClient):
+def test_information_governance_profile_can_manage_membership_without_hold_administration(
+    client: TestClient, aggregation: dict,
+):
     hold = _create_hold(client)
     password = "Governance-Viewer-Test-123!"
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
@@ -203,8 +205,22 @@ def test_information_governance_visibility_is_not_hold_administration(client: Te
     assert login.status_code==200
     client.headers["X-CSRF-Token"]=client.cookies.get("erms_csrf")
     assert "holds.administer" not in login.json()["global_privileges"]
+    assert "holds.membership.manage_all" in login.json()["global_privileges"]
     visible=client.get(f"/api/v1/holds/{hold['id']}")
     assert visible.status_code==200
+    assert visible.json()["capabilities"]["manage_members"] is True
+    added=client.post(
+        f"/api/v1/aggregations/{aggregation['id']}/holds",
+        json={"hold_id":hold["id"]},
+        headers={"X-Change-Reason":"Governance preservation direction"},
+    )
+    assert added.status_code==201, added.text
+    removed=client.delete(
+        f"/api/v1/aggregations/{aggregation['id']}/holds",
+        headers={"X-Change-Reason":"Governance release direction"},
+    )
+    assert removed.status_code==200, removed.text
+    assert removed.json()["removed_hold_ids"]==[hold["id"]]
     denied=client.post("/api/v1/holds",json={
         "code":"DENIED","name":"Must not create","valid_from":datetime.now(timezone.utc).isoformat(),
         "owner_user_id":user_id,
