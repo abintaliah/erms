@@ -1212,6 +1212,14 @@ def test_browser_native_image_preview_preserves_mime_type_and_is_audited(client:
     history = client.get(f"/api/v1/digital-components/{uploaded['id']}/history").json()
     viewed = next(event for event in history if event["operation"] == "CONTENT_VIEWED")
     assert viewed["metadata"]["rendering_method"] == "browser-native"
+    dashboard = client.get("/api/v1/dashboard/summary", params={"recent_limit": 7})
+    assert dashboard.status_code == 200, dashboard.text
+    assert any(
+        item["entity_type"] == "record"
+        and item["entity_id"] == record["id"]
+        and item["operation"] == "CONTENT_VIEWED"
+        for item in dashboard.json()["recent_activity"]
+    )
 
 
 def test_upload_size_limit(client: TestClient, record: dict, monkeypatch):

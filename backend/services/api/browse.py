@@ -475,6 +475,54 @@ def browse_org_unit_summary(
         ).fetchone()
     else:
         row["parent"] = None
+    row["ancestors"] = list(connection.execute(
+        """WITH RECURSIVE ancestors AS (
+               SELECT parent.id,parent.parent_org_unit_id,parent.code,parent.name,1 AS depth
+                 FROM org_units current_unit
+                 JOIN org_units parent ON parent.id=current_unit.parent_org_unit_id
+                WHERE current_unit.id=%s
+               UNION ALL
+               SELECT parent.id,parent.parent_org_unit_id,parent.code,parent.name,
+                      ancestors.depth + 1
+                 FROM ancestors
+                 JOIN org_units parent ON parent.id=ancestors.parent_org_unit_id
+           )
+           SELECT id,code,name
+             FROM ancestors
+            ORDER BY depth DESC""",
+        (org_unit_id,),
+    ).fetchall())
+    row["holdings_metrics"] = connection.execute(
+        """WITH aggregation_metrics AS (
+               SELECT count(*) AS aggregation_count,
+                      count(*) FILTER (WHERE date_closed IS NULL) AS open_aggregation_count,
+                      count(*) FILTER (WHERE date_closed IS NOT NULL) AS closed_aggregation_count,
+                      count(*) FILTER (WHERE medium='physical') AS physical_aggregation_count,
+                      count(*) FILTER (WHERE medium='digital') AS digital_aggregation_count,
+                      count(*) FILTER (WHERE medium='mixed') AS mixed_aggregation_count
+                 FROM aggregations aggregation
+                WHERE aggregation.owning_org_unit_id=%s
+                  AND current_user_can_view_aggregation(aggregation.id)
+           ), record_metrics AS (
+               SELECT count(*) AS record_count,
+                      count(*) FILTER (WHERE medium='physical') AS physical_record_count,
+                      count(*) FILTER (WHERE medium='digital') AS digital_record_count,
+                      count(*) FILTER (WHERE medium='mixed') AS mixed_record_count,
+                      count(*) FILTER (WHERE is_vital) AS vital_record_count
+                 FROM records record
+                WHERE record.owning_org_unit_id=%s
+                  AND current_user_can_view_record(record.id)
+           ), component_metrics AS (
+               SELECT coalesce(sum(component.size_in_bytes),0) AS storage_size_in_bytes
+                 FROM records record
+                 JOIN digital_components component ON component.record_id=record.id
+                WHERE record.owning_org_unit_id=%s
+                  AND current_user_can_view_record(record.id)
+           )
+           SELECT aggregation_metrics.*,record_metrics.*,component_metrics.*
+             FROM aggregation_metrics,record_metrics,component_metrics""",
+        (org_unit_id, org_unit_id, org_unit_id),
+    ).fetchone()
     return row
 
 
@@ -494,7 +542,16 @@ def browse_role_summary(
                   count(*) FILTER (WHERE valid_until IS NOT NULL AND valid_until <= CURRENT_TIMESTAMP) AS expired_assignment_count
              FROM user_role_assignments WHERE role_id=%s""", (role_id,),
     ).fetchone()
-    return {**row, **counts}
+    profile_privileges = list(connection.execute(
+        """SELECT privilege.id,privilege.code,privilege.name,privilege.description,
+                  privilege.category,privilege.is_reserved
+             FROM profile_privileges membership
+             JOIN privileges privilege ON privilege.id=membership.privilege_id
+            WHERE membership.profile_id=%s
+            ORDER BY privilege.category,privilege.name,privilege.code""",
+        (row["profile_id"],),
+    ).fetchall())
+    return {**row, **counts, "profile_privileges": profile_privileges}
 
 
 @router.get("/organization/search", tags=["organization browser"])

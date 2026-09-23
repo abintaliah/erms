@@ -144,7 +144,16 @@ def test_system_administrator_can_list_and_revoke_sessions(client: TestClient):
     )
     assert page.status_code == 200, page.text
     assert page.json()["total"] == 1
+    assert page.json()["active"] == 1
     assert page.json()["items"][0]["user_id"] == 1
+    global_page = client.get(
+        "/api/v1/auth/sessions/page",
+        params={"limit": 20, "query": "test.invalid", "session_status": "active"},
+    )
+    assert global_page.status_code == 200, global_page.text
+    assert global_page.json()["total"] >= 1
+    assert global_page.json()["active"] == global_page.json()["total"]
+    assert all("test.invalid" in row["user_email"] for row in global_page.json()["items"])
     current = next(row for row in sessions.json() if row["is_current"])
     assert current["status"] == "active"
     response = client.delete(f"/api/v1/auth/sessions/{current['id']}")

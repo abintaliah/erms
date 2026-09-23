@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
 import inspect
 import json
 from datetime import datetime, timedelta, timezone
@@ -128,10 +127,8 @@ def visible_navigation_indices(
     visible = sorted(set(visible))
     hidden = [index for index in range(length) if index not in visible]
     return visible, hidden
-USER_AVATAR_COLORS = (
-    "#2563eb", "#7c3aed", "#db2777", "#dc2626", "#ea580c",
-    "#ca8a04", "#16a34a", "#0d9488", "#0891b2", "#4f46e5",
-)
+USER_AVATAR_BACKGROUND = "#e3f2fd"
+USER_AVATAR_TEXT = "#15527a"
 LIFECYCLE_ACTION_BUTTONS = (
     '<q-btn v-if="props.row.status === \'inactive\'" flat round dense '
     'icon="toggle_on" color="positive" aria-label="Activate" '
@@ -187,7 +184,7 @@ def filter_membership_rows(
 
 
 def user_avatar(user: dict[str, Any]) -> dict[str, str]:
-    """Return stable best-effort initials and color for a user."""
+    """Return best-effort initials with the standard Wathiq user-avatar palette."""
     parts = [part for part in str(user.get("name") or "").split() if part]
     if len(parts) >= 2:
         initials = f"{parts[0][0]}{parts[-1][0]}"
@@ -195,16 +192,18 @@ def user_avatar(user: dict[str, Any]) -> dict[str, str]:
         initials = parts[0][:2]
     else:
         initials = "?"
-    stable_key = str(user.get("id") or user.get("email") or user.get("name") or "unknown")
-    color_index = hashlib.sha256(stable_key.encode("utf-8")).digest()[0] % len(USER_AVATAR_COLORS)
-    return {"initials": initials.upper(), "color": USER_AVATAR_COLORS[color_index]}
+    return {
+        "initials": initials.upper(),
+        "color": USER_AVATAR_BACKGROUND,
+        "text_color": USER_AVATAR_TEXT,
+    }
 
 
 def render_user_avatar(user: dict[str, Any], *, size: str = "38px") -> Any:
     """Render the same deterministic avatar used by the Users listing."""
     avatar = user_avatar(user)
     with ui.avatar(size=size).style(
-        f"background:{avatar['color']} !important;color:white !important"
+        f"background:{avatar['color']} !important;color:{avatar['text_color']} !important"
     ) as control:
         ui.label(avatar["initials"]).classes("font-medium")
     return control
@@ -655,6 +654,62 @@ def relationship_select(
     return control
 
 
+def style_person_select(control: Any, *, multiple: bool = False) -> None:
+    """Give user selectors a consistent name/email hierarchy and compact identity chips."""
+    control.props(
+        'use-input input-debounce=0 behavior=menu options-dense '
+        'popup-content-style="min-width:420px;max-width:calc(100vw - 48px)"'
+    ).classes("person-select")
+    control.add_slot("option", """
+        <q-item v-bind="props.itemProps" class="person-select-option q-py-sm">
+          <q-item-section avatar style="min-width:44px">
+            <q-avatar color="blue-1" text-color="primary" size="34px">
+              {{ props.opt.label.split(' — ')[0].split(' ').filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() }}
+            </q-avatar>
+          </q-item-section>
+          <q-item-section style="min-width:0">
+            <q-item-label class="text-weight-medium ellipsis">{{ props.opt.label.split(' — ')[0] }}</q-item-label>
+            <q-item-label caption class="ellipsis">{{ props.opt.label.split(' — ').slice(1).join(' — ') }}</q-item-label>
+          </q-item-section>
+        </q-item>
+    """)
+    if multiple:
+        control.add_slot("selected-item", """
+            <q-chip
+              dense removable outline color="primary" text-color="blue-grey-9"
+              class="person-select-chip"
+              @remove="props.removeAtIndex(props.index)"
+              :tabindex="props.tabindex"
+            >
+              <q-avatar color="blue-1" text-color="primary">
+                {{ props.opt.label.split(' — ')[0].split(' ').filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() }}
+              </q-avatar>
+              <span class="ellipsis">{{ props.opt.label.split(' — ')[0] }}</span>
+              <q-tooltip>{{ props.opt.label }}</q-tooltip>
+            </q-chip>
+        """)
+    else:
+        # NiceGUI's single-select `with_input=True` defaults to hiding the
+        # selected-item slot and filling the filter input with the raw label.
+        # Keep search enabled, but let the selected identity render through
+        # the same visual chip slot used by the contributors selector.
+        control._props["hide-selected"] = False
+        control._props["fill-input"] = False
+        control.add_slot("selected-item", """
+            <q-chip
+              dense outline color="primary" text-color="blue-grey-9"
+              class="person-select-chip"
+              :tabindex="props.tabindex"
+            >
+              <q-avatar color="blue-1" text-color="primary">
+                {{ props.opt.label.split(' — ')[0].split(' ').filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() }}
+              </q-avatar>
+              <span class="ellipsis">{{ props.opt.label.split(' — ')[0] }}</span>
+              <q-tooltip>{{ props.opt.label }}</q-tooltip>
+            </q-chip>
+        """)
+
+
 def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | None = None):
     display_label = f"{field.label} *" if field.required else field.label
     if field.kind == "account_type":
@@ -982,6 +1037,86 @@ def index() -> None:
         .login-sessions-table .q-table__sort-icon {
             flex: 0 0 auto;
         }
+        .login-sessions-table .q-table { table-layout: fixed; width: 100%; }
+        .login-sessions-table .q-table th,
+        .login-sessions-table .q-table td { overflow: hidden; }
+        .login-session-client-value {
+            display: block; min-width: 0; max-width: 100%;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .login-session-user-value { min-width: 0; max-width: 100%; }
+        .login-session-user-name { white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
+        .login-session-user-email {
+            display: block; min-width: 0; max-width: 100%;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .login-session-action-button {
+            width: 36px; height: 34px; min-width: 36px !important; padding: 0 !important;
+        }
+        .login-session-action-button .q-icon { font-size: 20px !important; }
+        .login-session-card-grid {
+            display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px;
+        }
+        .login-session-card {
+            width: 100%; min-width: 0; padding: 14px; gap: 13px;
+            border: 1px solid var(--erms-border); background: var(--erms-surface);
+        }
+        .governance-card-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+        .governance-list-card {
+            width: 100%; min-width: 0; padding: 14px; gap: 12px;
+            border: 1px solid var(--erms-border); background: var(--erms-surface);
+        }
+        .governance-card-icon {
+            width: 38px; height: 38px; flex: 0 0 38px;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid #add4ec; border-radius: 9px;
+            color: var(--erms-blue); background: transparent;
+        }
+        .governance-list-facts {
+            display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+            width: 100%; min-width: 0;
+            gap: 10px 18px; padding-top: 10px; border-top: 1px solid #e7ebef;
+        }
+        .user-role-assignment-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .user-role-assignment-card {
+            padding: 9px 11px; gap: 8px; cursor: pointer; transition: all .16s ease;
+        }
+        .user-role-assignment-card:hover { border-color: #93b4e8; background: #f8fcff; }
+        .user-role-assignment-card .governance-card-icon {
+            width: 32px; height: 32px; flex-basis: 32px;
+        }
+        .user-role-assignment-card .user-role-assignment-facts {
+            gap: 6px 16px; padding-top: 7px;
+        }
+        .governance-custody-assignment-card { padding: 11px 13px; gap: 9px; }
+        .governance-custody-assignment-card .governance-list-facts {
+            gap: 7px 16px; padding-top: 8px;
+        }
+        .security-event-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .role-privilege-groups {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+        }
+        .role-privilege-group {
+            min-width: 0; overflow: hidden; border: 1px solid var(--erms-border);
+            border-radius: 9px; background: var(--erms-surface);
+        }
+        .role-privilege-group-header {
+            min-height: 42px; padding: 9px 11px; background: #eef7fd;
+            border-bottom: 1px solid #dceaf3;
+        }
+        .role-privilege-list {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0 14px; padding: 4px 11px 8px;
+        }
+        .role-privilege-item {
+            min-width: 0; padding: 7px 2px; border-bottom: 1px solid #edf1f4;
+        }
+        @media (max-width: 820px) {
+            .role-privilege-groups { grid-template-columns: minmax(0, 1fr); }
+        }
+        @media (max-width: 800px) {
+            .governance-list-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
         .erms-profiles-table .q-table { table-layout: fixed; width: 100%; }
         .erms-profiles-table .q-table th,
         .erms-profiles-table .q-table td { overflow: hidden; }
@@ -1123,6 +1258,32 @@ def index() -> None:
             color: #64748b; font-size: .68rem; font-weight: 750;
             letter-spacing: .07em; text-transform: uppercase;
         }
+        .identity-command-layout {
+            display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(330px, .72fr);
+            align-items: start; gap: 12px;
+        }
+        .identity-command-metadata { grid-column: 1; grid-row: 1; min-width: 0; }
+        .identity-command-actions { grid-column: 2; grid-row: 1; min-width: 0; width: 100%; }
+        .identity-command-actions .q-btn { justify-content: flex-start; }
+        .hold-command-layout {
+            display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .65fr);
+            align-items: start; gap: 12px;
+        }
+        .hold-command-overview { grid-column: 1; grid-row: 1; min-width: 0; }
+        .hold-command-actions { grid-column: 2; grid-row: 1; min-width: 0; width: 100%; }
+        .hold-action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .hold-action-row .q-btn { width: auto; }
+        .hold-summary-facts {
+            display: grid; grid-template-columns: minmax(150px, .8fr) minmax(150px, .8fr) minmax(240px, 1.4fr);
+            gap: 16px; padding-top: 12px; border-top: 1px solid #e2e8f0;
+        }
+        .hold-people-block { padding-top: 2px; }
+        .hold-held-item-filter-primary {
+            display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;
+        }
+        .hold-held-item-filter-secondary {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
+        }
         @media (max-width: 980px) {
             .aggregation-command-layout { display: flex !important; flex-direction: column; }
             .aggregation-command-side { display: contents; }
@@ -1132,11 +1293,34 @@ def index() -> None:
             .aggregation-child-preview-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
             .record-command-layout { display: flex; flex-direction: column; }
             .record-command-overview, .record-command-controls { min-width: 100%; width: 100%; }
+            .identity-command-layout { display: flex; flex-direction: column; }
+            .identity-command-metadata, .identity-command-actions { min-width: 100%; width: 100%; }
+            .hold-command-layout { display: flex; flex-direction: column; }
+            .hold-command-overview, .hold-command-actions { min-width: 100%; width: 100%; }
+            .hold-summary-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .hold-held-item-filter-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 600px) {
+            .hold-summary-facts { grid-template-columns: minmax(0, 1fr); }
+            .hold-held-item-filter-primary,
+            .hold-held-item-filter-secondary { grid-template-columns: minmax(0, 1fr); }
         }
         .relationship-select .q-field__control { min-height: 58px; border-radius: 10px; }
         .relationship-option { min-width: 360px; }
         .relationship-option:hover { background: #f3f7ff; }
         .relationship-select .q-field__native { font-weight: 600; color: #16324f; }
+        .person-select .q-field__control { min-height: 62px; border-radius: 10px; }
+        .person-select .q-field__native { min-width: 0; gap: 5px; }
+        .person-select-option:hover { background: #f3f8fc; }
+        .person-select-value { min-width: 0; max-width: calc(100% - 8px); padding: 3px 0; }
+        .person-select-value .min-width-0 { min-width: 0; }
+        .person-select-initials {
+            display: inline-flex; align-items: center; justify-content: center; flex: 0 0 32px;
+            width: 32px; height: 32px; border-radius: 999px; background: #e3f2fd;
+            color: var(--q-primary); font-size: .75rem; font-weight: 700;
+        }
+        .person-select-chip { max-width: 240px; background: #f7fbfe !important; }
+        .person-select-chip .q-chip__content { min-width: 0; flex-wrap: nowrap; }
         .relationship-cell-name { color: #172033; }
         .recent-card { min-height: 62px; border: 1px solid #e2e8f0; border-radius: 10px; transition: all .16s ease; }
         .recent-card:hover { border-color: #93b4e8; background: #f8fcff; }
@@ -1184,8 +1368,200 @@ def index() -> None:
             line-height: 1.35;
             text-align: left;
         }
-        .dashboard-stat { border: 1px solid #e2e8f0; box-shadow: none; transition: all .16s ease; }
-        .dashboard-stat:hover { border-color: #93b4e8; background: #f8fcff; }
+        .dashboard-overview-primary {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+        }
+        .dashboard-overview-primary-card {
+            width: 100%; min-width: 0; padding: 10px 12px; gap: 10px;
+            border: 1px solid #dce5eb; box-shadow: none; transition: all .16s ease;
+        }
+        .dashboard-overview-primary-card:hover,
+        .dashboard-overview-admin-item:hover { border-color: #93b4e8; background: #f8fcff; }
+        .dashboard-overview-mediums {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+            padding-top: 7px; margin-top: 7px; border-top: 1px solid #edf2f5;
+        }
+        .dashboard-overview-medium {
+            display: inline-flex; align-items: center; gap: 4px; min-width: 0;
+            color: #64748b; font-size: .7rem; white-space: nowrap;
+        }
+        .dashboard-overview-separator {
+            color: #cbd5e1; font-size: .8rem; line-height: 1; user-select: none;
+        }
+        .dashboard-overview-signal {
+            display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+            color: #475569; font-size: .72rem;
+        }
+        .dashboard-overview-icon {
+            width: 34px; height: 34px; flex: 0 0 34px; display: flex;
+            align-items: center; justify-content: center; border: 1px solid #add4ec;
+            border-radius: 8px; color: var(--erms-blue); background: transparent;
+        }
+        .dashboard-overview-admin {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            width: 100%; overflow: hidden; border: 1px solid #dce5eb;
+            border-radius: 10px; background: white;
+        }
+        .dashboard-overview-admin-item {
+            min-width: 0; min-height: 46px; padding: 9px 10px; display: flex;
+            align-items: center; gap: 7px; border-right: 1px solid #e2e8ed;
+            transition: all .16s ease; cursor: pointer;
+        }
+        .dashboard-overview-admin-item:last-child { border-right: 0; }
+        @media (max-width: 800px) {
+            .dashboard-overview-admin { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .dashboard-overview-admin-item { border-bottom: 1px solid #e2e8ed; }
+        }
+        @media (max-width: 520px) {
+            .dashboard-overview-primary { grid-template-columns: minmax(0, 1fr); }
+        }
+        .dashboard-holdings-list {
+            width: 100%; overflow: hidden; border: 1px solid #dce5eb;
+            border-radius: 10px; background: white;
+        }
+        .dashboard-holdings-row {
+            display: grid;
+            grid-template-columns: minmax(220px, 1fr) 190px 250px 165px;
+            align-items: center; gap: 12px; min-width: 0; padding: 10px 12px;
+            border-bottom: 1px solid #e2e8ed; cursor: pointer; transition: all .16s ease;
+        }
+        .dashboard-holdings-row:last-child { border-bottom: 0; }
+        .dashboard-holdings-row:hover { background: #f8fcff; }
+        .dashboard-holdings-identity {
+            display: flex; align-items: center; gap: 10px; min-width: 0;
+        }
+        .dashboard-holdings-metric {
+            display: flex; align-items: flex-start; justify-content: flex-start;
+            gap: 7px; min-width: 0; color: #64748b;
+        }
+        .dashboard-holdings-metric-detail {
+            color: #94a3b8; font-size: .68rem; line-height: 1.35; white-space: nowrap;
+        }
+        .dashboard-holdings-mediums {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px;
+        }
+        .dashboard-holdings-medium {
+            color: #94a3b8; font-size: .64rem; line-height: 1.3;
+        }
+        .dashboard-holdings-peer-stat {
+            display: inline-flex; align-items: center; gap: 5px; color: #64748b;
+            min-height: 18px; font-size: .75rem; font-weight: 500;
+            line-height: 18px; white-space: nowrap;
+        }
+        .dashboard-holdings-peer-stat .q-icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 14px; height: 14px; min-width: 14px; line-height: 14px;
+            font-size: 14px !important; flex: 0 0 14px;
+        }
+        .org-unit-holdings-grid {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            width: 100%;
+        }
+        .org-unit-holdings-group {
+            min-width: 0; padding: 13px 16px;
+            border-right: 1px solid #e2e8ed;
+        }
+        .org-unit-holdings-group:last-child { border-right: 0; }
+        .org-unit-lineage-list { width: 100%; padding: 8px 16px 10px; }
+        .org-unit-lineage-row {
+            position: relative; display: grid;
+            grid-template-columns: 28px minmax(0, 1fr);
+            align-items: center; gap: 9px; min-height: 38px;
+        }
+        .org-unit-lineage-row:not(:last-child)::after {
+            content: ""; position: absolute; z-index: 0;
+            left: 13px; top: 27px; bottom: -11px; width: 1px;
+            background: #c8deec;
+        }
+        .org-unit-lineage-node {
+            position: relative; z-index: 1; width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 999px; color: var(--erms-blue); background: #eaf6fd;
+        }
+        .org-unit-lineage-node.current { color: white; background: var(--erms-blue); }
+        .org-unit-lineage-link { cursor: pointer; color: var(--erms-blue); }
+        .org-unit-lineage-link:hover { text-decoration: underline; }
+        .org-unit-lineage-code {
+            color: #8791a1; font-size: .68rem; font-weight: 600;
+            letter-spacing: .025em;
+        }
+        @media (max-width: 760px) {
+            .org-unit-holdings-grid { grid-template-columns: minmax(0, 1fr); }
+            .org-unit-holdings-group {
+                border-right: 0; border-bottom: 1px solid #e2e8ed;
+            }
+            .org-unit-holdings-group:last-child { border-bottom: 0; }
+        }
+        @media (max-width: 1050px) {
+            .dashboard-holdings-row {
+                grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(145px, auto));
+                overflow-x: auto;
+            }
+        }
+        @media (max-width: 520px) {
+            .dashboard-holdings-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .dashboard-holdings-identity { grid-column: 1 / -1; }
+            .dashboard-holdings-metric { justify-content: flex-start; }
+        }
+        .dashboard-review-columns {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px; width: 100%;
+        }
+        .dashboard-review-group {
+            width: 100%; min-width: 0; padding: 0; gap: 0; overflow: hidden;
+            border: 1px solid #dce5eb; box-shadow: none;
+        }
+        .dashboard-review-header {
+            min-height: 46px; padding: 9px 11px; border-bottom: 1px solid #e2e8ed;
+        }
+        .dashboard-review-item {
+            display: grid; grid-template-columns: 32px minmax(0, 1fr) auto;
+            align-items: center; gap: 9px; width: 100%; min-width: 0;
+            padding: 9px 11px; border-bottom: 1px solid #e8edf1;
+            cursor: pointer; transition: all .16s ease;
+        }
+        .dashboard-review-item:last-child { border-bottom: 0; }
+        .dashboard-review-item:hover { background: #f8fcff; }
+        .dashboard-review-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+        @media (max-width: 760px) {
+            .dashboard-review-columns { grid-template-columns: minmax(0, 1fr); }
+        }
+        @media (max-width: 460px) {
+            .dashboard-review-date { display: none; }
+        }
+        .dashboard-personal-columns {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px; width: 100%;
+        }
+        .dashboard-personal-panel {
+            width: 100%; min-width: 0; padding: 0; gap: 0; overflow: hidden;
+            border: 1px solid #dce5eb; box-shadow: none;
+        }
+        .dashboard-personal-header {
+            min-height: 44px; padding: 9px 11px; border-bottom: 1px solid #e2e8ed;
+        }
+        .dashboard-personal-item {
+            display: grid; grid-template-columns: 32px minmax(0, 1fr) auto;
+            align-items: center; gap: 9px; width: 100%; min-width: 0;
+            padding: 9px 11px; border-bottom: 1px solid #e8edf1;
+            cursor: pointer; transition: all .16s ease;
+        }
+        .dashboard-personal-item:last-child { border-bottom: 0; }
+        .dashboard-personal-item:hover { background: #f8fcff; }
+        .dashboard-activity-badge {
+            display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+            border: 1px solid currentColor; border-radius: 5px; padding: 2px 5px;
+            font-size: .7rem; font-weight: 600;
+        }
+        .dashboard-activity-created { color: #28864a; }
+        .dashboard-activity-updated { color: #a46000; }
+        .dashboard-activity-viewed { color: #287eae; }
+        @media (max-width: 760px) {
+            .dashboard-personal-columns { grid-template-columns: minmax(0, 1fr); }
+        }
+        @media (max-width: 440px) {
+            .dashboard-activity-badge { display: none; }
+        }
     """)
 
     with ui.header().classes("erms-header items-center gap-3"):
@@ -1204,7 +1580,8 @@ def index() -> None:
             with ui.column().classes("w-72 p-3 gap-2"):
                 with ui.row().classes("w-full items-center gap-3 no-wrap"):
                     with ui.avatar(size="44px").style(
-                        "background:#64748b !important;color:white !important"
+                        f"background:{USER_AVATAR_BACKGROUND} !important;"
+                        f"color:{USER_AVATAR_TEXT} !important"
                     ) as current_user_avatar:
                         current_user_avatar_initials = ui.label("?").classes("font-medium")
                     with ui.column().classes("gap-0 min-w-0"):
@@ -1644,7 +2021,10 @@ def index() -> None:
         current_user_email.text = ""
         current_user_avatar_initials.text = "?"
         current_user_avatar.style(
-            replace="background:#64748b !important;color:white !important"
+            replace=(
+                f"background:{USER_AVATAR_BACKGROUND} !important;"
+                f"color:{USER_AVATAR_TEXT} !important"
+            )
         )
         current_user_last_login.text = "First sign-in"
         current_user_roles.clear()
@@ -3699,11 +4079,12 @@ def index() -> None:
                 })
             return result
         if spec.key == "roles":
-            units, profiles = await asyncio.gather(
-                api.list("org-units"), api.profile_references(),
+            units, profiles, security_levels = await asyncio.gather(
+                api.list("org-units"), api.profile_references(), api.list("security-levels"),
             )
             by_id = {item["id"]: item for item in units}
             profiles_by_id = {item["id"]: item for item in profiles}
+            security_levels_by_id = {item["id"]: item for item in security_levels}
             decorated = decorate_relationship_rows(spec.key, rows, units)
             result = []
             for item in decorated:
@@ -3713,6 +4094,9 @@ def index() -> None:
                     **item,
                     "profile_display": relationship_cell(
                         profiles_by_id.get(item.get("profile_id"))
+                    ),
+                    "security_level_display": relationship_cell(
+                        security_levels_by_id.get(item.get("security_level_id"))
                     ),
                     "effective_status": "active" if effective else "inactive",
                     "_inactive_reason": (
@@ -4815,7 +5199,7 @@ def index() -> None:
         assignments_area: Any = None
         selection_holder: dict[str, Any] = {}
 
-        async def load_memberships() -> None:
+        async def load_held_itemships() -> None:
             try:
                 assignments = (
                     await api.user_roles(entity["id"])
@@ -4972,7 +5356,7 @@ def index() -> None:
                                 <q-td :props="props">
                                   <div class="column">
                                     <div class="row items-center no-wrap q-gutter-sm">
-                                      <q-avatar size="36px" :style="{ backgroundColor: props.row.counterpart_avatar.color, color: 'white' }">
+                                      <q-avatar size="36px" :style="{ backgroundColor: props.row.counterpart_avatar.color, color: props.row.counterpart_avatar.text_color }">
                                         {{ props.row.counterpart_avatar.initials }}
                                       </q-avatar>
                                       <div class="column">
@@ -5022,7 +5406,7 @@ def index() -> None:
                             try:
                                 await api.delete_assignment(assignment["id"], assignment["version"])
                                 ui.notify("Assignment removed", color="positive")
-                                await load_memberships()
+                                await load_held_itemships()
                             except ApiError as error:
                                 show_api_error(error)
 
@@ -5042,7 +5426,7 @@ def index() -> None:
             try:
                 await api.create("user-role-assignments", payload)
                 ui.notify(f"{counterpart_label.capitalize()} assigned", color="positive")
-                await load_memberships()
+                await load_held_itemships()
             except ApiError as error:
                 ui.notify(error_message(error), color="negative", close_button=True)
 
@@ -5078,7 +5462,7 @@ def index() -> None:
             with ui.row().classes("w-full justify-end"):
                 ui.button("Close", on_click=dialog.close).props("flat")
         dialog.open()
-        await load_memberships()
+        await load_held_itemships()
 
     async def open_aggregation(aggregation: dict[str, Any]) -> None:
         register_navigation(
@@ -6119,6 +6503,240 @@ def index() -> None:
             administration_filter = None
             visible_rows = state["rows"]
             result_filter = None
+            if spec.key in {"security-levels", "profiles", "users", "roles", "org-units"}:
+                card_page = {"offset": 0, "filtered_total": 0}
+                with ui.row().classes("w-full items-end gap-3 px-5 pt-3 flex-wrap"):
+                    card_filter = ui.input(
+                        {
+                            "security-levels": "Filter security levels",
+                            "profiles": "Filter profiles",
+                            "users": "Filter users",
+                            "roles": "Filter roles",
+                            "org-units": "Filter organization units",
+                        }[spec.key],
+                        placeholder={
+                            "users": "Name, email, or external identifier",
+                            "roles": "Code, name, organization unit, or profile",
+                            "org-units": "Code, name, parent unit, or description",
+                        }.get(spec.key, "Code, name, or description"),
+                    ).props("outlined dense clearable debounce=250").classes("grow min-w-[260px]")
+                    card_status = None
+                    card_account_type = None
+                    if spec.key in {"users", "roles", "org-units"}:
+                        status_options = {"all": "All statuses", "active": "Active", "inactive": "Inactive"}
+                        if spec.key == "users":
+                            status_options["suspended"] = "Suspended"
+                        selected_status = state.get("lifecycle_filter", "all")
+                        if selected_status not in status_options:
+                            selected_status = "all"
+                            state["lifecycle_filter"] = "all"
+                        card_status = ui.select(
+                            status_options, value=selected_status, label="Status",
+                        ).props("outlined dense options-dense").classes("w-44")
+                    if spec.key == "users":
+                        card_account_type = ui.select(
+                            {"all": "All account types", "person": "Person", "service": "Service"},
+                            value=state.get("account_type_filter", "all"), label="Account type",
+                        ).props("outlined dense options-dense").classes("w-48")
+                    sort_options = {
+                        "security-levels": {"level_number": "Level", "code": "Code", "name": "Name"},
+                        "profiles": {"name": "Name", "code": "Code", "is_system": "Type"},
+                        "users": {"name": "Name", "email": "Email", "date_created": "Created"},
+                        "roles": {"name": "Name", "code": "Code", "effective_status": "Status"},
+                        "org-units": {"name": "Name", "code": "Code", "effective_status": "Status"},
+                    }[spec.key]
+                    card_sort = ui.select(
+                        sort_options,
+                        value="level_number" if spec.key == "security-levels" else "name",
+                        label="Sort by",
+                    ).props("outlined dense options-dense").classes("w-44")
+                    card_page_size = ui.select(
+                        {10: "10", 25: "25", 50: "50", 100: "100"}, value=25,
+                        label="Per page",
+                    ).props("outlined dense options-dense").classes("w-28")
+                with ui.row().classes("w-full items-center px-5"):
+                    card_summary = ui.label().classes("text-sm text-slate-500")
+                    ui.space()
+                    ui.button("Refresh", icon="refresh", on_click=lambda: load_rows(repeat_search=True)).props("flat dense no-caps")
+                card_host = ui.element("div").classes("governance-card-list w-full px-5")
+                with ui.row().classes("w-full items-center px-5 pb-5 gap-2"):
+                    card_range = ui.label().classes("text-sm text-slate-500")
+                    ui.space()
+                    card_first = ui.button("First", icon="first_page").props("flat dense no-caps")
+                    card_previous = ui.button("Previous", icon="chevron_left").props("flat dense no-caps")
+                    card_next = ui.button("Next", icon="chevron_right").props("flat dense no-caps icon-right")
+                    card_last = ui.button("Last", icon="last_page").props("flat dense no-caps icon-right")
+
+                def render_governance_cards(*, reset: bool = False) -> None:
+                    if reset:
+                        card_page["offset"] = 0
+                    query = (card_filter.value or "").strip().casefold()
+
+                    def searchable_text(value: Any) -> str:
+                        if isinstance(value, dict):
+                            return " ".join(searchable_text(item) for item in value.values())
+                        if isinstance(value, (list, tuple)):
+                            return " ".join(searchable_text(item) for item in value)
+                        return "" if value is None else str(value)
+
+                    rows = [
+                        row for row in visible_rows
+                        if (
+                            not query
+                            or query in " ".join(searchable_text(value) for value in row.values()).casefold()
+                        )
+                        and (
+                            card_status is None
+                            or card_status.value == "all"
+                            or row.get("effective_status", row.get("status")) == card_status.value
+                        )
+                        and (
+                            card_account_type is None
+                            or card_account_type.value == "all"
+                            or row.get("account_type") == card_account_type.value
+                        )
+                    ]
+                    if card_status is not None:
+                        state["lifecycle_filter"] = card_status.value
+                    if card_account_type is not None:
+                        state["account_type_filter"] = card_account_type.value
+                    card_page["filtered_total"] = len(rows)
+                    sort_key = card_sort.value or ("level_number" if spec.key == "security-levels" else "name")
+                    rows.sort(key=lambda row: (row.get(sort_key) is None, str(row.get(sort_key) or "").casefold() if not isinstance(row.get(sort_key), (int, bool)) else row.get(sort_key), row.get("id", 0)))
+                    size = int(card_page_size.value)
+                    if card_page["offset"] >= len(rows) and card_page["offset"]:
+                        card_page["offset"] = max(0, ((len(rows) - 1) // size) * size)
+                    page_rows = rows[card_page["offset"]:card_page["offset"] + size]
+                    card_host.clear()
+                    with card_host:
+                        if not page_rows:
+                            ui.label("No matching items.").classes("w-full text-center text-slate-400 py-12")
+                        for row in page_rows:
+                            with ui.card().classes("governance-list-card shadow-none"):
+                                with ui.row().classes("w-full items-start no-wrap gap-3"):
+                                    with ui.element("div").classes("governance-card-icon mt-1"):
+                                        ui.icon(
+                                            {
+                                                "security-levels": "shield",
+                                                "profiles": "admin_panel_settings",
+                                                "users": "person" if row.get("account_type") == "person" else "smart_toy",
+                                                "roles": "badge",
+                                                "org-units": "corporate_fare",
+                                            }[spec.key],
+                                            size="22px",
+                                        )
+                                    with ui.column().classes("gap-0 min-w-0 grow"):
+                                        ui.label(row.get("name") or "Unnamed").classes("font-semibold text-base leading-tight")
+                                        identity = row.get("code") or row.get("email") or row.get("external_id") or "—"
+                                        ui.label(identity).classes("text-xs font-medium text-primary break-all")
+                                        if spec.key in {"profiles", "roles", "org-units"}:
+                                            ui.label(row.get("description") or "No description provided").classes("text-xs text-slate-500 mt-1 leading-5")
+                                    if spec.key == "profiles":
+                                        ui.badge("Built-in" if row.get("is_system") else "Custom", color="blue-grey").props("outline")
+                                    elif spec.key in {"users", "roles", "org-units"}:
+                                        status_value = row.get("effective_status", row.get("status", "active"))
+                                        ui.badge(
+                                            str(status_value).title(),
+                                            color="positive" if status_value == "active" else "warning" if status_value == "suspended" else "blue-grey",
+                                        ).props("outline")
+                                with ui.element("div").classes("governance-list-facts w-full"):
+                                    facts_by_resource = {
+                                        "security-levels": (
+                                            ("Level", str(row.get("level_number", "—"))),
+                                            ("Roles assigned this level", str(row.get("roles_assigned_count", 0))),
+                                            ("Assigned content", f"{row.get('aggregation_count', 0)} aggregations · {row.get('record_count', 0)} records"),
+                                            ("Prevents disposition", "Yes" if row.get("prevents_disposition") else "No"),
+                                        ),
+                                        "profiles": (
+                                            ("Privileges", f"{row.get('privilege_count', 0)} privileges"),
+                                            ("Assigned roles", f"{row.get('role_count', 0)} roles"),
+                                            ("Profile type", "Built-in" if row.get("is_system") else "Custom"),
+                                            ("Last updated", format_timestamp(row.get("date_updated"))),
+                                        ),
+                                        "users": (
+                                            ("Account type", str(row.get("account_type") or "—").title()),
+                                            ("External identifier", row.get("external_id") or "—"),
+                                            ("Created", format_timestamp(row.get("date_created"))),
+                                            ("Account state", str(row.get("status") or "—").title()),
+                                        ),
+                                        "roles": (
+                                            ("Organization unit", " — ".join(filter(None, ((row.get("org_unit_display") or {}).get("code"), (row.get("org_unit_display") or {}).get("name")))) or "—"),
+                                            ("Profile", " — ".join(filter(None, ((row.get("profile_display") or {}).get("code"), (row.get("profile_display") or {}).get("name")))) or "—"),
+                                            ("Security clearance", " — ".join(filter(None, ((row.get("security_level_display") or {}).get("code"), (row.get("security_level_display") or {}).get("name")))) or "—"),
+                                            ("Information governance", "Yes" if row.get("is_information_governance") else "No"),
+                                        ),
+                                        "org-units": (
+                                            ("Parent unit", " — ".join(filter(None, ((row.get("parent_org_unit_display") or {}).get("code"), (row.get("parent_org_unit_display") or {}).get("name")))) or "Top-level unit"),
+                                            ("Effective status", str(row.get("effective_status") or "—").title()),
+                                            ("Created", format_timestamp(row.get("date_created"))),
+                                            ("Deactivated", format_timestamp(row.get("date_deactivated")) if row.get("date_deactivated") else "—"),
+                                        ),
+                                    }
+                                    facts = facts_by_resource[spec.key]
+                                    for label, value in facts:
+                                        with ui.column().classes("gap-0 min-w-0"):
+                                            ui.label(label).classes("detail-field-label")
+                                            if label == "Prevents disposition" and value == "Yes":
+                                                ui.badge("Yes", color="warning").props(
+                                                    "rounded text-color=white"
+                                                ).classes("font-semibold")
+                                            elif (
+                                                spec.key == "org-units"
+                                                and label == "Parent unit"
+                                                and row.get("parent_org_unit_id")
+                                            ):
+                                                ui.label(value).classes(
+                                                    "text-sm font-medium text-primary cursor-pointer "
+                                                    "truncate w-full"
+                                                ).on(
+                                                    "click",
+                                                    lambda _, parent_id=row["parent_org_unit_id"]:
+                                                        select_organization_unit_details(parent_id),
+                                                ).tooltip(f"Open {value}")
+                                            else:
+                                                ui.label(value).classes("text-sm font-medium truncate w-full").tooltip(value)
+                                with ui.row().classes("w-full justify-end gap-1"):
+                                    if spec.key == "users":
+                                        ui.button(icon="open_in_new", on_click=lambda _, item=row: select_user_details(item["id"])).props("outline dense color=primary").tooltip("Open user")
+                                    elif spec.key == "roles":
+                                        ui.button(icon="open_in_new", on_click=lambda _, item=row: select_role_details(item["id"])).props("outline dense color=primary").tooltip("Open role")
+                                    elif spec.key == "org-units":
+                                        ui.button(icon="open_in_new", on_click=lambda _, item=row: select_organization_unit_details(item["id"])).props("outline dense color=primary").tooltip("Open organization unit")
+                                    ui.button(icon="edit", on_click=lambda _, item=row: open_editor(item)).props("outline dense color=primary").tooltip("Edit")
+                                    if spec.key == "profiles":
+                                        ui.button(icon="key", on_click=lambda _, item=row: show_profile_privilege_editor(item)).props("outline dense color=primary").tooltip("Manage privileges")
+                                    if spec.key in {"users", "roles"}:
+                                        ui.button(
+                                            icon="group",
+                                            on_click=lambda _, item=row, user_view=spec.key == "users": show_memberships(item, for_user=user_view),
+                                        ).props("outline dense color=primary").tooltip("Role assignments")
+                                    ui.button(icon="history", on_click=lambda _, item=row: show_entity_history(spec.key, item)).props("outline dense color=blue-grey").tooltip("Event history")
+                    start = card_page["offset"] + 1 if page_rows else 0
+                    end = card_page["offset"] + len(page_rows)
+                    card_summary.text = f"{len(rows)} {spec.label.lower()}"
+                    card_range.text = f"Showing {start}–{end} of {len(rows)}"
+                    at_start = card_page["offset"] == 0
+                    at_end = end >= len(rows)
+                    card_first.set_enabled(not at_start); card_previous.set_enabled(not at_start)
+                    card_next.set_enabled(not at_end); card_last.set_enabled(not at_end)
+
+                def move_card_page(offset: int) -> None:
+                    card_page["offset"] = max(0, offset)
+                    render_governance_cards()
+
+                card_filter.on_value_change(lambda: render_governance_cards(reset=True))
+                card_sort.on_value_change(lambda: render_governance_cards(reset=True))
+                card_page_size.on_value_change(lambda: render_governance_cards(reset=True))
+                if card_status is not None:
+                    card_status.on_value_change(lambda: render_governance_cards(reset=True))
+                if card_account_type is not None:
+                    card_account_type.on_value_change(lambda: render_governance_cards(reset=True))
+                card_first.on("click", lambda: move_card_page(0))
+                card_previous.on("click", lambda: move_card_page(card_page["offset"] - int(card_page_size.value)))
+                card_next.on("click", lambda: move_card_page(card_page["offset"] + int(card_page_size.value)))
+                card_last.on("click", lambda: move_card_page(max(0, ((card_page["filtered_total"] - 1) // int(card_page_size.value)) * int(card_page_size.value))))
+                render_governance_cards()
+                return
             if spec.key in {"aggregations", "records"}:
                 with ui.row().classes("w-full items-center px-5 pt-2 gap-3"):
                     result_filter = ui.input(
@@ -6260,7 +6878,7 @@ def index() -> None:
             if spec.key == "users":
                 table.add_slot("body-cell-_avatar", '''
                     <q-td :props="props" style="width: 56px">
-                      <q-avatar size="38px" :style="{ backgroundColor: props.row._avatar.color, color: 'white' }">
+                      <q-avatar size="38px" :style="{ backgroundColor: props.row._avatar.color, color: props.row._avatar.text_color }">
                         {{ props.row._avatar.initials }}
                       </q-avatar>
                     </q-td>
@@ -6597,7 +7215,10 @@ def index() -> None:
         avatar = user_avatar(user)
         current_user_avatar_initials.text = avatar["initials"]
         current_user_avatar.style(
-            replace=f"background:{avatar['color']} !important;color:white !important"
+            replace=(
+                f"background:{avatar['color']} !important;"
+                f"color:{avatar['text_color']} !important"
+            )
         )
         previous_login_at = principal.get("previous_login_at")
         current_user_last_login.text = (
@@ -6616,7 +7237,7 @@ def index() -> None:
 
     async def refresh_hold_navigation() -> None:
         privileges=set((auth_state.get("principal") or {}).get("global_privileges",[]))
-        if {"holds.administer", "holds.membership.manage_all"} & privileges:
+        if {"holds.administer", "holds.held_items.manage_all"} & privileges:
             holds_navigation.set_visibility(True); return
         try:
             page=await api.holds_page(limit=1)
@@ -6713,209 +7334,192 @@ def index() -> None:
         with table_container:
             outer = ui.column().classes("w-full p-5 gap-4")
 
-        async def load_sessions() -> None:
+        page_state = {"offset": 0, "total": 0, "active": 0, "loading": False}
+        with outer:
+            with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-3"):
+                ui.label("Filter sessions").classes("font-semibold")
+                with ui.element("div").classes("hold-held-item-filter-primary w-full"):
+                    session_filter = ui.input(
+                        "User or client", placeholder="Name, email, IP address or browser",
+                    ).props("outlined dense clearable").classes("w-full col-span-2")
+                    status_filter = ui.select(
+                        {"all": "All statuses", "active": "Active", "expired": "Expired", "revoked": "Revoked"},
+                        value="all", label="Status",
+                    ).props("outlined dense options-dense").classes("w-full")
+                    sort_filter = ui.select(
+                        {"date_created": "Signed in", "last_seen_at": "Last activity", "expires_at": "Expiry", "status": "Status", "client_ip": "IP address"},
+                        value="date_created", label="Sort by",
+                    ).props("outlined dense options-dense").classes("w-full")
+                    timestamp_field = ui.select(
+                        {"date_created": "Signed in", "last_seen_at": "Last activity"},
+                        label="Date field", value="date_created",
+                    ).props("outlined dense options-dense").classes("w-full")
+                    from_filter = ui.input("From").props("outlined dense clearable type=datetime-local").classes("w-full")
+                    until_filter = ui.input("To").props("outlined dense clearable type=datetime-local").classes("w-full")
+                    direction_filter = ui.select(
+                        {True: "Newest/descending", False: "Oldest/ascending"},
+                        value=True, label="Direction",
+                    ).props("outlined dense options-dense").classes("w-full")
+                filter_actions = ui.row().classes("w-full justify-end gap-2")
+            with ui.row().classes("w-full items-center"):
+                result_summary = ui.label().classes("text-sm text-slate-500")
+                ui.space()
+                refresh_button = ui.button("Refresh", icon="refresh").props("flat no-caps")
+            results = ui.element("div").classes("login-session-card-grid w-full")
+            empty_state = ui.label("No login sessions match these filters.").classes(
+                "w-full text-center text-slate-400 py-12"
+            )
+            with ui.row().classes("w-full items-center gap-3"):
+                page_range = ui.label().classes("text-sm text-slate-500")
+                ui.space()
+                rows_per_page = ui.select({20: "20", 50: "50", 100: "100"}, value=20, label="Per page").props("outlined dense options-dense").classes("w-28")
+                first_page = ui.button("First", icon="first_page").props("flat dense no-caps")
+                previous_page = ui.button("Previous", icon="chevron_left").props("flat dense no-caps")
+                next_page = ui.button("Next", icon="chevron_right").props("flat dense no-caps icon-right")
+                last_page = ui.button("Last", icon="last_page").props("flat dense no-caps icon-right")
+
+        def client_summary(user_agent: str | None) -> tuple[str, str]:
+            value = user_agent or "Unknown client"
+            browser = next((name for token, name in (("Edg/", "Microsoft Edge"), ("Chrome/", "Google Chrome"), ("Firefox/", "Mozilla Firefox"), ("Safari/", "Safari")) if token in value), "Browser")
+            platform = next((name for token, name in (("Macintosh", "macOS"), ("Windows", "Windows"), ("Android", "Android"), ("iPhone", "iOS"), ("Linux", "Linux")) if token in value), "Unknown platform")
+            return browser, platform
+
+        async def confirm_revoke(row: dict[str, Any], *, all_for_user: bool = False) -> None:
+            confirmation = ui.dialog()
+            with confirmation, ui.card().classes("w-[460px] max-w-full"):
+                ui.label("Force sign-out?").classes("text-xl font-semibold")
+                scope = "all active sessions for" if all_for_user else "this session for"
+                ui.label(f"This will immediately revoke {scope} {row['user_name']}.").classes("text-sm text-slate-600")
+
+                async def proceed() -> None:
+                    confirmation.close()
+                    try:
+                        if all_for_user:
+                            await api.revoke_user_sessions(row["user_id"])
+                        else:
+                            await api.revoke_session(row["id"])
+                        if row.get("is_current"):
+                            app.storage.user.pop("session_token", None)
+                            api.set_session_token(None)
+                            clear_signed_in_identity()
+                            login_dialog.open()
+                        else:
+                            ui.notify("Session revoked", color="positive")
+                            await load_sessions()
+                    except ApiError as error:
+                        ui.notify(error_message(error), color="negative")
+
+                with ui.row().classes("w-full justify-end"):
+                    ui.button("Cancel", on_click=confirmation.close).props("flat")
+                    ui.button("Force sign-out", icon="logout", color="negative", on_click=proceed).props("unelevated no-caps")
+            confirmation.open()
+
+        def render_session_card(row: dict[str, Any], *, can_revoke_all: bool) -> None:
+            browser, platform = client_summary(row.get("user_agent"))
+            with ui.card().classes("login-session-card shadow-none"):
+                with ui.row().classes("w-full items-start no-wrap gap-3"):
+                    render_user_avatar({"id": row.get("user_id"), "name": row.get("user_name"), "email": row.get("user_email")}, size="40px")
+                    with ui.column().classes("gap-0 min-w-0 grow"):
+                        ui.label(row.get("user_name") or "Unknown user").classes("font-semibold leading-tight")
+                        ui.label(row.get("user_email") or "No email address").classes("text-xs text-slate-500 truncate w-full").tooltip(row.get("user_email") or "No email address")
+                        if row.get("is_current"):
+                            ui.badge("Current session", color="primary").props("outline").classes("mt-1")
+                    ui.badge(
+                        str(row.get("status") or "unknown").title(),
+                        color={
+                            "active": "positive", "revoked": "negative",
+                            "expired": "grey-7",
+                        }.get(row.get("status"), "grey-7"),
+                    ).props("outline")
+                with ui.grid(columns=3).classes("w-full gap-x-4 gap-y-3"):
+                    for label, value in (
+                        ("Signed in", format_timestamp(row.get("date_created"))),
+                        ("Last activity", format_timestamp(row.get("last_seen_at"))),
+                        ("Expires", format_timestamp(row.get("expires_at"))),
+                        ("IP address", row.get("client_ip") or "—"),
+                        ("Platform", platform), ("Browser", browser),
+                    ):
+                        with ui.column().classes("gap-0 min-w-0"):
+                            ui.label(label).classes("detail-field-label")
+                            ui.label(value).classes("text-xs truncate w-full").tooltip(value)
+                with ui.row().classes("w-full items-center no-wrap border-t border-slate-100 pt-2 gap-2"):
+                    ui.icon("devices", color="primary", size="18px")
+                    ui.label(row.get("user_agent") or "Unknown client").classes("text-xs text-slate-500 truncate grow").tooltip(row.get("user_agent") or "Unknown client")
+                    if row.get("status") == "active":
+                        ui.button(icon="logout", on_click=lambda _, item=row: confirm_revoke(item)).props("outline dense color=negative").classes("login-session-action-button").tooltip("Force sign-out this session")
+                        if can_revoke_all:
+                            ui.button(icon="person_off", on_click=lambda _, item=row: confirm_revoke(item, all_for_user=True)).props("outline dense color=negative").classes("login-session-action-button").tooltip("Force sign-out all sessions for this user")
+
+        async def load_sessions(*, reset: bool = False) -> None:
+            if page_state["loading"]:
+                return
+            if reset:
+                page_state["offset"] = 0
+            page_state["loading"] = True
+            results.clear()
+            empty_state.set_visibility(False)
+            with results:
+                for _ in range(4):
+                    ui.skeleton(type="rect").classes("h-48 rounded-xl")
             try:
-                rows = await api.login_sessions(user_id=user_id)
+                page = await api.login_sessions_page(
+                    user_id, limit=int(rows_per_page.value), offset=page_state["offset"],
+                    query=(session_filter.value or "").strip(),
+                    session_status=status_filter.value or "all",
+                    sort_by=sort_filter.value or "date_created",
+                    descending=bool(direction_filter.value),
+                    date_field=timestamp_field.value or "date_created",
+                    from_timestamp=from_filter.value or None,
+                    until_timestamp=until_filter.value or None,
+                )
             except ApiError as error:
                 ui.notify(error_message(error), color="negative")
                 return
-            is_admin = "identity.sessions.administer" in set(
-                auth_state["principal"].get("global_privileges", [])
-            )
-            for row in rows:
-                row["can_revoke_all"] = is_admin
-                row["_user_avatar"] = user_avatar({
-                    "id": row.get("user_id"),
-                    "name": row.get("user_name"),
-                    "email": row.get("user_email"),
-                })
-            outer.clear()
-            with outer:
-                with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-3"):
-                    ui.label("Filter sessions").classes("font-semibold")
-                    with ui.grid(columns=4).classes("w-full gap-3"):
-                        session_filter = ui.input(
-                            "User or client",
-                            placeholder="Name, email, IP address or browser",
-                        ).props("outlined dense clearable").classes("w-full col-span-2")
-                        status_filter = ui.select(
-                            {"active": "Active", "expired": "Expired", "revoked": "Revoked"},
-                            label="Status", clearable=True,
-                        ).props("outlined dense options-dense").classes("w-full")
-                        timestamp_field = ui.select(
-                            {"date_created": "Signed in", "last_seen_at": "Last activity"},
-                            label="Date field", value="date_created",
-                        ).props("outlined dense options-dense").classes("w-full")
-                        from_filter = ui.input("From").props(
-                            "outlined dense clearable type=datetime-local"
-                        ).classes("w-full col-span-2")
-                        until_filter = ui.input("To").props(
-                            "outlined dense clearable type=datetime-local"
-                        ).classes("w-full col-span-2")
-                    filter_actions = ui.row().classes("w-full justify-end gap-2")
-                with ui.row().classes("w-full items-center"):
-                    result_summary = ui.label(
-                        f"Showing {len(rows)} sessions · "
-                        f"{sum(row.get('status') == 'active' for row in rows)} active"
-                    ).classes("text-sm text-slate-500")
-                    ui.space()
-                    ui.button("Refresh", icon="refresh", on_click=load_sessions).props("flat no-caps")
-                table = ui.table(
-                    columns=[
-                        {"name": "user_name", "label": "User", "field": "user_name", "align": "left", "sortable": True},
-                        {"name": "status", "label": "Status", "field": "status", "align": "left", "sortable": True},
-                        {"name": "date_created", "label": "Signed in", "field": "date_created", "align": "left", "sortable": True},
-                        {"name": "last_seen_at", "label": "Last activity", "field": "last_seen_at", "align": "left", "sortable": True},
-                        {"name": "expires_at", "label": "Expires", "field": "expires_at", "align": "left", "sortable": True},
-                        {"name": "client_ip", "label": "IP address", "field": "client_ip", "align": "left", "sortable": True},
-                        {"name": "user_agent", "label": "Client", "field": "user_agent", "align": "left", "sortable": True},
-                        {"name": "actions", "label": "", "field": "actions", "align": "right"},
-                    ], rows=rows, row_key="id", pagination=25,
-                ).props("flat bordered wrap-cells").classes("w-full governance-table login-sessions-table")
-                add_timestamp_slots(table, ["date_created", "last_seen_at", "expires_at"])
-                table.add_slot("body-cell-user_name", '''
-                    <q-td :props="props">
-                      <div class="row items-center no-wrap q-gutter-sm">
-                        <q-avatar size="36px" :style="{ backgroundColor: props.row._user_avatar.color, color: 'white' }">
-                          {{ props.row._user_avatar.initials }}
-                        </q-avatar>
-                        <div class="column">
-                          <span class="text-weight-medium">{{ props.row.user_name }}</span>
-                          <span class="text-caption text-grey-6">{{ props.row.user_email || 'No email address' }}</span>
-                          <q-badge v-if="props.row.is_current" outline color="primary" label="Current session" class="self-start q-mt-xs" />
-                        </div>
-                      </div>
-                    </q-td>
-                ''')
-                table.add_slot("body-cell-status", '''
-                    <q-td :props="props"><q-badge :color="props.value === 'active' ? 'positive' : (props.value === 'revoked' ? 'negative' : 'grey')" :label="props.value" /></q-td>
-                ''')
-                table.add_slot("body-cell-actions", '''
-                    <q-td :props="props">
-                      <q-btn-dropdown
-                        v-if="props.row.status === 'active'"
-                        outline dense no-caps color="negative" icon="logout"
-                        label="Force sign-out"
-                      >
-                        <q-list style="min-width: 245px">
-                          <q-item clickable v-close-popup @click="$parent.$emit('revoke', props.row)">
-                            <q-item-section avatar><q-icon name="logout" color="negative" /></q-item-section>
-                            <q-item-section>
-                              <q-item-label>This session</q-item-label>
-                              <q-item-label caption>End only this login session</q-item-label>
-                            </q-item-section>
-                          </q-item>
-                          <q-separator v-if="props.row.can_revoke_all" />
-                          <q-item v-if="props.row.can_revoke_all" clickable v-close-popup @click="$parent.$emit('revoke_all', props.row)">
-                            <q-item-section avatar><q-icon name="devices_off" color="negative" /></q-item-section>
-                            <q-item-section>
-                              <q-item-label>All sessions for this user</q-item-label>
-                              <q-item-label caption>End every active login for this account</q-item-label>
-                            </q-item-section>
-                          </q-item>
-                        </q-list>
-                      </q-btn-dropdown>
-                    </q-td>
-                ''')
+            finally:
+                page_state["loading"] = False
+            rows = page.get("items", [])
+            page_state.update(total=int(page.get("total", 0)), active=int(page.get("active", 0)))
+            if page_state["offset"] >= page_state["total"] and page_state["offset"]:
+                page_state["offset"] = max(0, ((page_state["total"] - 1) // int(rows_per_page.value)) * int(rows_per_page.value))
+                await load_sessions()
+                return
+            results.clear()
+            can_revoke_all = "identity.sessions.administer" in set(auth_state["principal"].get("global_privileges", []))
+            with results:
+                for row in rows:
+                    render_session_card(row, can_revoke_all=can_revoke_all)
+            empty_state.set_visibility(not rows)
+            start = page_state["offset"] + 1 if rows else 0
+            end = page_state["offset"] + len(rows)
+            result_summary.text = f"{page_state['total']} sessions · {page_state['active']} active"
+            page_range.text = f"Showing {start}–{end} of {page_state['total']} sessions"
+            at_start = page_state["offset"] == 0
+            at_end = end >= page_state["total"]
+            first_page.set_enabled(not at_start); previous_page.set_enabled(not at_start)
+            next_page.set_enabled(not at_end); last_page.set_enabled(not at_end)
 
-                def parsed_timestamp(value: Any) -> datetime | None:
-                    if not value:
-                        return None
-                    try:
-                        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-                        return parsed.astimezone()
-                    except (TypeError, ValueError):
-                        return None
+        async def clear_session_filters() -> None:
+            session_filter.value = ""; status_filter.value = "all"; sort_filter.value = "date_created"
+            timestamp_field.value = "date_created"; from_filter.value = ""; until_filter.value = ""; direction_filter.value = True
+            for control in (session_filter, status_filter, sort_filter, timestamp_field, from_filter, until_filter, direction_filter):
+                control.update()
+            await load_sessions(reset=True)
 
-                def apply_session_filters() -> None:
-                    query = (session_filter.value or "").strip().casefold()
-                    status_value = status_filter.value
-                    selected_timestamp = timestamp_field.value or "date_created"
-                    range_start = parsed_timestamp(from_filter.value)
-                    range_end = parsed_timestamp(until_filter.value)
-                    filtered_rows = []
-                    for row in rows:
-                        searchable = " ".join(str(row.get(field) or "") for field in (
-                            "user_name", "user_email", "status", "client_ip", "user_agent",
-                        )).casefold()
-                        occurred = parsed_timestamp(row.get(selected_timestamp))
-                        if query and query not in searchable:
-                            continue
-                        if status_value and row.get("status") != status_value:
-                            continue
-                        if range_start and (occurred is None or occurred < range_start):
-                            continue
-                        if range_end and (occurred is None or occurred > range_end):
-                            continue
-                        filtered_rows.append(row)
-                    table.rows = filtered_rows
-                    table.update()
-                    result_summary.text = (
-                        f"Showing {len(filtered_rows)} of {len(rows)} sessions · "
-                        f"{sum(row['status'] == 'active' for row in filtered_rows)} active"
-                    )
-                    result_summary.update()
+        with filter_actions:
+            ui.button("Clear", icon="filter_alt_off", on_click=clear_session_filters).props("flat dense no-caps")
+            ui.button("Apply filters", icon="filter_alt", on_click=lambda: load_sessions(reset=True)).props("unelevated dense no-caps")
+        refresh_button.on("click", load_sessions)
+        session_filter.on("keydown.enter", lambda: load_sessions(reset=True))
+        rows_per_page.on_value_change(lambda: load_sessions(reset=True))
 
-                def clear_session_filters() -> None:
-                    session_filter.value = ""
-                    status_filter.value = None
-                    timestamp_field.value = "date_created"
-                    from_filter.value = ""
-                    until_filter.value = ""
-                    for control in (
-                        session_filter, status_filter, timestamp_field,
-                        from_filter, until_filter,
-                    ):
-                        control.update()
-                    apply_session_filters()
+        async def go_to_offset(offset: int) -> None:
+            page_state["offset"] = max(0, offset)
+            await load_sessions()
 
-                with filter_actions:
-                    ui.button("Clear", icon="filter_alt_off", on_click=clear_session_filters).props(
-                        "flat dense no-caps"
-                    )
-                    ui.button("Apply filters", icon="filter_alt", on_click=apply_session_filters).props(
-                        "unelevated dense no-caps"
-                    )
-                session_filter.on("keydown.enter", apply_session_filters)
-
-                async def confirm_revoke(row: dict[str, Any], *, all_for_user: bool = False) -> None:
-                    confirmation = ui.dialog()
-                    with confirmation, ui.card().classes("w-[460px] max-w-full"):
-                        ui.label("Force sign-out?").classes("text-xl font-semibold")
-                        scope = "all active sessions for" if all_for_user else "this session for"
-                        ui.label(f"This will immediately revoke {scope} {row['user_name']}.").classes("text-sm text-slate-600")
-
-                        async def proceed() -> None:
-                            confirmation.close()
-                            try:
-                                if all_for_user:
-                                    await api.revoke_user_sessions(row["user_id"])
-                                else:
-                                    await api.revoke_session(row["id"])
-                                if row.get("is_current"):
-                                    app.storage.user.pop("session_token", None)
-                                    api.set_session_token(None)
-                                    clear_signed_in_identity()
-                                    login_dialog.open()
-                                else:
-                                    ui.notify("Session revoked", color="positive")
-                                    await load_sessions()
-                            except ApiError as error:
-                                ui.notify(error_message(error), color="negative")
-
-                        with ui.row().classes("w-full justify-end"):
-                            ui.button("Cancel", on_click=confirmation.close).props("flat")
-                            ui.button("Force sign-out", icon="logout", color="negative", on_click=proceed).props("unelevated no-caps")
-                    confirmation.open()
-
-                async def revoke(event) -> None:
-                    await confirm_revoke(event.args)
-
-                async def revoke_all(event) -> None:
-                    await confirm_revoke(event.args, all_for_user=True)
-
-                table.on("revoke", revoke)
-                table.on("revoke_all", revoke_all)
+        first_page.on("click", lambda: go_to_offset(0))
+        previous_page.on("click", lambda: go_to_offset(page_state["offset"] - int(rows_per_page.value)))
+        next_page.on("click", lambda: go_to_offset(page_state["offset"] + int(rows_per_page.value)))
+        last_page.on("click", lambda: go_to_offset(((page_state["total"] - 1) // int(rows_per_page.value)) * int(rows_per_page.value)))
         await load_sessions()
 
     async def select_dashboard() -> None:
@@ -7007,7 +7611,7 @@ def index() -> None:
             dashboard_content.clear()
             with dashboard_content:
                 with ui.row().classes("w-full items-center"):
-                    ui.label("System overview").classes("text-lg font-semibold")
+                    ui.label("Overview").classes("text-lg font-semibold")
                     ui.space()
                     refresh = ui.button("Refresh", icon="refresh").props("flat dense no-caps color=primary")
                 loading = ui.row().classes("w-full items-center justify-center py-12 gap-2")
@@ -7025,9 +7629,13 @@ def index() -> None:
                 recent_days = dashboard_recent_days()
                 recent_since = datetime.now(timezone.utc) - timedelta(days=recent_days)
                 summary = await api.dashboard_summary(
-                    recent_limit=recent_limit, recent_since=recent_since,
+                    recent_limit=50, recent_since=recent_since,
                 )
                 counts = summary["overview_counts"]
+                medium_counts = summary["overview_medium_counts"]
+                attention_counts = summary["overview_resource_attention_counts"]
+                aggregation_status_counts = summary["overview_aggregation_status_counts"]
+                component_metrics = summary["overview_digital_component_metrics"]
                 metrics = summary["classification_metrics"]
                 published_scheme_count = int(metrics["published_scheme_count"])
                 draft_scheme_count = int(metrics["draft_scheme_count"])
@@ -7046,23 +7654,25 @@ def index() -> None:
                     for resource in ("aggregations", "records")
                 }
                 activity = summary["recent_activity"]
-                recent = {
-                    resource: tuple([
+                def recent_record_entries(
+                    source_activity: list[dict[str, Any]], *, limit: int | None = None,
+                ) -> list[dict[str, Any]]:
+                    entries = [
                         {
                             "id": item["entity_id"],
                             "title": item["title"],
-                            "aggregation_number": item.get("aggregation_number"),
                             "record_number": item.get("record_number"),
                             "_activity_at": item["occurred_at"],
+                            "_operation": item["operation"],
                         }
-                        for item in activity
-                        if item["entity_type"] == entity_type
-                        and item["operation"] == operation
-                    ] for operation in ("CREATE", "UPDATE"))
-                    for resource, entity_type in (
-                        ("aggregations", "aggregation"), ("records", "record"),
-                    )
-                }
+                        for item in source_activity
+                        if item["entity_type"] == "record"
+                        and item["operation"] in {"CREATE", "UPDATE", "CONTENT_VIEWED"}
+                    ]
+                    return entries if limit is None else entries[:limit]
+
+                all_recent_records = recent_record_entries(activity)
+                recent_records = all_recent_records[:recent_limit]
                 favourite_limit = dashboard_favourite_item_limit()
             except ApiError as error:
                 if getattr(page_client, "_deleted", False):
@@ -7083,75 +7693,196 @@ def index() -> None:
             dashboard_content.clear()
             with dashboard_content:
                 with ui.row().classes("w-full items-center"):
-                    ui.label("System overview").classes("text-lg font-semibold")
+                    ui.label("Overview").classes("text-lg font-semibold")
                     ui.space()
                     ui.button("Refresh", icon="refresh", on_click=load_dashboard).props("flat dense no-caps color=primary")
-                with ui.grid(columns=4).classes("w-full gap-3"):
-                    overview_cards = [
-                        ("aggregations", "Aggregations", "folder", None, lambda: select_entity("aggregations")),
-                        ("records", "Records", "description", None, lambda: select_entity("records")),
-                    ]
-                    if can_classify:
-                        overview_cards.extend((
-                            (
-                            "classification-schemes", "Classification schemes", "account_tree",
-                            f"{published_scheme_count} published · {draft_scheme_count} draft · "
-                            f"{inactive_scheme_count} inactive",
-                            select_classification_workspace,
-                            ), (
-                            "classifications", "Classifications", "schema",
-                            f"{branch_count} branches · {terminal_count} terminals\n"
-                            f"{assignable_terminal_count} assignable terminals · "
-                            f"{draft_terminal_count} draft terminals",
-                            select_classification_workspace,
-                            ),
-                        ))
-                    if can_organize:
-                        overview_cards.extend((
-                            ("org-units", "Organization units", "corporate_fare", None, lambda: select_entity("org-units")),
-                            ("roles", "Roles", "badge", None, lambda: select_entity("roles")),
-                        ))
-                    if can_administer_users:
-                        overview_cards.append(
-                            ("users", "Users", "group", None, lambda: select_entity("users")),
-                        )
-                    for resource, label, icon, detail, handler in overview_cards:
-                        with ui.card().classes("dashboard-stat cursor-pointer p-4 gap-2").on(
-                            "click", lambda _, action=handler: action()
-                        ):
-                            with ui.row().classes("items-center gap-3 no-wrap"):
-                                ui.avatar(icon=icon, color="blue-1", text_color="primary")
+                with ui.element("div").classes("dashboard-overview-primary w-full"):
+                    for resource, label, icon, handler in (
+                        ("aggregations", "Aggregations", "folder", lambda: select_entity("aggregations")),
+                        ("records", "Records", "description", lambda: select_entity("records")),
+                    ):
+                        with ui.card().classes(
+                            "dashboard-overview-primary-card cursor-pointer"
+                        ).on("click", lambda _, action=handler: action()):
+                            with ui.row().classes("w-full items-center no-wrap gap-3"):
+                                with ui.element("div").classes("dashboard-overview-icon"):
+                                    ui.icon(icon, size="20px")
                                 with ui.column().classes("gap-0 min-w-0"):
-                                    ui.label(str(counts[resource])).classes("text-2xl font-bold text-slate-800")
-                                    ui.label(label).classes("text-xs text-slate-500")
-                                    if detail:
-                                        ui.label(detail).classes(
-                                            "text-[11px] leading-4 text-slate-400 whitespace-pre-line"
+                                    ui.label(label).classes("text-sm font-semibold text-slate-700")
+                                    ui.label("Visible to you").classes("text-[11px] text-slate-500")
+                                ui.space()
+                                ui.label(str(counts[resource])).classes(
+                                    "text-xl font-bold text-slate-800 tabular-nums"
+                                )
+                            with ui.element("div").classes("dashboard-overview-mediums"):
+                                for medium, medium_icon in (
+                                    ("physical", "inventory_2"),
+                                    ("digital", "cloud"),
+                                    ("mixed", "join_inner"),
+                                ):
+                                    with ui.element("span").classes("dashboard-overview-medium"):
+                                        ui.icon(medium_icon, size="13px").classes("text-primary")
+                                        ui.label(
+                                            f"{medium.title()} {medium_counts[resource][medium]}"
+                                        ).classes("tabular-nums")
+                                ui.label("|").classes("dashboard-overview-separator").props(
+                                    "aria-hidden=true"
+                                )
+                                for metric, metric_icon in (("vital", "emergency"), ("held", "gavel")):
+                                    with ui.element("span").classes("dashboard-overview-signal"):
+                                        ui.icon(metric_icon, size="13px").classes(
+                                            "text-red-600" if metric == "vital" else "text-amber-600"
                                         )
+                                        ui.label(
+                                            f"{metric.title()} {attention_counts[resource][metric]}"
+                                        ).classes("font-semibold tabular-nums")
+                                if resource == "aggregations":
+                                    for status, status_color in (
+                                        ("open", "text-green-700"),
+                                        ("closed", "text-slate-500"),
+                                    ):
+                                        with ui.element("span").classes(
+                                            f"dashboard-overview-signal {status_color}"
+                                        ):
+                                            ui.label(
+                                                f"{status.title()} "
+                                                f"{aggregation_status_counts[status]}"
+                                            ).classes("font-semibold tabular-nums")
+                                else:
+                                    with ui.element("span").classes("dashboard-overview-signal"):
+                                        ui.icon("attachment", size="13px").classes("text-primary")
+                                        ui.label(
+                                            f"{component_metrics['component_count']} components"
+                                        ).classes("font-semibold tabular-nums")
+                                    with ui.element("span").classes("dashboard-overview-signal"):
+                                        ui.icon("database", size="13px").classes("text-primary")
+                                        ui.label(
+                                            format_file_size(component_metrics["storage_size_in_bytes"])
+                                        ).classes("font-semibold tabular-nums")
 
-                ui.label("Holdings by organizational unit").classes("text-lg font-semibold mt-2")
+                administration_items = []
+                if can_classify:
+                    administration_items.extend((
+                        ("classification-schemes", "Schemes", "account_tree", select_classification_workspace),
+                        ("classifications", "Classifications", "schema", select_classification_workspace),
+                    ))
+                if "holds.administer" in privileges:
+                    administration_items.append(
+                        ("holds", "Holds", "gavel", select_holds),
+                    )
+                if can_organize:
+                    administration_items.extend((
+                        ("org-units", "Org units", "corporate_fare", lambda: select_entity("org-units")),
+                        ("roles", "Roles", "badge", lambda: select_entity("roles")),
+                    ))
+                if can_administer_users:
+                    administration_items.append(
+                        ("users", "Users", "group", lambda: select_entity("users")),
+                    )
+                if administration_items:
+                    with ui.element("div").classes("dashboard-overview-admin"):
+                        for resource, label, icon, handler in administration_items:
+                            with ui.element("div").classes(
+                                "dashboard-overview-admin-item"
+                            ).on("click", lambda _, action=handler: action()):
+                                ui.icon(icon, size="17px").classes("text-primary shrink-0")
+                                ui.label(label).classes(
+                                    "text-xs font-medium text-slate-600 truncate min-w-0"
+                                ).tooltip({
+                                    "classification-schemes": "Classification schemes",
+                                    "org-units": "Organization units",
+                                }.get(resource, label))
+                                ui.space()
+                                ui.label(str(counts[resource])).classes(
+                                    "text-sm font-bold text-slate-800 tabular-nums"
+                                )
+
+                with ui.row().classes("w-full items-center mt-2"):
+                    ui.label("Holdings by organizational unit").classes("text-lg font-semibold")
+                    ui.space()
+                    unit_count = len(ownership_counts)
+                    ui.label(f"{unit_count} {'unit' if unit_count == 1 else 'units'}").classes(
+                        "text-xs text-slate-500"
+                    )
                 ui.label(
-                    "Shows holdings for organizational units where you currently have an effective "
-                    "role. Counts include only aggregations and records you are allowed to view."
+                    "Only units where you have an effective role; counts respect your access."
                 ).classes("text-sm leading-5 text-slate-500 -mt-1")
                 if ownership_counts:
-                    with ui.card().classes("w-full shadow-none border border-slate-200 p-0 gap-0"):
-                        for index, owner_count in enumerate(ownership_counts):
-                            if index:
-                                ui.separator()
-                            with ui.row().classes("w-full items-center gap-3 px-4 py-3"):
-                                ui.avatar(
-                                    icon="corporate_fare", color="blue-1", text_color="primary",
-                                ).props("size=36px")
-                                with ui.column().classes("gap-0 grow min-w-0"):
-                                    ui.label(
-                                        f"{owner_count['org_unit_code']} — "
-                                        f"{owner_count['org_unit_name']}"
-                                    ).classes("font-semibold text-slate-700")
-                                    ui.label(
-                                        f"{owner_count['aggregation_count']} aggregations · "
-                                        f"{owner_count['record_count']} records"
-                                    ).classes("text-xs text-slate-500")
+                    with ui.element("div").classes("dashboard-holdings-list"):
+                        for owner_count in ownership_counts:
+                            row = ui.element("div").classes("dashboard-holdings-row").props(
+                                "role=button tabindex=0"
+                            )
+                            row.on(
+                                "click",
+                                lambda _, item=owner_count: select_organization_unit_details(
+                                    item["org_unit_id"]
+                                ),
+                            )
+                            row.on(
+                                "keydown.enter",
+                                lambda _, item=owner_count: select_organization_unit_details(
+                                    item["org_unit_id"]
+                                ),
+                            )
+                            with row:
+                                with ui.element("div").classes("dashboard-holdings-identity"):
+                                    with ui.element("div").classes("dashboard-overview-icon"):
+                                        ui.icon("corporate_fare", size="20px")
+                                    with ui.column().classes("gap-0 min-w-0"):
+                                        ui.label(owner_count["org_unit_name"]).classes(
+                                            "text-sm font-semibold text-slate-700 truncate w-full"
+                                        ).tooltip(owner_count["org_unit_name"])
+                                        ui.label(owner_count["org_unit_code"]).classes(
+                                            "text-xs font-semibold text-primary"
+                                        )
+                                with ui.element("div").classes("dashboard-holdings-metric"):
+                                    ui.icon("folder", size="17px").classes("text-primary shrink-0")
+                                    with ui.column().classes("gap-0"):
+                                        ui.label(
+                                            f"{owner_count['aggregation_count']} aggregations"
+                                        ).classes("text-xs font-medium tabular-nums")
+                                        ui.label(
+                                            f"{owner_count['open_aggregation_count']} open · "
+                                            f"{owner_count['closed_aggregation_count']} closed"
+                                        ).classes("dashboard-holdings-metric-detail tabular-nums")
+                                with ui.element("div").classes("dashboard-holdings-metric"):
+                                    ui.icon("description", size="17px").classes("text-primary shrink-0")
+                                    with ui.column().classes("gap-0"):
+                                        ui.label(
+                                            f"{owner_count['record_count']} records"
+                                        ).classes("text-xs font-medium tabular-nums")
+                                        with ui.element("div").classes("dashboard-holdings-mediums"):
+                                            for medium_index, medium in enumerate((
+                                                "physical", "digital", "mixed",
+                                            )):
+                                                if medium_index:
+                                                    ui.label("·").classes(
+                                                        "dashboard-holdings-medium"
+                                                    ).props("aria-hidden=true")
+                                                with ui.element("span").classes(
+                                                    "dashboard-overview-medium dashboard-holdings-medium"
+                                                ):
+                                                    ui.label(
+                                                        f"{medium.title()} "
+                                                        f"{owner_count[f'{medium}_record_count']}"
+                                                    ).classes("tabular-nums")
+                                with ui.element("div").classes("dashboard-holdings-metric"):
+                                    with ui.column().classes("gap-1"):
+                                        with ui.element("span").classes(
+                                            "dashboard-holdings-peer-stat tabular-nums"
+                                        ):
+                                            ui.icon("emergency", size="14px").classes("text-red-600")
+                                            ui.label(
+                                                f"{owner_count['vital_record_count']} vital records"
+                                            )
+                                        with ui.element("span").classes(
+                                            "dashboard-holdings-peer-stat tabular-nums"
+                                        ):
+                                            ui.icon("storage", size="14px").classes("text-primary")
+                                            ui.label(
+                                                f"{format_file_size(owner_count['storage_size_in_bytes'])} storage"
+                                            )
                 else:
                     ui.label(
                         "No organizational-unit holdings are available for your effective roles."
@@ -7163,14 +7894,18 @@ def index() -> None:
                 ui.label(
                     f"Upcoming reviews fall within the next {summary.get('review_warning_window_days', 30)} days."
                 ).classes("text-sm text-slate-500 -mt-1")
-                with ui.grid(columns=2).classes("w-full gap-4"):
+                with ui.element("div").classes("dashboard-review-columns"):
                     for heading, items, color, empty in (
                         ("Overdue", overdue_reviews, "negative", "No overdue reviews."),
                         ("Upcoming", upcoming_reviews, "warning", "No reviews due soon."),
                     ):
-                        with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-2"):
-                            with ui.row().classes("items-center gap-2"):
-                                ui.icon("event", color=color)
+                        with ui.card().classes("dashboard-review-group"):
+                            with ui.row().classes("dashboard-review-header w-full items-center gap-2"):
+                                ui.icon(
+                                    "error_outline" if heading == "Overdue" else "event",
+                                    color=color,
+                                    size="19px",
+                                )
                                 ui.label(heading).classes("font-semibold")
                                 total = summary["overdue_review_count" if heading == "Overdue" else "upcoming_review_count"]
                                 ui.badge(str(total), color=color).props("outline")
@@ -7180,19 +7915,47 @@ def index() -> None:
                                     on_click=lambda _, kind=heading.lower(): show_all_reviews(kind),
                                 ).props("flat dense no-caps color=primary")
                             if not items:
-                                ui.label(empty).classes("text-sm text-slate-400")
+                                ui.label(empty).classes("text-sm text-slate-400 px-3 py-4")
                             for item in items:
                                 resource = "aggregations" if item["entity_type"] == "aggregation" else "records"
                                 number = item.get("aggregation_number") or item.get("record_number")
-                                with ui.row().classes("recent-card cursor-pointer w-full items-center gap-2 px-2 py-2").on(
-                                    "click", lambda _, row=item, kind=resource: open_dashboard_resource(kind, {"id": row["entity_id"]}),
-                                ):
-                                    ui.icon("folder" if resource == "aggregations" else "description", color="primary")
+                                review_item = ui.element("div").classes(
+                                    "dashboard-review-item"
+                                ).props("role=button tabindex=0")
+                                review_item.on(
+                                    "click",
+                                    lambda _, row=item, kind=resource: open_dashboard_resource(
+                                        kind, {"id": row["entity_id"]}
+                                    ),
+                                )
+                                review_item.on(
+                                    "keydown.enter",
+                                    lambda _, row=item, kind=resource: open_dashboard_resource(
+                                        kind, {"id": row["entity_id"]}
+                                    ),
+                                )
+                                with review_item:
+                                    with ui.element("div").classes("dashboard-overview-icon"):
+                                        ui.icon(
+                                            "folder" if resource == "aggregations" else "description",
+                                            size="18px",
+                                        )
                                     with ui.column().classes("gap-0 grow min-w-0"):
-                                        ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
-                                        ui.label(f"{number} · {format_timestamp(item['date_of_next_review'])}").classes("text-xs text-slate-500")
+                                        ui.label(item["title"]).classes(
+                                            "text-sm font-semibold text-slate-700 truncate w-full"
+                                        ).tooltip(item["title"])
+                                        ui.label(
+                                            f"{'Aggregation' if resource == 'aggregations' else 'Record'} · {number}"
+                                        ).classes("text-xs text-slate-500 truncate w-full")
+                                    ui.label(
+                                        format_timestamp(item["date_of_next_review"])
+                                    ).classes(
+                                        f"dashboard-review-date text-xs font-medium text-{color}"
+                                    )
                             if total > len(items):
-                                ui.label(f"Showing {len(items)} of {total}.").classes("text-xs text-slate-500 self-end")
+                                ui.label(f"Showing {len(items)} of {total}.").classes(
+                                    "text-xs text-slate-500 self-end px-3 py-2"
+                                )
 
                 if unclassified_root_count or inactive_classification_count:
                     ui.label("Governance attention").classes("text-lg font-semibold mt-2")
@@ -7220,28 +7983,45 @@ def index() -> None:
                                         ui.label("Inactive classifications").classes("font-semibold")
                                         ui.label("Unavailable for new aggregation assignments.").classes("text-xs text-slate-500")
 
-                ui.label("Your favourites").classes("text-lg font-semibold mt-2")
-                favourites_area = ui.column().classes("w-full gap-3")
+                favourites_area: Any = None
+
+                def combined_favourites() -> list[dict[str, Any]]:
+                    combined = [
+                        {**item, "_resource": resource}
+                        for resource in ("aggregations", "records")
+                        for item in favourites[resource]
+                    ]
+                    return sorted(
+                        combined,
+                        key=lambda item: str(item.get("date_favourited") or ""),
+                        reverse=True,
+                    )
 
                 def render_favourite_entry(
                     resource: str, item: dict[str, Any], *, after_remove: Any,
                 ) -> None:
                     icon = "folder" if resource == "aggregations" else "description"
-                    with ui.row().classes(
-                        "recent-card cursor-pointer w-full items-center no-wrap px-3 py-2 gap-3"
-                    ).on(
+                    favourite_row = ui.element("div").classes(
+                        "dashboard-personal-item"
+                    ).props("role=button tabindex=0").on(
                         "click",
                         lambda _, selected=item, kind=resource: open_dashboard_resource(kind, selected),
-                    ):
-                        ui.icon(icon).classes("text-primary")
+                    ).on(
+                        "keydown.enter",
+                        lambda _, selected=item, kind=resource: open_dashboard_resource(kind, selected),
+                    )
+                    with favourite_row:
+                        with ui.element("div").classes("dashboard-overview-icon"):
+                            ui.icon(icon, size="18px")
                         with ui.column().classes("gap-0 grow min-w-0"):
-                            ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
+                            ui.label(item["title"]).classes(
+                                "text-sm font-semibold text-slate-700 truncate w-full"
+                            ).tooltip(item["title"])
                             number = item.get("aggregation_number") or item.get("record_number")
-                            ui.label(number).classes("text-xs text-slate-400")
-                            if resource == "records":
-                                ui.label(
-                                    f"{item['aggregation_number']} — {item['aggregation_title']}"
-                                ).classes("text-xs text-slate-400 line-clamp-1")
+                            resource_label = "Aggregation" if resource == "aggregations" else "Record"
+                            ui.label(f"{resource_label} · {number}").classes(
+                                "text-xs text-slate-500 truncate w-full"
+                            )
                         remove_button = ui.button(
                             icon="favorite", color="red",
                         ).props("flat round dense aria-label='Remove from favourites'")
@@ -7251,7 +8031,6 @@ def index() -> None:
                             lambda _, selected=item, kind=resource: after_remove(kind, selected),
                             js_handler=STOP_PROPAGATION_CLICK_HANDLER,
                         )
-                        ui.icon("chevron_right").classes("text-slate-300")
 
                 async def remove_dashboard_favourite(
                     resource: str, item: dict[str, Any], *, dialog_refresh: Any | None = None,
@@ -7271,28 +8050,26 @@ def index() -> None:
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True)
 
-                def show_all_favourites(resource: str) -> None:
+                def show_all_favourites() -> None:
                     dialog = ui.dialog()
                     with dialog, ui.card().classes("w-[760px] max-w-full max-h-[85vh]"):
                         with ui.row().classes("w-full items-center"):
-                            ui.label(
-                                "Favourite aggregations" if resource == "aggregations" else "Favourite records"
-                            ).classes("text-xl font-semibold")
+                            ui.label("Favourites").classes("text-xl font-semibold")
                             ui.space()
                             ui.button(icon="close", on_click=dialog.close).props("flat round")
-                        complete_list = ui.column().classes("w-full gap-2 max-h-[65vh] overflow-y-auto")
+                        complete_list = ui.element("div").classes(
+                            "dashboard-personal-panel w-full max-h-[65vh] overflow-y-auto"
+                        )
 
                     def render_complete_list() -> None:
                         complete_list.clear()
                         with complete_list:
-                            if not favourites[resource]:
-                                ui.label(
-                                    "No favourite aggregations" if resource == "aggregations"
-                                    else "No favourite records"
-                                ).classes("text-sm text-slate-400 py-4")
-                            for item in favourites[resource]:
+                            all_favourites = combined_favourites()
+                            if not all_favourites:
+                                ui.label("No favourites").classes("text-sm text-slate-400 p-4")
+                            for item in all_favourites:
                                 render_favourite_entry(
-                                    resource, item,
+                                    item["_resource"], item,
                                     after_remove=lambda kind, selected: remove_dashboard_favourite(
                                         kind, selected, dialog_refresh=render_complete_list,
                                     ),
@@ -7304,76 +8081,93 @@ def index() -> None:
                 def render_favourites_dashboard() -> None:
                     favourites_area.clear()
                     with favourites_area:
-                        if not favourites["aggregations"] and not favourites["records"]:
-                            with ui.card().classes("w-full shadow-none border border-slate-200 p-5"):
+                        with ui.card().classes("dashboard-personal-panel"):
+                            with ui.row().classes(
+                                "dashboard-personal-header w-full items-center gap-2"
+                            ):
+                                ui.icon("favorite_border", color="primary", size="19px")
+                                ui.label("Favourites").classes("font-semibold text-slate-800")
+                                total_favourites = sum(len(favourites[key]) for key in ("aggregations", "records"))
+                                ui.badge(str(total_favourites), color="blue-grey").props("outline")
+                                ui.space()
+                                ui.button(
+                                    "View all", on_click=show_all_favourites,
+                                ).props("flat dense no-caps color=primary")
+                            all_favourites = combined_favourites()
+                            if not all_favourites:
                                 ui.label(
                                     "You haven't added any favourites yet. Select the heart on an aggregation or record for quick access here."
-                                ).classes("text-sm text-slate-500")
-                            return
-                        with ui.grid(columns=2).classes("w-full gap-5"):
-                            for resource, heading, icon, empty_label in (
-                                ("aggregations", "Favourite aggregations", "folder", "No favourite aggregations"),
-                                ("records", "Favourite records", "description", "No favourite records"),
-                            ):
-                                with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-3"):
-                                    with ui.row().classes("w-full items-center gap-2"):
-                                        ui.icon(icon, color="primary")
-                                        ui.label(heading).classes("font-semibold text-slate-800")
-                                        ui.space()
-                                        ui.badge(str(len(favourites[resource])), color="blue-grey").props("outline")
-                                    preview, has_more = favourite_preview(
-                                        favourites[resource], favourite_limit,
-                                    )
-                                    if not preview:
-                                        ui.label(empty_label).classes("text-sm text-slate-400 py-3")
-                                    for item in preview:
-                                        render_favourite_entry(
-                                            resource, item, after_remove=remove_dashboard_favourite,
-                                        )
-                                    if has_more:
-                                        ui.button(
-                                            f"View all ({len(favourites[resource])})",
-                                            icon="open_in_full",
-                                            on_click=lambda _, kind=resource: show_all_favourites(kind),
-                                        ).props("flat dense no-caps color=primary").classes("self-end")
+                                ).classes("text-sm text-slate-500 p-4")
+                            for item in all_favourites[:favourite_limit]:
+                                render_favourite_entry(
+                                    item["_resource"], item, after_remove=remove_dashboard_favourite,
+                                )
 
-                render_favourites_dashboard()
+                def render_recent_record_entry(item: dict[str, Any]) -> None:
+                    operation = item["_operation"]
+                    activity_label, activity_icon, activity_class = {
+                        "CREATE": ("Created", "add", "dashboard-activity-created"),
+                        "UPDATE": ("Updated", "edit", "dashboard-activity-updated"),
+                        "CONTENT_VIEWED": ("Viewed", "visibility", "dashboard-activity-viewed"),
+                    }[operation]
+                    activity_row = ui.element("div").classes(
+                        "dashboard-personal-item"
+                    ).props("role=button tabindex=0").on(
+                        "click", lambda _, entry=item: open_dashboard_resource("records", entry),
+                    ).on(
+                        "keydown.enter", lambda _, entry=item: open_dashboard_resource("records", entry),
+                    )
+                    with activity_row:
+                        with ui.element("div").classes("dashboard-overview-icon"):
+                            ui.icon("description", size="18px")
+                        with ui.column().classes("gap-0 grow min-w-0"):
+                            ui.label(item["title"]).classes(
+                                "text-sm font-semibold text-slate-700 truncate w-full"
+                            ).tooltip(item["title"])
+                            ui.label(
+                                f"{item.get('record_number') or '—'} · {format_timestamp(item['_activity_at'])}"
+                            ).classes("text-xs text-slate-500 truncate w-full")
+                        with ui.element("div").classes(
+                            f"dashboard-activity-badge {activity_class}"
+                        ):
+                            ui.icon(activity_icon, size="13px")
+                            ui.label(activity_label)
 
-                ui.label("Your recent records activity").classes("text-lg font-semibold mt-2")
-                ui.label(
-                    f"Created or updated by you during the last {recent_days} days"
-                ).classes("text-sm text-slate-500 -mt-4")
-                with ui.grid(columns=2).classes("w-full gap-5"):
-                    for resource, singular, icon in (
-                        ("aggregations", "aggregation", "folder"),
-                        ("records", "record", "description"),
-                    ):
-                        with ui.card().classes("w-full shadow-none border border-slate-200 p-4 gap-4"):
-                            with ui.row().classes("items-center gap-2"):
-                                ui.icon(icon, color="primary")
-                                ui.label(ENTITIES[resource].label).classes("font-semibold text-slate-800")
-                            for heading, items, activity_icon in (
-                                ("Recently created by you", recent[resource][0], "add_circle"),
-                                ("Recently updated by you", recent[resource][1], "history"),
-                            ):
-                                ui.label(heading).classes("component-meta-label mt-1")
-                                if not items:
-                                    ui.label("Nothing here yet").classes("text-sm text-slate-400")
-                                for item in items:
-                                    handler = (
-                                        lambda _, entry=item, kind=resource:
-                                            open_dashboard_resource(kind, entry)
-                                    )
-                                    with ui.row().classes(
-                                        "recent-card cursor-pointer w-full items-center no-wrap px-3 py-2 gap-3"
-                                    ).on("click", handler):
-                                        ui.icon(icon).classes("text-primary")
-                                        with ui.column().classes("gap-0 grow min-w-0"):
-                                            ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
-                                            number = item.get("aggregation_number") or item.get("record_number")
-                                            ui.label(number).classes("text-xs text-slate-400")
-                                        ui.label(format_timestamp(item.get("_activity_at"))).classes("text-xs text-slate-400")
-                                        ui.icon("chevron_right").classes("text-slate-300")
+                def show_all_recent_records() -> None:
+                    dialog = ui.dialog()
+                    with dialog, ui.card().classes("w-[820px] max-w-full max-h-[85vh]"):
+                        with ui.row().classes("w-full items-center"):
+                            ui.label("Recent records activity").classes("text-xl font-semibold")
+                            ui.space()
+                            ui.button(icon="close", on_click=dialog.close).props("flat round")
+                        with ui.element("div").classes(
+                            "dashboard-personal-panel w-full max-h-[65vh] overflow-y-auto"
+                        ):
+                            if not all_recent_records:
+                                ui.label("No recent records activity").classes("text-sm text-slate-400 p-4")
+                            for item in all_recent_records:
+                                render_recent_record_entry(item)
+                    dialog.open()
+
+                with ui.element("div").classes("dashboard-personal-columns mt-2"):
+                    favourites_area = ui.element("div").classes("w-full")
+                    render_favourites_dashboard()
+                    with ui.card().classes("dashboard-personal-panel"):
+                        with ui.row().classes(
+                            "dashboard-personal-header w-full items-center gap-2"
+                        ):
+                            ui.icon("history", color="primary", size="19px")
+                            ui.label("Recent records activity").classes("font-semibold text-slate-800")
+                            ui.space()
+                            ui.button(
+                                "View all", on_click=show_all_recent_records,
+                            ).props("flat dense no-caps color=primary")
+                        if not recent_records:
+                            ui.label(
+                                f"No records created, updated, or viewed during the last {recent_days} days."
+                            ).classes("text-sm text-slate-500 p-4")
+                        for item in recent_records:
+                            render_recent_record_entry(item)
                 set_connection_status(True)
 
         await load_dashboard()
@@ -7641,7 +8435,7 @@ def index() -> None:
                         "w-full max-h-28 overflow-y-auto rounded-lg bg-slate-50 p-3 "
                         "text-sm leading-6 text-slate-600 whitespace-pre-wrap"
                     )
-                with ui.grid(columns=2).classes("w-full gap-3"):
+                with ui.element("div").classes("hold-held-item-filter-secondary w-full"):
                     detail_value("Medium", medium_label(item.get("medium")))
                     detail_value("Vital status", "Vital" if item.get("is_vital") else "Contains vital resources" if item.get("has_vital_descendants") else "Not vital")
                     detail_value("Review", review_display(item.get("date_of_next_review")))
@@ -8205,7 +8999,29 @@ def index() -> None:
                 show_api_error(error)
 
         with table_container, ui.column().classes("w-full p-5 gap-4"):
-            with ui.card().classes("w-full shadow-none border border-slate-200 p-5 gap-4"):
+            with ui.element("div").classes("identity-command-layout w-full"):
+                with ui.card().classes(
+                    "detail-surface identity-command-actions shadow-none p-4 gap-3"
+                ):
+                    ui.label("Organization unit actions").classes("aggregation-panel-heading w-full")
+                    ui.label("Manage and audit").classes("record-action-group-label")
+                    with ui.row().classes("w-full gap-2 flex-wrap"):
+                        ui.button("Edit", icon="edit", on_click=lambda: open_editor(unit, on_saved=refresh, resource_key="org-units")).props("outline dense no-caps")
+                        ui.button("History", icon="history", on_click=lambda: show_entity_history("org-units", unit)).props("outline dense no-caps")
+                    ui.label("Lifecycle").classes("record-action-group-label")
+                    with ui.row().classes("w-full gap-2 flex-wrap"):
+                        ui.button("Activate" if unit["status"] == "inactive" else "Deactivate", icon="toggle_on" if unit["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline dense no-caps")
+                        ui.button(
+                            "Permanently delete", icon="delete_forever", color="negative",
+                            on_click=lambda: confirm_identity_deletion(
+                                "org-units", unit, label="organization unit",
+                                on_deleted=lambda: select_entity("org-units"),
+                            ),
+                        ).props("outline dense no-caps")
+                organization_metadata_panel = ui.card().classes(
+                    "detail-surface identity-command-metadata shadow-none p-5 gap-4"
+                )
+                organization_metadata_panel.__enter__()
                 with ui.row().classes("w-full items-start gap-4"):
                     ui.avatar(icon="corporate_fare", color="blue-1", text_color="primary", size="58px")
                     with ui.column().classes("gap-1 grow"):
@@ -8215,16 +9031,6 @@ def index() -> None:
                     ui.button(
                         "Back", icon="arrow_back",
                         on_click=lambda: breadcrumb_back(lambda: select_entity("org-units")),
-                    ).props("flat no-caps")
-                    ui.button("Edit", icon="edit", on_click=lambda: open_editor(unit, on_saved=refresh, resource_key="org-units")).props("flat no-caps")
-                    ui.button("History", icon="history", on_click=lambda: show_entity_history("org-units", unit)).props("flat no-caps")
-                    ui.button("Activate" if unit["status"] == "inactive" else "Deactivate", icon="toggle_on" if unit["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline no-caps")
-                    ui.button(
-                        "Permanently delete", icon="delete_forever", color="negative",
-                        on_click=lambda: confirm_identity_deletion(
-                            "org-units", unit, label="organization unit",
-                            on_deleted=lambda: select_entity("org-units"),
-                        ),
                     ).props("flat no-caps")
                 with ui.grid(columns=3).classes("w-full gap-4"):
                     for label, value in (
@@ -8239,10 +9045,143 @@ def index() -> None:
                             "Effective status": "Also includes inactivity inherited from any parent organization unit.",
                         }.get(label)
                         with ui.column().classes("gap-0 border-b border-slate-100 pb-1.5"):
-                            ui.label(label.upper()).classes("text-xs text-slate-400")
-                            ui.label(str(value).title() if value is not None else "—").classes("font-medium")
+                            ui.label(label).classes("detail-field-label")
+                            display_value = (
+                                str(value).replace("_", " ").title()
+                                if value is not None and label in {"Direct status", "Effective status"}
+                                else str(value) if value is not None else "—"
+                            )
+                            if label == "Parent" and (unit.get("parent") or {}).get("id"):
+                                ui.label(display_value).classes(
+                                    "font-medium text-primary cursor-pointer"
+                                ).on(
+                                    "click",
+                                    lambda: select_organization_unit_details(
+                                        unit["parent"]["id"]
+                                    ),
+                                ).tooltip("Open parent organization unit")
+                            else:
+                                ui.label(display_value).classes("font-medium")
                             if guidance_text:
                                 ui.label(guidance_text).classes("w-full text-[10px] leading-3 text-slate-400")
+                organization_metadata_panel.__exit__(None, None, None)
+            with ui.card().classes(
+                "detail-surface shadow-none p-0 gap-0 w-full overflow-hidden"
+            ):
+                with ui.row().classes(
+                    "w-full items-center gap-2 px-4 py-3 border-b border-slate-200"
+                ):
+                    ui.icon("account_tree", size="19px").classes("text-primary")
+                    with ui.column().classes("gap-0"):
+                        ui.label("Organizational lineage").classes(
+                            "font-semibold text-slate-800"
+                        )
+                        ui.label(
+                            "From the highest ancestor to the current organization unit"
+                        ).classes("text-xs text-slate-500")
+                with ui.element("div").classes("org-unit-lineage-list"):
+                    lineage = [*(unit.get("ancestors") or []), {
+                        "id": unit["id"], "code": unit["code"],
+                        "name": unit["name"], "is_current": True,
+                    }]
+                    for lineage_unit in lineage:
+                        is_current = bool(lineage_unit.get("is_current"))
+                        with ui.element("div").classes("org-unit-lineage-row"):
+                            with ui.element("div").classes(
+                                "org-unit-lineage-node" + (" current" if is_current else "")
+                            ):
+                                ui.icon(
+                                    "location_on" if is_current else "corporate_fare",
+                                    size="16px",
+                                )
+                            with ui.row().classes("items-center gap-2 min-w-0 no-wrap"):
+                                lineage_name = ui.label(lineage_unit["name"]).classes(
+                                    "text-sm font-semibold truncate"
+                                )
+                                if not is_current:
+                                    lineage_name.classes("org-unit-lineage-link").on(
+                                        "click",
+                                        lambda _, ancestor_id=lineage_unit["id"]:
+                                            select_organization_unit_details(ancestor_id),
+                                    ).tooltip(
+                                        f"Open {lineage_unit['name']}"
+                                    )
+                                ui.label(lineage_unit["code"]).classes(
+                                    "org-unit-lineage-code shrink-0"
+                                )
+            holdings_metrics = unit["holdings_metrics"]
+            with ui.card().classes(
+                "detail-surface shadow-none p-0 gap-0 w-full overflow-hidden"
+            ):
+                with ui.row().classes(
+                    "w-full items-center gap-2 px-4 py-3 border-b border-slate-200"
+                ):
+                    ui.icon("inventory_2", size="19px").classes("text-primary")
+                    with ui.column().classes("gap-0"):
+                        ui.label("Holdings summary").classes("font-semibold text-slate-800")
+                        ui.label("Visible holdings owned by this organization unit").classes(
+                            "text-xs text-slate-500"
+                        )
+                with ui.element("div").classes("org-unit-holdings-grid"):
+                    with ui.element("div").classes("org-unit-holdings-group"):
+                        with ui.row().classes("items-center gap-2"):
+                            ui.icon("folder", size="18px").classes("text-primary")
+                            ui.label(
+                                f"{holdings_metrics['aggregation_count']} aggregations"
+                            ).classes("text-sm font-semibold tabular-nums")
+                        with ui.element("div").classes("dashboard-holdings-mediums mt-1"):
+                            ui.label(
+                                f"{holdings_metrics['open_aggregation_count']} open · "
+                                f"{holdings_metrics['closed_aggregation_count']} closed"
+                            ).classes("dashboard-holdings-medium tabular-nums")
+                            ui.label("|").classes(
+                                "dashboard-holdings-medium"
+                            ).props("aria-hidden=true")
+                            for medium_index, medium in enumerate((
+                                "physical", "digital", "mixed",
+                            )):
+                                if medium_index:
+                                    ui.label("·").classes(
+                                        "dashboard-holdings-medium"
+                                    ).props("aria-hidden=true")
+                                ui.label(
+                                    f"{medium.title()} "
+                                    f"{holdings_metrics[f'{medium}_aggregation_count']}"
+                                ).classes("dashboard-holdings-medium tabular-nums")
+                    with ui.element("div").classes("org-unit-holdings-group"):
+                        with ui.row().classes("items-center gap-2"):
+                            ui.icon("description", size="18px").classes("text-primary")
+                            ui.label(
+                                f"{holdings_metrics['record_count']} records"
+                            ).classes("text-sm font-semibold tabular-nums")
+                        with ui.element("div").classes("dashboard-holdings-mediums mt-1"):
+                            for medium_index, medium in enumerate((
+                                "physical", "digital", "mixed",
+                            )):
+                                if medium_index:
+                                    ui.label("·").classes(
+                                        "dashboard-holdings-medium"
+                                    ).props("aria-hidden=true")
+                                ui.label(
+                                    f"{medium.title()} "
+                                    f"{holdings_metrics[f'{medium}_record_count']}"
+                                ).classes("dashboard-holdings-medium tabular-nums")
+                    with ui.element("div").classes("org-unit-holdings-group"):
+                        with ui.column().classes("gap-1"):
+                            with ui.element("span").classes(
+                                "dashboard-holdings-peer-stat tabular-nums"
+                            ):
+                                ui.icon("emergency", size="14px").classes("text-red-600")
+                                ui.label(
+                                    f"{holdings_metrics['vital_record_count']} vital records"
+                                )
+                            with ui.element("span").classes(
+                                "dashboard-holdings-peer-stat tabular-nums"
+                            ):
+                                ui.icon("storage", size="14px").classes("text-primary")
+                                ui.label(
+                                    f"{format_file_size(holdings_metrics['storage_size_in_bytes'])} storage"
+                                )
 
     async def select_role_details(role_id: int) -> None:
         register_navigation("role-details", f"Role #{role_id}", entity_id=role_id)
@@ -8272,7 +9211,31 @@ def index() -> None:
                 show_api_error(error)
 
         with table_container, ui.column().classes("w-full p-5 gap-4"):
-            with ui.card().classes("w-full shadow-none border border-slate-200 p-5 gap-4"):
+            with ui.element("div").classes("identity-command-layout w-full"):
+                with ui.card().classes(
+                    "detail-surface identity-command-actions shadow-none p-4 gap-3"
+                ):
+                    ui.label("Role actions").classes("aggregation-panel-heading w-full")
+                    ui.label("Manage and assignments").classes("record-action-group-label")
+                    with ui.row().classes("w-full gap-2 flex-wrap"):
+                        ui.button("Edit", icon="edit", on_click=lambda: open_editor(role, on_saved=refresh, resource_key="roles")).props("outline dense no-caps")
+                        ui.button("User assignments", icon="group", on_click=lambda: show_memberships(role, for_user=False)).props("outline dense no-caps")
+                    ui.label("Audit").classes("record-action-group-label")
+                    with ui.row().classes("w-full gap-2 flex-wrap"):
+                        ui.button("History", icon="history", on_click=lambda: show_entity_history("roles", role)).props("outline dense no-caps")
+                    ui.label("Lifecycle").classes("record-action-group-label")
+                    with ui.row().classes("w-full gap-2 flex-wrap"):
+                        ui.button("Activate" if role["status"] == "inactive" else "Deactivate", icon="toggle_on" if role["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline dense no-caps")
+                        ui.button(
+                            "Permanently delete", icon="delete_forever", color="negative",
+                            on_click=lambda: confirm_identity_deletion(
+                                "roles", role, label="role", on_deleted=lambda: select_entity("roles"),
+                            ),
+                        ).props("outline dense no-caps")
+                role_metadata_panel = ui.card().classes(
+                    "detail-surface identity-command-metadata shadow-none p-5 gap-4"
+                )
+                role_metadata_panel.__enter__()
                 with ui.row().classes("w-full items-start gap-4"):
                     ui.avatar(icon="badge", color="blue-1", text_color="primary", size="58px")
                     with ui.column().classes("gap-1 grow"):
@@ -8282,16 +9245,6 @@ def index() -> None:
                     ui.button(
                         "Back", icon="arrow_back",
                         on_click=lambda: breadcrumb_back(lambda: select_entity("roles")),
-                    ).props("flat no-caps")
-                    ui.button("Edit", icon="edit", on_click=lambda: open_editor(role, on_saved=refresh, resource_key="roles")).props("flat no-caps")
-                    ui.button("User assignments", icon="group", on_click=lambda: show_memberships(role, for_user=False)).props("flat no-caps")
-                    ui.button("History", icon="history", on_click=lambda: show_entity_history("roles", role)).props("flat no-caps")
-                    ui.button("Activate" if role["status"] == "inactive" else "Deactivate", icon="toggle_on" if role["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline no-caps")
-                    ui.button(
-                        "Permanently delete", icon="delete_forever", color="negative",
-                        on_click=lambda: confirm_identity_deletion(
-                            "roles", role, label="role", on_deleted=lambda: select_entity("roles"),
-                        ),
                     ).props("flat no-caps")
                 with ui.grid(columns=3).classes("w-full gap-4"):
                     for label, value in (
@@ -8303,8 +9256,12 @@ def index() -> None:
                             role.get("profile_code"), role.get("profile_name"),
                         )))),
                         ("Information governance", "Yes" if role.get("is_information_governance") else "No"),
-                        ("Organization unit", role.get("org_unit_name")),
-                        ("Supervising role", role.get("supervisor_role_name")),
+                        ("Organization unit", " — ".join(filter(None, (
+                            role.get("org_unit_code"), role.get("org_unit_name"),
+                        )))),
+                        ("Supervising role", " — ".join(filter(None, (
+                            role.get("supervisor_role_code"), role.get("supervisor_role_name"),
+                        ))) or None),
                         ("Supervised roles", role.get("subordinate_role_count")),
                         ("All assignments", role.get("assigned_user_count")),
                         ("Current assignments", role.get("current_assignment_count")),
@@ -8326,10 +9283,106 @@ def index() -> None:
                             ),
                         }.get(label)
                         with ui.column().classes("gap-0 border-b border-slate-100 pb-1.5"):
-                            ui.label(label.upper()).classes("text-xs text-slate-400")
-                            ui.label(str(value).title() if value is not None else "—").classes("font-medium")
+                            ui.label(label).classes("detail-field-label")
+                            if label == "Organization unit" and role.get("org_unit_id"):
+                                ui.label(str(value)).classes(
+                                    "font-medium text-primary cursor-pointer"
+                                ).on(
+                                    "click",
+                                    lambda: select_organization_unit_details(
+                                        role["org_unit_id"]
+                                    ),
+                                ).tooltip("Open organization unit")
+                            elif label == "Supervising role" and role.get("supervisor_role_id"):
+                                ui.label(str(value)).classes(
+                                    "font-medium text-primary cursor-pointer"
+                                ).on(
+                                    "click",
+                                    lambda: select_role_details(role["supervisor_role_id"]),
+                                ).tooltip("Open supervising role")
+                            else:
+                                rendered_value = (
+                                    str(value).title()
+                                    if label in {"Direct status", "Effective status"}
+                                    and value is not None
+                                    else str(value) if value is not None else "—"
+                                )
+                                ui.label(rendered_value).classes("font-medium")
                             if guidance_text:
                                 ui.label(guidance_text).classes("w-full text-[10px] leading-3 text-slate-400")
+                role_metadata_panel.__exit__(None, None, None)
+
+            profile_privileges = role.get("profile_privileges") or []
+            privileges_by_category: dict[str, list[dict[str, Any]]] = {}
+            for privilege in profile_privileges:
+                privileges_by_category.setdefault(
+                    privilege.get("category") or "other", [],
+                ).append(privilege)
+            with ui.card().classes("detail-surface shadow-none w-full p-0 gap-0"):
+                with ui.row().classes(
+                    "w-full items-center gap-3 px-4 py-3 border-b border-slate-200"
+                ):
+                    with ui.column().classes("gap-0 grow min-w-0"):
+                        ui.label("Privileges inherited from profile").classes(
+                            "text-base font-semibold"
+                        )
+                        with ui.row().classes("items-center gap-1 text-xs text-slate-500"):
+                            ui.label("Granted by")
+                            ui.label(
+                                " — ".join(filter(None, (
+                                    role.get("profile_code"), role.get("profile_name"),
+                                ))) or "Unknown profile"
+                            ).classes("font-semibold text-primary")
+                    ui.badge(
+                        f"{len(profile_privileges)} privileges", color="primary",
+                    ).props("outline")
+                if not profile_privileges:
+                    ui.label("This profile grants no privileges.").classes(
+                        "w-full text-center text-slate-400 py-8"
+                    )
+                else:
+                    category_icons = {
+                        "administration": "settings", "aggregation": "folder",
+                        "record": "description", "component": "attachment",
+                        "exceptional": "warning_amber", "hold": "gavel",
+                    }
+                    with ui.element("div").classes("role-privilege-groups w-full p-3"):
+                        for category, privileges in privileges_by_category.items():
+                            with ui.element("section").classes("role-privilege-group"):
+                                with ui.row().classes(
+                                    "role-privilege-group-header w-full items-center gap-2"
+                                ):
+                                    ui.icon(
+                                        category_icons.get(category, "verified_user"),
+                                        size="18px",
+                                    ).classes("text-primary")
+                                    ui.label(
+                                        category.replace("_", " ").title()
+                                    ).classes("text-sm font-semibold grow")
+                                    ui.label(str(len(privileges))).classes(
+                                        "text-xs text-slate-500 tabular-nums"
+                                    )
+                                with ui.element("div").classes("role-privilege-list"):
+                                    for privilege in privileges:
+                                        with ui.row().classes(
+                                            "role-privilege-item items-start no-wrap gap-2"
+                                        ):
+                                            ui.icon(
+                                                "check", color="positive", size="16px",
+                                            ).classes("mt-0.5 shrink-0")
+                                            with ui.column().classes("gap-0 min-w-0"):
+                                                ui.label(privilege["name"]).classes(
+                                                    "text-xs font-semibold leading-4"
+                                                )
+                                                ui.label(privilege["code"]).classes(
+                                                    "text-[10px] font-mono text-slate-500 "
+                                                    "break-all leading-4"
+                                                ).tooltip(
+                                                    privilege_help_text(
+                                                        privilege["code"],
+                                                        privilege.get("description"),
+                                                    )
+                                                )
 
     async def select_user_details(user_id: int) -> None:
         """Render the extensible single-user management view."""
@@ -8395,49 +9448,90 @@ def index() -> None:
 
         with table_container:
             with ui.column().classes("w-full p-5 gap-4"):
-                with ui.card().classes("w-full shadow-none border border-slate-200 p-5"):
-                    with ui.row().classes("w-full items-start gap-4"):
-                        render_user_avatar(person, size="64px")
-                        with ui.column().classes("gap-1 grow"):
-                            ui.label(person["name"]).classes("text-xl font-semibold")
-                            ui.label(person.get("email") or "No email address").classes("text-slate-500")
-                            with ui.row().classes("gap-2"):
-                                ui.badge(person["account_type"].title(), color="blue-grey").props("outline")
-                                ui.badge(person["status"].title(), color={"active": "positive", "suspended": "warning"}.get(person["status"], "grey-7"))
-                            if person.get("date_suspended"):
-                                ui.label(
-                                    f"Suspended {format_timestamp(person['date_suspended'])}"
-                                ).classes("text-xs text-amber-700")
-                            elif person.get("date_deactivated"):
-                                ui.label(
-                                    f"Deactivated {format_timestamp(person['date_deactivated'])}"
-                                ).classes("text-xs text-slate-500")
-                        with ui.row().classes("gap-1"):
-                            ui.button(
-                                "Back", icon="arrow_back",
-                                on_click=lambda: breadcrumb_back(lambda: select_entity("users")),
-                            ).props("flat no-caps")
-                            ui.button("Edit", icon="edit", on_click=lambda: open_editor(person, on_saved=refresh_user, resource_key="users")).props("flat no-caps")
-                            ui.button("Role assignments", icon="group", on_click=lambda: show_memberships(person, for_user=True)).props("flat no-caps")
-                            ui.button("Temporary password", icon="password", on_click=issue_password).props("flat no-caps color=orange")
-                            ui.button("History", icon="history", on_click=lambda: show_entity_history("users", person)).props("flat no-caps")
+                with ui.element("div").classes("identity-command-layout w-full"):
+                    with ui.card().classes(
+                        "detail-surface identity-command-actions shadow-none p-4 gap-3"
+                    ):
+                        ui.label("User actions").classes("aggregation-panel-heading w-full")
+                        ui.label("Account and assignments").classes("record-action-group-label")
+                        with ui.row().classes("w-full gap-2 flex-wrap"):
+                            ui.button("Edit", icon="edit", on_click=lambda: open_editor(person, on_saved=refresh_user, resource_key="users")).props("outline dense no-caps")
+                            ui.button("Role assignments", icon="group", on_click=lambda: show_memberships(person, for_user=True)).props("outline dense no-caps")
+                            ui.button("Temporary password", icon="password", on_click=issue_password).props("outline dense no-caps color=orange")
+                        ui.label("Status and access").classes("record-action-group-label")
+                        with ui.row().classes("w-full gap-2 flex-wrap"):
+                            if person["status"] == "inactive":
+                                ui.button("Activate", icon="toggle_on", on_click=lambda: change_status("activate")).props("outline dense no-caps color=positive")
+                            else:
+                                ui.button("Deactivate", icon="toggle_off", on_click=lambda: change_status("deactivate")).props("outline dense no-caps color=negative")
+                            if person["status"] == "suspended":
+                                ui.button("Unsuspend", icon="play_circle", on_click=lambda: change_status("unsuspend")).props("outline dense no-caps color=positive")
+                            else:
+                                suspend = ui.button("Suspend", icon="pause_circle", on_click=lambda: change_status("suspend")).props("outline dense no-caps color=warning")
+                                if person["status"] != "active":
+                                    suspend.disable(); suspend.tooltip("Activate the user before suspending")
+                        ui.label("Audit and lifecycle").classes("record-action-group-label")
+                        with ui.row().classes("w-full gap-2 flex-wrap"):
+                            ui.button("History", icon="history", on_click=lambda: show_entity_history("users", person)).props("outline dense no-caps")
                             ui.button(
                                 "Permanently delete", icon="delete_forever", color="negative",
                                 on_click=lambda: confirm_identity_deletion(
                                     "users", person, label="user", on_deleted=lambda: select_entity("users"),
                                 ),
+                            ).props("outline dense no-caps")
+                    user_metadata_panel = ui.card().classes(
+                        "detail-surface identity-command-metadata shadow-none p-5"
+                    )
+                    user_metadata_panel.__enter__()
+                    with ui.row().classes("w-full items-start gap-4"):
+                        render_user_avatar(person, size="64px")
+                        with ui.column().classes("gap-1 grow"):
+                            ui.label(person["name"]).classes("text-xl font-semibold")
+                            ui.label(
+                                f"{person['account_type'].title()} account · "
+                                f"{person.get('email') or 'No email address'}"
+                            ).classes("text-sm text-slate-500")
+                        with ui.row().classes("gap-1"):
+                            ui.button(
+                                "Back", icon="arrow_back",
+                                on_click=lambda: breadcrumb_back(lambda: select_entity("users")),
                             ).props("flat no-caps")
-                    with ui.row().classes("w-full justify-end gap-2"):
-                        if person["status"] == "inactive":
-                            ui.button("Activate", icon="toggle_on", on_click=lambda: change_status("activate")).props("outline no-caps color=positive")
-                        else:
-                            ui.button("Deactivate", icon="toggle_off", on_click=lambda: change_status("deactivate")).props("outline no-caps color=negative")
-                        if person["status"] == "suspended":
-                            ui.button("Unsuspend", icon="play_circle", on_click=lambda: change_status("unsuspend")).props("outline no-caps color=positive")
-                        else:
-                            suspend = ui.button("Suspend", icon="pause_circle", on_click=lambda: change_status("suspend")).props("outline no-caps color=warning")
-                            if person["status"] != "active":
-                                suspend.disable(); suspend.tooltip("Activate the user before suspending")
+                    with ui.grid(columns=3).classes("w-full gap-4 mt-3"):
+                        with ui.column().classes("gap-1 border-b border-slate-100 pb-1.5"):
+                            ui.label("Email address").classes("detail-field-label")
+                            ui.label(person.get("email") or "No email address").classes("font-medium")
+                        with ui.column().classes("gap-1 border-b border-slate-100 pb-1.5"):
+                            ui.label("Account type").classes("detail-field-label")
+                            ui.badge(person["account_type"].title(), color="blue-grey").props("outline")
+                        with ui.column().classes("gap-1 border-b border-slate-100 pb-1.5"):
+                            ui.label("Status").classes("detail-field-label")
+                            with ui.row().classes("items-center gap-2"):
+                                ui.badge(
+                                    person["status"].title(),
+                                    color={"active": "positive", "suspended": "warning"}.get(
+                                        person["status"], "grey-7",
+                                    ),
+                                )
+                                if person.get("date_suspended"):
+                                    ui.label(
+                                        f"since {format_timestamp(person['date_suspended'])}"
+                                    ).classes("text-xs text-amber-700")
+                                elif person.get("date_deactivated"):
+                                    ui.label(
+                                        f"since {format_timestamp(person['date_deactivated'])}"
+                                    ).classes("text-xs text-slate-500")
+                        with ui.column().classes("gap-1 border-b border-slate-100 pb-1.5"):
+                            ui.label("External ID").classes("detail-field-label")
+                            ui.label(person.get("external_id") or "—").classes("font-medium")
+                        with ui.column().classes("gap-1 border-b border-slate-100 pb-1.5"):
+                            ui.label("Created").classes("detail-field-label")
+                            ui.label(format_timestamp(person.get("date_created"))).classes(
+                                "font-medium"
+                            )
+                        with ui.column().classes("gap-1 border-b border-slate-100 pb-1.5"):
+                            ui.label("User ID").classes("detail-field-label")
+                            ui.label(str(person["id"])).classes("font-medium tabular-nums")
+                    user_metadata_panel.__exit__(None, None, None)
                 ui.label("Role assignments").classes("text-lg font-semibold")
                 if not assignments:
                     ui.label("No role assignments").classes("text-slate-400")
@@ -8458,24 +9552,156 @@ def index() -> None:
                         assignment_search = ui.input("Filter role name or code").props("outlined dense clearable").classes("grow")
                         assignment_status = ui.select({"all": "All role statuses", "active": "Active", "inactive": "Inactive"}, value="all", label="Role status").props("outlined dense options-dense").classes("w-44")
                         assignment_validity = ui.select({"all": "All validity", "current": "Current", "future": "Future", "expired": "Expired"}, value="all", label="Assignment validity").props("outlined dense options-dense").classes("w-48")
-                    assignment_table = ui.table(columns=[
-                        {"name": "role", "label": "Role", "field": "role", "align": "left", "sortable": True},
-                        {"name": "role_status", "label": "Role status", "field": "role_status", "align": "left", "sortable": True},
-                        {"name": "validity", "label": "Validity", "field": "validity", "align": "left", "sortable": True},
-                        {"name": "valid_from", "label": "Valid from", "field": "valid_from", "align": "left", "sortable": True},
-                        {"name": "valid_until", "label": "Valid until", "field": "valid_until", "align": "left", "sortable": True},
-                    ], rows=assignment_rows, row_key="id", pagination={"rowsPerPage": 5, "sortBy": "role", "descending": False}).props("flat bordered dense").classes("w-full h-[190px] overflow-y-auto")
-                    add_timestamp_slots(assignment_table, ["valid_from", "valid_until"])
+                    assignment_results = ui.element("div").classes(
+                        "governance-card-list w-full"
+                    )
+                    assignment_page_size = 5
+                    assignment_state: dict[str, Any] = {
+                        "offset": 0, "filtered_rows": assignment_rows,
+                    }
+
+                    def confirm_remove_role_assignment(row: dict[str, Any]) -> None:
+                        dialog = ui.dialog()
+
+                        async def remove_assignment() -> None:
+                            try:
+                                await api.delete_assignment(row["id"], row["version"])
+                            except ApiError as error:
+                                show_api_error(error)
+                                return
+                            dialog.close()
+                            ui.notify("Role assignment removed", color="positive")
+                            await select_user_details(user_id)
+
+                        with dialog, ui.card().classes("w-[500px] max-w-full"):
+                            ui.label("Remove role assignment?").classes(
+                                "text-lg font-semibold"
+                            )
+                            ui.label(
+                                f"Remove {person['name']} from {row['role']}?"
+                            ).classes("text-sm text-slate-600")
+                            with ui.row().classes("w-full justify-end gap-2"):
+                                ui.button("Cancel", on_click=dialog.close).props(
+                                    "flat no-caps"
+                                )
+                                ui.button(
+                                    "Remove assignment", icon="person_remove",
+                                    color="negative", on_click=remove_assignment,
+                                ).props("unelevated no-caps")
+                        dialog.open()
+
+                    def render_assignment_cards() -> None:
+                        rows = assignment_state["filtered_rows"]
+                        offset = assignment_state["offset"]
+                        page_rows = rows[offset:offset + assignment_page_size]
+                        assignment_results.clear()
+                        with assignment_results:
+                            if not rows:
+                                ui.label("No role assignments match these filters.").classes(
+                                    "w-full text-center text-slate-400 py-8"
+                                )
+                            for row in page_rows:
+                                card = ui.card().classes(
+                                    "governance-list-card user-role-assignment-card shadow-none"
+                                ).on(
+                                    "click",
+                                    lambda _, role_id=row["role_id"]: select_role_details(role_id),
+                                )
+                                with card:
+                                    with ui.row().classes("w-full items-start no-wrap gap-3"):
+                                        with ui.element("div").classes("governance-card-icon"):
+                                            ui.icon("badge", size="18px")
+                                        with ui.column().classes("gap-0.5 min-w-0 grow"):
+                                            ui.label(row["role"]).classes(
+                                                "text-sm font-semibold leading-tight"
+                                            )
+                                            with ui.row().classes("items-center gap-2 flex-wrap"):
+                                                ui.badge(
+                                                    str(row["role_status"]).title(),
+                                                    color=(
+                                                        "positive" if row["role_status"] == "active"
+                                                        else "grey-7"
+                                                    ),
+                                                ).props("outline")
+                                                ui.badge(
+                                                    str(row["validity"]).title(),
+                                                    color={
+                                                        "current": "primary", "future": "warning",
+                                                        "expired": "grey-7",
+                                                    }.get(row["validity"], "grey-7"),
+                                                ).props("outline")
+                                        remove_button = ui.button(icon="person_remove").props(
+                                            "flat round dense color=negative "
+                                            "aria-label='Remove role assignment'"
+                                        ).tooltip("Remove role assignment")
+                                        remove_button.on(
+                                            "click.stop",
+                                            lambda _, item=row: confirm_remove_role_assignment(item),
+                                        )
+                                    with ui.element("div").classes(
+                                        "governance-list-facts user-role-assignment-facts"
+                                    ):
+                                        for label, value in (
+                                            ("Valid from", format_timestamp(row.get("valid_from"))),
+                                            (
+                                                "Valid until",
+                                                format_timestamp(row.get("valid_until"))
+                                                if row.get("valid_until") else "No expiry",
+                                            ),
+                                        ):
+                                            with ui.column().classes("gap-0 min-w-0"):
+                                                ui.label(label).classes("detail-field-label")
+                                                ui.label(value).classes("text-sm")
+                        start = offset + 1 if rows else 0
+                        end = min(offset + assignment_page_size, len(rows))
+                        assignment_page_label.text = f"{start}-{end} of {len(rows)}"
+                        assignment_page_label.update()
+                        (
+                            assignment_previous.enable
+                            if offset > 0 else assignment_previous.disable
+                        )()
+                        (
+                            assignment_next.enable
+                            if offset + assignment_page_size < len(rows)
+                            else assignment_next.disable
+                        )()
+
+                    with ui.row().classes("w-full items-center justify-end gap-2"):
+                        assignment_page_label = ui.label().classes(
+                            "text-sm text-slate-500"
+                        )
+                        assignment_previous = ui.button(
+                            "Previous", icon="chevron_left",
+                        ).props("flat dense no-caps")
+                        assignment_next = ui.button(
+                            "Next", icon="chevron_right",
+                        ).props("flat dense no-caps")
+
+                    def previous_assignment_page() -> None:
+                        assignment_state["offset"] = max(
+                            0, assignment_state["offset"] - assignment_page_size,
+                        )
+                        render_assignment_cards()
+
+                    def next_assignment_page() -> None:
+                        assignment_state["offset"] += assignment_page_size
+                        render_assignment_cards()
+
+                    assignment_previous.on("click", previous_assignment_page)
+                    assignment_next.on("click", next_assignment_page)
+
                     def filter_assignments() -> None:
                         query = (assignment_search.value or "").strip().casefold()
-                        assignment_table.rows = [row for row in assignment_rows if (
+                        assignment_state["filtered_rows"] = [row for row in assignment_rows if (
                             (not query or query in row["role"].casefold())
                             and (assignment_status.value == "all" or row["role_status"] == assignment_status.value)
                             and (assignment_validity.value == "all" or row["validity"] == assignment_validity.value)
                         )]
-                        assignment_table.update()
+                        assignment_state["offset"] = 0
+                        render_assignment_cards()
                     for control in (assignment_search, assignment_status, assignment_validity):
                         control.on_value_change(filter_assignments)
+                    render_assignment_cards()
 
                 ui.label("Login sessions").classes("text-lg font-semibold")
                 session_state = {"offset": 0, "total": 0}
@@ -8484,21 +9710,76 @@ def index() -> None:
                     session_status = ui.select({"all": "All statuses", "active": "Active", "expired": "Expired", "revoked": "Revoked"}, value="all", label="Status").props("outlined dense options-dense").classes("w-40")
                     session_sort = ui.select({"date_created": "Signed in", "last_seen_at": "Last activity", "expires_at": "Expiry", "status": "Status", "client_ip": "IP address"}, value="date_created", label="Sort by").props("outlined dense options-dense").classes("w-40")
                     session_direction = ui.select({True: "Newest/descending", False: "Oldest/ascending"}, value=True, label="Direction").props("outlined dense options-dense").classes("w-48")
-                session_table = ui.table(columns=[
-                    {"name": "status", "label": "Status", "field": "status", "align": "left", "sortable": True},
-                    {"name": "date_created", "label": "Signed in", "field": "date_created", "align": "left", "sortable": True},
-                    {"name": "last_seen_at", "label": "Last activity", "field": "last_seen_at", "align": "left", "sortable": True},
-                    {"name": "expires_at", "label": "Expires", "field": "expires_at", "align": "left", "sortable": True},
-                    {"name": "client_ip", "label": "IP address", "field": "client_ip", "align": "left", "sortable": True},
-                    {"name": "user_agent", "label": "Client", "field": "user_agent", "align": "left"},
-                    {"name": "actions", "label": "", "field": "actions", "align": "right"},
-                ], rows=[], row_key="id").props("flat bordered dense hide-bottom").classes("w-full h-[190px] overflow-y-auto")
-                add_timestamp_slots(session_table, ["date_created", "last_seen_at", "expires_at"])
-                session_table.add_slot("body-cell-actions", '''<q-td :props="props"><q-btn v-if="props.row.status === 'active'" flat round dense color="negative" icon="logout" @click="$parent.$emit('revoke', props.row)"><q-tooltip>Force logout this session</q-tooltip></q-btn></q-td>''')
+                session_results = ui.element("div").classes("login-session-card-grid w-full")
                 with ui.row().classes("w-full items-center justify-end gap-2"):
                     session_page_label = ui.label().classes("text-sm text-slate-500")
                     session_previous = ui.button("Previous", icon="chevron_left").props("flat dense no-caps")
                     session_next = ui.button("Next", icon="chevron_right").props("flat dense no-caps")
+
+                def session_client_summary(user_agent: str | None) -> tuple[str, str]:
+                    value = user_agent or "Unknown client"
+                    browser = next((
+                        name for token, name in (
+                            ("Edg/", "Microsoft Edge"), ("Chrome/", "Google Chrome"),
+                            ("Firefox/", "Mozilla Firefox"), ("Safari/", "Safari"),
+                        ) if token in value
+                    ), "Browser")
+                    platform = next((
+                        name for token, name in (
+                            ("Macintosh", "macOS"), ("Windows", "Windows"),
+                            ("Android", "Android"), ("iPhone", "iOS"), ("Linux", "Linux"),
+                        ) if token in value
+                    ), "Unknown platform")
+                    return browser, platform
+
+                def render_user_session_card(row: dict[str, Any]) -> None:
+                    browser, platform = session_client_summary(row.get("user_agent"))
+                    with ui.card().classes("login-session-card shadow-none"):
+                        with ui.row().classes("w-full items-start no-wrap gap-3"):
+                            with ui.element("div").classes("governance-card-icon"):
+                                ui.icon("devices", size="20px")
+                            with ui.column().classes("gap-0 min-w-0 grow"):
+                                ui.label(f"{browser} on {platform}").classes(
+                                    "font-semibold leading-tight"
+                                )
+                                ui.label(row.get("client_ip") or "No IP address").classes(
+                                    "text-xs text-slate-500"
+                                )
+                                if row.get("is_current"):
+                                    ui.badge("Current session", color="primary").props(
+                                        "outline"
+                                    ).classes("mt-1")
+                            ui.badge(
+                                str(row.get("status") or "unknown").title(),
+                                color={
+                                    "active": "positive", "revoked": "negative",
+                                    "expired": "grey-7",
+                                }.get(row.get("status"), "grey-7"),
+                            ).props("outline")
+                        with ui.grid(columns=3).classes("w-full gap-x-4 gap-y-3"):
+                            for label, value in (
+                                ("Signed in", format_timestamp(row.get("date_created"))),
+                                ("Last activity", format_timestamp(row.get("last_seen_at"))),
+                                ("Expires", format_timestamp(row.get("expires_at"))),
+                            ):
+                                with ui.column().classes("gap-0 min-w-0"):
+                                    ui.label(label).classes("detail-field-label")
+                                    ui.label(value).classes("text-xs truncate w-full").tooltip(value)
+                        with ui.row().classes(
+                            "w-full items-center no-wrap border-t border-slate-100 pt-2 gap-2"
+                        ):
+                            ui.icon("devices", color="primary", size="18px")
+                            user_agent = row.get("user_agent") or "Unknown client"
+                            ui.label(user_agent).classes(
+                                "text-xs text-slate-500 truncate grow"
+                            ).tooltip(user_agent)
+                            if row.get("status") == "active":
+                                ui.button(
+                                    icon="logout",
+                                    on_click=lambda _, item=row: revoke_user_session_by_row(item),
+                                ).props("outline dense color=negative").classes(
+                                    "login-session-action-button"
+                                ).tooltip("Force sign-out this session")
 
                 async def load_session_page(*, reset: bool = False) -> None:
                     if reset: session_state["offset"] = 0
@@ -8511,7 +9792,14 @@ def index() -> None:
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True); return
                     session_state["total"] = page["total"]
-                    session_table.rows = page["items"]; session_table.update()
+                    session_results.clear()
+                    with session_results:
+                        if not page["items"]:
+                            ui.label("No login sessions match these filters.").classes(
+                                "w-full text-center text-slate-400 py-8"
+                            )
+                        for session_row in page["items"]:
+                            render_user_session_card(session_row)
                     start = session_state["offset"] + 1 if page["total"] else 0
                     end = min(session_state["offset"] + len(page["items"]), page["total"])
                     session_page_label.text = f"{start}-{end} of {page['total']}"; session_page_label.update()
@@ -8525,12 +9813,13 @@ def index() -> None:
                 session_previous.on("click", previous_sessions); session_next.on("click", next_sessions)
                 for control in (session_query, session_status, session_sort, session_direction):
                     control.on_value_change(lambda: load_session_page(reset=True))
-                async def revoke_user_session(event: Any) -> None:
+                async def revoke_user_session_by_row(row: dict[str, Any]) -> None:
                     try:
-                        await api.revoke_session(event.args["id"]); ui.notify("Login session revoked", color="positive"); await load_session_page()
+                        await api.revoke_session(row["id"])
+                        ui.notify("Login session revoked", color="positive")
+                        await load_session_page()
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True)
-                session_table.on("revoke", revoke_user_session)
                 await load_session_page()
 
     async def show_organization_structure(
@@ -9179,46 +10468,79 @@ def index() -> None:
                     }
                     for item in qualifying_assignments
                 ]
-                custodian_table = ui.table(
-                    columns=[
-                        {"name": "person", "label": "Person", "field": "person", "sortable": True, "align": "left"},
-                        {"name": "email", "label": "Email", "field": "email", "sortable": True, "align": "left"},
-                        {"name": "role", "label": "Qualifying role", "field": "role", "sortable": True, "align": "left"},
-                        {"name": "clearance", "label": "Clearance", "field": "clearance", "sortable": True, "align": "left"},
-                        {"name": "valid_from_display", "label": "Valid from", "field": "valid_from_display", "sortable": True, "align": "left"},
-                        {"name": "valid_until_display", "label": "Assignment valid until", "field": "valid_until_display", "sortable": True, "align": "left"},
-                        {"name": "actions", "label": "", "field": "actions", "align": "right"},
-                    ],
-                    rows=custodian_rows,
-                    pagination={"rowsPerPage": 5},
-                ).props("flat bordered rows-per-page-options='[5,10,25]'").classes(
-                    "w-full governance-table"
-                )
-                custodian_table.add_slot("body-cell-person", """
-                    <q-td :props="props">
-                      <div class="row items-center no-wrap q-gutter-sm">
-                        <q-avatar size="36px"
-                          :style="{ backgroundColor: props.row.avatar.color, color: 'white' }">
-                          {{ props.row.avatar.initials }}
-                        </q-avatar>
-                        <span>{{ props.row.person }}</span>
-                      </div>
-                    </q-td>
-                """)
-                custodian_table.add_slot("body-cell-actions", """
-                    <q-td :props="props">
-                      <q-btn flat dense no-caps icon="person" color="primary" label="Open user"
-                        @click="$parent.$emit('open_user', props.row)" />
-                      <q-btn flat dense no-caps icon="badge" color="primary" label="Open role"
-                        @click="$parent.$emit('open_role', props.row)" />
-                    </q-td>
-                """)
-                custodian_table.on(
-                    "open_user", lambda event: select_user_details(event.args["user_id"])
-                )
-                custodian_table.on(
-                    "open_role", lambda event: select_role_details(event.args["role_id"])
-                )
+                custodian_page = {"offset": 0}
+                custodian_host = ui.element("div").classes("governance-card-list w-full")
+                with ui.row().classes("w-full items-center justify-end gap-2"):
+                    custodian_page_label = ui.label().classes("text-sm text-slate-500")
+                    custodian_previous = ui.button(
+                        "Previous", icon="chevron_left",
+                    ).props("flat dense no-caps")
+                    custodian_next = ui.button(
+                        "Next", icon="chevron_right",
+                    ).props("flat dense no-caps")
+
+                def render_custodian_cards() -> None:
+                    offset = custodian_page["offset"]
+                    page_rows = custodian_rows[offset:offset + 5]
+                    custodian_host.clear()
+                    with custodian_host:
+                        for row in page_rows:
+                            with ui.card().classes(
+                                "governance-list-card governance-custody-assignment-card shadow-none"
+                            ):
+                                with ui.row().classes("w-full items-center no-wrap gap-3"):
+                                    render_user_avatar({
+                                        "id": row["user_id"], "name": row["person"],
+                                        "email": row["email"],
+                                    }, size="36px")
+                                    with ui.column().classes("gap-0 min-w-0 grow"):
+                                        ui.label(row["person"]).classes("font-semibold")
+                                        ui.label(row["email"]).classes(
+                                            "text-xs text-slate-500 truncate w-full"
+                                        ).tooltip(row["email"])
+                                    ui.badge("Universal custodian", color="positive").props(
+                                        "outline"
+                                    )
+                                    ui.button(
+                                        icon="person",
+                                        on_click=lambda _, item=row: select_user_details(
+                                            item["user_id"]
+                                        ),
+                                    ).props("flat round dense").tooltip("Open user")
+                                    ui.button(
+                                        icon="badge",
+                                        on_click=lambda _, item=row: select_role_details(
+                                            item["role_id"]
+                                        ),
+                                    ).props("flat round dense").tooltip("Open role")
+                                with ui.element("div").classes("governance-list-facts"):
+                                    for label, value in (
+                                        ("Qualifying role", row["role"]),
+                                        ("Clearance", row["clearance"]),
+                                        ("Valid from", row["valid_from_display"]),
+                                        ("Valid until", row["valid_until_display"]),
+                                    ):
+                                        with ui.column().classes("gap-0 min-w-0"):
+                                            ui.label(label).classes("detail-field-label")
+                                            ui.label(value).classes("text-sm truncate w-full").tooltip(value)
+                    start = offset + 1
+                    end = min(offset + 5, len(custodian_rows))
+                    custodian_page_label.text = f"{start}-{end} of {len(custodian_rows)}"
+                    custodian_page_label.update()
+                    (custodian_previous.enable if offset > 0 else custodian_previous.disable)()
+                    (custodian_next.enable if offset + 5 < len(custodian_rows) else custodian_next.disable)()
+
+                def previous_custodians() -> None:
+                    custodian_page["offset"] = max(0, custodian_page["offset"] - 5)
+                    render_custodian_cards()
+
+                def next_custodians() -> None:
+                    custodian_page["offset"] += 5
+                    render_custodian_cards()
+
+                custodian_previous.on("click", previous_custodians)
+                custodian_next.on("click", next_custodians)
+                render_custodian_cards()
             else:
                 ui.label(
                     "No active person currently meets every universal-custody requirement."
@@ -9229,9 +10551,6 @@ def index() -> None:
                     ui.label(
                         "Qualifying roles provide custody; other listed roles show what is still missing."
                     ).classes("text-xs text-slate-500")
-                ui.button(
-                    "Open roles", icon="open_in_new", on_click=lambda: select_entity("roles"),
-                ).props("flat dense no-caps")
             if not report["governance_roles"]:
                 with ui.card().classes("governance-empty-state shadow-none"):
                     ui.icon("verified_user", color="blue-grey-4", size="28px")
@@ -9268,9 +10587,9 @@ def index() -> None:
                                 color="positive" if role["qualifies_for_universal_custody"] else "warning",
                             ).props("outline")
                             ui.button(
-                                "Open role", icon="open_in_new",
+                                icon="badge",
                                 on_click=lambda _, identifier=role["id"]: select_role_details(identifier),
-                            ).props("flat dense no-caps")
+                            ).props("flat round dense").tooltip("Open role")
                         with ui.row().classes("w-full items-center gap-2 flex-wrap"):
                             ui.badge(
                                 f"{role['security_level_code']} — {role['security_level_name']} "
@@ -9336,35 +10655,79 @@ def index() -> None:
                     assignment_rows.append({
                         **item,
                         "person": item["user_name"],
+                        "email": item.get("user_email") or "—",
                         "role": f"{item['role_code']} — {item['role_name']}",
                         "custody_status": "; ".join(
                             reason_labels.get(reason, reason.replace("_", " ").title())
                             for reason in item["ineffective_reasons"]
                         ),
                     })
-                assignment_table = ui.table(
-                    columns=[
-                        {"name": "person", "label": "Person", "field": "person", "sortable": True, "align": "left"},
-                        {"name": "role", "label": "Role", "field": "role", "sortable": True, "align": "left"},
-                        {"name": "custody_status", "label": "Custody status", "field": "custody_status", "sortable": True, "align": "left"},
-                        {"name": "actions", "label": "", "field": "actions", "align": "right"},
-                    ],
-                    rows=assignment_rows,
-                    pagination={"rowsPerPage": 5},
-                ).props("flat bordered rows-per-page-options='[5,10,25]'").classes(
-                    "w-full governance-table"
-                )
-                assignment_table.add_slot("body-cell-actions", """
-                    <q-td :props="props">
-                      <q-btn flat round dense icon="open_in_new" color="primary"
-                        @click="$parent.$emit('open_user', props.row)">
-                        <q-tooltip>Open user</q-tooltip>
-                      </q-btn>
-                    </q-td>
-                """)
-                assignment_table.on(
-                    "open_user", lambda event: select_user_details(event.args["user_id"])
-                )
+                attention_page = {"offset": 0}
+                attention_host = ui.element("div").classes("governance-card-list w-full")
+                with ui.row().classes("w-full items-center justify-end gap-2"):
+                    attention_page_label = ui.label().classes("text-sm text-slate-500")
+                    attention_previous = ui.button(
+                        "Previous", icon="chevron_left",
+                    ).props("flat dense no-caps")
+                    attention_next = ui.button(
+                        "Next", icon="chevron_right",
+                    ).props("flat dense no-caps")
+
+                def render_attention_cards() -> None:
+                    offset = attention_page["offset"]
+                    page_rows = assignment_rows[offset:offset + 5]
+                    attention_host.clear()
+                    with attention_host:
+                        for row in page_rows:
+                            with ui.card().classes(
+                                "governance-list-card governance-custody-assignment-card shadow-none"
+                            ):
+                                with ui.row().classes("w-full items-center no-wrap gap-3"):
+                                    render_user_avatar({
+                                        "id": row["user_id"], "name": row["person"],
+                                        "email": row["email"],
+                                    }, size="36px")
+                                    with ui.column().classes("gap-0 min-w-0 grow"):
+                                        ui.label(row["person"]).classes("font-semibold")
+                                        ui.label(row["email"]).classes(
+                                            "text-xs text-slate-500 truncate w-full"
+                                        ).tooltip(row["email"])
+                                    ui.button(
+                                        icon="person",
+                                        on_click=lambda _, item=row: select_user_details(
+                                            item["user_id"]
+                                        ),
+                                    ).props("flat round dense").tooltip("Open user")
+                                with ui.element("div").classes(
+                                    "governance-list-facts user-role-assignment-facts"
+                                ):
+                                    for label, value in (
+                                        ("Role", row["role"]),
+                                        ("Custody status", row["custody_status"]),
+                                    ):
+                                        with ui.column().classes("gap-0 min-w-0"):
+                                            ui.label(label).classes("detail-field-label")
+                                            ui.label(value).classes(
+                                                "text-sm whitespace-normal"
+                                            )
+                    start = offset + 1
+                    end = min(offset + 5, len(assignment_rows))
+                    attention_page_label.text = f"{start}-{end} of {len(assignment_rows)}"
+                    attention_page_label.update()
+                    (attention_previous.enable if offset > 0 else attention_previous.disable)()
+                    (attention_next.enable if offset + 5 < len(assignment_rows) else attention_next.disable)()
+
+                def previous_attention_assignments() -> None:
+                    attention_page["offset"] = max(0, attention_page["offset"] - 5)
+                    render_attention_cards()
+
+                def next_attention_assignments() -> None:
+                    attention_page["offset"] += 5
+                    render_attention_cards()
+
+                attention_previous.on("click", previous_attention_assignments)
+                attention_next.on("click", next_attention_assignments)
+                render_attention_cards()
 
     async def select_security_operations() -> None:
         register_navigation("security-operations", "Security operations")
@@ -9466,9 +10829,11 @@ def index() -> None:
                                     ).props("outline")
                                     if "organization.administer" in privileges:
                                         ui.button(
-                                            "Open role", icon="open_in_new",
+                                            icon="badge",
                                             on_click=lambda _, role_id=affected_role["id"]: select_role_details(role_id),
-                                        ).props("flat dense no-caps color=primary")
+                                        ).props("flat round dense color=primary").tooltip(
+                                            "Open role"
+                                        )
 
                 with ui.grid(columns=2).classes("w-full gap-4"):
                     for value, label, icon, help_text in (
@@ -9507,25 +10872,169 @@ def index() -> None:
                     "signal": item["operation"].replace("_", " ").title(),
                     "decision": decision_code_label(item.get("decision_code")),
                 } for item in summary.get("recent_events", [])]
-                event_table = ui.table(
-                    columns=[
-                        {"name": "when", "label": "When", "field": "when", "sortable": True, "align": "left"},
-                        {"name": "signal", "label": "Event", "field": "signal", "sortable": True, "align": "left"},
-                        {"name": "actor", "label": "Account / actor", "field": "actor", "sortable": True, "align": "left"},
-                        {"name": "entity_label", "label": "Target", "field": "entity_label", "sortable": True, "align": "left"},
-                        {"name": "decision", "label": "Decision", "field": "decision", "sortable": True, "align": "left"},
-                    ], rows=event_rows, pagination={"rowsPerPage": 10}, row_key="id",
-                ).props("flat bordered rows-per-page-options='[10,25,50]'").classes(
-                    "w-full governance-table security-operations-table"
+                security_event_page = {"offset": 0}
+                security_event_host = ui.element("div").classes(
+                    "governance-card-list w-full"
                 )
-                event_table.add_slot("body-cell-decision", '''
-                    <q-td :props="props">
-                      <span>{{ props.value }}</span>
-                      <q-tooltip v-if="props.row.decision_code">
-                        Technical code: {{ props.row.decision_code }}
-                      </q-tooltip>
-                    </q-td>
-                ''')
+                with ui.row().classes("w-full items-center justify-end gap-2"):
+                    security_event_page_label = ui.label().classes(
+                        "text-sm text-slate-500"
+                    )
+                    security_event_previous = ui.button(
+                        "Previous", icon="chevron_left",
+                    ).props("flat dense no-caps")
+                    security_event_next = ui.button(
+                        "Next", icon="chevron_right",
+                    ).props("flat dense no-caps")
+
+                async def open_security_event_target(row: dict[str, Any]) -> None:
+                    entity_type = row.get("entity_type")
+                    entity_id = row.get("entity_id")
+                    try:
+                        if entity_type == "aggregation":
+                            await open_aggregation(await api.get("aggregations", entity_id))
+                        elif entity_type == "record":
+                            await select_record_details(entity_id)
+                        elif entity_type == "org_unit":
+                            await select_organization_unit_details(entity_id)
+                        elif entity_type == "role":
+                            await select_role_details(entity_id)
+                        elif entity_type == "user":
+                            await select_user_details(entity_id)
+                        elif entity_type == "classification_scheme":
+                            await select_classification_workspace(
+                                initial_scheme_id=entity_id,
+                            )
+                        elif entity_type == "classification":
+                            classification = await api.get("classifications", entity_id)
+                            await select_classification_workspace(
+                                initial_scheme_id=classification["classification_scheme_id"],
+                                initial_classification_id=entity_id,
+                            )
+                    except ApiError as error:
+                        if error.status_code == 404:
+                            ui.notify(
+                                "This target no longer exists.", color="warning",
+                            )
+                        else:
+                            show_api_error(error)
+
+                def render_security_event_cards() -> None:
+                    offset = security_event_page["offset"]
+                    page_rows = event_rows[offset:offset + 10]
+                    security_event_host.clear()
+                    with security_event_host:
+                        if not page_rows:
+                            ui.label("No recent security events in this period.").classes(
+                                "w-full text-center text-slate-400 py-8"
+                            )
+                        for row in page_rows:
+                            with ui.card().classes(
+                                "governance-list-card governance-custody-assignment-card shadow-none"
+                            ):
+                                with ui.row().classes("w-full items-center no-wrap gap-3"):
+                                    with ui.element("div").classes("governance-card-icon"):
+                                        ui.icon("security", size="18px")
+                                    ui.label(row["signal"]).classes(
+                                        "font-semibold grow min-w-0"
+                                    )
+                                    ui.label(row["when"]).classes(
+                                        "text-xs text-slate-500 whitespace-nowrap"
+                                    )
+                                with ui.element("div").classes(
+                                    "governance-list-facts security-event-facts"
+                                ):
+                                    with ui.column().classes("gap-0 min-w-0"):
+                                        ui.label("Account / actor").classes(
+                                            "detail-field-label"
+                                        )
+                                        if row.get("actor_user_id"):
+                                            actor_control = ui.row().classes(
+                                                "items-center no-wrap gap-2 min-w-0 "
+                                                "cursor-pointer text-primary"
+                                            ).on(
+                                                "click",
+                                                lambda _, user_id=row["actor_user_id"]:
+                                                    select_user_details(user_id),
+                                            )
+                                            actor_control.tooltip("Open user")
+                                            with actor_control:
+                                                render_user_avatar({
+                                                    "id": row["actor_user_id"],
+                                                    "name": row.get("actor_name"),
+                                                    "email": row.get("actor_email"),
+                                                }, size="26px")
+                                                ui.label(row.get("actor") or "—").classes(
+                                                    "text-sm truncate min-w-0"
+                                                )
+                                        else:
+                                            with ui.row().classes(
+                                                "items-center no-wrap gap-2 min-w-0"
+                                            ):
+                                                ui.icon("smart_toy", size="18px").classes(
+                                                    "text-slate-400"
+                                                )
+                                                ui.label(row.get("actor") or "—").classes(
+                                                    "text-sm truncate min-w-0"
+                                                )
+                                    with ui.column().classes("gap-0 min-w-0"):
+                                        ui.label("Target").classes("detail-field-label")
+                                        target_value = row.get("entity_label") or "—"
+                                        target_supported = (
+                                            not row.get("redacted")
+                                            and row.get("entity_type") in {
+                                                "aggregation", "record", "org_unit", "role",
+                                                "user", "classification", "classification_scheme",
+                                            }
+                                        )
+                                        target_label = ui.label(target_value).classes(
+                                            "text-sm truncate w-full "
+                                            + ("cursor-pointer text-primary" if target_supported else "")
+                                        ).tooltip(target_value)
+                                        if target_supported:
+                                            target_label.on(
+                                                "click",
+                                                lambda _, item=row: open_security_event_target(item),
+                                            )
+                                    with ui.column().classes("gap-0 min-w-0"):
+                                        ui.label("Decision").classes("detail-field-label")
+                                        decision_value = row.get("decision") or "—"
+                                        decision_label = ui.label(decision_value).classes(
+                                            "text-sm truncate w-full"
+                                        )
+                                        if row.get("decision_code"):
+                                            decision_label.tooltip(
+                                                f"Technical code: {row['decision_code']}"
+                                            )
+                    start = offset + 1 if event_rows else 0
+                    end = min(offset + 10, len(event_rows))
+                    security_event_page_label.text = (
+                        f"{start}-{end} of {len(event_rows)}"
+                    )
+                    security_event_page_label.update()
+                    (
+                        security_event_previous.enable
+                        if offset > 0 else security_event_previous.disable
+                    )()
+                    (
+                        security_event_next.enable
+                        if offset + 10 < len(event_rows)
+                        else security_event_next.disable
+                    )()
+
+                def previous_security_events() -> None:
+                    security_event_page["offset"] = max(
+                        0, security_event_page["offset"] - 10,
+                    )
+                    render_security_event_cards()
+
+                def next_security_events() -> None:
+                    security_event_page["offset"] += 10
+                    render_security_event_cards()
+
+                security_event_previous.on("click", previous_security_events)
+                security_event_next.on("click", next_security_events)
+                render_security_event_cards()
 
                 ui.label("Denial monitoring").classes("text-lg font-semibold mt-2")
                 ui.label(AUTHORIZATION_DENIAL_HELP).classes("text-sm text-slate-500 -mt-4")
@@ -10658,13 +12167,17 @@ def index() -> None:
                 name = ui.input("Name", value=(hold or {}).get("name", "")).props("outlined maxlength=300").classes("w-full")
                 valid_from = ui.input("Valid from", value=initial_valid_from).props("outlined type=datetime-local").classes("w-full")
                 valid_to = ui.input("Valid to (exclusive)", value=initial_valid_to).props("outlined type=datetime-local").classes("w-full")
-            owner = ui.select(people, value=(hold or {}).get("owner_user_id"), label="Owner", with_input=True).props("outlined use-input").classes("w-full")
+            owner = ui.select(
+                people, value=(hold or {}).get("owner_user_id"), label="Owner", with_input=True,
+            ).props("outlined use-input").classes("w-full")
+            style_person_select(owner)
             contributor_people = {key: value for key, value in people.items() if key != owner.value}
             contributors = ui.select(
                 contributor_people,
                 value=[item["id"] for item in (hold or {}).get("contributors", [])],
                 multiple=True, label="Contributors", with_input=True,
             ).props("outlined use-chips use-input").classes("w-full")
+            style_person_select(contributors, multiple=True)
             description = ui.textarea("Description", value=(hold or {}).get("description") or "").props("outlined autogrow maxlength=4000").classes("w-full")
             preserve = ui.checkbox("Preserve resource metadata and state", value=(hold or {}).get("preserve_resource_state", False))
             ui.label("Valid-to is exclusive. Dates currently use the application timezone.").classes("text-xs text-slate-500")
@@ -10683,10 +12196,11 @@ def index() -> None:
                 if not (code.value or "").strip() or not (name.value or "").strip() or owner.value is None:
                     ui.notify("Code, name, owner, and valid-from are required", color="warning"); return
                 try:
+                    owner_id = int(owner.value)
                     payload = {"code": code.value.strip(), "name": name.value.strip(), "description": (description.value or "").strip() or None,
                                "valid_from": iso_value(valid_from.value, required=True), "valid_to": iso_value(valid_to.value, required=False),
-                               "owner_user_id": int(owner.value), "preserve_resource_state": bool(preserve.value)}
-                    contributor_ids = [int(value) for value in (contributors.value or []) if int(value) != int(owner.value)]
+                               "owner_user_id": owner_id, "preserve_resource_state": bool(preserve.value)}
+                    contributor_ids = [int(value) for value in (contributors.value or []) if int(value) != owner_id]
                     if not editing:
                         payload["contributor_user_ids"] = contributor_ids
                     saved = await (api.update_hold(hold["id"], hold["version"], payload, reason or "") if editing else api.create_hold(payload))
@@ -10711,7 +12225,7 @@ def index() -> None:
 
     async def add_resource_to_hold_dialog(resource_type: str, resource_id: int, refresh_page: Any) -> None:
         try:
-            available = [item for item in await api.holds(limit=100) if item.get("capabilities", {}).get("manage_members")]
+            available = [item for item in await api.holds(limit=100) if item.get("capabilities", {}).get("manage_held_items")]
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True); return
         dialog = ui.dialog()
@@ -10763,10 +12277,10 @@ def index() -> None:
                                         dialog.close(); await open_aggregation(await api.get("aggregations", source_id))
                                     ui.button("Open assigning aggregation", icon="account_tree", on_click=open_source).props("flat no-caps")
                                 if (resource_type and resource_id is not None and item.get("is_direct")
-                                        and item.get("can_manage_members") and item.get("direct_assignment_version") is not None):
+                                        and item.get("can_manage_held_items") and item.get("direct_assignment_version") is not None):
                                     async def remove_this(selected: dict[str, Any] = item) -> None:
                                         async def remove(reason: str) -> None:
-                                            await api.remove_hold_member(selected["hold_id"],resource_type,resource_id,selected["direct_assignment_version"],reason)
+                                            await api.remove_hold_held_item(selected["hold_id"],resource_type,resource_id,selected["direct_assignment_version"],reason)
                                             dialog.close(); ui.notify("Direct hold assignment removed",color="positive")
                                             if refresh_page:
                                                 result=refresh_page()
@@ -10804,16 +12318,16 @@ def index() -> None:
                         "Create hold", icon="add", on_click=lambda: open_hold_editor(),
                     ).props("unelevated no-caps")
             with ui.row().classes("w-full items-end gap-3"):
-                query = ui.input("Search code or name").props("outlined clearable debounce=300").classes("grow")
-                hold_state = ui.select({None:"All states","scheduled":"Scheduled","active":"Active","expired":"Expired"}, value=None, label="State").props("outlined").classes("w-44")
-                preservation = ui.select({None:"All protection","false":"Core protection","true":"Enhanced state preservation"},value=None,label="Protection").props("outlined").classes("w-56")
-                hold_sort = ui.select({"code":"Code","name":"Name","state":"State","valid_from":"Valid from","valid_to":"Valid until","owner":"Owner","created":"Created","updated":"Updated"},value="code",label="Sort by").props("outlined").classes("w-44")
-                refresh = ui.button("Refresh", icon="refresh").props("flat no-caps")
+                query = ui.input("Search code or name").props("outlined dense clearable debounce=300").classes("grow")
+                hold_state = ui.select({None:"All states","scheduled":"Scheduled","active":"Active","expired":"Expired"}, value=None, label="State").props("outlined dense").classes("w-44")
+                preservation = ui.select({None:"All protection","false":"Core protection","true":"Enhanced state preservation"},value=None,label="Protection").props("outlined dense").classes("w-56")
+                hold_sort = ui.select({"code":"Code","name":"Name","state":"State","valid_from":"Valid from","valid_to":"Valid until","owner":"Owner","created":"Created","updated":"Updated"},value="code",label="Sort by").props("outlined dense").classes("w-44")
+                refresh = ui.button("Refresh", icon="refresh").props("flat dense no-caps")
             with ui.row().classes("w-full items-end gap-3"):
-                owner_filter=ui.select(owner_options,value=None,label="Owner").props("outlined clearable").classes("w-56")
-                contributor_filter=ui.select(contributor_options,value=None,label="Contributor").props("outlined clearable").classes("w-56")
-                valid_from_filter=ui.input("Valid from on/after").props("outlined clearable type=datetime-local").classes("w-56")
-                valid_to_filter=ui.input("Valid until before").props("outlined clearable type=datetime-local").classes("w-56")
+                owner_filter=ui.select(owner_options,value=None,label="Owner").props("outlined dense clearable").classes("w-56")
+                contributor_filter=ui.select(contributor_options,value=None,label="Contributor").props("outlined dense clearable").classes("w-56")
+                valid_from_filter=ui.input("Valid from on/after").props("outlined dense clearable type=datetime-local").classes("w-56")
+                valid_to_filter=ui.input("Valid until before").props("outlined dense clearable type=datetime-local").classes("w-56")
             host = ui.column().classes("w-full")
             with ui.row().classes("w-full items-center justify-between"):
                 page_status = ui.label().classes("text-sm text-slate-600")
@@ -10823,15 +12337,16 @@ def index() -> None:
                     next_page = ui.button("Next",icon="chevron_right").props("flat no-caps")
                     last_page = ui.button("Last",icon="last_page").props("flat no-caps")
 
+            async def show_list_hold_history(hold: dict[str, Any]) -> None:
+                await show_entity_history("holds", hold)
+
             async def load(*, reset: bool = False) -> None:
                 if reset: paging["offset"] = 0
                 try:
-                    async def browser_iso(value: str | None) -> str | None:
-                        return await ui.run_javascript(f"new Date({json.dumps(value)}).toISOString()") if value else None
                     result = await api.holds_page(q=(query.value or "").strip() or None,state=hold_state.value,
                         preserve_resource_state=(None if preservation.value is None else preservation.value=="true"),
                         owner_user_id=owner_filter.value,contributor_user_id=contributor_filter.value,
-                        valid_from_gte=await browser_iso(valid_from_filter.value),valid_to_lt=await browser_iso(valid_to_filter.value),
+                        valid_from_gte=valid_from_filter.value or None,valid_to_lt=valid_to_filter.value or None,
                         sort=hold_sort.value,limit=paging["limit"],offset=paging["offset"])
                 except ApiError as error:
                     ui.notify(error_message(error), color="negative", close_button=True); return
@@ -10841,14 +12356,34 @@ def index() -> None:
                     if not rows:
                         ui.label("No holds are available.").classes("text-slate-500 p-6")
                         return
-                    table = ui.table(columns=[
-                        {"name":"code","label":"Code","field":"code","sortable":True}, {"name":"name","label":"Name","field":"name","sortable":True},
-                        {"name":"state","label":"State","field":"state","sortable":True}, {"name":"valid_from","label":"Valid from","field":"valid_from","sortable":True},
-                        {"name":"valid_to","label":"Valid to","field":"valid_to","sortable":True}, {"name":"direct_member_count","label":"Direct members","field":"direct_member_count","sortable":True},
-                        {"name":"actions","label":"","field":"actions"},
-                    ], rows=rows, row_key="id", pagination={"rowsPerPage":25,"sortBy":"code"}).props('flat bordered wrap-cells separator=horizontal hide-pagination').classes("w-full governance-table")
-                    table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round icon="open_in_new" color="primary" @click="$parent.$emit(\'open_hold\', props.row)"><q-tooltip>Open hold</q-tooltip></q-btn></q-td>')
-                    table.on("open_hold", lambda event: select_hold_details(event.args["id"]))
+                    with ui.element("div").classes("governance-card-list w-full"):
+                        for hold in rows:
+                            with ui.card().classes(
+                                "governance-list-card shadow-none " +
+                                ("border-l-4 border-l-amber-400" if hold.get("is_effective") else "")
+                            ):
+                                with ui.row().classes("w-full items-start no-wrap gap-3"):
+                                    ui.avatar(icon="gavel", color="amber-1" if hold.get("is_effective") else "blue-1", text_color="amber-9" if hold.get("is_effective") else "primary", size="42px")
+                                    with ui.column().classes("gap-0 min-w-0 grow"):
+                                        ui.label(hold["name"]).classes("font-semibold text-base leading-tight")
+                                        ui.label(hold["code"]).classes("text-xs font-medium text-primary")
+                                        ui.label(hold.get("description") or "No description provided").classes("text-xs text-slate-500 mt-1 leading-5")
+                                    ui.badge(hold["state"].title(), color={"active":"warning","scheduled":"primary","expired":"blue-grey"}.get(hold["state"], "blue-grey")).props("outline")
+                                with ui.element("div").classes("governance-list-facts w-full"):
+                                    for label, value in (
+                                        ("Owner", hold["owner"]["name"]),
+                                        ("Contributors", f"{len(hold.get('contributors') or [])} contributors"),
+                                        ("Validity", f"{format_timestamp(hold.get('valid_from'))} – {format_timestamp(hold.get('valid_to')) if hold.get('valid_to') else 'Until released'}"),
+                                        ("Held items", str(hold.get("direct_held_item_count", 0))),
+                                    ):
+                                        with ui.column().classes("gap-0 min-w-0"):
+                                            ui.label(label).classes("detail-field-label")
+                                            ui.label(value).classes("text-sm font-medium truncate w-full").tooltip(value)
+                                with ui.row().classes("w-full justify-end gap-1"):
+                                    ui.button(icon="open_in_new", on_click=lambda _, item=hold: select_hold_details(item["id"])).props("outline dense color=primary").tooltip("Open hold")
+                                    if hold.get("capabilities", {}).get("update"):
+                                        ui.button(icon="edit", on_click=lambda _, item=hold: open_hold_editor(item)).props("outline dense color=primary").tooltip("Edit hold")
+                                    ui.button(icon="history", on_click=lambda _, item=hold: show_list_hold_history(item)).props("outline dense color=blue-grey").tooltip("Hold history")
                 start=paging["offset"]+1 if paging["total"] else 0; end=min(paging["offset"]+len(rows),paging["total"])
                 page_status.text=f"Showing {start}–{end} of {paging['total']} holds"
                 first_page.set_enabled(paging["offset"]>0); previous_page.set_enabled(paging["offset"]>0)
@@ -10882,6 +12417,7 @@ def index() -> None:
             with dialog, ui.card().classes("w-[620px] max-w-full"):
                 ui.label("Manage contributors").classes("text-xl font-semibold")
                 selected = ui.select(people, value=[item["id"] for item in hold["contributors"]], multiple=True, label="Active contributors").props("outlined use-chips use-input").classes("w-full")
+                style_person_select(selected, multiple=True)
                 reason = ui.textarea("Reason").props("outlined autogrow maxlength=2000").classes("w-full")
                 async def submit() -> None:
                     if not (reason.value or "").strip(): ui.notify("A reason is required", color="warning"); return
@@ -10900,116 +12436,98 @@ def index() -> None:
             await hold_reason_dialog("Reason for deleting this empty hold", "Delete hold", remove)
 
         async def show_hold_history() -> None:
-            try: rows = await api.hold_history(hold_id)
-            except ApiError as error: ui.notify(error_message(error), color="negative", close_button=True); return
-            dialog = ui.dialog()
-            with dialog, ui.card().classes("w-[920px] max-w-[95vw] max-h-[85vh]"):
-                ui.label("Hold history").classes("text-xl font-semibold")
-                history_filter = ui.input("Filter history", placeholder="Event, actor, or reason").props("outlined dense clearable debounce=250").classes("w-full")
-                history_table = ui.table(columns=[{"name":"event_timestamp","label":"When","field":"event_timestamp","sortable":True},{"name":"operation","label":"Event","field":"operation","sortable":True},{"name":"actor_name","label":"Actor","field":"actor_name","sortable":True},{"name":"reason","label":"Reason","field":"reason","sortable":True}], rows=rows, row_key="id", pagination={"rowsPerPage":10,"sortBy":"event_timestamp","descending":True}).props('flat bordered wrap-cells separator=horizontal :rows-per-page-options="[10,25,50]"').classes("w-full governance-table")
-                history_table.bind_filter_from(history_filter, "value")
-                ui.button("Close", on_click=dialog.close).props("flat no-caps").classes("self-end")
-            dialog.open()
+            await show_entity_history("holds", hold)
         with table_container, ui.column().classes("w-full p-4 gap-3"):
-            with ui.card().classes("detail-surface w-full shadow-none overflow-hidden p-0"):
-                with ui.row().classes("w-full items-center px-4 py-2 border-b border-slate-100"):
-                    ui.icon("gavel", color="primary", size="21px")
-                    ui.label("Hold details").classes("font-semibold")
-                with ui.row().classes(f"w-full {RECORD_DETAIL_HEADER_CLASSES} gap-3 px-4 py-4"):
-                    ui.avatar(icon="gavel",color="blue-1",text_color="primary",size="50px")
-                    with ui.column().classes("gap-1 grow"):
-                        with ui.row().classes("items-center gap-3"):
-                            ui.label(hold["name"]).classes("text-2xl font-semibold text-slate-900")
-                            ui.badge(
-                                hold["state"].title(),
-                                color="positive" if hold["state"]=="active" else "blue-grey",
-                            ).props("outline")
-                        ui.label(hold["code"]).classes("text-sm font-medium tracking-wide text-slate-500")
-                        ui.label(hold.get("description") or "No description provided").classes("text-base text-slate-700 mt-2 max-w-3xl")
-                    with ui.row().classes("gap-1"):
-                        if hold["capabilities"].get("update"): ui.button(icon="edit",on_click=lambda:open_hold_editor(hold)).props("flat round").tooltip("Edit hold")
-                        if hold["capabilities"].get("manage_contributors"): ui.button(icon="group",on_click=manage_contributors).props("flat round").tooltip("Manage contributors")
-                        ui.button(icon="history",on_click=show_hold_history).props("flat round").tooltip("View hold history")
-                        delete_button = ui.button(icon="delete",color="negative",on_click=delete_current_hold).props("flat round")
-                        if hold["capabilities"].get("delete"):
-                            delete_button.tooltip("Delete empty hold")
-                        else:
-                            delete_button.disable()
-                            delete_button.tooltip("Remove all direct members before deleting this hold" if hold["capability_reasons"].get("delete") == "hold_not_empty" else "You are not authorized to delete this hold")
-                ui.separator()
-                with ui.grid(columns=4).classes("w-full gap-0 divide-x divide-slate-200"):
-                    for icon,label,value in [
-                        ("event_available","Valid from",format_timestamp(hold["valid_from"])),
-                        ("event_busy","Valid until",format_timestamp(hold["valid_to"]) if hold.get("valid_to") else "No scheduled end"),
-                        ("person","Owner",hold["owner"]["name"]),
-                        ("shield","Protection",("Prevents disposition, deletion, and component changes; also preserves metadata and governed state"
-                                                  if hold["preserve_resource_state"] else
-                                                  "Prevents disposition, deletion, and component changes")),
-                    ]:
-                        with ui.row().classes("items-start gap-3 p-4 no-wrap min-w-0"):
-                            ui.icon(icon).classes("text-primary text-xl mt-1 shrink-0")
+            with ui.element("div").classes("hold-command-layout w-full"):
+                with ui.card().classes("detail-surface hold-command-overview shadow-none p-4 gap-3"):
+                    with ui.row().classes("w-full items-start no-wrap gap-3"):
+                        ui.avatar(icon="gavel",color="blue-1",text_color="primary",size="46px")
+                        with ui.column().classes("gap-0 grow min-w-0"):
+                            with ui.row().classes("items-center gap-2"):
+                                ui.label(hold["name"]).classes("text-xl font-semibold text-slate-900")
+                                ui.badge(hold["state"].title(), color="positive" if hold["state"]=="active" else "blue-grey").props("outline")
+                            ui.label(hold["code"]).classes("text-xs font-medium tracking-wide text-slate-500")
+                            ui.label(hold.get("description") or "No description provided").classes("text-sm text-slate-600 mt-2 leading-5")
+                    with ui.element("div").classes("hold-summary-facts w-full"):
+                        for label,value in (
+                            ("Valid from",format_timestamp(hold["valid_from"])),
+                            ("Valid until",format_timestamp(hold["valid_to"]) if hold.get("valid_to") else "No scheduled end"),
+                            ("Protection",("Enhanced state preservation" if hold["preserve_resource_state"] else "Core protection")),
+                        ):
                             with ui.column().classes("gap-0 min-w-0"):
-                                ui.label(label).classes("text-xs uppercase tracking-wide text-slate-500")
-                                if label == "Owner":
-                                    with ui.button(
-                                        on_click=lambda: select_user_details(hold["owner"]["id"]),
-                                    ).props("flat dense no-caps color=blue-grey-9").classes("self-start -ml-2 gap-2"):
-                                        render_user_avatar(hold["owner"], size="28px").style(
-                                            "margin-right:8px !important"
-                                        )
-                                        ui.label(value).classes("text-sm font-medium")
-                                else:
-                                    ui.label(value).classes("text-sm font-medium text-slate-800")
-                ui.separator()
-                with ui.row().classes("w-full items-center gap-3 px-4 py-3"):
-                    ui.icon("groups").classes("text-primary text-xl")
-                    with ui.column().classes("gap-1"):
-                        ui.label("Contributors").classes("text-xs uppercase tracking-wide text-slate-500")
-                        with ui.row().classes("gap-2"):
+                                ui.label(label).classes("detail-field-label")
+                                ui.label(value).classes("text-sm font-medium w-full").tooltip(value)
+                    with ui.column().classes("hold-people-block w-full gap-1"):
+                        ui.label("Owner").classes("detail-field-label")
+                        with ui.button(on_click=lambda: select_user_details(hold["owner"]["id"])).props("flat dense no-caps color=blue-grey-9").classes("self-start -ml-2"):
+                            render_user_avatar(hold["owner"], size="26px").style("margin-right:7px !important")
+                            ui.label(hold["owner"]["name"]).classes("text-sm")
+                        ui.label("Contributors").classes("detail-field-label mt-1")
+                        with ui.row().classes("w-full items-center gap-2 -ml-2"):
                             if hold["contributors"]:
                                 for contributor in hold["contributors"]:
-                                    with ui.button(
-                                        on_click=lambda _, user_id=contributor["id"]: select_user_details(user_id),
-                                    ).props("flat dense no-caps color=blue-grey-9").classes("gap-2"):
-                                        render_user_avatar(contributor, size="28px").style(
-                                            "margin-right:8px !important"
-                                        )
-                                        ui.label(contributor["name"]).classes("text-sm text-slate-700")
-                            else: ui.label("No contributors assigned").classes("text-sm text-slate-500")
-            with ui.row().classes("w-full items-end gap-3 flex-wrap"):
-                member_query=ui.input("Filter direct members").props("outlined clearable").classes("grow")
-                member_type=ui.select({None:"All types","aggregation":"Aggregations","record":"Records"},value=None,label="Type").props("outlined").classes("w-44")
-                member_sort=ui.select({"assigned_at":"Assigned","number":"Number","title":"Title","type":"Type","assigned_by":"Assigned by","security_level":"Security level"},value="assigned_at",label="Sort by").props("outlined").classes("w-44")
-                assigned_by_options={None:"Any assigning user",hold["owner"]["id"]:hold["owner"]["name"]}
-                assigned_by_options.update({item["id"]:item["name"] for item in hold["contributors"]})
-                member_assigned_by=ui.select(assigned_by_options,value=None,label="Assigned by").props("outlined clearable").classes("w-52")
-                member_refresh=ui.button("Refresh",icon="refresh").props("flat no-caps")
-                if hold["capabilities"].get("manage_members"):
-                    add_member=ui.button("Add Members",icon="add").props("unelevated no-caps")
-                    remove_selected_members=ui.button("Remove selected",icon="link_off",color="negative").props("outline no-caps")
-                member_assigned_from=ui.input("Assignment date from").props("outlined clearable type=datetime-local").classes("w-56")
-                member_assigned_before=ui.input("Assignment date before").props("outlined clearable type=datetime-local").classes("w-56")
-            member_host=ui.column().classes("w-full")
-            member_paging={"offset":0,"total":0,"limit":25}
-            member_selection:dict[str,dict[str,Any]]={}
+                                    with ui.button(on_click=lambda _, user_id=contributor["id"]: select_user_details(user_id)).props("flat dense no-caps color=blue-grey-9").classes("gap-1"):
+                                        render_user_avatar(contributor, size="25px").style("margin-right:5px !important")
+                                        ui.label(contributor["name"]).classes("text-xs")
+                            else:
+                                ui.label("No contributors assigned").classes("text-xs text-slate-500")
+                with ui.card().classes("detail-surface hold-command-actions shadow-none p-4 gap-3"):
+                    ui.label("Hold actions").classes("aggregation-panel-heading w-full")
+                    ui.label("MANAGE").classes("aggregation-action-group-label")
+                    with ui.element("div").classes("hold-action-row w-full"):
+                        if hold["capabilities"].get("update"):
+                            ui.button("Edit hold",icon="edit",on_click=lambda:open_hold_editor(hold)).props("outline dense no-caps")
+                        if hold["capabilities"].get("manage_contributors"):
+                            ui.button("Manage contributors",icon="group",on_click=manage_contributors).props("outline dense no-caps")
+                    ui.label("AUDIT AND LIFECYCLE").classes("aggregation-action-group-label")
+                    with ui.element("div").classes("hold-action-row w-full"):
+                        ui.button("View history",icon="history",on_click=show_hold_history).props("outline dense no-caps")
+                        delete_button = ui.button("Delete hold",icon="delete",color="negative",on_click=delete_current_hold).props("outline dense no-caps")
+                    if hold["capabilities"].get("delete"):
+                        delete_button.tooltip("Delete empty hold")
+                    else:
+                        delete_button.disable()
+                        delete_button.tooltip("Remove all held items before deleting this hold" if hold["capability_reasons"].get("delete") == "hold_not_empty" else "You are not authorized to delete this hold")
+            assigned_by_options={None:"Any assigning user",hold["owner"]["id"]:hold["owner"]["name"]}
+            assigned_by_options.update({item["id"]:item["name"] for item in hold["contributors"]})
+            with ui.card().classes("detail-surface w-full shadow-none p-4 gap-3"):
+                ui.label("Filter held items").classes("font-semibold")
+                with ui.grid(columns=4).classes("w-full gap-3"):
+                    held_item_query=ui.input("Search held items").props("outlined dense clearable").classes("w-full")
+                    held_item_type=ui.select({None:"All types","aggregation":"Aggregations","record":"Records"},value=None,label="Type").props("outlined dense").classes("w-full")
+                    held_item_sort=ui.select({"assigned_at":"Assigned","number":"Number","title":"Title","type":"Type","assigned_by":"Assigned by","security_level":"Security level"},value="assigned_at",label="Sort by").props("outlined dense").classes("w-full")
+                    held_item_assigned_by=ui.select(assigned_by_options,value=None,label="Assigned by").props("outlined dense clearable").classes("w-full")
+                with ui.grid(columns=2).classes("w-full gap-3"):
+                    held_item_assigned_from=ui.input("Assignment date from").props("outlined dense clearable type=datetime-local").classes("w-full")
+                    held_item_assigned_before=ui.input("Assignment date before").props("outlined dense clearable type=datetime-local").classes("w-full")
+                with ui.row().classes("w-full items-center justify-end gap-2"):
+                    held_item_refresh=ui.button("Refresh",icon="refresh").props("flat dense no-caps")
+                    if hold["capabilities"].get("manage_held_items"):
+                        add_held_item=ui.button("Add held items",icon="add").props("unelevated dense no-caps")
+                        remove_selected_held_items=ui.button("Remove selected",icon="link_off",color="negative").props("outline dense no-caps")
+            with ui.row().classes("w-full items-end justify-between pt-2"):
+                with ui.column().classes("gap-0"):
+                    ui.label("Held items").classes("text-lg font-semibold text-slate-900")
+                    ui.label("Records and aggregations directly assigned to this hold").classes("text-sm text-slate-500")
+            held_item_host=ui.column().classes("w-full")
+            held_item_paging={"offset":0,"total":0,"limit":25}
+            held_item_selection:dict[str,dict[str,Any]]={}
             with ui.row().classes("w-full items-center justify-between"):
-                member_page_status=ui.label().classes("text-sm text-slate-600")
+                held_item_page_status=ui.label().classes("text-sm text-slate-600")
                 with ui.row().classes("gap-1"):
-                    member_first=ui.button("First",icon="first_page").props("flat no-caps")
-                    member_previous=ui.button("Previous",icon="chevron_left").props("flat no-caps")
-                    member_next=ui.button("Next",icon="chevron_right").props("flat no-caps")
-                    member_last=ui.button("Last",icon="last_page").props("flat no-caps")
+                    held_item_first=ui.button("First",icon="first_page").props("flat no-caps")
+                    held_item_previous=ui.button("Previous",icon="chevron_left").props("flat no-caps")
+                    held_item_next=ui.button("Next",icon="chevron_right").props("flat no-caps")
+                    held_item_last=ui.button("Last",icon="last_page").props("flat no-caps")
 
-            async def load_members(*,reset:bool=False) -> None:
-                if reset: member_paging["offset"]=0
-                async def browser_iso(value:str|None)->str|None:
-                    return await ui.run_javascript(f"new Date({json.dumps(value)}).toISOString()") if value else None
-                result=await api.hold_members_page(hold_id,q=(member_query.value or "").strip() or None,resource_type=member_type.value,
-                    assigned_by_user_id=member_assigned_by.value,assigned_from=await browser_iso(member_assigned_from.value),assigned_before=await browser_iso(member_assigned_before.value),
-                    sort=member_sort.value,descending=member_sort.value=="assigned_at",limit=member_paging["limit"],offset=member_paging["offset"])
-                rows=result["items"]; member_paging["total"]=result["total"]
-                member_host.clear()
-                with member_host:
+            async def load_held_items(*,reset:bool=False) -> None:
+                if reset: held_item_paging["offset"]=0
+                result=await api.hold_held_items_page(hold_id,q=(held_item_query.value or "").strip() or None,resource_type=held_item_type.value,
+                    assigned_by_user_id=held_item_assigned_by.value,assigned_from=held_item_assigned_from.value or None,assigned_before=held_item_assigned_before.value or None,
+                    sort=held_item_sort.value,descending=held_item_sort.value=="assigned_at",limit=held_item_paging["limit"],offset=held_item_paging["offset"])
+                rows=result["items"]; held_item_paging["total"]=result["total"]
+                held_item_host.clear()
+                with held_item_host:
                     for row in rows:
                         row["selection_key"]=f"{row['resource_type']}:{row['resource_id']}"
                         row["security_level_display"] = f"{row['security_level_code']} — {row['security_level_name']}"
@@ -11018,88 +12536,62 @@ def index() -> None:
                             "id": row.get("assigned_by_user_id"),
                             "name": row.get("assigned_by_name") or "System",
                         })
-                    table=ui.table(columns=[
-                        {"name":"resource_type","label":"Type","field":"resource_type","sortable":True,"align":"left","style":"width: 88px; max-width: 88px; text-align: center","headerStyle":"width: 88px; max-width: 88px; text-align: left; white-space: nowrap"},
-                        {"name":"number","label":"Number","field":"number","sortable":True,"align":"left","style":"width: 190px; min-width: 190px; text-align: left","headerStyle":"width: 190px; min-width: 190px; text-align: left"},
-                        {"name":"title","label":"Title","field":"title","sortable":True,"align":"left","style":"width: 250px; min-width: 250px; text-align: left","headerStyle":"width: 250px; min-width: 250px; text-align: left"},
-                        {"name":"description","label":"Description","field":"description","sortable":True,"align":"left","style":"width: 270px; min-width: 270px; text-align: left","headerStyle":"width: 270px; min-width: 270px; text-align: left"},
-                        {"name":"security_level_display","label":"Security level","field":"security_level_display","sortable":True,"align":"left","style":"width: 190px; min-width: 190px; text-align: left","headerStyle":"width: 190px; min-width: 190px; text-align: left"},
-                        {"name":"assigned_at","label":"Assigned","field":"assigned_at","sortable":True,"align":"left","style":"width: 210px; min-width: 210px; text-align: left","headerStyle":"width: 210px; min-width: 210px; text-align: left"},
-                        {"name":"assigned_by_name","label":"Assigned by","field":"assigned_by_name","sortable":True,"align":"left","style":"width: 210px; min-width: 210px; text-align: left","headerStyle":"width: 210px; min-width: 210px; text-align: left"},
-                        {"name":"actions","label":"Actions","field":"actions","align":"right","headerStyle":"text-align: right"},
-                    ],rows=rows,row_key="selection_key",selection="multiple" if hold["capabilities"].get("manage_members") else None,pagination={"rowsPerPage":25}).props('flat bordered wrap-cells separator=horizontal hide-pagination').classes(
-                        "w-full governance-table hold-selection-table"
-                        if hold["capabilities"].get("manage_members")
-                        else "w-full governance-table"
-                    )
-                    table.selected=[row for row in rows if row["selection_key"] in member_selection]
-                    def member_selection_changed() -> None:
-                        page_keys={row["selection_key"] for row in rows}
-                        for key in page_keys: member_selection.pop(key,None)
-                        for row in table.selected: member_selection[row["selection_key"]]=dict(row)
-                    table.on("selection",lambda _:member_selection_changed())
-                    table.add_slot("body-cell-resource_type", '''
-                        <q-td :props="props" class="text-left" style="width:88px;max-width:88px;text-align:left">
-                          <q-icon :name="props.row.resource_type === 'aggregation' ? 'folder' : 'description'" color="primary" size="24px">
-                            <q-tooltip>{{ props.row.resource_type === 'aggregation' ? 'Aggregation' : 'Record' }}</q-tooltip>
-                          </q-icon>
-                        </q-td>
-                    ''')
-                    table.add_slot("body-cell-description", '''
-                        <q-td :props="props" class="text-left">
-                          <div style="height:88px;overflow-y:auto;white-space:normal;overflow-wrap:anywhere;text-align:left;padding-right:6px">
-                            {{ props.row.description || '—' }}
-                          </div>
-                        </q-td>
-                    ''')
-                    table.add_slot("body-cell-title", '''
-                        <q-td :props="props" class="text-left">
-                          <div style="height:88px;overflow-y:auto;white-space:normal;overflow-wrap:anywhere;text-align:left;padding-right:6px">
-                            {{ props.row.title || '—' }}
-                          </div>
-                        </q-td>
-                    ''')
-                    table.add_slot("body-cell-assigned_at", '''
-                        <q-td :props="props" class="text-left">
-                          <div class="row items-center no-wrap q-gutter-sm">
-                            <q-icon name="schedule" color="primary" size="20px" />
-                            <span>{{ props.row.assigned_at_display }}</span>
-                          </div>
-                        </q-td>
-                    ''')
-                    table.add_slot("body-cell-assigned_by_name", '''
-                        <q-td :props="props" class="text-left">
-                          <q-btn v-if="props.row.assigned_by_user_id" flat dense no-caps color="blue-grey-9" @click="$parent.$emit('open_user', props.row.assigned_by_user_id)">
-                            <q-avatar size="30px" :style="{ backgroundColor: props.row.assigned_by_avatar.color, color: 'white' }">
-                              {{ props.row.assigned_by_avatar.initials }}
-                            </q-avatar>
-                            <span class="q-ml-sm">{{ props.row.assigned_by_name }}</span>
-                            <q-tooltip>Open user details</q-tooltip>
-                          </q-btn>
-                          <span v-else>{{ props.row.assigned_by_name || 'System' }}</span>
-                        </q-td>
-                    ''')
-                    table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round icon="open_in_new" color="primary" aria-label="Open resource" @click="$parent.$emit(\'open_member\', props.row)"><q-tooltip>Open resource</q-tooltip></q-btn><q-btn v-if="'+str(bool(hold["capabilities"].get("manage_members"))).lower()+'" flat round icon="link_off" color="negative" aria-label="Remove from this hold" @click="$parent.$emit(\'remove_member\', props.row)"><q-tooltip>Remove from this hold</q-tooltip></q-btn></q-td>')
-                    async def open_member(event: Any) -> None:
-                        row=event.args
+                    async def open_held_item(row: dict[str, Any]) -> None:
                         if row["resource_type"]=="aggregation": await open_aggregation(await api.get("aggregations",row["resource_id"]))
                         else: await select_record_details(row["resource_id"])
-                    async def remove_member(event: Any) -> None:
-                        row=event.args
+                    async def remove_held_item(row: dict[str, Any]) -> None:
                         async def remove(reason: str) -> None:
-                            await api.remove_hold_member(hold_id,row["resource_type"],row["resource_id"],row["version"],reason); ui.notify("Member removed",color="positive"); await select_hold_details(hold_id)
+                            await api.remove_hold_held_item(hold_id,row["resource_type"],row["resource_id"],row["version"],reason); ui.notify("Held item removed",color="positive"); await select_hold_details(hold_id)
                         await hold_reason_dialog("Reason for removing this direct assignment","Remove",remove)
-                    table.on("open_member",open_member); table.on("remove_member",remove_member)
-                    table.on("open_user", lambda event: select_user_details(int(event.args)))
-                start=member_paging["offset"]+1 if member_paging["total"] else 0; end=min(member_paging["offset"]+len(rows),member_paging["total"])
-                member_page_status.text=f"Showing {start}–{end} of {member_paging['total']} direct members"
-                member_first.set_enabled(member_paging["offset"]>0); member_previous.set_enabled(member_paging["offset"]>0)
-                member_next.set_enabled(member_paging["offset"]+member_paging["limit"]<member_paging["total"]); member_last.set_enabled(member_paging["offset"]+member_paging["limit"]<member_paging["total"])
-            async def move_member_page(delta:int)->None:
-                member_paging["offset"]=max(0,member_paging["offset"]+delta*member_paging["limit"]); await load_members()
-            async def member_page_edge(last:bool)->None:
-                member_paging["offset"]=(max(0,(member_paging["total"]-1)//member_paging["limit"])*member_paging["limit"] if last else 0); await load_members()
-            async def show_add_member() -> None:
+                    def update_held_item_selection(row: dict[str, Any], selected: bool) -> None:
+                        if selected:
+                            held_item_selection[row["selection_key"]] = dict(row)
+                        else:
+                            held_item_selection.pop(row["selection_key"], None)
+                    if not rows:
+                        ui.label("No held items match these filters.").classes("w-full text-center text-slate-400 py-12")
+                    with ui.element("div").classes("governance-card-list w-full"):
+                        for row in rows:
+                            with ui.card().classes("governance-list-card shadow-none"):
+                                with ui.row().classes("w-full items-start no-wrap gap-3"):
+                                    if hold["capabilities"].get("manage_held_items"):
+                                        selected = ui.checkbox(value=row["selection_key"] in held_item_selection).props("dense")
+                                        selected.on_value_change(lambda event, item=row: update_held_item_selection(item, bool(event.value)))
+                                    with ui.element("div").classes("governance-card-icon mt-1"):
+                                        ui.icon("folder" if row["resource_type"] == "aggregation" else "description", size="22px")
+                                    with ui.column().classes("gap-0 min-w-0 grow"):
+                                        ui.label(row.get("title") or "Untitled").classes("font-semibold text-base leading-tight")
+                                        ui.label(row.get("number") or "—").classes("text-xs font-medium text-primary")
+                                        ui.label(row.get("description") or "No description provided").classes("text-xs text-slate-500 mt-1 leading-5")
+                                    ui.badge("Aggregation" if row["resource_type"] == "aggregation" else "Record", color="blue-grey").props("outline")
+                                with ui.element("div").classes("governance-list-facts w-full"):
+                                    for label, value in (
+                                        ("Security level", row["security_level_display"]),
+                                        ("Assigned", row["assigned_at_display"]),
+                                        ("Assigned by", row.get("assigned_by_name") or "System"),
+                                        ("Direct assignment", "Yes"),
+                                    ):
+                                        with ui.column().classes("gap-0 min-w-0"):
+                                            ui.label(label).classes("detail-field-label")
+                                            if label == "Assigned by" and row.get("assigned_by_user_id"):
+                                                with ui.button(on_click=lambda _, user_id=row["assigned_by_user_id"]: select_user_details(user_id)).props("flat dense no-caps color=blue-grey-9").classes("self-start -ml-2"):
+                                                    render_user_avatar({"id":row["assigned_by_user_id"],"name":value}, size="26px").style("margin-right:7px !important")
+                                                    ui.label(value).classes("text-sm")
+                                            else:
+                                                ui.label(value).classes("text-sm font-medium truncate w-full").tooltip(value)
+                                with ui.row().classes("w-full justify-end gap-1"):
+                                    ui.button(icon="open_in_new", on_click=lambda _, item=row: open_held_item(item)).props("outline dense color=primary").tooltip("Open resource")
+                                    if hold["capabilities"].get("manage_held_items"):
+                                        ui.button(icon="link_off", on_click=lambda _, item=row: remove_held_item(item)).props("outline dense color=negative").tooltip("Remove from this hold")
+                start=held_item_paging["offset"]+1 if held_item_paging["total"] else 0; end=min(held_item_paging["offset"]+len(rows),held_item_paging["total"])
+                held_item_page_status.text=f"Showing {start}–{end} of {held_item_paging['total']} held items"
+                held_item_first.set_enabled(held_item_paging["offset"]>0); held_item_previous.set_enabled(held_item_paging["offset"]>0)
+                held_item_next.set_enabled(held_item_paging["offset"]+held_item_paging["limit"]<held_item_paging["total"]); held_item_last.set_enabled(held_item_paging["offset"]+held_item_paging["limit"]<held_item_paging["total"])
+            async def move_held_item_page(delta:int)->None:
+                held_item_paging["offset"]=max(0,held_item_paging["offset"]+delta*held_item_paging["limit"]); await load_held_items()
+            async def held_item_page_edge(last:bool)->None:
+                held_item_paging["offset"]=(max(0,(held_item_paging["total"]-1)//held_item_paging["limit"])*held_item_paging["limit"] if last else 0); await load_held_items()
+            async def show_add_held_item() -> None:
                 page_size = 50
                 picker = {"offset": 0, "total": 0, "selected": {}}
                 dialog=ui.dialog().props("persistent")
@@ -11129,7 +12621,7 @@ def index() -> None:
                     async def load_candidates(*, reset: bool=False) -> None:
                         if reset: picker["offset"]=0
                         try:
-                            result=await api.hold_member_candidates(
+                            result=await api.hold_held_item_candidates(
                                 hold_id,q=(candidate_query.value or "").strip() or None,
                                 resource_type=candidate_type.value,limit=page_size,offset=picker["offset"],
                             )
@@ -11143,45 +12635,25 @@ def index() -> None:
                             if not rows:
                                 ui.label("No matching resources are available to add.").classes("text-slate-500 p-8 self-center")
                             else:
-                                candidate_table=ui.table(
-                                    columns=[
-                                        {"name":"resource_type","label":"Type","field":"resource_type","sortable":True,"align":"left","style":"width: 38px; max-width: 38px; text-align: left","headerStyle":"width: 38px; max-width: 38px; text-align: left; white-space: nowrap"},
-                                        {"name":"number","label":"Number","field":"number","sortable":True,"align":"left","style":"width: 90px; white-space: normal; text-align: left","headerStyle":"width: 90px; text-align: left"},
-                                        {"name":"title","label":"Title","field":"title","sortable":True,"align":"left","style":"width: 240px; min-width: 240px; text-align: left","headerStyle":"width: 240px; min-width: 240px; text-align: left"},
-                                        {"name":"description","label":"Description","field":"description","sortable":True,"align":"left","style":"width: 260px; min-width: 260px; text-align: left","headerStyle":"width: 260px; min-width: 260px; text-align: left"},
-                                    ],rows=rows,row_key="selection_key",selection="multiple",
-                                    pagination={"rowsPerPage":page_size,"sortBy":"number"},
-                                ).props("flat bordered wrap-cells separator=horizontal hide-pagination").classes(
-                                    "w-full governance-table hold-selection-table hold-candidate-selection-table"
-                                )
-                                candidate_table.add_slot("body-cell-resource_type", '''
-                                    <q-td :props="props" class="text-left" style="width:38px;max-width:38px;text-align:left">
-                                      <q-icon :name="props.row.resource_type === 'aggregation' ? 'folder' : 'description'" color="primary" size="24px">
-                                        <q-tooltip>{{ props.row.resource_type === 'aggregation' ? 'Aggregation' : 'Record' }}</q-tooltip>
-                                      </q-icon>
-                                    </q-td>
-                                ''')
-                                candidate_table.add_slot("body-cell-title", '''
-                                    <q-td :props="props" class="text-left">
-                                      <div style="height:88px;overflow-y:auto;white-space:normal;overflow-wrap:anywhere;text-align:left;padding-right:6px">
-                                        {{ props.row.title || '—' }}
-                                      </div>
-                                    </q-td>
-                                ''')
-                                candidate_table.add_slot("body-cell-description", '''
-                                    <q-td :props="props" class="text-left">
-                                      <div style="height:88px;overflow-y:auto;white-space:normal;overflow-wrap:anywhere;text-align:left;padding-right:6px">
-                                        {{ props.row.description || '—' }}
-                                      </div>
-                                    </q-td>
-                                ''')
-                                candidate_table.selected=[row for row in rows if row["selection_key"] in picker["selected"]]
-                                def selection_changed() -> None:
-                                    page_keys={row["selection_key"] for row in rows}
-                                    for key in page_keys: picker["selected"].pop(key,None)
-                                    for row in candidate_table.selected: picker["selected"][row["selection_key"]]=dict(row)
+                                def update_candidate_selection(row: dict[str, Any], selected: bool) -> None:
+                                    if selected:
+                                        picker["selected"][row["selection_key"]] = dict(row)
+                                    else:
+                                        picker["selected"].pop(row["selection_key"], None)
                                     update_selection_summary()
-                                candidate_table.on("selection",lambda _:selection_changed())
+                                with ui.element("div").classes("governance-card-list w-full"):
+                                    for row in rows:
+                                        with ui.card().classes("governance-list-card shadow-none"):
+                                            with ui.row().classes("w-full items-start no-wrap gap-3"):
+                                                selected = ui.checkbox(value=row["selection_key"] in picker["selected"]).props("dense")
+                                                selected.on_value_change(lambda event, item=row: update_candidate_selection(item, bool(event.value)))
+                                                with ui.element("div").classes("governance-card-icon mt-1"):
+                                                    ui.icon("folder" if row["resource_type"] == "aggregation" else "description", size="22px")
+                                                with ui.column().classes("gap-0 min-w-0 grow"):
+                                                    ui.label(row.get("title") or "Untitled").classes("font-semibold leading-tight")
+                                                    ui.label(row.get("number") or "—").classes("text-xs font-medium text-primary")
+                                                    ui.label(row.get("description") or "No description provided").classes("text-xs text-slate-500 mt-1 leading-5")
+                                                ui.badge("Aggregation" if row["resource_type"] == "aggregation" else "Record", color="blue-grey").props("outline")
                         start=picker["offset"]+1 if result["total"] else 0
                         end=min(picker["offset"]+len(rows),result["total"])
                         page_status.text=f"Showing {start}–{end} of {result['total']} matching resources"
@@ -11201,9 +12673,9 @@ def index() -> None:
                     async def submit() -> None:
                         if not picker["selected"]: ui.notify("Select at least one resource",color="warning"); return
                         if not(reason.value or "").strip(): ui.notify("A reason is required",color="warning"); return
-                        members=[{"resource_type":row["resource_type"],"resource_id":row["resource_id"]} for row in picker["selected"].values()]
+                        held_items=[{"resource_type":row["resource_type"],"resource_id":row["resource_id"]} for row in picker["selected"].values()]
                         try:
-                            result=await api.add_hold_members_bulk(hold_id,members,reason.value.strip())
+                            result=await api.add_hold_held_items_bulk(hold_id,held_items,reason.value.strip())
                             dialog.close(); ui.notify(f"{result['added']} resources added to the hold",color="positive"); await select_hold_details(hold_id)
                         except ApiError as error: ui.notify(error_message(error),color="negative",close_button=True)
                     candidate_query.on_value_change(lambda:load_candidates(reset=True))
@@ -11212,23 +12684,23 @@ def index() -> None:
                     next_page.on("click",lambda:move_page(1)); last_page.on("click",lambda:move_to_edge(True))
                     with ui.row().classes("w-full justify-end gap-2"):
                         ui.button("Cancel",on_click=dialog.close).props("flat no-caps")
-                        ui.button("Add Members",icon="playlist_add",on_click=submit).props("unelevated no-caps")
+                        ui.button("Add held items",icon="playlist_add",on_click=submit).props("unelevated no-caps")
                     await load_candidates()
                 dialog.open()
-            member_refresh.on("click",load_members); member_query.on_value_change(lambda:load_members(reset=True)); member_type.on_value_change(lambda:load_members(reset=True)); member_sort.on_value_change(lambda:load_members(reset=True))
-            member_assigned_by.on_value_change(lambda:load_members(reset=True)); member_assigned_from.on_value_change(lambda:load_members(reset=True)); member_assigned_before.on_value_change(lambda:load_members(reset=True))
-            member_first.on("click",lambda:member_page_edge(False)); member_previous.on("click",lambda:move_member_page(-1)); member_next.on("click",lambda:move_member_page(1)); member_last.on("click",lambda:member_page_edge(True))
-            if hold["capabilities"].get("manage_members"): add_member.on("click",show_add_member)
-            if hold["capabilities"].get("manage_members"):
+            held_item_refresh.on("click",load_held_items); held_item_query.on_value_change(lambda:load_held_items(reset=True)); held_item_type.on_value_change(lambda:load_held_items(reset=True)); held_item_sort.on_value_change(lambda:load_held_items(reset=True))
+            held_item_assigned_by.on_value_change(lambda:load_held_items(reset=True)); held_item_assigned_from.on_value_change(lambda:load_held_items(reset=True)); held_item_assigned_before.on_value_change(lambda:load_held_items(reset=True))
+            held_item_first.on("click",lambda:held_item_page_edge(False)); held_item_previous.on("click",lambda:move_held_item_page(-1)); held_item_next.on("click",lambda:move_held_item_page(1)); held_item_last.on("click",lambda:held_item_page_edge(True))
+            if hold["capabilities"].get("manage_held_items"): add_held_item.on("click",show_add_held_item)
+            if hold["capabilities"].get("manage_held_items"):
                 async def remove_selected() -> None:
-                    selected=list(member_selection.values())
-                    if not selected: ui.notify("Select one or more direct members",color="warning"); return
+                    selected=list(held_item_selection.values())
+                    if not selected: ui.notify("Select one or more held items",color="warning"); return
                     async def remove(reason:str)->None:
-                        await api.remove_hold_members_bulk(hold_id,[{"resource_type":row["resource_type"],"resource_id":row["resource_id"],"version":row["version"]} for row in selected],reason)
-                        member_selection.clear(); ui.notify(f"{len(selected)} direct members removed from {hold['name']}",color="positive"); await select_hold_details(hold_id)
-                    await hold_reason_dialog(f"Remove {len(selected)} selected direct members from {hold['name']}?","Remove members",remove)
-                remove_selected_members.on("click",remove_selected)
-            await load_members()
+                        await api.remove_hold_held_items_bulk(hold_id,[{"resource_type":row["resource_type"],"resource_id":row["resource_id"],"version":row["version"]} for row in selected],reason)
+                        held_item_selection.clear(); ui.notify(f"{len(selected)} held items removed from {hold['name']}",color="positive"); await select_hold_details(hold_id)
+                    await hold_reason_dialog(f"Remove {len(selected)} selected held items from {hold['name']}?","Remove held items",remove)
+                remove_selected_held_items.on("click",remove_selected)
+            await load_held_items()
 
     for key, button in navigation.items():
         if key == "classification-schemes":

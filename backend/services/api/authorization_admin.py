@@ -7,12 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from psycopg import Connection
 
 from .concurrency import expected_version
-from .crud import create_row, delete_row, get_or_404, update_row
+from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .database import get_connection
-from .authorization_policy import require_authorization_admin
+from .authorization_policy import require_audit_view, require_authorization_admin
 from .continuity_lock import acquire_continuity_lock
 from .schemas import (
-    PrivilegeRead, ProfileCreate, ProfilePrivilegeReplace, ProfileRead,
+    EventHistoryRead, PrivilegeRead, ProfileCreate, ProfilePrivilegeReplace, ProfileRead,
     ProfileUpdate, RoleProfileAssignment, RoleRead,
 )
 
@@ -163,12 +163,35 @@ def create_profile(payload: ProfileCreate, connection: Connection=Depends(get_co
 
 @router.get("/profiles", response_model=list[ProfileRead])
 def list_profiles(limit: int=Query(500,ge=1,le=500), offset: int=Query(0,ge=0), connection: Connection=Depends(get_connection,scope="function")):
-    return list(connection.execute("SELECT * FROM profiles ORDER BY name,id LIMIT %s OFFSET %s",(limit,offset)).fetchall())
+    return list(connection.execute(
+        """SELECT profile.*,
+                  (SELECT count(*) FROM profile_privileges membership WHERE membership.profile_id=profile.id) privilege_count,
+                  (SELECT count(*) FROM roles role WHERE role.profile_id=profile.id) role_count
+             FROM profiles profile ORDER BY profile.name,profile.id LIMIT %s OFFSET %s""",
+        (limit,offset),
+    ).fetchall())
 
 
 @router.get("/profiles/{profile_id}", response_model=ProfileRead)
 def get_profile(profile_id: int, connection: Connection=Depends(get_connection,scope="function")):
     return get_or_404(connection,"profiles",profile_id)
+
+
+@router.get(
+    "/profiles/{profile_id}/history",
+    response_model=list[EventHistoryRead],
+    tags=["event history"],
+    dependencies=[Depends(require_audit_view)],
+)
+def get_profile_history(
+    profile_id: int, connection: Connection=Depends(get_connection,scope="function"),
+):
+    get_or_404(connection, "profiles", profile_id)
+    return list_rows(
+        connection, "event_history", limit=500, offset=0,
+        filters={"entity_type": "profile", "entity_id": profile_id},
+        order_by=("occurred_at", "id"), descending=True,
+    )
 
 
 @router.patch("/profiles/{profile_id}", response_model=ProfileRead)

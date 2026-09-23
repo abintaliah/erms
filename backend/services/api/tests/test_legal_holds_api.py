@@ -21,7 +21,7 @@ def _create_hold(client: TestClient, owner_user_id: int = 1, *, preserve: bool =
     return response.json()
 
 
-def test_hold_lifecycle_membership_capabilities_and_explainer(
+def test_hold_lifecycle_held_items_capabilities_and_explainer(
     client: TestClient, aggregation: dict, record: dict,
 ):
     hold = _create_hold(client)
@@ -30,10 +30,10 @@ def test_hold_lifecycle_membership_capabilities_and_explainer(
         "id": 1, "name": "Test Administrator", "email": "admin@test.invalid", "status": "active",
     }
     assert hold["is_effective"] is True
-    assert hold["capabilities"]["manage_members"] is True
+    assert hold["capabilities"]["manage_held_items"] is True
 
     missing_reason = client.post(
-        f"/api/v1/holds/{hold['id']}/members",
+        f"/api/v1/holds/{hold['id']}/held-items",
         json={"resource_type": "aggregation", "resource_id": aggregation["id"]},
     )
     assert missing_reason.status_code == 422
@@ -117,13 +117,13 @@ def test_hold_candidate_search_and_atomic_bulk_add(
     })
     assert described.status_code == 201, described.text
     description_match = client.get(
-        f"/api/v1/holds/{hold['id']}/member-candidates", params={"q": "Falcon inquiry"},
+        f"/api/v1/holds/{hold['id']}/held-item-candidates", params={"q": "Falcon inquiry"},
     )
     assert description_match.status_code == 200, description_match.text
     assert description_match.json()["total"] == 1
     assert description_match.json()["items"][0]["description"] == "Material concerning the Falcon inquiry"
     candidates = client.get(
-        f"/api/v1/holds/{hold['id']}/member-candidates",
+        f"/api/v1/holds/{hold['id']}/held-item-candidates",
         params={"q": aggregation["aggregation_number"]},
     )
     assert candidates.status_code == 200, candidates.text
@@ -131,8 +131,8 @@ def test_hold_candidate_search_and_atomic_bulk_add(
     assert candidates.json()["items"][0]["resource_type"] == "aggregation"
 
     missing_reason = client.post(
-        f"/api/v1/holds/{hold['id']}/members/bulk",
-        json={"members": [
+        f"/api/v1/holds/{hold['id']}/held-items/bulk",
+        json={"held_items": [
             {"resource_type": "aggregation", "resource_id": aggregation["id"]},
             {"resource_type": "record", "resource_id": record["id"]},
         ]},
@@ -140,18 +140,18 @@ def test_hold_candidate_search_and_atomic_bulk_add(
     assert missing_reason.status_code == 422
 
     added = client.post(
-        f"/api/v1/holds/{hold['id']}/members/bulk",
-        json={"members": [
+        f"/api/v1/holds/{hold['id']}/held-items/bulk",
+        json={"held_items": [
             {"resource_type": "aggregation", "resource_id": aggregation["id"]},
             {"resource_type": "record", "resource_id": record["id"]},
         ]},
         headers={"X-Change-Reason": "Bulk preservation scope import"},
     )
     assert added.status_code == 201, added.text
-    assert added.json() == {"requested": 2, "added": 2, "already_members": 0}
+    assert added.json() == {"requested": 2, "added": 2, "already_held_items": 0}
 
     page = client.get(
-        f"/api/v1/holds/{hold['id']}/members",
+        f"/api/v1/holds/{hold['id']}/held-items",
         params={"limit": 1, "sort": "number"},
     )
     assert page.status_code == 200, page.text
@@ -161,12 +161,12 @@ def test_hold_candidate_search_and_atomic_bulk_add(
     assert page.json()["items"][0]["security_level_code"]
     assignment = page.json()["items"][0]
     stale_remove = client.delete(
-        f"/api/v1/holds/{hold['id']}/members/{assignment['resource_type']}/{assignment['resource_id']}",
+        f"/api/v1/holds/{hold['id']}/held-items/{assignment['resource_type']}/{assignment['resource_id']}",
         headers={"If-Match": str(assignment["version"] + 1), "X-Change-Reason": "Stale removal"},
     )
     assert stale_remove.status_code == 409
     removed = client.delete(
-        f"/api/v1/holds/{hold['id']}/members/{assignment['resource_type']}/{assignment['resource_id']}",
+        f"/api/v1/holds/{hold['id']}/held-items/{assignment['resource_type']}/{assignment['resource_id']}",
         headers={"If-Match": str(assignment["version"]), "X-Change-Reason": "Scope corrected"},
     )
     assert removed.status_code == 204
@@ -176,7 +176,7 @@ def test_hold_candidate_search_and_atomic_bulk_add(
     assert holds_page.json()["total"] >= 1
     assert holds_page.json()["items"][0]["owner"]["name"] == "Test Administrator"
 
-    remaining = client.get(f"/api/v1/holds/{hold['id']}/member-candidates")
+    remaining = client.get(f"/api/v1/holds/{hold['id']}/held-item-candidates")
     assert remaining.status_code == 200
     keys = {(item["resource_type"], item["resource_id"]) for item in remaining.json()["items"]}
     assert (assignment["resource_type"], assignment["resource_id"]) in keys
@@ -185,7 +185,7 @@ def test_hold_candidate_search_and_atomic_bulk_add(
     assert not (still_assigned & keys)
 
 
-def test_information_governance_profile_can_manage_membership_without_hold_administration(
+def test_information_governance_profile_can_manage_held_items_without_hold_administration(
     client: TestClient, aggregation: dict,
 ):
     hold = _create_hold(client)
@@ -205,10 +205,10 @@ def test_information_governance_profile_can_manage_membership_without_hold_admin
     assert login.status_code==200
     client.headers["X-CSRF-Token"]=client.cookies.get("erms_csrf")
     assert "holds.administer" not in login.json()["global_privileges"]
-    assert "holds.membership.manage_all" in login.json()["global_privileges"]
+    assert "holds.held_items.manage_all" in login.json()["global_privileges"]
     visible=client.get(f"/api/v1/holds/{hold['id']}")
     assert visible.status_code==200
-    assert visible.json()["capabilities"]["manage_members"] is True
+    assert visible.json()["capabilities"]["manage_held_items"] is True
     added=client.post(
         f"/api/v1/aggregations/{aggregation['id']}/holds",
         json={"hold_id":hold["id"]},

@@ -20,6 +20,31 @@ def test_seeded_catalogue_and_lowest_level_defaults(client: TestClient, aggregat
     role = client.get("/api/v1/roles/1")
     assert role.status_code == 200
     assert role.json()["security_level_id"] == catalogue["G"]["id"]
+    assert catalogue["G"]["roles_assigned_count"] >= 1
+    assert catalogue["G"]["aggregation_count"] >= 1
+    assert catalogue["G"]["record_count"] >= 1
+    for level in catalogue.values():
+        history = client.get(f"/api/v1/security-levels/{level['id']}/history")
+        assert history.status_code == 200, history.text
+        assert sum(event["operation"] == "CREATE" for event in history.json()) == 1
+
+
+def test_security_level_history_uses_standard_event_history(client: TestClient):
+    created = client.post("/api/v1/security-levels", json={
+        "code": "HIST",
+        "name": "History test level",
+        "level_number": 60,
+        "prevents_disposition": False,
+    })
+    assert created.status_code == 201, created.text
+
+    history = client.get(f"/api/v1/security-levels/{created.json()['id']}/history")
+    assert history.status_code == 200, history.text
+    assert any(
+        event["entity_type"] == "security_level"
+        and event["entity_id"] == created.json()["id"]
+        for event in history.json()
+    )
 
 
 def test_child_aggregation_defaults_to_parent_but_record_defaults_to_baseline(

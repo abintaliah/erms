@@ -46,7 +46,7 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
             return "globally_privileged", "identity.sessions.administer", None
         return "authenticated_only", None, None
     if path.startswith("/api/v1/holds"):
-        if method in {"POST", "PATCH", "DELETE", "PUT"} and not "/members" in path:
+        if method in {"POST", "PATCH", "DELETE", "PUT"} and not "/held-items" in path:
             return "globally_privileged", "holds.administer", None
         return "relationship_scoped", None, None
     if path.startswith(("/api/v1/aggregations/", "/api/v1/records/")) and (

@@ -85,6 +85,63 @@ def test_first_class_navigation_excludes_digital_components():
     assert ENTITIES["roles"].fields[1].lookup_resource == "roles"
 
 
+def test_identity_administration_lists_use_one_column_governance_cards():
+    assert '{"security-levels", "profiles", "users", "roles", "org-units"}' in APP_SOURCE
+    assert '"users": "Filter users"' in APP_SOURCE
+    assert '"roles": "Filter roles"' in APP_SOURCE
+    assert '"org-units": "Filter organization units"' in APP_SOURCE
+    assert '"users": (' in APP_SOURCE
+    assert '"roles": (' in APP_SOURCE
+    assert '"org-units": (' in APP_SOURCE
+    assert 'select_user_details(item["id"])' in APP_SOURCE
+    assert 'select_role_details(item["id"])' in APP_SOURCE
+    assert 'select_organization_unit_details(item["id"])' in APP_SOURCE
+    assert 'show_memberships(item, for_user=user_view)' in APP_SOURCE
+    assert 'api.list("security-levels")' in APP_SOURCE
+
+
+def test_dashboard_overview_uses_compact_holdings_first_layout():
+    assert 'ui.label("Overview").classes("text-lg font-semibold")' in APP_SOURCE
+    assert '"dashboard-overview-primary w-full"' in APP_SOURCE
+    assert 'ui.label("Visible to you")' in APP_SOURCE
+    assert '"dashboard-overview-admin"' in APP_SOURCE
+    assert '("classification-schemes", "Schemes", "account_tree"' in APP_SOURCE
+    assert 'ui.label("System overview")' not in APP_SOURCE
+
+
+def test_dashboard_uses_compact_favourites_and_recent_record_streams():
+    assert APP_SOURCE.count("await api.dashboard_summary(") == 1
+    assert "recent_limit=50, recent_since=recent_since" in APP_SOURCE
+    assert '"dashboard-personal-columns mt-2"' in APP_SOURCE
+    assert 'ui.label("Favourites")' in APP_SOURCE
+    assert 'ui.label("Recent records activity")' in APP_SOURCE
+    assert 'item["operation"] in {"CREATE", "UPDATE", "CONTENT_VIEWED"}' in APP_SOURCE
+    assert '"CONTENT_VIEWED": ("Viewed", "visibility", "dashboard-activity-viewed")' in APP_SOURCE
+    assert 'ui.label("Your favourites")' not in APP_SOURCE
+    assert 'ui.label("Your recent records activity")' not in APP_SOURCE
+
+
+def test_dashboard_overview_shows_medium_breakdowns_and_admin_hold_total():
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in APP_SOURCE
+    assert 'medium_counts = summary["overview_medium_counts"]' in APP_SOURCE
+    assert '("physical", "inventory_2")' in APP_SOURCE
+    assert '("digital", "cloud")' in APP_SOURCE
+    assert '("mixed", "join_inner")' in APP_SOURCE
+    assert 'if "holds.administer" in privileges:' in APP_SOURCE
+    assert '("holds", "Holds", "gavel", select_holds)' in APP_SOURCE
+    assert 'aggregation_status_counts = summary["overview_aggregation_status_counts"]' in APP_SOURCE
+    assert 'attention_counts = summary["overview_resource_attention_counts"]' in APP_SOURCE
+    assert 'component_metrics = summary["overview_digital_component_metrics"]' in APP_SOURCE
+    assert '("open", "text-green-700")' in APP_SOURCE
+    assert '("closed", "text-slate-500")' in APP_SOURCE
+    assert 'f"dashboard-overview-signal {status_color}"' in APP_SOURCE
+    assert '(("vital", "emergency"), ("held", "gavel"))' in APP_SOURCE
+    assert 'ui.label("|").classes("dashboard-overview-separator")' in APP_SOURCE
+    assert '"dashboard-overview-signals"' not in APP_SOURCE
+    assert 'f"{component_metrics[\'component_count\']} components"' in APP_SOURCE
+    assert 'format_file_size(component_metrics["storage_size_in_bytes"])' in APP_SOURCE
+
+
 def test_form_payload_converts_ids_and_omits_empty_create_fields():
     spec = ENTITIES["records"]
     controls = {
@@ -212,6 +269,8 @@ def test_user_avatar_is_stable_and_uses_best_effort_initials():
     user = {"id": 42, "name": "Sami Mali Jibtou Jari", "email": "sami@example.test"}
     first = user_avatar(user)
     assert first["initials"] == "SJ"
+    assert first["color"] == "#e3f2fd"
+    assert first["text_color"] == "#15527a"
     assert first == user_avatar(user)
     assert user_avatar({"id": 43, "name": "Admin"})["initials"] == "AD"
     assert user_avatar({"id": 44, "name": ""})["initials"] == "?"
@@ -279,6 +338,145 @@ def test_record_detail_long_values_are_aligned_and_bounded():
     assert "width: min(280px, 100%); height: 2.5em" in source
     assert "-webkit-line-clamp: 2" in source
     assert ").tooltip(component_name)" in component_source
+
+
+def test_identity_details_use_grouped_command_panels():
+    source = inspect.getsource(index)
+    assert source.count('"identity-command-layout w-full"') == 3
+    assert 'ui.label("Organization unit actions")' in source
+    assert 'ui.label("Role actions")' in source
+    assert 'ui.label("User actions")' in source
+    assert 'ui.label("Manage and assignments")' in source
+    assert 'ui.label("Account and assignments")' in source
+    assert 'ui.label("Status and access")' in source
+    assert '"detail-surface identity-command-metadata' in source
+    assert '"detail-surface identity-command-actions' in source
+    assert ".identity-command-metadata { grid-column: 1; grid-row: 1;" in source
+    assert ".identity-command-actions { grid-column: 2; grid-row: 1;" in source
+    assert 'assignment_results = ui.element("div").classes(' in source
+    assert 'assignment_page_size = 5' in source
+    assert 'def render_assignment_cards()' in source
+    assert 'page_rows = rows[offset:offset + assignment_page_size]' in source
+    assert 'assignment_previous = ui.button(' in source
+    assert 'assignment_next = ui.button(' in source
+    assert '"governance-list-facts user-role-assignment-facts"' in source
+    assert '"governance-list-card user-role-assignment-card shadow-none"' in source
+    assert 'lambda _, role_id=row["role_id"]: select_role_details(role_id)' in source
+    assert 'def confirm_remove_role_assignment(row: dict[str, Any])' in source
+    assert 'await api.delete_assignment(row["id"], row["version"])' in source
+    assert '"click.stop",' in source
+    assert 'session_results = ui.element("div").classes("login-session-card-grid w-full")' in source
+    assert 'label in {"Direct status", "Effective status"}' in source
+
+
+def test_org_unit_details_show_dedicated_holdings_summary_and_card_style_labels():
+    source = inspect.getsource(index)
+    assert 'holdings_metrics = unit["holdings_metrics"]' in source
+    assert 'ui.label("Holdings summary")' in source
+    assert '"Visible holdings owned by this organization unit"' in source
+    assert '"org-unit-holdings-grid"' in source
+    assert "holdings_metrics['open_aggregation_count']" in source
+    assert "holdings_metrics[f'{medium}_aggregation_count']" in source
+    assert 'ui.label("|").classes(' in source
+    assert "holdings_metrics[f'{medium}_record_count']" in source
+    assert "holdings_metrics['vital_record_count']" in source
+    assert "holdings_metrics['storage_size_in_bytes']" in source
+    assert 'ui.label(label).classes("detail-field-label")' in source
+
+
+def test_org_unit_parent_values_navigate_to_parent_details():
+    source = inspect.getsource(index)
+    assert 'spec.key == "org-units"' in source
+    assert 'label == "Parent unit"' in source
+    assert 'parent_id=row["parent_org_unit_id"]' in source
+    assert 'select_organization_unit_details(parent_id)' in source
+    assert 'label == "Parent" and (unit.get("parent") or {}).get("id")' in source
+    assert 'unit["parent"]["id"]' in source
+    assert '.tooltip("Open parent organization unit")' in source
+
+
+def test_org_unit_details_show_clickable_vertical_lineage_before_holdings():
+    source = inspect.getsource(index)
+    lineage_index = source.index('ui.label("Organizational lineage")')
+    holdings_index = source.index('ui.label("Holdings summary")')
+    assert lineage_index < holdings_index
+    assert 'lineage = [*(unit.get("ancestors") or []), {' in source
+    assert '"org-unit-lineage-row"' in source
+    assert '"org-unit-lineage-node" + (" current" if is_current else "")' in source
+    assert 'ancestor_id=lineage_unit["id"]' in source
+    assert 'select_organization_unit_details(ancestor_id)' in source
+    assert 'if not is_current:' in source
+    assert 'ui.label(lineage_unit["code"]).classes(' in source
+    assert 'ui.label("Current unit").classes(' not in source
+
+
+def test_role_and_user_metadata_field_names_use_card_style_labels():
+    source = inspect.getsource(index)
+    assert source.count('ui.label(label).classes("detail-field-label")') >= 2
+    for label in ("Email address", "Account type", "Status", "External ID", "Created", "User ID"):
+        assert f'ui.label("{label}").classes("detail-field-label")' in source
+
+
+def test_role_details_relationship_values_navigate_to_details_pages():
+    source = inspect.getsource(index)
+    assert 'role.get("org_unit_code"), role.get("org_unit_name")' in source
+    assert 'role.get("supervisor_role_code"), role.get("supervisor_role_name")' in source
+    assert 'select_organization_unit_details(' in source
+    assert 'role["org_unit_id"]' in source
+    assert 'select_role_details(role["supervisor_role_id"])' in source
+    assert '.tooltip("Open organization unit")' in source
+    assert '.tooltip("Open supervising role")' in source
+
+
+def test_role_details_group_profile_privileges_with_names_and_codes():
+    source = inspect.getsource(index)
+    assert 'profile_privileges = role.get("profile_privileges") or []' in source
+    assert 'privileges_by_category: dict[str, list[dict[str, Any]]]' in source
+    assert 'ui.label("Privileges inherited from profile")' in source
+    assert '"role-privilege-groups w-full p-3"' in source
+    assert 'ui.label(privilege["name"])' in source
+    assert 'ui.label(privilege["code"])' in source
+    assert 'privilege_help_text(' in source
+
+
+def test_user_details_use_fixed_blue_avatar_and_one_column_session_cards():
+    source = inspect.getsource(index)
+    assert 'render_user_avatar(person, size="64px")' in source
+    assert 'session_results = ui.element("div").classes("login-session-card-grid w-full")' in source
+    assert 'def render_user_session_card(row: dict[str, Any])' in source
+    assert 'ui.label(f"{browser} on {platform}")' in source
+    assert ').props("outline")' in source
+
+
+def test_governance_catalogues_use_one_column_cards():
+    source = inspect.getsource(index)
+    assert 'if spec.key in {"security-levels", "profiles", "users", "roles", "org-units"}:' in source
+    assert '"governance-card-list w-full px-5"' in source
+    assert '"governance-list-card shadow-none"' in source
+    assert 'width: 100%; min-width: 0;' in source
+    assert '"security-levels": "shield"' in source
+    assert '"profiles": "admin_panel_settings"' in source
+    assert 'with ui.element("div").classes("governance-card-icon mt-1")' in source
+    assert "border: 1px solid #add4ec" in source
+    assert '("Roles assigned this level", str(row.get("roles_assigned_count", 0)))' in source
+    assert "Clearance requirement" not in source
+    assert 'if label == "Prevents disposition" and value == "Yes":' in source
+    assert 'ui.badge("Yes", color="warning")' in source
+    assert '("Privileges", f"{row.get(\'privilege_count\', 0)} privileges")' in source
+    assert 'with ui.element("div").classes("governance-card-list w-full")' in source
+    assert '.tooltip("Hold history")' in source
+
+
+def test_hold_held_items_use_one_column_cards():
+    source = inspect.getsource(index)
+    assert 'ui.label("No held items match these filters.")' in source
+    assert 'update_held_item_selection(row: dict[str, Any], selected: bool)' in source
+    assert '.tooltip("Remove from this hold")' in source
+    assert 'update_candidate_selection(row: dict[str, Any], selected: bool)' in source
+    assert 'picker["selected"][row["selection_key"]] = dict(row)' in source
+    assert 'session_results = ui.element("div").classes("login-session-card-grid w-full")' in source
+    assert 'user_agent = row.get("user_agent") or "Unknown client"' in source
+    assert '.tooltip(user_agent)' in source
 
 
 def test_scalar_display_columns_are_not_rendered_as_relationship_links():
@@ -366,8 +564,17 @@ def test_application_shell_is_flat_and_uses_one_background():
     assert '"erms-page-table' in source
     assert ".login-sessions-table .q-table th" in source
     assert "white-space: nowrap" in source
-    assert '"label": "Signed in", "field": "date_created", "align": "left", "sortable": True' in source
-    assert 'label="Force sign-out"' in source
+    assert 'results = ui.element("div").classes("login-session-card-grid w-full")' in source
+    assert "grid-template-columns: minmax(0, 1fr); gap: 10px;" in source
+    assert '.tooltip("Force sign-out this session")' in source
+    assert '.tooltip("Force sign-out all sessions for this user")' in source
+    assert 'icon="logout", on_click=' in source
+    assert 'icon="person_off", on_click=' in source
+    assert '{20: "20", 50: "50", 100: "100"}' in source
+    assert 'page_range.text = f"Showing {start}–{end} of {page_state[\'total\']} sessions"' in source
+    assert 'await api.login_sessions_page(' in source
+    assert ".login-session-action-button" in source
+    assert "<q-btn-dropdown" not in source
     assert 'ui.row().classes("w-full items-center no-wrap gap-4")' in source
     assert 'ui.row().classes("items-center no-wrap gap-2 flex-none")' in source
     assert 'ui.label("Search results").classes("text-lg font-semibold")' in source
@@ -444,7 +651,7 @@ def test_navigation_drawer_does_not_load_or_render_entity_counts():
     assert "navigation_badges" not in source
     assert "refresh_navigation_counts" not in source
     assert "active_count" not in source
-    assert "sum(row.get('status') == 'active' for row in rows)" in source
+    assert "page_state.update(total=int(page.get(\"total\", 0)), active=int(page.get(\"active\", 0)))" in source
 
 
 def test_navigation_drawer_collapses_to_clickable_icon_rail():
@@ -496,10 +703,17 @@ def test_governance_custody_page_explains_qualification_and_empty_configuration(
     assert "governance-metrics-row" in source
     assert "governance-empty-state" in source
     assert "Universal custodians (" in source
-    assert "governance-table" in source
-    assert '"person", "label": "Person"' in source
-    assert 'label="Open user"' in source
-    assert 'label="Open role"' in source
+    assert "governance-custody-assignment-card" in source
+    assert 'custodian_host = ui.element("div").classes("governance-card-list w-full")' in source
+    assert 'attention_host = ui.element("div").classes("governance-card-list w-full")' in source
+    assert 'def render_custodian_cards()' in source
+    assert 'def render_attention_cards()' in source
+    assert 'render_user_avatar({' in source
+    assert '.tooltip("Open user")' in source
+    assert '.tooltip("Open role")' in source
+    assert '"Open roles", icon="open_in_new"' not in source
+    assert 'icon="person",\n                                        on_click=lambda _, item=row: select_user_details(' in source
+    assert 'icon="badge",\n                                on_click=lambda _, identifier=role["id"]: select_role_details(identifier)' in source
     assert "valid_from_display" in source
     assert "valid_until_display" in source
     assert "qualifies_for_universal_custody" in source
@@ -510,11 +724,31 @@ def test_governance_custody_page_explains_qualification_and_empty_configuration(
     assert "Assignments whose validity dates include the present time." in source
     assert "account, role, and organization hierarchy are active" in source
     assert "highest security clearance" in source
-    assert 'pagination={"rowsPerPage": 5}' in source
+    assert 'page_rows = custodian_rows[offset:offset + 5]' in source
+    assert 'page_rows = assignment_rows[offset:offset + 5]' in source
     assert "def set_page_title_icon(page: str)" in source
     assert 'page_title_icon = ui.icon("dashboard")' in source
     assert "page_title_icon = ui.icon()" not in source
     assert 'ui.label("Previous sign-in")' in source
+
+
+def test_login_session_statuses_and_security_operations_use_compact_cards():
+    source = inspect.getsource(index)
+    assert 'str(row.get("status") or "unknown").title(),' in source
+    assert '"expired": "grey-7",' in source
+    assert ').props("outline")' in source
+    assert 'security_event_host = ui.element("div").classes(' in source
+    assert 'def render_security_event_cards()' in source
+    assert 'page_rows = event_rows[offset:offset + 10]' in source
+    assert 'ui.label("No recent security events in this period.")' in source
+    assert 'f"Technical code: {row[\'decision_code\']}"' in source
+    assert '"Open role", icon="open_in_new"' not in source
+    assert 'async def open_security_event_target(row: dict[str, Any])' in source
+    assert '"name": row.get("actor_name")' in source
+    assert 'render_user_avatar({' in source
+    assert 'select_user_details(user_id)' in source
+    assert 'target_supported = (' in source
+    assert 'open_security_event_target(item)' in source
     assert 'current_user_last_login = ui.label("First sign-in")' in source
     assert 'current_user_avatar_initials = ui.label("?")' in source
     assert 'user_menu.on("show", refresh_user_profile)' in source
@@ -723,10 +957,27 @@ def test_organizational_ownership_is_presented_on_details_and_dashboard():
     assert 'dashboard_load_state = {"running": False}' in source
     assert 'if dashboard_load_state["running"]:' in source
     assert 'ui.label("Holdings by organizational unit")' in source
-    assert "where you currently have an effective" in source
-    assert "Counts include only aggregations and records you are allowed to view." in source
+    assert "Only units where you have an effective role; counts respect your access." in source
+    assert '"dashboard-holdings-list"' in source
+    assert '"dashboard-holdings-row"' in source
+    assert 'select_organization_unit_details(' in source
+    assert '"role=button tabindex=0"' in source
+    assert '"keydown.enter"' in source
+    assert 'dashboard-holdings-open' not in source
     assert "owner_count['aggregation_count']" in source
     assert "owner_count['record_count']" in source
+    assert "owner_count['open_aggregation_count']" in source
+    assert "owner_count['closed_aggregation_count']" in source
+    assert "owner_count['vital_record_count']" in source
+    assert "owner_count['storage_size_in_bytes']" in source
+    assert '"dashboard-holdings-mediums"' in source
+    assert '"dashboard-overview-medium dashboard-holdings-medium"' in source
+    assert 'for medium_index, medium in enumerate((' in source
+    assert 'ui.label("·").classes(' in source
+    assert "owner_count[f'{medium}_record_count']" in source
+    assert '"dashboard-holdings-peer-stat tabular-nums"' in source
+    assert 'ui.icon("storage", size="14px")' in source
+    assert ".dashboard-holdings-peer-stat .q-icon" in APP_SOURCE
 
 
 def test_metadata_editor_shows_read_only_owning_org_unit_context():
@@ -835,6 +1086,10 @@ def test_upload_batch_is_fully_buffered_before_api_awaits():
 def test_review_and_location_experience_has_accessible_text_labels():
     source = APP_SOURCE
     assert 'ui.label("Review reminders")' in source
+    assert '"dashboard-review-columns"' in source
+    assert '"dashboard-review-group"' in source
+    assert '"dashboard-review-item"' in source
+    assert 'f"{\'Aggregation\' if resource == \'aggregations\' else \'Record\'} · {number}"' in source
     assert 'ui.label("Change location")' in source
     assert 'ui.input("Assigned location"' in source
     assert 'ui.input("Current location"' in source

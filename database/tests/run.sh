@@ -119,8 +119,10 @@ psql "${HOLDS_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${DATABASE_DIR}/migrations/006_correct_legal_hold_authorization.sql"
 psql "${HOLDS_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${DATABASE_DIR}/migrations/007_add_global_hold_membership_management.sql"
+psql "${HOLDS_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/008_rename_hold_membership_to_held_items.sql"
 psql "${HOLDS_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --command \
-    "DO \$\$ BEGIN IF (SELECT count(*) FROM users WHERE email='pre-holds@test.invalid')<>1 OR to_regclass('public.holds') IS NULL OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='005_add_legal_holds_foundation') OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='006_correct_legal_hold_authorization') OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='007_add_global_hold_membership_management') OR NOT EXISTS(SELECT 1 FROM privileges WHERE code='holds.membership.manage_all') THEN RAISE EXCEPTION 'legal holds migration verification failed'; END IF; END \$\$"
+    "DO \$\$ BEGIN IF (SELECT count(*) FROM users WHERE email='pre-holds@test.invalid')<>1 OR to_regclass('public.holds') IS NULL OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='005_add_legal_holds_foundation') OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='006_correct_legal_hold_authorization') OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='007_add_global_hold_membership_management') OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='008_rename_hold_membership_to_held_items') OR NOT EXISTS(SELECT 1 FROM privileges WHERE code='holds.held_items.manage_all') THEN RAISE EXCEPTION 'legal holds migration verification failed'; END IF; END \$\$"
 docker exec "${CONTAINER_NAME}" dropdb --force \
     --username "${POSTGRES_USER}" "${HOLDS_MIGRATION_DB}"
 HOLDS_MIGRATION_DB_CREATED=false

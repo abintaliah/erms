@@ -62,14 +62,48 @@ def dashboard_summary(
     ).fetchall()
     privileges = {row["code"] for row in privilege_rows}
 
-    overview_counts = {
-        "aggregations": connection.execute(
-            "SELECT count(*) AS total FROM authorized_aggregations_for_search"
-        ).fetchone()["total"],
-        "records": connection.execute(
-            "SELECT count(*) AS total FROM authorized_records_for_search"
-        ).fetchone()["total"],
-    }
+    overview_counts = {}
+    overview_medium_counts = {}
+    overview_resource_attention_counts = {}
+    overview_aggregation_status_counts = {"open": 0, "closed": 0}
+    for resource in ("aggregations", "records"):
+        status_columns = (
+            ", count(*) FILTER (WHERE date_closed IS NULL) AS open,"
+            " count(*) FILTER (WHERE date_closed IS NOT NULL) AS closed"
+            if resource == "aggregations" else ""
+        )
+        row = connection.execute(
+            f"""SELECT count(*) AS total,
+                       count(*) FILTER (WHERE medium='physical') AS physical,
+                       count(*) FILTER (WHERE medium='digital') AS digital,
+                       count(*) FILTER (WHERE medium='mixed') AS mixed,
+                       count(*) FILTER (WHERE is_vital) AS vital,
+                       count(*) FILTER (WHERE on_effective_hold) AS held
+                       {status_columns}
+                  FROM authorized_{resource}_for_search"""
+        ).fetchone()
+        overview_counts[resource] = row["total"]
+        overview_medium_counts[resource] = {
+            medium: row[medium] for medium in ("physical", "digital", "mixed")
+        }
+        overview_resource_attention_counts[resource] = {
+            metric: row[metric] for metric in ("vital", "held")
+        }
+        if resource == "aggregations":
+            overview_aggregation_status_counts = {
+                status: row[status] for status in ("open", "closed")
+            }
+    overview_digital_component_metrics = dict(connection.execute(
+        """SELECT count(component.id) AS component_count,
+                  coalesce(sum(component.size_in_bytes),0) AS storage_size_in_bytes
+             FROM records record
+        LEFT JOIN digital_components component ON component.record_id=record.id
+            WHERE current_user_can_view_record(record.id)"""
+    ).fetchone())
+    if "holds.administer" in privileges:
+        overview_counts["holds"] = connection.execute(
+            "SELECT count(*) AS total FROM holds"
+        ).fetchone()["total"]
     for resource, privilege in (
         ("classification-schemes", "classifications.administer"),
         ("classifications", "classifications.administer"),
@@ -151,16 +185,47 @@ def dashboard_summary(
                  AND CURRENT_TIMESTAMP>=assignment.valid_from
                  AND (assignment.valid_until IS NULL OR CURRENT_TIMESTAMP<=assignment.valid_until)
                  AND role_effectively_active(role.id)
+           ), aggregation_metrics AS (
+               SELECT aggregation.owning_org_unit_id AS org_unit_id,
+                      count(*) AS aggregation_count,
+                      count(*) FILTER (WHERE aggregation.date_closed IS NULL) AS open_aggregation_count,
+                      count(*) FILTER (WHERE aggregation.date_closed IS NOT NULL) AS closed_aggregation_count
+                 FROM aggregations aggregation
+                WHERE current_user_can_view_aggregation(aggregation.id)
+                GROUP BY aggregation.owning_org_unit_id
+           ), record_metrics AS (
+               SELECT record.owning_org_unit_id AS org_unit_id,
+                      count(*) AS record_count,
+                      count(*) FILTER (WHERE record.medium='physical') AS physical_record_count,
+                      count(*) FILTER (WHERE record.medium='digital') AS digital_record_count,
+                      count(*) FILTER (WHERE record.medium='mixed') AS mixed_record_count,
+                      count(*) FILTER (WHERE record.is_vital) AS vital_record_count
+                 FROM records record
+                WHERE current_user_can_view_record(record.id)
+                GROUP BY record.owning_org_unit_id
+           ), component_metrics AS (
+               SELECT record.owning_org_unit_id AS org_unit_id,
+                      coalesce(sum(component.size_in_bytes),0) AS storage_size_in_bytes
+                 FROM records record
+                 JOIN digital_components component ON component.record_id=record.id
+                WHERE current_user_can_view_record(record.id)
+                GROUP BY record.owning_org_unit_id
            )
            SELECT unit.id AS org_unit_id,unit.code AS org_unit_code,
                   unit.name AS org_unit_name,
-                  (SELECT count(*) FROM aggregations aggregation
-                    WHERE aggregation.owning_org_unit_id=unit.id
-                      AND current_user_can_view_aggregation(aggregation.id)) AS aggregation_count,
-                  (SELECT count(*) FROM records record
-                    WHERE record.owning_org_unit_id=unit.id
-                      AND current_user_can_view_record(record.id)) AS record_count
+                  coalesce(aggregation_metrics.aggregation_count,0) AS aggregation_count,
+                  coalesce(aggregation_metrics.open_aggregation_count,0) AS open_aggregation_count,
+                  coalesce(aggregation_metrics.closed_aggregation_count,0) AS closed_aggregation_count,
+                  coalesce(record_metrics.record_count,0) AS record_count,
+                  coalesce(record_metrics.physical_record_count,0) AS physical_record_count,
+                  coalesce(record_metrics.digital_record_count,0) AS digital_record_count,
+                  coalesce(record_metrics.mixed_record_count,0) AS mixed_record_count,
+                  coalesce(record_metrics.vital_record_count,0) AS vital_record_count,
+                  coalesce(component_metrics.storage_size_in_bytes,0) AS storage_size_in_bytes
              FROM eligible_units unit
+        LEFT JOIN aggregation_metrics ON aggregation_metrics.org_unit_id=unit.id
+        LEFT JOIN record_metrics ON record_metrics.org_unit_id=unit.id
+        LEFT JOIN component_metrics ON component_metrics.org_unit_id=unit.id
             ORDER BY unit.name COLLATE "C",unit.id"""
     ).fetchall())
 
@@ -195,7 +260,7 @@ def dashboard_summary(
     ).fetchall())
 
     recent_activity = list(connection.execute(
-        """WITH latest_resource_events AS (
+        """WITH governed_resource_events AS (
                SELECT DISTINCT ON (event.entity_type,event.entity_id,event.operation)
                       event.id,event.entity_type,event.entity_id,event.operation,event.occurred_at
                  FROM event_history event
@@ -205,6 +270,22 @@ def dashboard_summary(
                   AND (%s::timestamptz IS NULL OR event.occurred_at >= %s)
                 ORDER BY event.entity_type,event.entity_id,event.operation,
                          event.occurred_at DESC,event.id DESC
+           ), content_view_events AS (
+               SELECT DISTINCT ON (component.record_id)
+                      event.id,'record'::text AS entity_type,
+                      component.record_id AS entity_id,
+                      event.operation,event.occurred_at
+                 FROM event_history event
+                 JOIN digital_components component ON component.id=event.entity_id
+                WHERE event.actor_user_id=%s
+                  AND event.entity_type='digital_component'
+                  AND event.operation='CONTENT_VIEWED'
+                  AND (%s::timestamptz IS NULL OR event.occurred_at >= %s)
+                ORDER BY component.record_id,event.occurred_at DESC,event.id DESC
+           ), latest_resource_events AS (
+               SELECT * FROM governed_resource_events
+               UNION ALL
+               SELECT * FROM content_view_events
            ), ranked_events AS (
                SELECT event.entity_type,event.entity_id,event.operation,event.occurred_at,
                       row_number() OVER (
@@ -226,7 +307,11 @@ def dashboard_summary(
             WHERE event.position<=%s
               AND (aggregation.id IS NOT NULL OR record.id IS NOT NULL)
             ORDER BY event.occurred_at DESC,event.entity_type,event.entity_id""",
-        (principal.user_id, recent_since, recent_since, recent_limit),
+        (
+            principal.user_id, recent_since, recent_since,
+            principal.user_id, recent_since, recent_since,
+            recent_limit,
+        ),
     ).fetchall())
     review_counts = connection.execute(
         """SELECT
@@ -278,6 +363,10 @@ def dashboard_summary(
 
     return {
         "overview_counts": overview_counts,
+        "overview_medium_counts": overview_medium_counts,
+        "overview_resource_attention_counts": overview_resource_attention_counts,
+        "overview_aggregation_status_counts": overview_aggregation_status_counts,
+        "overview_digital_component_metrics": overview_digital_component_metrics,
         "classification_metrics": classification_metrics,
         "unclassified_root_count": unclassified_root_count,
         "ownership_counts": ownership_counts,
