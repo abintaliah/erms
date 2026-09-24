@@ -37,6 +37,18 @@ Relationship fields are also protected. When a record or child aggregation is vi
 
 Authorization, relationship filtering, root detection, counting, sorting, and pagination use the true stored relationship. Redaction happens only after rows have been selected for the response. This prevents a concealed parent from making a child appear to be a root while still ensuring that a guessed inaccessible parent ID cannot produce visible results.
 
+## Operational response to increased security requirements
+
+When a matter's required security level rises above an employee's effective clearance, previous involvement does not preserve access. Operationally, the organization must either:
+
+1. reassign the matter to an employee whose vetted clearance covers the new level;
+2. complete the required vetting and formally raise the current employee's clearance; or
+3. retain the employee's existing clearance and enforce least privilege.
+
+Under the third option, the employee may find and view only independently accessible records or child aggregations within that clearance. Wathiq redacts the more-restrictive parent aggregation and conceals records and contextual information above the employee's clearance. Redaction does not grant access to the parent, disclose its identity, or change the stored hierarchy.
+
+The system must not bypass a clearance mismatch or continue access solely because the employee previously worked on the matter. Doing so would defeat the purpose of security-level enforcement.
+
 The generic relationship redactor resolves all referenced parents in one bounded set query regardless of page size. List and search authorization is likewise embedded in the set query rather than evaluated with one database call per result.
 
 ## Digital-component metadata

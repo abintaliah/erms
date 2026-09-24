@@ -242,6 +242,29 @@ show the child, but the parent and every inaccessible ancestor are concealed:
 The child remains stored beneath the parent; concealment does not flatten or
 rewrite the database hierarchy.
 
+#### Operational response when security requirements increase
+
+If a matter's required security level is raised above an employee's effective
+clearance, the employee's earlier involvement does not preserve or
+“grandfather” access. The organization must take one of these actions:
+
+1. reassign the matter to an employee whose vetted security clearance covers
+   the new level;
+2. complete the required vetting and formally raise the current employee's
+   security clearance; or
+3. retain the employee's existing clearance and apply least privilege. The
+   employee may continue to find and view only those independently accessible
+   records or child aggregations whose security levels are within that
+   clearance. The more-restrictive parent aggregation, records above the
+   employee's clearance, and all protected contextual information remain
+   concealed. Wathiq implements this option through the redacted-parent
+   behavior specified above.
+
+No other response may bypass the clearance mismatch, disclose the protected
+context, or continue access merely because the employee previously worked on
+the matter. Permitting such access would make the security-level control
+ineffective.
+
 Root detection must always use the stored `parent_aggregation_id`, never the
 redacted API projection. In particular, a child with a concealed parent must
 not be counted or returned as a root aggregation. The relationship-state fields
