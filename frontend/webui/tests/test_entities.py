@@ -163,6 +163,7 @@ def test_dashboard_overview_shows_medium_breakdowns_and_admin_hold_total():
     assert 'ui.label("|").classes("dashboard-overview-separator")' in APP_SOURCE
     assert '"dashboard-overview-signals"' not in APP_SOURCE
     assert 'f"{component_metrics[\'component_count\']} components"' in APP_SOURCE
+    assert 'ui.icon("storage", size="13px")' in APP_SOURCE
     assert 'format_file_size(component_metrics["storage_size_in_bytes"])' in APP_SOURCE
 
 
@@ -189,7 +190,7 @@ def test_dashboard_adds_attention_chart_without_removing_overview_counts():
 def test_dashboard_adds_holdings_chart_without_removing_unit_rows():
     assert '"dashboard-holdings-chart"' in APP_SOURCE
     assert ".dashboard-holdings-chart {" in APP_SOURCE
-    assert ".dashboard-holdings-chart { width: 100%; }" in APP_SOURCE
+    assert ".dashboard-storage-chart { width: 100%; }" in APP_SOURCE
     assert 'ui.label("Records by medium")' in APP_SOURCE
     assert '"Compare record volume and medium mix across your units."' in APP_SOURCE
     assert 'owner_count[f"{medium}_record_count"]' in APP_SOURCE
@@ -199,6 +200,7 @@ def test_dashboard_adds_holdings_chart_without_removing_unit_rows():
     ) < APP_SOURCE.index(
         'with ui.element("div").classes("dashboard-holdings-list")'
     )
+    assert 'ui.icon("storage", size="14px")' in APP_SOURCE
 
 
 def test_dashboard_adds_review_urgency_chart_without_removing_reminder_lists():
@@ -209,6 +211,21 @@ def test_dashboard_adds_review_urgency_chart_without_removing_reminder_lists():
     assert 'upcoming_total = int(summary["upcoming_review_count"])' in APP_SOURCE
     assert '"dashboard-review-columns"' in APP_SOURCE
     assert '"View all", icon="arrow_forward"' in APP_SOURCE
+
+
+def test_dashboard_ends_with_top_five_digital_storage_chart_and_other_summary():
+    assert 'ui.label("Digital storage by organizational unit")' in APP_SOURCE
+    assert '"dashboard-storage-chart"' in APP_SOURCE
+    assert 'top_storage_units = ranked_storage_units[:5]' in APP_SOURCE
+    assert 'other_storage_units = ranked_storage_units[5:]' in APP_SOURCE
+    assert 'f"Other {len(other_storage_units)} units"' in APP_SOURCE
+    assert 'ui.label("Combined remainder")' in APP_SOURCE
+    assert 'int(item["storage_size_in_bytes"])' in APP_SOURCE
+    assert APP_SOURCE.index(
+        'with ui.element("div").classes("dashboard-personal-columns mt-2")'
+    ) < APP_SOURCE.index(
+        'with ui.element("section").classes("dashboard-storage-chart")'
+    )
 
 
 def test_form_payload_converts_ids_and_omits_empty_create_fields():

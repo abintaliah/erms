@@ -1498,6 +1498,34 @@ def index() -> None:
             text-align: right; color: #334155; font-size: .75rem; font-weight: 600;
             font-variant-numeric: tabular-nums;
         }
+        .dashboard-storage-chart {
+            width: 50%; margin-inline: auto; padding: 13px 14px 12px;
+            border: 1px solid #dce5eb; border-radius: 10px; background: white;
+        }
+        .dashboard-storage-chart-rows { display: grid; gap: 10px; margin-top: 13px; }
+        .dashboard-storage-chart-row {
+            display: grid; grid-template-columns: minmax(105px, 145px) minmax(80px, 1fr) 78px;
+            align-items: center; gap: 9px; min-width: 0;
+        }
+        .dashboard-storage-chart-name {
+            min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            color: #475569; font-size: .75rem; font-weight: 600;
+        }
+        .dashboard-storage-chart-track {
+            height: 15px; overflow: hidden; border-radius: 4px; background: #edf2f5;
+        }
+        .dashboard-storage-chart-bar { height: 100%; background: #4d82c4; }
+        .dashboard-storage-chart-value {
+            text-align: right; color: #334155; font-size: .72rem; font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+        .dashboard-storage-chart-share {
+            color: #94a3b8; font-size: .62rem; font-weight: 500;
+        }
+        .dashboard-storage-other {
+            margin-top: 3px; padding-top: 10px; border-top: 1px solid #e2e8ed;
+        }
+        .dashboard-storage-other-summary { color: #94a3b8; font-size: .68rem; }
         .dashboard-holdings-row {
             display: grid;
             grid-template-columns: minmax(220px, 1fr) 190px 250px 165px;
@@ -1587,6 +1615,10 @@ def index() -> None:
             }
             .dashboard-attention-plot { gap: 14px; padding-right: 12px; padding-left: 42px; }
             .dashboard-attention-axis-label { left: -42px; }
+            .dashboard-storage-chart-row {
+                grid-template-columns: minmax(72px, 90px) minmax(70px, 1fr) 65px;
+                gap: 6px;
+            }
         }
         .dashboard-review-layout {
             display: grid; grid-template-columns: minmax(190px, .55fr) minmax(0, 2fr);
@@ -1643,7 +1675,8 @@ def index() -> None:
         .dashboard-review-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
         @media (max-width: 760px) {
             .dashboard-attention-chart,
-            .dashboard-holdings-chart { width: 100%; }
+            .dashboard-holdings-chart,
+            .dashboard-storage-chart { width: 100%; }
             .dashboard-review-layout { grid-template-columns: minmax(0, 1fr); }
             .dashboard-review-summary {
                 display: grid; grid-template-columns: minmax(0, 1fr) auto;
@@ -8102,7 +8135,7 @@ def index() -> None:
                                             f"{component_metrics['component_count']} components"
                                         ).classes("font-semibold tabular-nums")
                                     with ui.element("span").classes("dashboard-overview-signal"):
-                                        ui.icon("database", size="13px").classes("text-primary")
+                                        ui.icon("storage", size="13px").classes("text-primary")
                                         ui.label(
                                             format_file_size(component_metrics["storage_size_in_bytes"])
                                         ).classes("font-semibold tabular-nums")
@@ -8669,6 +8702,108 @@ def index() -> None:
                             ).classes("text-sm text-slate-500 p-4")
                         for item in recent_records:
                             render_recent_record_entry(item)
+
+                ui.label("Digital storage by organizational unit").classes(
+                    "text-lg font-semibold mt-2"
+                )
+                ui.label(
+                    "Largest authorized storage totals among units available through your effective roles."
+                ).classes("text-sm text-slate-500 -mt-1")
+                ranked_storage_units = sorted(
+                    ownership_counts,
+                    key=lambda item: (
+                        -int(item["storage_size_in_bytes"]),
+                        str(item["org_unit_name"]),
+                        int(item["org_unit_id"]),
+                    ),
+                )
+                top_storage_units = ranked_storage_units[:5]
+                other_storage_units = ranked_storage_units[5:]
+                total_storage_bytes = sum(
+                    int(item["storage_size_in_bytes"]) for item in ranked_storage_units
+                )
+                maximum_unit_storage = max(
+                    1,
+                    *(int(item["storage_size_in_bytes"]) for item in top_storage_units),
+                )
+                with ui.element("section").classes("dashboard-storage-chart").props(
+                    "aria-label='Top five organizational units by authorized digital storage'"
+                ):
+                    with ui.row().classes("w-full items-start gap-3"):
+                        with ui.column().classes("gap-0 min-w-0"):
+                            ui.label("Top organizational units").classes(
+                                "text-sm font-semibold text-slate-700"
+                            )
+                            ui.label(
+                                f"{len(top_storage_units)} of {len(ranked_storage_units)} "
+                                f"{'unit' if len(ranked_storage_units) == 1 else 'units'} "
+                                "shown individually"
+                            ).classes("text-xs text-slate-500")
+                        ui.space()
+                        with ui.column().classes("items-end gap-0 shrink-0"):
+                            ui.label(format_file_size(total_storage_bytes)).classes(
+                                "text-lg font-bold text-slate-800 tabular-nums"
+                            )
+                            ui.label("authorized storage").classes(
+                                "text-[10px] text-slate-500"
+                            )
+                    if not ranked_storage_units:
+                        ui.label(
+                            "No organizational-unit storage is available for your effective roles."
+                        ).classes("text-sm text-slate-500 py-4")
+                    else:
+                        with ui.element("div").classes("dashboard-storage-chart-rows"):
+                            for owner_count in top_storage_units:
+                                storage_bytes = int(owner_count["storage_size_in_bytes"])
+                                bar_width = (storage_bytes / maximum_unit_storage) * 100
+                                share = (
+                                    (storage_bytes / total_storage_bytes) * 100
+                                    if total_storage_bytes else 0
+                                )
+                                with ui.element("div").classes(
+                                    "dashboard-storage-chart-row"
+                                ):
+                                    ui.label(owner_count["org_unit_name"]).classes(
+                                        "dashboard-storage-chart-name"
+                                    ).tooltip(owner_count["org_unit_name"])
+                                    with ui.element("div").classes(
+                                        "dashboard-storage-chart-track"
+                                    ):
+                                        ui.element("div").classes(
+                                            "dashboard-storage-chart-bar"
+                                        ).style(f"width: {bar_width:.2f}%")
+                                    with ui.column().classes("items-end gap-0"):
+                                        ui.label(format_file_size(storage_bytes)).classes(
+                                            "dashboard-storage-chart-value"
+                                        )
+                                        ui.label(f"{share:.1f}%").classes(
+                                            "dashboard-storage-chart-share"
+                                        )
+                            if other_storage_units:
+                                other_storage_bytes = sum(
+                                    int(item["storage_size_in_bytes"])
+                                    for item in other_storage_units
+                                )
+                                other_share = (
+                                    (other_storage_bytes / total_storage_bytes) * 100
+                                    if total_storage_bytes else 0
+                                )
+                                with ui.element("div").classes(
+                                    "dashboard-storage-chart-row dashboard-storage-other"
+                                ):
+                                    ui.label(
+                                        f"Other {len(other_storage_units)} units"
+                                    ).classes("dashboard-storage-chart-name")
+                                    ui.label("Combined remainder").classes(
+                                        "dashboard-storage-other-summary"
+                                    )
+                                    with ui.column().classes("items-end gap-0"):
+                                        ui.label(format_file_size(other_storage_bytes)).classes(
+                                            "dashboard-storage-chart-value"
+                                        )
+                                        ui.label(f"{other_share:.1f}%").classes(
+                                            "dashboard-storage-chart-share"
+                                        )
                 set_connection_status(True)
 
         await load_dashboard()

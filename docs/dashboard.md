@@ -102,7 +102,7 @@ currently authenticated user.
 
 ## Dashboard visualizations
 
-The web Dashboard supplements its existing cards and lists with three compact
+The web Dashboard supplements its existing cards and lists with four compact
 visualizations. They use the existing consolidated summary response and must
 not issue additional API requests:
 
@@ -119,6 +119,11 @@ not issue additional API requests:
   lists. It divides the complete authorized review count between overdue items
   and items due within the configured warning window. The existing previews,
   dates, empty states, and **View all** actions remain unchanged.
+- **Digital storage by organizational unit** is the final Dashboard section.
+  It ranks eligible units by authorized digital-component storage, shows the
+  largest five individually, and folds all remaining eligible units into one
+  clearly labelled **Other units** summary. Exact formatted storage totals and
+  percentage shares remain visible without squeezing every unit into the plot.
 
 The visualizations are comparative presentations of counts already present in
 the response. They do not create new data scopes, privileges, resources, or
@@ -128,7 +133,7 @@ state rather than an invented chart row.
 
 ## Dashboard data visibility
 
-Access to the Dashboard and its three visualizations requires an authenticated
+Access to the Dashboard and its four visualizations requires an authenticated
 session. The API remains the authorization boundary; hiding or showing a UI
 element is not a substitute for server-side filtering.
 
@@ -138,14 +143,15 @@ element is not a substitute for server-side filtering.
 | Attention signals | Uses the authorized overview attention counts. No extra global privilege is required. A user sees only vital and effectively held aggregations and records they can already view. |
 | Administration counts | Each item is included only when the caller has its corresponding global privilege: `classifications.administer` for Schemes and Classifications, `holds.administer` for Holds, `organization.administer` for Organization units and Roles, and `identity.users.administer` for Users. These privileges control the administration items, not the Attention signals chart beneath them. |
 | Holdings by organizational unit and Records by medium | Includes each distinct organizational unit represented by a currently effective role held by the caller. Multiple effective roles in one unit produce one entry. Within each eligible unit, counts include only aggregations and records the caller is authorized to view. An eligible unit with no visible holdings reports zero. Future, expired, or ineffective roles do not add units. |
+| Digital storage by organizational unit | Uses the same eligible organizational units as Holdings. Each unit's storage is the sum of digital-component bytes belonging to records the caller is authorized to view. The five largest totals are shown individually; all remaining eligible units are combined into **Other units**. Ranking and aggregation do not reveal units outside the caller's effective-role scope. |
 | Review urgency and reminder lists | Includes only reviewable aggregations and records owned by an organizational unit represented by one of the caller's currently effective roles. Within that ownership scope, normal resource visibility, security-clearance, and ACL rules apply. The information-governance custodian bypass does not add unrelated organizational units. |
 | Governance attention | Unclassified-root counts include only root aggregations visible to the caller. Classification administration metrics and navigation require `classifications.administer`. |
 | Favourites and recent activity | Private to the authenticated user and filtered again through current resource visibility so deleted or no-longer-visible resources are omitted. |
 
-A user does not need any of the four administration privileges to see the three
+A user does not need any of the four administration privileges to see the four
 visualizations. An effective organizational-unit role is required for Holdings
-and Review sections to contain organizationally scoped data; without one, those
-sections show their existing empty or zero states. A user needs all four global
+Review, and Digital storage sections to contain organizationally scoped data;
+without one, those sections show their existing empty or zero states. A user needs all four global
 administration privileges listed above only to see every administration-count
 item above Attention signals.
 

@@ -663,6 +663,17 @@ the detailed, navigable presentation. A qualifying unit with zero authorized
 records remains represented by its zero-valued row; the chart must not invent a
 positive-width data segment.
 
+The Dashboard must add a final **Digital storage by organizational unit**
+section using the authorized `storage_size_in_bytes` values returned for the
+same eligible organizational units. Units are ordered by storage descending,
+then by name and immutable ID for deterministic ties. At most five units are
+shown individually. When more than five eligible units exist, every remaining
+unit is folded into one **Other units** summary containing their combined bytes
+and share of the authorized total. The summary must not expose the names or
+individual storage values of units outside the top five. Units outside the
+caller's effective-role scope or containing only inaccessible records must not
+contribute storage.
+
 Dashboard loading must use a consolidated, self-only summary operation rather
 than issuing one search request per card or hydrating recent activity through
 per-resource requests. A refresh may have only one in-flight summary request
@@ -992,7 +1003,11 @@ and immutable completion reporting.
 - the Records by medium chart uses exactly the physical, digital, mixed, and
   total record counts returned for those authorized unit rows; and
 - the chart is additive and does not remove or weaken the existing holdings
-  rows, their zero state, or their organizational-unit navigation.
+  rows, their zero state, or their organizational-unit navigation;
+- digital storage ranks no more than five eligible units individually and
+  combines the remaining eligible units into one Other units summary; and
+- digital storage includes components belonging only to records the caller is
+  authorized to view within units represented by currently effective roles.
 
 All database-backed tests must run only against a newly created, uniquely named
 disposable PostgreSQL database initialized from the canonical schema or the

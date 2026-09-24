@@ -68,7 +68,9 @@ clickable lists:
 - organizational-unit holdings use labelled horizontal bars segmented into
   Physical, Digital, and Mixed records; and
 - review urgency uses a directly labelled part-to-whole ring for Overdue and
-  the configured upcoming-review window.
+  the configured upcoming-review window; and
+- organizational-unit storage uses ranked horizontal bars for the five largest
+  authorized totals, followed by a separated textual Other units summary.
 
 Color is paired with visible labels and numeric values. Zero values remain
 readable without a misleading positive-size mark. On narrow screens, legends
