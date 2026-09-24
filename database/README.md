@@ -31,6 +31,12 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/005_add_legal_holds_foundation.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/006_correct_legal_hold_authorization.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/007_add_global_hold_membership_management.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/008_rename_hold_membership_to_held_items.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/009_preserve_relationship_truth_for_search.sql
 ```
 
 Migration 004 makes lifecycle timestamps authoritative. Organization units and
@@ -59,6 +65,11 @@ Migration 008 renames the original legal-hold membership terminology to the
 canonical **held items** terminology. It updates the global privilege to
 `holds.held_items.manage_all` and refreshes the database authorization function
 without changing existing hold assignments.
+
+Migration 009 makes governed search predicates operate on true aggregation
+relationships. Inaccessible parent/container identifiers remain redacted at
+the API response boundary and are distinguished from absent relationships by
+explicit relationship-state fields.
 
 Migration files are not initialization scripts and must never be run against a
 new database already created from the latest `schema.sql`.

@@ -33,7 +33,9 @@ Visibility predicates are composed into SQL before counting, sorting, cursor eva
 
 A known but inaccessible resource returns the same public `404` body as an absent resource. Lists, trees, favourites, counts, and searches silently omit inaccessible entries. Filtering by a protected parent returns no results when that parent is unavailable.
 
-Relationship fields are also protected. When a record or child aggregation is visible but its containing aggregation is not, the protected parent identifier and parent label are returned as null. Advanced-search projections apply the same rule before evaluating relationship filters, so a guessed parent ID cannot be confirmed through totals or pagination.
+Relationship fields are also protected. When a record or child aggregation is visible but its containing aggregation is not, the protected identifier and label are returned as null. The response also says why: aggregations expose `parent_aggregation_state` (`none`, `visible`, or `redacted`) and records expose `aggregation_state` (`visible` or `redacted`). Sentinel IDs are deliberately forbidden.
+
+Authorization, relationship filtering, root detection, counting, sorting, and pagination use the true stored relationship. Redaction happens only after rows have been selected for the response. This prevents a concealed parent from making a child appear to be a root while still ensuring that a guessed inaccessible parent ID cannot produce visible results.
 
 The generic relationship redactor resolves all referenced parents in one bounded set query regardless of page size. List and search authorization is likewise embedded in the set query rather than evaluated with one database call per result.
 

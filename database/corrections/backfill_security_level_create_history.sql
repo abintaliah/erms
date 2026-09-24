@@ -6,6 +6,8 @@ INSERT INTO event_history (
     entity_id,
     operation,
     actor_type,
+    actor_name,
+    actor_email,
     source,
     after_state,
     changed_fields,
@@ -18,6 +20,8 @@ SELECT
     level.id,
     'CREATE',
     'automated_process',
+    'Security-level history correction',
+    'system@erms.local',
     'administrative_tool',
     to_jsonb(level),
     ARRAY[

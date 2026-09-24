@@ -227,6 +227,13 @@ show the child, but the parent and every inaccessible ancestor are concealed:
 - breadcrumbs omit concealed segments and may show a neutral “Protected
   container” discontinuity without a link;
 - the child response does not embed the hidden parent object;
+- relationship identifiers are redacted only at the API response boundary,
+  after authorization, filtering, counting, sorting, and pagination have used
+  the true stored relationship;
+- `parent_aggregation_state` is `none`, `visible`, or `redacted`, while a
+  record's `aggregation_state` is `visible` or `redacted`; a null identifier
+  plus `redacted` means the related aggregation exists but is inaccessible;
+- sentinel or magic identifier values are forbidden;
 - the user cannot edit, move, reclassify, or otherwise act on the parent in the
   UI; and
 - direct API operations against the parent return the ordinary non-disclosing
@@ -234,6 +241,11 @@ show the child, but the parent and every inaccessible ancestor are concealed:
 
 The child remains stored beneath the parent; concealment does not flatten or
 rewrite the database hierarchy.
+
+Root detection must always use the stored `parent_aggregation_id`, never the
+redacted API projection. In particular, a child with a concealed parent must
+not be counted or returned as a root aggregation. The relationship-state fields
+are presentation metadata and must not be used for structural database logic.
 
 ### 4.4 UI and API handling of hierarchy conflicts
 

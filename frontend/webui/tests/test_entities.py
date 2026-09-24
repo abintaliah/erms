@@ -39,6 +39,7 @@ from frontend.webui.app import (
     medium_label,
     user_avatar,
     relationship_options,
+    record_draft_component_context,
     render_component_cards,
     role_change_requires_reason,
     append_navigation_entry,
@@ -57,6 +58,17 @@ from frontend.webui.config import (
 from frontend.webui.app import favourite_preview
 
 APP_SOURCE = inspect.getsource(index)
+
+
+def test_record_draft_component_context_requires_and_normalizes_visible_form_values():
+    assert record_draft_component_context("17", "digital") == {
+        "aggregation_id": 17,
+        "medium": "digital",
+    }
+    with pytest.raises(ValueError, match="Select the parent aggregation"):
+        record_draft_component_context(None, "digital")
+    with pytest.raises(ValueError, match="record medium"):
+        record_draft_component_context(17, None)
 
 
 def test_native_preview_kind_uses_safe_browser_renderers():
@@ -1010,6 +1022,22 @@ def test_record_creation_explains_and_enforces_parent_owner_role_context():
     assert "previous Create for selection was cleared" in source
     assert "you cannot create a record there" in source
     assert "previous_role_id in eligible_role_ids" in source
+    assert 'payload["aggregation_id"] = int(target_aggregation_id)' in source
+    assert 'controls["aggregation_id"].props("readonly")' in source
+    assert "The parent aggregation is fixed because this record is being" in source
+    assert 'controls["aggregation_id"].disable()' not in source[parent_position:create_for_position]
+    assert "if len(creation_roles) == 1:" in source[parent_position:]
+    assert 'controls["creator_acl_role_id"].props("readonly")' in source
+    assert "if len(rows) == 1:" in source[create_for_position:]
+    upload_handler_position = source.index("def upload_to_draft(")
+    context_sync_position = source.index(
+        'await api.update_record_draft(draft["id"], component_context)',
+        upload_handler_position,
+    )
+    component_upload_position = source.index(
+        "await api.upload_draft_component(", upload_handler_position,
+    )
+    assert context_sync_position < component_upload_position
 
 
 def test_aggregation_creation_places_parent_before_role_and_explains_ownership():

@@ -54,6 +54,15 @@ as historically used because they supplied governance context and may have
 supplied inherited retention. Reassignment or deletion of the aggregation does
 not clear these markers.
 
+## Redacted hierarchy relationships
+
+Classification governance always follows the true stored aggregation tree.
+When a caller may see a child but not its parent, the API returns a null
+`parent_aggregation_id` together with `parent_aggregation_state: "redacted"`;
+it uses `"none"` only for a genuine root. Search predicates and governance
+counts run before this response redaction, so concealed parents cannot create
+false unclassified-root warnings. No magic or sentinel aggregation ID is used.
+
 ## Branches, terminals, and hierarchy
 
 Classifications have unlimited hierarchy depth and are explicitly one of:

@@ -17,7 +17,13 @@ READ_VISIBILITY = {
 def redact_hidden_relationships(
     connection: Connection, table: str, rows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Remove protected parent identifiers with one bounded set query."""
+    """Remove protected relationship identifiers with one bounded set query.
+
+    Filtering must already have used the real database relationship.  The
+    companion state field preserves the semantic difference between no
+    relationship and an existing relationship whose identifier is redacted.
+    Never use a magic/sentinel identifier for that distinction.
+    """
     relation = {"aggregations": "parent_aggregation_id", "records": "aggregation_id"}.get(table)
     aggregation_context: dict[int, dict[str, Any]] = {}
     if table in {"aggregations", "records"} and rows:
@@ -70,15 +76,26 @@ def redact_hidden_relationships(
     if relation is None:
         return rows
     parent_ids = sorted({row[relation] for row in rows if row.get(relation) is not None})
+    state_field = "parent_aggregation_state" if table == "aggregations" else "aggregation_state"
     if not parent_ids:
+        for row in rows:
+            # Aggregations may truly be roots. Records always have a container,
+            # so a missing record relationship is necessarily already redacted.
+            row[state_field] = "none" if table == "aggregations" else "redacted"
         return rows
     visible = {
         entity_id for entity_id in parent_ids
         if aggregation_context.get(entity_id, {}).get("visible", bool(aggregation_context.get(entity_id)))
     }
     for row in rows:
-        if row.get(relation) is not None and row[relation] not in visible:
+        relationship_id = row.get(relation)
+        if relationship_id is None:
+            row[state_field] = "none" if table == "aggregations" else "redacted"
+        elif relationship_id not in visible:
             row[relation] = None
+            row[state_field] = "redacted"
+        else:
+            row[state_field] = "visible"
     return rows
 
 

@@ -530,6 +530,7 @@ class AggregationRead(ApiModel):
 
     id: int
     parent_aggregation_id: int | None
+    parent_aggregation_state: Literal["none", "visible", "redacted"] | None = None
     classification_id: int | None
     aggregation_number: str
     title: str
@@ -557,6 +558,16 @@ class AggregationRead(ApiModel):
     child_aggregation_acl_version: int
     child_record_acl_version: int
     version: int
+
+    @model_validator(mode="after")
+    def derive_parent_aggregation_state(self):
+        # CRUD redaction sets "redacted" explicitly. This fallback makes
+        # non-redacted create/update responses self-describing as well.
+        if self.parent_aggregation_state is None:
+            self.parent_aggregation_state = (
+                "none" if self.parent_aggregation_id is None else "visible"
+            )
+        return self
 
 
 DispositionAction = Literal[
@@ -888,6 +899,7 @@ class RecordRead(ApiModel):
 
     id: int
     aggregation_id: int | None
+    aggregation_state: Literal["visible", "redacted"] | None = None
     record_number: str
     title: str
     description: str | None
@@ -907,6 +919,16 @@ class RecordRead(ApiModel):
     inherit_acl_from_parent: bool
     resource_acl_version: int
     version: int
+
+    @model_validator(mode="after")
+    def derive_aggregation_state(self):
+        # Records always belong to an aggregation; NULL in an API response
+        # therefore means that the existing container relationship is redacted.
+        if self.aggregation_state is None:
+            self.aggregation_state = (
+                "visible" if self.aggregation_id is not None else "redacted"
+            )
+        return self
 
 
 class RecordDraftCreate(ApiModel):

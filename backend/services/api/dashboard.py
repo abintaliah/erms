@@ -170,9 +170,14 @@ def dashboard_summary(
                  FROM scheme_metrics"""
         ).fetchone())
 
+    # Root status and visibility are security-sensitive facts. Count from the
+    # real hierarchy and authorize each resource; never infer roots from a
+    # response-redacted parent identifier.
     unclassified_root_count = connection.execute(
-        """SELECT count(*) AS total FROM authorized_aggregations_for_search
-            WHERE parent_aggregation_id IS NULL AND classification_id IS NULL"""
+        """SELECT count(*) AS total FROM aggregations
+            WHERE parent_aggregation_id IS NULL
+              AND classification_id IS NULL
+              AND current_user_can_view_aggregation(id)"""
     ).fetchone()["total"]
 
     ownership_counts = list(connection.execute(

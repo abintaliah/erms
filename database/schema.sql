@@ -2359,6 +2359,8 @@ INSERT INTO event_history (
     entity_id,
     operation,
     actor_type,
+    actor_name,
+    actor_email,
     source,
     after_state,
     changed_fields,
@@ -2371,6 +2373,8 @@ SELECT
     level.id,
     'CREATE',
     'automated_process',
+    'Canonical security-level seed',
+    'system@erms.local',
     'seeding',
     to_jsonb(level),
     ARRAY[
@@ -4428,8 +4432,9 @@ FOR EACH ROW EXECUTE FUNCTION append_hold_assignment_domain_events();
 
 CREATE OR REPLACE VIEW authorized_aggregations_for_search AS
 SELECT resource.id,
-       CASE WHEN resource.parent_aggregation_id IS NULL OR current_user_can_view_aggregation(resource.parent_aggregation_id)
-            THEN resource.parent_aggregation_id END AS parent_aggregation_id,
+       -- Search predicates must use the true relationship. The API redacts an
+       -- inaccessible parent only after filtering and adds parent_aggregation_state.
+       resource.parent_aggregation_id,
        resource.classification_id,resource.aggregation_number,resource.title,resource.description,
        resource.date_created,resource.date_opened,resource.date_closed,resource.security_level_id,
        resource.inherit_acl_from_parent,resource.default_child_aggregation_acl_mode,
@@ -4455,7 +4460,9 @@ CROSS JOIN LATERAL (
 
 CREATE OR REPLACE VIEW authorized_records_for_search AS
 SELECT resource.id,
-       CASE WHEN current_user_can_view_aggregation(resource.aggregation_id) THEN resource.aggregation_id END AS aggregation_id,
+       -- Keep the true container for filtering; API serialization performs
+       -- output redaction and adds aggregation_state.
+       resource.aggregation_id,
        resource.record_number,resource.title,resource.description,resource.date_created,resource.date_originated,
        resource.security_level_id,resource.inherit_acl_from_parent,resource.resource_acl_version,resource.version,
        resource.owning_org_unit_id,resource.medium,resource.is_vital,resource.date_of_next_review,

@@ -390,6 +390,12 @@ The following invariant is database-enforced:
 parent_aggregation_id IS NULL  <=>  classification_id IS NOT NULL
 ```
 
+This invariant and every unclassified-root report operate on the true stored
+relationship. API redaction of an inaccessible parent cannot turn a child into
+a root: the response instead carries `parent_aggregation_id: null` with
+`parent_aggregation_state: "redacted"`. A true root carries state `"none"`.
+Magic or sentinel identifiers are not used.
+
 In addition:
 
 - A root aggregation may only reference a terminal classification.

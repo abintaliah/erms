@@ -236,6 +236,17 @@ def review_display(value: Any) -> str:
     return f"{state} · {format_timestamp(value)}" if state else "Not scheduled"
 
 
+def record_draft_component_context(
+    aggregation_id: Any, medium: Any,
+) -> dict[str, Any]:
+    """Return the persisted draft context required before staging content."""
+    if aggregation_id in (None, "") or medium in (None, ""):
+        raise ValueError(
+            "Select the parent aggregation and record medium before adding digital files."
+        )
+    return {"aggregation_id": int(aggregation_id), "medium": str(medium)}
+
+
 def format_timestamp(value: Any) -> str:
     if not value:
         return "—"
@@ -3993,7 +4004,15 @@ def index() -> None:
                             ("Inherited assigned location", record.get("effective_assigned_location") or "Unknown"),
                             ("Inherited current location", record.get("effective_current_location") or "Unknown"),
                             ("Review", review_display(record.get("date_of_next_review"))),
-                            ("Containing aggregation", record.get("aggregation_display")),
+                            # The state disambiguates a protected existing
+                            # container from an absent relationship; records
+                            # structurally always have a container.
+                            (
+                                "Containing aggregation",
+                                "Restricted aggregation"
+                                if record.get("aggregation_state") == "redacted"
+                                else record.get("aggregation_display"),
+                            ),
                         ):
                             with ui.column().classes("detail-field gap-1"):
                                 ui.label(label).classes("detail-field-label")
@@ -4216,8 +4235,19 @@ def index() -> None:
         def upload_to_draft(event: events.MultiUploadEventArguments) -> None:
             try:
                 buffered_files = buffer_upload_batch(event)
-            except (OSError, ValueError) as error:
+                # Form controls are client-side state. Persist the relationship
+                # and medium before the component endpoint validates the draft.
+                component_context = record_draft_component_context(
+                    target_aggregation_id
+                    if target_aggregation_id is not None
+                    else controls["aggregation_id"].value,
+                    controls["medium"].value,
+                )
+            except OSError as error:
                 ui.notify(f"Could not read an uploaded file: {error}", color="negative", close_button=True)
+                return
+            except ValueError as error:
+                ui.notify(str(error), color="warning", close_button=True)
                 return
             upload_state["pending"] += 1
             action_controls["commit"].disable()
@@ -4226,6 +4256,7 @@ def index() -> None:
             async def stage_buffered_files() -> None:
                 try:
                     async with upload_lock:
+                        await api.update_record_draft(draft["id"], component_context)
                         await refresh_draft_components()
                         first_position = len(current_rows) + 1
                         for offset, (content, name, mime_type) in enumerate(buffered_files):
@@ -4264,6 +4295,11 @@ def index() -> None:
         async def commit() -> None:
             try:
                 payload = form_payload(spec, controls, creating=True)
+                if target_aggregation_id is not None:
+                    # The aggregation-details route owns this relationship.
+                    # Bind it from route context instead of trusting a
+                    # read-only presentation control to submit its value.
+                    payload["aggregation_id"] = int(target_aggregation_id)
                 creator_role_id = controls["creator_acl_role_id"].value
                 if creator_role_id is None:
                     raise ValueError("Select who this record is being created for")
@@ -4307,7 +4343,14 @@ def index() -> None:
                     )
                     controls["aggregation_id"].classes("col-span-2")
                     if target_aggregation_id is not None:
-                        controls["aggregation_id"].disable()
+                        # Read-only keeps the selected parent visible in the
+                        # form. Saving is independently guarded by binding the
+                        # route's target_aggregation_id into the payload.
+                        controls["aggregation_id"].props("readonly")
+                        ui.label(
+                            "The parent aggregation is fixed because this record is being "
+                            "added from its Aggregation details page."
+                        ).classes("text-xs leading-5 text-slate-500 col-span-2 -mt-2")
 
                     role_options = {
                         item["role_id"]: item["label"] for item in creation_roles
@@ -4321,7 +4364,12 @@ def index() -> None:
                         ),
                         label="Create for *",
                     ).props("outlined options-dense").classes("w-full col-span-2")
-                    if target_aggregation_id is None or len(creation_roles) <= 1:
+                    # A sole eligible role is fixed by policy but must remain
+                    # visibly populated; readonly avoids the empty rendering
+                    # observed with a disabled NiceGUI select.
+                    if len(creation_roles) == 1:
+                        controls["creator_acl_role_id"].props("readonly")
+                    elif not creation_roles:
                         controls["creator_acl_role_id"].disable()
                     ui.label(
                         "Select the role that will receive creator access. The record belongs to the "
@@ -4437,10 +4485,14 @@ def index() -> None:
                             {item["role_id"]: item["label"] for item in rows},
                             value=selected_role_id,
                         )
-                        if len(rows) <= 1:
-                            role_control.disable()
-                        else:
+                        role_control.props(remove="readonly")
+                        if len(rows) == 1:
                             role_control.enable()
+                            role_control.props("readonly")
+                        elif rows:
+                            role_control.enable()
+                        else:
+                            role_control.disable()
                         if not rows:
                             creation_role_status.set_text(
                                 "You do not have an effective role in the parent aggregation's "
@@ -5743,6 +5795,17 @@ def index() -> None:
                                 ui.icon("emergency", color="red-8")
                                 ui.label("Vital" if current.get("is_vital") else "Contains vital resources").classes("text-sm font-semibold text-red-900")
                                 ui.label("This aggregation cannot be deleted while vital protection applies.").classes("text-xs text-red-800")
+                        if current.get("parent_aggregation_state") == "redacted":
+                            # A null ID with redacted state means the parent
+                            # exists; it must never be interpreted as a root.
+                            with ui.row().classes(
+                                "w-full items-center gap-2 rounded-xl border border-slate-200 "
+                                "bg-slate-50 px-4 py-3"
+                            ):
+                                ui.icon("visibility_off", color="blue-grey-7")
+                                ui.label("Parent aggregation restricted").classes(
+                                    "text-sm font-semibold text-slate-700"
+                                )
                         if current.get("description"):
                             with ui.column().classes("w-full gap-1 rounded-xl bg-slate-50 px-4 py-3"):
                                 ui.label("DESCRIPTION").classes("detail-field-label")
@@ -7718,6 +7781,8 @@ def index() -> None:
         async def show_unclassified_roots() -> None:
             await select_entity("aggregations")
             try:
+                # The API evaluates this against the true stored parent before
+                # response redaction; a concealed parent is not a root.
                 result = await api.search_request("aggregations", {
                     "where": {"and": [
                         {"field": "parent_aggregation_id", "operator": "is_null"},

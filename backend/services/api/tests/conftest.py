@@ -20,7 +20,19 @@ def clean_database(client: TestClient):
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
         connection.execute("TRUNCATE user_favourite_records, user_favourite_aggregations, user_classification_selections, aggregation_retention_rules, classification_retention_rules, classifications, classification_schemes, login_sessions, user_credentials, user_role_assignments, roles, users, org_units, record_draft_components, record_drafts, digital_components, records, aggregations RESTART IDENTITY CASCADE")
         connection.execute("ALTER TABLE event_history DISABLE TRIGGER USER")
-        connection.execute("TRUNCATE event_history RESTART IDENTITY")
+        # Security Levels are canonical seeded catalogue rows and are not
+        # truncated between tests. Preserve their matching immutable baseline
+        # CREATE events as well; deleting them made the seed history disappear
+        # while leaving the seeded entities behind.
+        connection.execute(
+            """DELETE FROM event_history
+                WHERE NOT (
+                    entity_type='security_level'
+                    AND operation='CREATE'
+                    AND source='seeding'
+                    AND entity_id IN (SELECT id FROM security_levels)
+                )"""
+        )
         connection.execute("ALTER TABLE event_history ENABLE TRIGGER USER")
         org_id = connection.execute("INSERT INTO org_units (code,name) VALUES ('test-root','Test Root') RETURNING id").fetchone()[0]
         user_id = connection.execute("INSERT INTO users (name,email) VALUES ('Test Administrator','admin@test.invalid') RETURNING id").fetchone()[0]
@@ -60,7 +72,17 @@ def clean_database(client: TestClient):
             """
         )
         connection.execute("ALTER TABLE event_history DISABLE TRIGGER USER")
-        connection.execute("TRUNCATE event_history RESTART IDENTITY")
+        # Keep the canonical Security Level seed events in lockstep with the
+        # catalogue rows retained by this fixture.
+        connection.execute(
+            """DELETE FROM event_history
+                WHERE NOT (
+                    entity_type='security_level'
+                    AND operation='CREATE'
+                    AND source='seeding'
+                    AND entity_id IN (SELECT id FROM security_levels)
+                )"""
+        )
         connection.execute("ALTER TABLE event_history ENABLE TRIGGER USER")
     client.cookies.clear()
     client.headers.pop("X-CSRF-Token", None)
