@@ -8223,6 +8223,8 @@ def index() -> None:
                                         )
                                 ui.label(label).classes("dashboard-attention-group-label")
 
+                personal_sections_area = ui.element("div").classes("w-full")
+
                 with ui.row().classes("w-full items-center mt-2"):
                     ui.label("Holdings by organizational unit").classes("text-lg font-semibold")
                     ui.space()
@@ -8683,25 +8685,26 @@ def index() -> None:
                                 render_recent_record_entry(item)
                     dialog.open()
 
-                with ui.element("div").classes("dashboard-personal-columns mt-2"):
-                    favourites_area = ui.element("div").classes("w-full")
-                    render_favourites_dashboard()
-                    with ui.card().classes("dashboard-personal-panel"):
-                        with ui.row().classes(
-                            "dashboard-personal-header w-full items-center gap-2"
-                        ):
-                            ui.icon("history", color="primary", size="19px")
-                            ui.label("Recent records activity").classes("font-semibold text-slate-800")
-                            ui.space()
-                            ui.button(
-                                "View all", on_click=show_all_recent_records,
-                            ).props("flat dense no-caps color=primary")
-                        if not recent_records:
-                            ui.label(
-                                f"No records created, updated, or viewed during the last {recent_days} days."
-                            ).classes("text-sm text-slate-500 p-4")
-                        for item in recent_records:
-                            render_recent_record_entry(item)
+                with personal_sections_area:
+                    with ui.element("div").classes("dashboard-personal-columns mt-2"):
+                        favourites_area = ui.element("div").classes("w-full")
+                        render_favourites_dashboard()
+                        with ui.card().classes("dashboard-personal-panel"):
+                            with ui.row().classes(
+                                "dashboard-personal-header w-full items-center gap-2"
+                            ):
+                                ui.icon("history", color="primary", size="19px")
+                                ui.label("Recent records activity").classes("font-semibold text-slate-800")
+                                ui.space()
+                                ui.button(
+                                    "View all", on_click=show_all_recent_records,
+                                ).props("flat dense no-caps color=primary")
+                            if not recent_records:
+                                ui.label(
+                                    f"No records created, updated, or viewed during the last {recent_days} days."
+                                ).classes("text-sm text-slate-500 p-4")
+                            for item in recent_records:
+                                render_recent_record_entry(item)
 
                 ui.label("Digital storage by organizational unit").classes(
                     "text-lg font-semibold mt-2"

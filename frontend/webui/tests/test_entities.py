@@ -130,6 +130,11 @@ def test_dashboard_uses_compact_favourites_and_recent_record_streams():
     assert 'item["operation"] in {"CREATE", "UPDATE", "CONTENT_VIEWED"}' in APP_SOURCE
     assert '"CONTENT_VIEWED": ("Viewed", "visibility", "dashboard-activity-viewed")' in APP_SOURCE
     assert 'ui.label("Your favourites")' not in APP_SOURCE
+    assert 'personal_sections_area = ui.element("div").classes("w-full")' in APP_SOURCE
+    assert APP_SOURCE.index(
+        'personal_sections_area = ui.element("div").classes("w-full")'
+    ) < APP_SOURCE.index('ui.label("Holdings by organizational unit")')
+    assert "with personal_sections_area:" in APP_SOURCE
 
 
 def test_records_and_aggregations_landing_use_dashboard_personal_panel_treatment():

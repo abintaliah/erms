@@ -167,6 +167,8 @@ and records. Each preview observes `DASHBOARD_FAVOURITE_ITEM_LIMIT`. When a
 collection exceeds that limit, **View all** opens its complete scrollable list.
 Selecting an entry opens the existing aggregation or record interface. Removing
 an entry updates the preview and complete list without opening the entity.
+The combined Favourites and Recent records activity panel appears immediately
+after Overview and before Holdings by organizational unit.
 
 The Aggregations and Records search and listing pages also show the
 authenticated user's corresponding favourites preview above recent activity or
