@@ -1,5 +1,7 @@
 import hashlib
 import os
+from pathlib import Path
+import subprocess
 from datetime import datetime, timedelta, timezone
 
 import psycopg
@@ -8,6 +10,7 @@ from psycopg.rows import dict_row
 from fastapi.testclient import TestClient
 
 from backend.services.api.content_cleanup import cleanup_content
+from backend.services.api import document_conversion
 
 from backend.services.api.config import load_environment
 
@@ -1185,6 +1188,58 @@ def test_pdf_rendition_is_inline_and_audited(client: TestClient, record: dict):
     assert response.headers["content-disposition"].startswith("inline;")
     history = client.get(f"/api/v1/digital-components/{uploaded['id']}/history").json()
     assert "CONTENT_VIEWED" in [event["operation"] for event in history]
+
+
+@pytest.mark.parametrize(
+    ("extension", "mime_type", "expected_method"),
+    (
+        (".md", "text/markdown", "libreoffice"),
+        (".msg", "application/vnd.ms-outlook", "extract-msg+libreoffice"),
+        (".eml", "message/rfc822", "stdlib-email+libreoffice"),
+        (".html", "text/html", "libreoffice"),
+        (".txt", "text/plain", "libreoffice"),
+        (".xml", "application/xml", "escaped-xml+libreoffice"),
+        (".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx-fit-to-page+libreoffice"),
+    ),
+)
+def test_additional_text_and_email_formats_use_libreoffice_pdf_conversion(
+    monkeypatch, extension: str, mime_type: str, expected_method: str,
+):
+    expected_pdf = b"%PDF-1.7\n% converted test fixture\n%%EOF"
+
+    monkeypatch.setattr(document_conversion, "_libreoffice_binary", lambda: "/test/soffice")
+
+    def convert(command, **kwargs):
+        if command[1].endswith(("email_to_html.py", "xml_to_html.py", "xlsx_to_preview.py")):
+            Path(command[3]).write_bytes(b"prepared preview")
+            return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+        output = Path(command[command.index("--outdir") + 1])
+        (output / "source.pdf").write_bytes(expected_pdf)
+        return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(document_conversion.subprocess, "run", convert)
+
+    rendition, method = document_conversion.pdf_rendition(
+        b"synthetic source", f"source{extension}", mime_type,
+    )
+
+    assert rendition == expected_pdf
+    assert method == expected_method
+
+
+def test_email_extraction_timeout_fails_preview_safely(monkeypatch):
+    monkeypatch.setattr(
+        document_conversion.subprocess,
+        "run",
+        lambda command, **kwargs: (_ for _ in ()).throw(
+            subprocess.TimeoutExpired(command, kwargs["timeout"])
+        ),
+    )
+
+    with pytest.raises(document_conversion.ConversionUnavailable, match="preview preparation timed out"):
+        document_conversion.pdf_rendition(
+            b"synthetic MSG", "message.msg", "application/vnd.ms-outlook",
+        )
 
 
 def test_unsupported_preview_preserves_original_download(client: TestClient, record: dict):

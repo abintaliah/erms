@@ -262,7 +262,7 @@ Production may schedule the one-shot command or supervise exactly one `--watch`
 process per logical database. Cleanup must never start from each FastAPI worker.
 
 Commands and configuration are maintained in the central
-[Operational Tools Catalogue](../docs/operations.md#5-login-session-cleanup).
+[Operational Tools Catalogue](../docs/operations.md#6-login-session-cleanup).
 Every future operational tool must be added to that catalogue with its
 implementation.
 

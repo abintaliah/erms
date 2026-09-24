@@ -41,6 +41,7 @@ from frontend.webui.app import (
     relationship_options,
     record_draft_component_context,
     render_component_cards,
+    requires_document_conversion,
     role_change_requires_reason,
     append_navigation_entry,
     visible_navigation_indices,
@@ -55,7 +56,7 @@ from frontend.webui.config import (
     dashboard_recent_item_limit,
     user_details_session_limit,
 )
-from frontend.webui.app import favourite_preview
+from frontend.webui.app import favourite_preview, personal_dialog_list_height
 
 APP_SOURCE = inspect.getsource(index)
 
@@ -77,6 +78,14 @@ def test_native_preview_kind_uses_safe_browser_renderers():
     assert native_preview_kind("video/mp4") == "video"
     assert native_preview_kind("image/svg+xml") is None
     assert native_preview_kind("application/pdf") is None
+
+
+@pytest.mark.parametrize("extension", ("md", "msg", "eml", "html", "txt", "xml"))
+def test_additional_document_formats_show_conversion_progress(extension):
+    assert requires_document_conversion({
+        "file_name": f"example.{extension}",
+        "mime_type": "application/octet-stream",
+    })
 
 
 class Control:
@@ -148,6 +157,26 @@ def test_records_and_aggregations_landing_use_dashboard_personal_panel_treatment
     assert 'spec.key in {"aggregations", "records"}' in source
     assert 'render_resource_personal_sections(spec)' in source
     assert 'ui.label("Your recent records activity")' not in APP_SOURCE
+
+
+def test_personal_view_all_dialogs_use_dedicated_scroll_container():
+    assert ".dashboard-personal-dialog-list" in APP_SOURCE
+    assert APP_SOURCE.count("dashboard-personal-dialog-list") >= 6
+    assert APP_SOURCE.count("ui.scroll_area()") >= 6
+    assert APP_SOURCE.count('.props("visible")') >= 5
+    assert APP_SOURCE.count("height:min(65vh,") >= 5
+    assert "dashboard-personal-panel w-full max-h-[65vh] overflow-y-auto" not in APP_SOURCE
+
+
+def test_personal_dialog_list_height_is_compact_and_capped():
+    assert personal_dialog_list_height(0) == 120
+    assert personal_dialog_list_height(3) == 174
+    assert personal_dialog_list_height(100) == 520
+
+
+def test_classification_workspace_tree_and_summary_are_taller():
+    assert '"w-full h-[870px] min-h-0 gap-4 items-stretch"' in APP_SOURCE
+    assert '"w-full h-[820px] min-h-0 gap-4 items-stretch"' not in APP_SOURCE
 
 
 def test_dashboard_overview_shows_medium_breakdowns_and_admin_hold_total():

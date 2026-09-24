@@ -1,7 +1,7 @@
 # ERMS Operational Tools Catalogue
 
 **Audience:** DevOps engineers, system administrators, and release engineers  
-**Last reviewed:** 18 September 2026
+**Last reviewed:** 24 September 2026
 
 ## 1. Purpose
 
@@ -49,18 +49,39 @@ There are two supported scheduling models:
 
 Do not run `--watch` from FastAPI startup or once per FastAPI worker.
 
-## 3. Tool summary
+## 3. Central cleanup-service inventory
 
-| Tool | Status | Default mode | Purpose |
-| --- | --- | --- | --- |
-| `backend.services.api.content_cleanup` | Implemented | One shot | Remove abandoned uploads, expired drafts, and unreferenced content sets |
-| `backend.services.api.session_cleanup` | Implemented | One shot | Audit and remove expired or long-revoked login sessions |
-| `backend.services.api.manage_auth` | Implemented | One shot | Bootstrap authentication and perform deliberate credential recovery |
-| Database migration commands | Implemented | One shot | Upgrade the schema exactly once per database |
-| Database seed commands | Implemented | One shot | Install optional reference, demonstration, or load-test data |
-| Pre-production database reset | Planned | One shot, destructive | Recreate a not-yet-operational environment after setup or smoke testing |
+This table is the authoritative project-wide index of automatic or schedulable
+backend cleanup responsibilities. Every new cleanup service must be added here
+with its owner, status, invocation model, retained/deleted data, configuration,
+and a link to its specialized normative documentation.
 
-## 4. Segmented-content cleanup
+| Cleanup responsibility | Owning module/service | Status | Execution model | Specialized documentation |
+| --- | --- | --- | --- | --- |
+| Segmented content, upload session, draft, and superseded-content cleanup | `backend.services.api.content_cleanup` | Implemented | Scheduled one shot or one supervised `--watch` process | [Segmented-content cleanup](#5-segmented-content-cleanup), [content-storage guide](content-storage.md), [storage specification](../specs/segmented-postgresql-content-storage.md#11-cleanup-and-recovery) |
+| Expired and retained revoked login-session cleanup | `backend.services.api.session_cleanup` | Implemented | Scheduled one shot or one supervised `--watch` process | [Login-session cleanup](#6-login-session-cleanup), [authentication guide](authentication.md), [session-lifecycle specification](../specs/authentication-and-login-session-lifecycle.md#8-retention-and-cleanup) |
+| Full-text indexing attempt/job history and abandoned result-staging cleanup | `backend.services.api.content_indexing_cleanup` | Proposed in full-text-search specification | Scheduled one shot or one supervised `--watch` process | [Full-text indexing cleanup](#7-full-text-indexing-history-and-staging-cleanup), [full-text-search specification](../specs/full-text-search.md#66-content_indexing_attempts) |
+| Per-job text-indexer temporary-file cleanup | `backend.services.text_indexer` | Proposed in full-text-search specification | Immediate `finally` cleanup plus bounded startup recovery sweep; not a database scheduler | [Full-text indexing cleanup](#7-full-text-indexing-history-and-staging-cleanup), [security and robustness requirements](../specs/full-text-search.md#14-security-and-robustness) |
+
+The inventory distinguishes automatic retention/temporary-data cleanup from
+explicit governed deletion. Permanent deletion of a record, aggregation, user,
+role, organizational unit, hold, or other domain entity is a deliberate
+authorized business operation and must not be reclassified as background
+cleanup merely because dependent rows cascade.
+
+## 4. Operational tool summary
+
+| Tool | Status | Default mode | Purpose | Specialized documentation |
+| --- | --- | --- | --- | --- |
+| `backend.services.api.content_cleanup` | Implemented | One shot | Remove abandoned uploads, expired drafts, and unreferenced content sets | [Section 5](#5-segmented-content-cleanup) |
+| `backend.services.api.session_cleanup` | Implemented | One shot | Audit and remove expired or long-revoked login sessions | [Section 6](#6-login-session-cleanup) |
+| `backend.services.api.content_indexing_cleanup` | Proposed | One shot | Remove expired terminal indexing history/jobs and abandoned result staging | [Section 7](#7-full-text-indexing-history-and-staging-cleanup) |
+| `backend.services.api.manage_auth` | Implemented | One shot | Bootstrap authentication and perform deliberate credential recovery | [Section 8](#8-authentication-bootstrap-and-credential-recovery) |
+| Database migration commands | Implemented | One shot | Upgrade the schema exactly once per database | [Section 9](#9-database-migrations) |
+| Database seed commands | Implemented | One shot | Install optional reference, demonstration, or load-test data | [Section 10](#10-optional-database-seeds) |
+| Pre-production database reset | Planned | One shot, destructive | Recreate a not-yet-operational environment after setup or smoke testing | [Section 11](#11-pre-production-database-reset) |
+
+## 5. Segmented-content cleanup
 
 **Status:** Implemented
 **Module:** `backend.services.api.content_cleanup`
@@ -83,7 +104,7 @@ The worker uses a PostgreSQL advisory lock and records a `CONTENT_CLEANUP`
 domain event when committed work occurs. See
 [PostgreSQL segmented content storage](content-storage.md).
 
-## 5. Login-session cleanup
+## 6. Login-session cleanup
 
 **Status:** Implemented
 **Module:** `backend.services.api.session_cleanup`
@@ -128,7 +149,47 @@ own supervised service, never inside FastAPI.
 The normative lifecycle, audit, retention, and cleanup requirements are in
 [Authentication and Login-Session Lifecycle](../specs/authentication-and-login-session-lifecycle.md).
 
-## 6. Authentication bootstrap and credential recovery
+## 7. Full-text indexing history and staging cleanup
+
+**Status:** Proposed — specified, not yet implemented
+**Module:** `backend.services.api.content_indexing_cleanup`
+
+This API-side database maintenance worker removes expired terminal indexing
+attempt history and eligible terminal job rows after their retention period. It
+also removes abandoned result-staging chunks belonging to terminal jobs or
+expired lease generations after the shorter configured staging-retention
+period. It does not run in the separately deployed text-indexer service.
+
+```bash
+python -m backend.services.api.content_indexing_cleanup --dry-run
+python -m backend.services.api.content_indexing_cleanup --batch-size 500
+python -m backend.services.api.content_indexing_cleanup \
+  --watch --batch-size 500 --interval-seconds 3600
+```
+
+| Setting | Initial default | Meaning |
+| --- | ---: | --- |
+| `CONTENT_INDEXING_HISTORY_RETENTION_DAYS` | `365` | Retain completed indexing attempt/job operational history |
+| `CONTENT_INDEXING_CLEANUP_INTERVAL_SECONDS` | `3600` | Initial proposed delay between continuous cleanup passes; confirm during implementation |
+| `CONTENT_INDEXING_CLEANUP_BATCH_SIZE` | `500` | Maximum rows processed in one proposed cleanup batch |
+| `CONTENT_INDEXING_STAGING_RETENTION_HOURS` | To be selected during implementation | Retain abandoned terminal/expired-generation result staging before deletion |
+
+The worker uses its own PostgreSQL advisory-lock key, bounded keyset batches,
+short transactions, and database time. It may delete only rows that still meet
+the terminal-state and retention predicates while locked. It never deletes
+queued/leased jobs, a valid lease generation's active staging, current search
+documents, published search chunks, source content, or event history.
+
+The text-indexer separately removes its private temporary extraction files in a
+`finally` path after every job. At startup it performs a bounded recovery sweep
+of its own private temporary directory for files left by a process/host crash.
+That filesystem responsibility does not grant it database cleanup authority and
+does not use this API-side cleanup command.
+
+The normative data eligibility, safety, and verification requirements are in
+[Full-Text Content Search](../specs/full-text-search.md#66-content_indexing_attempts).
+
+## 8. Authentication bootstrap and credential recovery
 
 **Status:** Implemented  
 **Module:** `backend.services.api.manage_auth`
@@ -160,7 +221,7 @@ These commands print temporary credentials once. Their output must be handled as
 a secret and must not be stored in routine command logs. See
 [Authentication](authentication.md).
 
-## 7. Database migrations
+## 9. Database migrations
 
 **Status:** Implemented
 
@@ -173,7 +234,7 @@ See [Database setup and migrations](../database/README.md) for the authoritative
 commands and ordering. Do not apply migrations automatically from every API
 instance.
 
-## 8. Optional database seeds
+## 10. Optional database seeds
 
 **Status:** Implemented
 
@@ -184,7 +245,7 @@ See [ERMS seed data](../database/seeds/README.md). Confirm the target database
 and the seed's duplicate-data behavior before execution. Load-test seeds must
 not be applied to an operational production repository.
 
-## 9. Pre-production database reset
+## 11. Pre-production database reset
 
 **Status:** Planned
 
@@ -207,7 +268,7 @@ application. Its implementation must:
 Until the tool is implemented, DevOps must use the database platform's approved
 reprovisioning process rather than an ad hoc application command.
 
-## 10. Deployment checklist for scheduled operations
+## 12. Deployment checklist for scheduled operations
 
 For each deployed logical database:
 

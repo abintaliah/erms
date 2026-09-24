@@ -3,7 +3,7 @@
 **Status:** Implemented — segmented-storage baseline
 **Project:** ERMS  
 **Prepared:** 17 September 2026  
-**Revision:** 1.1 — implementation completed 17 September 2026
+**Revision:** 1.6 — wide-XLSX preview detection and fit-to-page normalization
 
 ## 1. Purpose
 
@@ -490,6 +490,61 @@ Range support is required for resumable downloads, PDF.js range loading, and
 native audio/video seeking. `HEAD` should return the same relevant headers
 without reading content.
 
+### 9.3 Preview renditions
+
+PDF.js shall receive PDF content only. Original PDFs are served directly;
+supported non-PDF documents are converted to a bounded PDF rendition before
+display. The LibreOffice conversion allowlist shall include DOC, DOCX, ODT,
+RTF, XLS, XLSX, ODS, CSV, PPT, PPTX, ODP, Markdown (`.md`), Outlook Message
+(`.msg`), Internet Message (`.eml`), HTML (`.html`), plain text (`.txt`) and XML
+(`.xml`). These formats shall use
+the same isolated temporary workspace, timeout, maximum source/rendition size,
+sandboxed response and cleanup behavior. The conversion worker or container
+shall have no general outbound network access so HTML and email references
+cannot retrieve external resources. The authoritative original remains
+unchanged and downloadable.
+
+Outlook MSG shall not be converted directly by LibreOffice. A dedicated,
+timeout-bounded `extract-msg` subprocess shall extract sender, recipients,
+date, subject, plain-text body and attachment names. The service shall escape
+every extracted value into an inert UTF-8 HTML template with automatic text
+direction, shall not render the message's supplied HTML or RTF as active
+markup, and shall not extract, open or embed attachment content. LibreOffice
+shall convert that controlled HTML intermediary to PDF. Extraction failure
+shall fail preview safely without changing the authoritative original.
+
+Internet Message EML shall use the same timeout-bounded inert intermediary
+design. Python's standard email parser shall decode MIME headers, declared
+character sets and content-transfer encoding. Plain text shall be preferred;
+if a message supplies HTML only, the service shall retain visible text without
+rendering active markup. Attachments shall be represented by escaped names
+only. Raw MIME source or base64/quoted-printable payloads shall not be shown as
+the preview body.
+
+XML shall not be imported directly as a LibreOffice structured-data document.
+The preview path shall detect a byte-order mark or XML-declared encoding,
+escape the complete source into inert UTF-8 HTML, preserve whitespace with
+wrapping, and convert that source view to PDF. It shall not parse XML, resolve
+entities, apply transformations or stylesheets, or retrieve referenced
+resources. The original XML remains authoritative and downloadable.
+
+For XLSX preview, the service shall calculate the used printable width of each
+worksheet from its populated columns and declared column widths. When a sheet
+exceeds the printable width of its current orientation and is not already
+configured to fit, the service shall modify only a temporary rendition copy:
+set ISO A4 landscape orientation, fit to one page wide, and permit unlimited
+pages vertically. It shall preserve worksheet values, formulas, styles and
+other package parts. Narrow sheets shall not be normalized, and the stored
+authoritative XLSX bytes shall never be changed.
+
+Other Python fallbacks are deferred. A future design may use Python-Markdown for
+Markdown followed by controlled HTML-to-PDF rendering with WeasyPrint. Before
+implementation, that path shall define HTML sanitization, script and
+active-content blocking, external-network and local-file denial, inert
+attachment handling, Arabic/RTL font behavior, and bounded CPU, memory, input
+size, output size and execution time. The absence or failure of any fallback
+must never alter or replace the authoritative original.
+
 ## 10. Connection-pool behavior
 
 A streaming PostgreSQL download holds a database connection while its iterator
@@ -522,6 +577,10 @@ run it concurrently and API restarts would make its schedule unreliable. Run
 the command from a dedicated worker process, operating-system scheduler,
 container scheduler, or equivalent deployment scheduler. A database advisory
 lock shall prevent overlapping cleanup runs.
+
+The project-wide inventory, invocation summary, and links for all cleanup
+workers are maintained in the
+[ERMS Operational Tools Catalogue](../docs/operations.md#3-central-cleanup-service-inventory).
 
 The command should have an interface conceptually similar to:
 
@@ -696,6 +755,9 @@ separately tagged/manual soak test should cover multi-gigabyte content.
 - Create Record remains disabled until finalization completes and explains why.
 - Cancellation, retry, reorder, and removal update the UI immediately.
 - PDF.js and native media controls issue successful range requests.
+- Markdown, Outlook MSG, Internet Message, HTML, plain-text and XML samples produce valid PDF
+  renditions through the bounded LibreOffice path, while their original bytes
+  remain downloadable.
 - UI behavior does not differ between PostgreSQL and future S3 providers.
 
 ### 17.4 Acceptance criteria

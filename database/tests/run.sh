@@ -153,8 +153,8 @@ BEGIN
     SELECT id INTO STRICT scheme_id
       FROM classification_schemes
      WHERE code = 'USCR-SHJ'
-       AND title = 'Unified Scheme for Common Records of the Emirate of Sharjah'
-       AND description = 'النظام الموحد للوثائق المتماثلة لإمارة الشارقة'
+       AND title = 'النظام الموحد للوثائق المتماثلة لإمارة الشارقة'
+       AND description = 'Unified Scheme for Common Records of the Emirate of Sharjah'
        AND date_published IS NULL;
 
     IF (SELECT count(*) FROM classifications WHERE classification_scheme_id=scheme_id) <> 345 THEN
@@ -168,7 +168,16 @@ BEGIN
         WHERE classification_scheme_id=scheme_id
           AND (description IS NULL OR btrim(description) = '')
     ) THEN
-        RAISE EXCEPTION 'Mutamathilah Arabic description mapping is incomplete';
+        RAISE EXCEPTION 'Mutamathilah English description mapping is incomplete';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM classifications
+        WHERE classification_scheme_id=scheme_id
+          AND code = '1000'
+          AND title = 'التنظيم العام للجهة'
+          AND description = 'General Organization of the Entity'
+    ) THEN
+        RAISE EXCEPTION 'Mutamathilah Arabic title and English description mapping is incorrect';
     END IF;
     SELECT count(DISTINCT correlation_id) INTO correlation_count
       FROM event_history

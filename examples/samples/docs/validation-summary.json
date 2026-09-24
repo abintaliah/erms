@@ -1,0 +1,33 @@
+{
+  "total": 1200,
+  "formats": {
+    "docx": 143,
+    "xlsx": 143,
+    "txt": 143,
+    "pdf": 143,
+    "png": 143,
+    "jpeg": 143,
+    "html": 142,
+    "eml": 40,
+    "msg": 40,
+    "xml": 40,
+    "pptx": 40,
+    "md": 40
+  },
+  "language_modes": {
+    "english": 401,
+    "arabic": 400,
+    "mixed": 399
+  },
+  "topics": {
+    "finance": 150,
+    "human-resources": 150,
+    "general-administration": 150,
+    "asset-management": 150,
+    "records-management": 150,
+    "project-management": 150,
+    "information-technology": 150,
+    "procurement": 150
+  },
+  "errors": []
+}

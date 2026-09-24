@@ -1,0 +1,55 @@
+{
+  "groups": {
+    "docx": {
+      "count": 143,
+      "dimensions": [
+        [
+          680,
+          880
+        ]
+      ],
+      "contact_sheets": 9
+    },
+    "xlsx": {
+      "count": 143,
+      "dimensions": [
+        [
+          985,
+          579
+        ]
+      ],
+      "contact_sheets": 9
+    },
+    "pdf": {
+      "count": 143,
+      "dimensions": [
+        [
+          680,
+          880
+        ]
+      ],
+      "contact_sheets": 9
+    },
+    "png": {
+      "count": 143,
+      "dimensions": [
+        [
+          1105,
+          1430
+        ]
+      ],
+      "contact_sheets": 9
+    },
+    "jpeg": {
+      "count": 143,
+      "dimensions": [
+        [
+          1105,
+          1430
+        ]
+      ],
+      "contact_sheets": 9
+    }
+  },
+  "errors": []
+}

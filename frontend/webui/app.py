@@ -157,6 +157,11 @@ def favourite_preview(items: list[dict[str, Any]], limit: int) -> tuple[list[dic
     return items[:limit], len(items) > limit
 
 
+def personal_dialog_list_height(item_count: int) -> int:
+    """Return a compact list height that caps long dialogs for scrolling."""
+    return min(520, max(120, item_count * 58))
+
+
 def filter_membership_rows(
     rows: list[dict[str, Any]], *, query: str = "", status: str = "all",
     valid_from: str | None = None, valid_until: str | None = None,
@@ -303,6 +308,7 @@ CONVERTIBLE_PREVIEW_EXTENSIONS = {
     ".doc", ".docx", ".odt", ".rtf",
     ".xls", ".xlsx", ".ods", ".csv",
     ".ppt", ".pptx", ".odp",
+    ".md", ".msg", ".eml", ".html", ".txt", ".xml",
 }
 
 
@@ -1695,6 +1701,12 @@ def index() -> None:
         .dashboard-personal-panel {
             width: 100%; min-width: 0; padding: 0; gap: 0; overflow: hidden;
             border: 1px solid #dce5eb; box-shadow: none;
+        }
+        .dashboard-personal-dialog {
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        .dashboard-personal-dialog-list {
+            width: 100%; min-height: 0;
         }
         .dashboard-personal-header {
             min-height: 44px; padding: 9px 11px; border-bottom: 1px solid #e2e8ed;
@@ -6515,12 +6527,21 @@ def index() -> None:
 
         def show_all() -> None:
             dialog = ui.dialog()
-            with dialog, ui.card().classes("w-[760px] max-w-full max-h-[85vh]"):
+            with dialog, ui.card().classes(
+                "dashboard-personal-dialog w-[760px] max-w-full max-h-[85vh]"
+            ):
                 with ui.row().classes("w-full items-center"):
                     ui.label(heading).classes("text-xl font-semibold")
                     ui.space()
                     ui.button(icon="close", on_click=dialog.close).props("flat round")
-                complete_host = ui.column().classes("w-full gap-2 max-h-[65vh] overflow-y-auto")
+                complete_host = (
+                    ui.scroll_area()
+                    .classes("dashboard-personal-dialog-list")
+                    .props("visible")
+                    .style(
+                        f"height:min(65vh,{personal_dialog_list_height(len(state['favourites'][resource]))}px)"
+                    )
+                )
 
             def render_complete() -> None:
                 complete_host.clear()
@@ -6683,13 +6704,18 @@ def index() -> None:
 
         def show_all_favourites() -> None:
             dialog = ui.dialog()
-            with dialog, ui.card().classes("w-[760px] max-w-full max-h-[85vh]"):
+            with dialog, ui.card().classes(
+                "dashboard-personal-dialog w-[760px] max-w-full max-h-[85vh]"
+            ):
                 with ui.row().classes("w-full items-center"):
                     ui.label(f"Favourite {resource}").classes("text-xl font-semibold")
                     ui.space()
                     ui.button(icon="close", on_click=dialog.close).props("flat round")
-                with ui.element("div").classes(
-                    "dashboard-personal-panel w-full max-h-[65vh] overflow-y-auto"
+                with (
+                    ui.scroll_area()
+                    .classes("dashboard-personal-dialog-list")
+                    .props("visible")
+                    .style(f"height:min(65vh,{personal_dialog_list_height(len(favourite_items))}px)")
                 ):
                     if not favourite_items:
                         ui.label(f"No favourite {resource}").classes("text-sm text-slate-400 p-4")
@@ -6699,13 +6725,18 @@ def index() -> None:
 
         def show_all_recent() -> None:
             dialog = ui.dialog()
-            with dialog, ui.card().classes("w-[820px] max-w-full max-h-[85vh]"):
+            with dialog, ui.card().classes(
+                "dashboard-personal-dialog w-[820px] max-w-full max-h-[85vh]"
+            ):
                 with ui.row().classes("w-full items-center"):
                     ui.label(f"Recent {singular} activity").classes("text-xl font-semibold")
                     ui.space()
                     ui.button(icon="close", on_click=dialog.close).props("flat round")
-                with ui.element("div").classes(
-                    "dashboard-personal-panel w-full max-h-[65vh] overflow-y-auto"
+                with (
+                    ui.scroll_area()
+                    .classes("dashboard-personal-dialog-list")
+                    .props("visible")
+                    .style(f"height:min(65vh,{personal_dialog_list_height(len(recent_items))}px)")
                 ):
                     if not recent_items:
                         ui.label(f"No recent {singular} activity").classes("text-sm text-slate-400 p-4")
@@ -8588,13 +8619,20 @@ def index() -> None:
 
                 def show_all_favourites() -> None:
                     dialog = ui.dialog()
-                    with dialog, ui.card().classes("w-[760px] max-w-full max-h-[85vh]"):
+                    with dialog, ui.card().classes(
+                        "dashboard-personal-dialog w-[760px] max-w-full max-h-[85vh]"
+                    ):
                         with ui.row().classes("w-full items-center"):
                             ui.label("Favourites").classes("text-xl font-semibold")
                             ui.space()
                             ui.button(icon="close", on_click=dialog.close).props("flat round")
-                        complete_list = ui.element("div").classes(
-                            "dashboard-personal-panel w-full max-h-[65vh] overflow-y-auto"
+                        complete_list = (
+                            ui.scroll_area()
+                            .classes("dashboard-personal-dialog-list")
+                            .props("visible")
+                            .style(
+                                f"height:min(65vh,{personal_dialog_list_height(len(combined_favourites()))}px)"
+                            )
                         )
 
                     def render_complete_list() -> None:
@@ -8671,13 +8709,20 @@ def index() -> None:
 
                 def show_all_recent_records() -> None:
                     dialog = ui.dialog()
-                    with dialog, ui.card().classes("w-[820px] max-w-full max-h-[85vh]"):
+                    with dialog, ui.card().classes(
+                        "dashboard-personal-dialog w-[820px] max-w-full max-h-[85vh]"
+                    ):
                         with ui.row().classes("w-full items-center"):
                             ui.label("Recent records activity").classes("text-xl font-semibold")
                             ui.space()
                             ui.button(icon="close", on_click=dialog.close).props("flat round")
-                        with ui.element("div").classes(
-                            "dashboard-personal-panel w-full max-h-[65vh] overflow-y-auto"
+                        with (
+                            ui.scroll_area()
+                            .classes("dashboard-personal-dialog-list")
+                            .props("visible")
+                            .style(
+                                f"height:min(65vh,{personal_dialog_list_height(len(all_recent_records))}px)"
+                            )
                         ):
                             if not all_recent_records:
                                 ui.label("No recent records activity").classes("text-sm text-slate-400 p-4")
@@ -12375,7 +12420,7 @@ def index() -> None:
 
                 selected = workspace["selected"]
                 with ui.grid(columns=2).classes(
-                    "w-full h-[620px] min-h-0 gap-4 items-stretch"
+                    "w-full h-[870px] min-h-0 gap-4 items-stretch"
                 ):
                     with ui.card().classes(
                         "w-full h-full min-h-0 overflow-hidden shadow-none "

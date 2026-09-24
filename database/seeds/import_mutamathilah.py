@@ -88,7 +88,11 @@ def import_scheme(database_url: str, xml_path: Path) -> bool:
     classifications, terminals = validate(root)
     checksum = hashlib.sha256(raw_xml).hexdigest()
     scheme_code = root.attrib["code"].strip()
-    scheme_title = root.attrib["title_en"].strip()
+    # This example file plan is intended for an Arabic-speaking demo audience:
+    # Arabic values are the user-visible titles and English values are retained
+    # as descriptions.
+    scheme_title = root.attrib["name"].strip()
+    scheme_description = root.attrib["title_en"].strip()
     published = publication_date(root.get("date_published"))
     correlation_id = str(uuid.uuid4())
     reason = (
@@ -105,8 +109,8 @@ def import_scheme(database_url: str, xml_path: Path) -> bool:
         "scheme_version": root.get("version"),
         "publication_policy": "draft_when_date_published_is_absent",
         "title_mapping": {
-            "title": "title_en",
-            "description": "title_ar (scheme uses Arabic name)",
+            "title": "Arabic scheme name / classification title_ar",
+            "description": "scheme title_en / classification title_en",
         },
         "ignored_xml_fields": [],
         "expected_counts": {
@@ -149,7 +153,7 @@ def import_scheme(database_url: str, xml_path: Path) -> bool:
                 (
                     scheme_code,
                     scheme_title,
-                    root.attrib["name"].strip(),
+                    scheme_description,
                     (root.get("version") or "").strip() or None,
                     published,
                 ),
@@ -169,8 +173,8 @@ def import_scheme(database_url: str, xml_path: Path) -> bool:
                         scheme_id,
                         parent_id,
                         element.attrib["code"].strip(),
-                        element.attrib["title_en"].strip(),
                         element.attrib["title_ar"].strip(),
+                        element.attrib["title_en"].strip(),
                         not children,
                     ),
                 ).fetchone()[0]

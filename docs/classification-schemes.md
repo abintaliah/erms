@@ -125,12 +125,13 @@ the same migration source, automated-process actor, explicit reason and
 structured bulk-operation provenance.
 
 The Mutamathilah example importer loads `examples/fileplans/mutamathilah.xml`
-as the draft scheme `USCR-SHJ — Unified Scheme for Common Records of the Emirate
-of Sharjah`. English `title_en` values populate titles, while Arabic scheme and
-classification titles populate descriptions. The importer validates the full
-hierarchy and retention model, translates controlled dispositions, and creates
-all rows plus their immutable events in one transaction with a single
-correlation identifier and source-file checksum.
+as the draft scheme `USCR-SHJ — النظام الموحد للوثائق المتماثلة لإمارة
+الشارقة`. For this Arabic-speaking demonstration, the Arabic scheme name and
+classification `title_ar` values populate titles. The English scheme
+`title_en` and classification `title_en` values are retained in descriptions.
+The importer validates the full hierarchy and retention model, translates
+controlled dispositions, and creates all rows plus their immutable events in
+one transaction with a single correlation identifier and source-file checksum.
 
 The NiceGUI aggregation form presents eligible terminals with code, title, and
 description. Its searchable hierarchy-aware list places the current user's

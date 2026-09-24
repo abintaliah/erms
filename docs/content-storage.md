@@ -29,8 +29,17 @@ Downloads, original PDFs, images, audio, and video are streamed in segment
 order. Content endpoints accept one HTTP byte range and return `206`,
 `Content-Range`, `Content-Length`, `Accept-Ranges`, and a checksum-derived
 `ETag`. This supports PDF.js loading, native media seeking, and resumable
-downloads. Office conversion currently requires materializing the bounded
-source for LibreOffice and remains subject to rendition-size configuration.
+downloads. Office, Markdown, HTML and email conversion currently requires
+materializing the bounded source for LibreOffice and remains subject to
+rendition-size configuration. MSG first uses a timeout-bounded `extract-msg`
+subprocess to generate inert UTF-8 HTML before LibreOffice creates the PDF;
+EML uses the same bounded intermediary path with Python's standard MIME parser.
+XML uses a bounded, encoding-aware, escaped HTML source view before PDF
+conversion and does not parse or resolve XML entities or stylesheets.
+Wide XLSX worksheets receive preview-only fit-to-page print settings in a
+temporary copy; the authoritative workbook is never rewritten.
+Other Python conversion fallbacks are documented as future options in
+[document viewing](document-viewing.md) but are not implemented.
 
 ## Configuration
 
@@ -75,6 +84,9 @@ deletion, and records a `CONTENT_CLEANUP` domain event when it changes state.
 It removes expired incomplete sessions, permanently failed/cancelled staged
 sets, expired drafts and their segments, and unreferenced superseded content
 sets. It never removes a verified file belonging to an unexpired open draft.
+
+This service is listed with every other backend cleanup responsibility in the
+[central cleanup-service inventory](operations.md#3-central-cleanup-service-inventory).
 
 ## Operational boundary
 

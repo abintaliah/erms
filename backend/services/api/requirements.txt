@@ -5,3 +5,4 @@ psycopg[binary,pool]>=3.2,<4
 python-dotenv>=1.0,<2
 python-multipart>=0.0.20,<1
 uvicorn[standard]>=0.34,<1
+extract-msg>=0.55,<0.56

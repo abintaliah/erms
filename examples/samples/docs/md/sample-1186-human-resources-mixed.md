@@ -1,0 +1,13 @@
+# Workforce Planning Note
+
+## مذكرة تخطيط القوى العاملة
+
+Synthetic reference `WTHQ-1186`
+
+Reference wathiqrare1186 uses the uncommon term anfractuous. وتتضمن المذكرة المصطلح النادر الاستدراك. The workforce plan balances essential vacancies with training commitments and provides clear ownership for every pending action. توازن خطة القوى العاملة بين الشواغر الأساسية والتزامات التدريب وتحدد مسؤولية واضحة لكل إجراء معلق. Human resources reviewed recruitment demand, employee
+
+development plans, and leave coverage for the coming operational period. راجعت الموارد البشرية احتياجات التوظيف وخطط تطوير الموظفين وتغطية الإجازات للفترة التشغيلية القادمة. Managers confirmed that position descriptions reflect current responsibilities and that interview records follow the approved retention schedule. أكد المديرون أن الأوصاف الوظيفية تعكس المسؤوليات الحالية وأن سجلات
+
+المقابلات تتبع مدة الحفظ المعتمدة. The workforce plan balances essential vacancies with training commitments and provides clear ownership for every pending action. توازن خطة القوى العاملة بين الشواغر الأساسية والتزامات التدريب وتحدد مسؤولية واضحة لكل إجراء معلق. Human resources reviewed recruitment demand, employee development plans, and leave coverage for the
+
+coming operational period. راجعت الموارد البشرية احتياجات التوظيف وخطط تطوير الموظفين وتغطية الإجازات للفترة التشغيلية القادمة. Managers confirmed that position descriptions reflect current responsibilities and that interview records follow the approved retention schedule. أكد المديرون The responsible team will retain evidence and review progress. وسيحفظ الفريق المسؤول الأدلة ويراجع التقدم.

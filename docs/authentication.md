@@ -57,7 +57,7 @@ Login sessions are transient operational security state rather than the durable
 authentication ledger. The session-cleanup worker audits terminal
 session details and removes expired or long-revoked rows after a configurable
 retention period. See the
-[operational tools catalogue](operations.md#5-login-session-cleanup) and the
+[operational tools catalogue](operations.md#6-login-session-cleanup) and the
 [authentication and login-session lifecycle specification](../specs/authentication-and-login-session-lifecycle.md).
 
 The user profile menu shows **Previous sign-in** as the most recent successful

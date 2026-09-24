@@ -2,6 +2,27 @@
 set -Eeuo pipefail
 
 readonly PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly PROJECT_ENV_FILE="${PROJECT_DIR}/.env"
+
+# Load project-local defaults before resolving the stack configuration. Keep
+# values explicitly exported by the invoking environment authoritative, which
+# matches the override=False behavior used by the API and web UI.
+if [[ -f "${PROJECT_ENV_FILE}" ]]; then
+    INHERITED_EXPORTED_ENVIRONMENT="$(export -p)"
+    ALLEXPORT_WAS_ENABLED=false
+    if [[ "$-" == *a* ]]; then
+        ALLEXPORT_WAS_ENABLED=true
+    fi
+    set -a
+    # shellcheck disable=SC1090
+    source "${PROJECT_ENV_FILE}"
+    if [[ "${ALLEXPORT_WAS_ENABLED}" == false ]]; then
+        set +a
+    fi
+    eval "${INHERITED_EXPORTED_ENVIRONMENT}"
+    unset INHERITED_EXPORTED_ENVIRONMENT ALLEXPORT_WAS_ENABLED
+fi
+
 readonly STACK_DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:5433/erms}"
 readonly STACK_DB_CONTAINER="${ERMS_LOCAL_DB_CONTAINER:-erms-postgres-local}"
 readonly STACK_DB_VOLUME="${ERMS_LOCAL_DB_VOLUME:-erms-postgres-local-data}"
