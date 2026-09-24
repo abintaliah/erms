@@ -57,6 +57,27 @@ Schemes, Organization Units, Roles, and Users place the corresponding lightweigh
 outlined navigation icon immediately before the page title. Other pages hide
 this title icon rather than inheriting a stale icon from prior navigation.
 
+## Dashboard charts
+
+Dashboard charts use the same white surface, fine neutral border, compact
+heading, muted explanatory text, and responsive spacing as the surrounding
+Wathiq cards. They supplement rather than replace the textual values and
+clickable lists:
+
+- attention signals use directly labelled grouped bars for Vital and On hold;
+- organizational-unit holdings use labelled horizontal bars segmented into
+  Physical, Digital, and Mixed records; and
+- review urgency uses a directly labelled part-to-whole ring for Overdue and
+  the configured upcoming-review window; and
+- organizational-unit storage uses ranked horizontal bars for the five largest
+  authorized totals, followed by a separated textual Other units summary.
+
+Color is paired with visible labels and numeric values. Zero values remain
+readable without a misleading positive-size mark. On narrow screens, legends
+wrap, review urgency stacks above the reminder lists, and organizational-unit
+labels truncate with their full value available in the existing tooltip and
+detail row.
+
 ## Page tables
 
 Full-width entity tables must be visually inset from their containing card.

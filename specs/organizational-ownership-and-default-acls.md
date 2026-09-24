@@ -654,6 +654,26 @@ The dashboard heading must include adjacent explanatory text making clear that
 the listed units come from the signed-in user's currently effective roles and
 that the counts contain only resources the user is authorized to view.
 
+The dashboard must supplement, and must not replace, the organizational-unit
+holdings rows with a stacked horizontal **Records by medium** chart. Each unit's
+bar represents its authorized `record_count` and is segmented by its authorized
+physical, digital, and mixed record counts. Units use the same ordering and
+eligibility rules as the holdings rows. The existing rows remain available as
+the detailed, navigable presentation. A qualifying unit with zero authorized
+records remains represented by its zero-valued row; the chart must not invent a
+positive-width data segment.
+
+The Dashboard must add a final **Digital storage by organizational unit**
+section using the authorized `storage_size_in_bytes` values returned for the
+same eligible organizational units. Units are ordered by storage descending,
+then by name and immutable ID for deterministic ties. At most five units are
+shown individually. When more than five eligible units exist, every remaining
+unit is folded into one **Other units** summary containing their combined bytes
+and share of the authorized total. The summary must not expose the names or
+individual storage values of units outside the top five. Units outside the
+caller's effective-role scope or containing only inaccessible records must not
+contribute storage.
+
 Dashboard loading must use a consolidated, self-only summary operation rather
 than issuing one search request per card or hydrating recent activity through
 per-resource requests. A refresh may have only one in-flight summary request
@@ -979,7 +999,15 @@ and immutable completion reporting.
 - an eligible unit with no authorized resources displays zero;
 - future, expired, and ineffective roles do not add dashboard units; and
 - counts refresh when assignments, ACLs, ownership, or resource visibility
-  changes.
+  changes;
+- the Records by medium chart uses exactly the physical, digital, mixed, and
+  total record counts returned for those authorized unit rows; and
+- the chart is additive and does not remove or weaken the existing holdings
+  rows, their zero state, or their organizational-unit navigation;
+- digital storage ranks no more than five eligible units individually and
+  combines the remaining eligible units into one Other units summary; and
+- digital storage includes components belonging only to records the caller is
+  authorized to view within units represented by currently effective roles.
 
 All database-backed tests must run only against a newly created, uniquely named
 disposable PostgreSQL database initialized from the canonical schema or the
