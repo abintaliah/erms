@@ -1426,9 +1426,77 @@ def index() -> None:
         @media (max-width: 520px) {
             .dashboard-overview-primary { grid-template-columns: minmax(0, 1fr); }
         }
+        .dashboard-attention-chart {
+            width: 50%; margin-inline: auto; padding: 13px 14px 12px;
+            border: 1px solid #dce5eb;
+            border-radius: 10px; background: white;
+        }
+        .dashboard-chart-legend {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+            color: #64748b; font-size: .7rem;
+        }
+        .dashboard-chart-legend-item {
+            display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+        }
+        .dashboard-chart-swatch {
+            width: 9px; height: 9px; flex: 0 0 9px; border-radius: 2px;
+        }
+        .dashboard-attention-plot {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-items: end; gap: 36px; min-height: 156px; margin-top: 12px;
+            padding: 12px 32px 28px 54px; border-left: 1px solid #cbd5e1;
+            border-bottom: 1px solid #cbd5e1;
+            background: repeating-linear-gradient(
+                to top, transparent 0, transparent 38px, #edf2f5 39px
+            );
+        }
+        .dashboard-attention-group {
+            display: flex; align-items: end; justify-content: center; gap: 10px;
+            height: 126px; position: relative;
+        }
+        .dashboard-attention-bar {
+            position: relative; width: min(44px, 38%);
+            border-radius: 4px 4px 0 0;
+        }
+        .dashboard-attention-bar-value {
+            position: absolute; left: 50%; top: -20px; transform: translateX(-50%);
+            color: #334155; font-size: .72rem; font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+        .dashboard-attention-group-label {
+            position: absolute; left: 0; right: 0; bottom: -24px; text-align: center;
+            color: #64748b; font-size: .72rem;
+        }
+        .dashboard-attention-axis-label {
+            position: absolute; left: -47px; top: 50%; transform: rotate(-90deg);
+            color: #94a3b8; font-size: .64rem; white-space: nowrap;
+        }
         .dashboard-holdings-list {
             width: 100%; overflow: hidden; border: 1px solid #dce5eb;
             border-radius: 10px; background: white;
+        }
+        .dashboard-holdings-chart {
+            width: 50%; margin-inline: auto; padding: 13px 14px 12px;
+            border: 1px solid #dce5eb;
+            border-radius: 10px; background: white;
+        }
+        .dashboard-holdings-chart-rows { display: grid; gap: 10px; margin-top: 13px; }
+        .dashboard-holdings-chart-row {
+            display: grid; grid-template-columns: minmax(110px, 180px) minmax(100px, 1fr) 46px;
+            align-items: center; gap: 10px; min-width: 0;
+        }
+        .dashboard-holdings-chart-name {
+            min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            color: #475569; font-size: .75rem; font-weight: 600;
+        }
+        .dashboard-holdings-chart-track {
+            display: flex; height: 18px; overflow: hidden; border-radius: 4px;
+            background: #edf2f5;
+        }
+        .dashboard-holdings-chart-segment { height: 100%; min-width: 0; }
+        .dashboard-holdings-chart-total {
+            text-align: right; color: #334155; font-size: .75rem; font-weight: 600;
+            font-variant-numeric: tabular-nums;
         }
         .dashboard-holdings-row {
             display: grid;
@@ -1513,6 +1581,45 @@ def index() -> None:
             .dashboard-holdings-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .dashboard-holdings-identity { grid-column: 1 / -1; }
             .dashboard-holdings-metric { justify-content: flex-start; }
+            .dashboard-holdings-chart-row {
+                grid-template-columns: minmax(72px, 90px) minmax(80px, 1fr) 38px;
+                gap: 7px;
+            }
+            .dashboard-attention-plot { gap: 14px; padding-right: 12px; padding-left: 42px; }
+            .dashboard-attention-axis-label { left: -42px; }
+        }
+        .dashboard-review-layout {
+            display: grid; grid-template-columns: minmax(190px, .55fr) minmax(0, 2fr);
+            align-items: stretch; gap: 10px; width: 100%;
+        }
+        .dashboard-review-summary {
+            width: 100%; min-width: 0; padding: 13px; gap: 10px;
+            border: 1px solid #dce5eb; box-shadow: none;
+        }
+        .dashboard-review-donut {
+            position: relative; width: 126px; height: 126px; margin: 4px auto;
+            border-radius: 999px;
+        }
+        .dashboard-review-donut::after {
+            content: ""; position: absolute; inset: 21px; border-radius: 999px;
+            background: white;
+        }
+        .dashboard-review-donut-center {
+            position: absolute; inset: 0; z-index: 1; display: flex;
+            flex-direction: column; align-items: center; justify-content: center;
+        }
+        .dashboard-review-donut-total {
+            color: #334155; font-size: 1.35rem; font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        .dashboard-review-donut-caption { color: #94a3b8; font-size: .65rem; }
+        .dashboard-review-summary-row {
+            display: grid; grid-template-columns: 9px minmax(0, 1fr) auto;
+            align-items: center; gap: 7px; color: #64748b; font-size: .72rem;
+        }
+        .dashboard-review-summary-value {
+            color: #334155; font-size: .85rem; font-weight: 600;
+            font-variant-numeric: tabular-nums;
         }
         .dashboard-review-columns {
             display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1535,6 +1642,14 @@ def index() -> None:
         .dashboard-review-item:hover { background: #f8fcff; }
         .dashboard-review-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
         @media (max-width: 760px) {
+            .dashboard-attention-chart,
+            .dashboard-holdings-chart { width: 100%; }
+            .dashboard-review-layout { grid-template-columns: minmax(0, 1fr); }
+            .dashboard-review-summary {
+                display: grid; grid-template-columns: minmax(0, 1fr) auto;
+                align-items: center;
+            }
+            .dashboard-review-summary > :first-child { grid-column: 1 / -1; }
             .dashboard-review-columns { grid-template-columns: minmax(0, 1fr); }
         }
         @media (max-width: 460px) {
@@ -8029,6 +8144,52 @@ def index() -> None:
                                     "text-sm font-bold text-slate-800 tabular-nums"
                                 )
 
+                attention_maximum = max(
+                    1,
+                    attention_counts["aggregations"]["vital"],
+                    attention_counts["aggregations"]["held"],
+                    attention_counts["records"]["vital"],
+                    attention_counts["records"]["held"],
+                )
+                with ui.element("section").classes("dashboard-attention-chart").props(
+                    "aria-label='Attention signals for visible aggregations and records'"
+                ):
+                    with ui.row().classes("w-full items-start gap-3"):
+                        with ui.column().classes("gap-0"):
+                            ui.label("Attention signals").classes(
+                                "text-sm font-semibold text-slate-700"
+                            )
+                            ui.label(
+                                "Visible vital and effectively held resources."
+                            ).classes("text-xs text-slate-500")
+                        ui.space()
+                        with ui.element("div").classes("dashboard-chart-legend"):
+                            for label, color in (("Vital", "#d85a6d"), ("On hold", "#d99b32")):
+                                with ui.element("span").classes("dashboard-chart-legend-item"):
+                                    ui.element("i").classes("dashboard-chart-swatch").style(
+                                        f"background: {color}"
+                                    )
+                                    ui.label(label)
+                    with ui.element("div").classes("dashboard-attention-plot"):
+                        ui.label("Number of items").classes("dashboard-attention-axis-label")
+                        for resource, label in (
+                            ("aggregations", "Aggregations"),
+                            ("records", "Records"),
+                        ):
+                            with ui.element("div").classes("dashboard-attention-group"):
+                                for metric, color in (("vital", "#d85a6d"), ("held", "#d99b32")):
+                                    value = int(attention_counts[resource][metric])
+                                    height = round((value / attention_maximum) * 112)
+                                    with ui.element("div").classes(
+                                        "dashboard-attention-bar"
+                                    ).style(f"height: {height}px; background: {color}").props(
+                                        f"aria-label='{label} {metric}: {value}'"
+                                    ):
+                                        ui.label(str(value)).classes(
+                                            "dashboard-attention-bar-value"
+                                        )
+                                ui.label(label).classes("dashboard-attention-group-label")
+
                 with ui.row().classes("w-full items-center mt-2"):
                     ui.label("Holdings by organizational unit").classes("text-lg font-semibold")
                     ui.space()
@@ -8040,6 +8201,69 @@ def index() -> None:
                     "Only units where you have an effective role; counts respect your access."
                 ).classes("text-sm leading-5 text-slate-500 -mt-1")
                 if ownership_counts:
+                    holdings_maximum = max(
+                        1, *(int(item["record_count"]) for item in ownership_counts)
+                    )
+                    with ui.element("section").classes("dashboard-holdings-chart").props(
+                        "aria-label='Records by organizational unit and medium'"
+                    ):
+                        with ui.row().classes("w-full items-start gap-3"):
+                            with ui.column().classes("gap-0"):
+                                ui.label("Records by medium").classes(
+                                    "text-sm font-semibold text-slate-700"
+                                )
+                                ui.label(
+                                    "Compare record volume and medium mix across your units."
+                                ).classes("text-xs text-slate-500")
+                            ui.space()
+                            with ui.element("div").classes("dashboard-chart-legend"):
+                                for label, color in (
+                                    ("Physical", "#356fb1"),
+                                    ("Digital", "#39a19f"),
+                                    ("Mixed", "#9cbfe5"),
+                                ):
+                                    with ui.element("span").classes(
+                                        "dashboard-chart-legend-item"
+                                    ):
+                                        ui.element("i").classes(
+                                            "dashboard-chart-swatch"
+                                        ).style(f"background: {color}")
+                                        ui.label(label)
+                        with ui.element("div").classes("dashboard-holdings-chart-rows"):
+                            for owner_count in ownership_counts:
+                                record_count = int(owner_count["record_count"])
+                                overall_width = (record_count / holdings_maximum) * 100
+                                with ui.element("div").classes(
+                                    "dashboard-holdings-chart-row"
+                                ):
+                                    ui.label(owner_count["org_unit_name"]).classes(
+                                        "dashboard-holdings-chart-name"
+                                    ).tooltip(owner_count["org_unit_name"])
+                                    with ui.element("div").classes(
+                                        "dashboard-holdings-chart-track"
+                                    ).style(f"width: {overall_width:.2f}%"):
+                                        for medium, color in (
+                                            ("physical", "#356fb1"),
+                                            ("digital", "#39a19f"),
+                                            ("mixed", "#9cbfe5"),
+                                        ):
+                                            medium_count = int(
+                                                owner_count[f"{medium}_record_count"]
+                                            )
+                                            medium_width = (
+                                                (medium_count / record_count) * 100
+                                                if record_count else 0
+                                            )
+                                            ui.element("span").classes(
+                                                "dashboard-holdings-chart-segment"
+                                            ).style(
+                                                f"width: {medium_width:.2f}%; background: {color}"
+                                            ).props(
+                                                f"aria-label='{medium.title()} {medium_count}'"
+                                            )
+                                    ui.label(str(record_count)).classes(
+                                        "dashboard-holdings-chart-total"
+                                    )
                     with ui.element("div").classes("dashboard-holdings-list"):
                         for owner_count in ownership_counts:
                             row = ui.element("div").classes("dashboard-holdings-row").props(
@@ -8126,68 +8350,113 @@ def index() -> None:
                 ui.label(
                     f"Upcoming reviews fall within the next {summary.get('review_warning_window_days', 30)} days."
                 ).classes("text-sm text-slate-500 -mt-1")
-                with ui.element("div").classes("dashboard-review-columns"):
-                    for heading, items, color, empty in (
-                        ("Overdue", overdue_reviews, "negative", "No overdue reviews."),
-                        ("Upcoming", upcoming_reviews, "warning", "No reviews due soon."),
+                overdue_total = int(summary["overdue_review_count"])
+                upcoming_total = int(summary["upcoming_review_count"])
+                review_total = overdue_total + upcoming_total
+                overdue_percent = (overdue_total / review_total * 100) if review_total else 0
+                donut_background = (
+                    "conic-gradient(#d64b5f 0 "
+                    f"{overdue_percent:.2f}%, #d99b32 {overdue_percent:.2f}% 100%)"
+                    if review_total else "#e2e8f0"
+                )
+                with ui.element("div").classes("dashboard-review-layout"):
+                    with ui.card().classes("dashboard-review-summary").props(
+                        "aria-label='Review urgency summary'"
                     ):
-                        with ui.card().classes("dashboard-review-group"):
-                            with ui.row().classes("dashboard-review-header w-full items-center gap-2"):
-                                ui.icon(
-                                    "error_outline" if heading == "Overdue" else "event",
-                                    color=color,
-                                    size="19px",
+                        ui.label("Review urgency").classes(
+                            "text-sm font-semibold text-slate-700"
+                        )
+                        with ui.element("div").classes("dashboard-review-donut").style(
+                            f"background: {donut_background}"
+                        ):
+                            with ui.element("div").classes("dashboard-review-donut-center"):
+                                ui.label(str(review_total)).classes(
+                                    "dashboard-review-donut-total"
                                 )
-                                ui.label(heading).classes("font-semibold")
-                                total = summary["overdue_review_count" if heading == "Overdue" else "upcoming_review_count"]
-                                ui.badge(str(total), color=color).props("outline")
-                                ui.space()
-                                ui.button(
-                                    "View all", icon="arrow_forward",
-                                    on_click=lambda _, kind=heading.lower(): show_all_reviews(kind),
-                                ).props("flat dense no-caps color=primary")
-                            if not items:
-                                ui.label(empty).classes("text-sm text-slate-400 px-3 py-4")
-                            for item in items:
-                                resource = "aggregations" if item["entity_type"] == "aggregation" else "records"
-                                number = item.get("aggregation_number") or item.get("record_number")
-                                review_item = ui.element("div").classes(
-                                    "dashboard-review-item"
-                                ).props("role=button tabindex=0")
-                                review_item.on(
-                                    "click",
-                                    lambda _, row=item, kind=resource: open_dashboard_resource(
-                                        kind, {"id": row["entity_id"]}
-                                    ),
+                                ui.label("need review").classes(
+                                    "dashboard-review-donut-caption"
                                 )
-                                review_item.on(
-                                    "keydown.enter",
-                                    lambda _, row=item, kind=resource: open_dashboard_resource(
-                                        kind, {"id": row["entity_id"]}
-                                    ),
-                                )
-                                with review_item:
-                                    with ui.element("div").classes("dashboard-overview-icon"):
-                                        ui.icon(
-                                            "folder" if resource == "aggregations" else "description",
-                                            size="18px",
-                                        )
-                                    with ui.column().classes("gap-0 grow min-w-0"):
-                                        ui.label(item["title"]).classes(
-                                            "text-sm font-semibold text-slate-700 truncate w-full"
-                                        ).tooltip(item["title"])
-                                        ui.label(
-                                            f"{'Aggregation' if resource == 'aggregations' else 'Record'} · {number}"
-                                        ).classes("text-xs text-slate-500 truncate w-full")
-                                    ui.label(
-                                        format_timestamp(item["date_of_next_review"])
-                                    ).classes(
-                                        f"dashboard-review-date text-xs font-medium text-{color}"
+                        with ui.column().classes("w-full gap-2"):
+                            for label, value, color in (
+                                ("Overdue", overdue_total, "#d64b5f"),
+                                (
+                                    f"Next {summary.get('review_warning_window_days', 30)} days",
+                                    upcoming_total,
+                                    "#d99b32",
+                                ),
+                            ):
+                                with ui.element("div").classes(
+                                    "dashboard-review-summary-row"
+                                ):
+                                    ui.element("i").classes("dashboard-chart-swatch").style(
+                                        f"background: {color}"
                                     )
-                            if total > len(items):
-                                ui.label(f"Showing {len(items)} of {total}.").classes(
-                                    "text-xs text-slate-500 self-end px-3 py-2"
-                                )
+                                    ui.label(label)
+                                    ui.label(str(value)).classes(
+                                        "dashboard-review-summary-value"
+                                    )
+                    with ui.element("div").classes("dashboard-review-columns"):
+                        for heading, items, color, empty in (
+                            ("Overdue", overdue_reviews, "negative", "No overdue reviews."),
+                            ("Upcoming", upcoming_reviews, "warning", "No reviews due soon."),
+                        ):
+                            with ui.card().classes("dashboard-review-group"):
+                                with ui.row().classes("dashboard-review-header w-full items-center gap-2"):
+                                    ui.icon(
+                                        "error_outline" if heading == "Overdue" else "event",
+                                        color=color,
+                                        size="19px",
+                                    )
+                                    ui.label(heading).classes("font-semibold")
+                                    total = summary["overdue_review_count" if heading == "Overdue" else "upcoming_review_count"]
+                                    ui.badge(str(total), color=color).props("outline")
+                                    ui.space()
+                                    ui.button(
+                                        "View all", icon="arrow_forward",
+                                        on_click=lambda _, kind=heading.lower(): show_all_reviews(kind),
+                                    ).props("flat dense no-caps color=primary")
+                                if not items:
+                                    ui.label(empty).classes("text-sm text-slate-400 px-3 py-4")
+                                for item in items:
+                                    resource = "aggregations" if item["entity_type"] == "aggregation" else "records"
+                                    number = item.get("aggregation_number") or item.get("record_number")
+                                    review_item = ui.element("div").classes(
+                                        "dashboard-review-item"
+                                    ).props("role=button tabindex=0")
+                                    review_item.on(
+                                        "click",
+                                        lambda _, row=item, kind=resource: open_dashboard_resource(
+                                            kind, {"id": row["entity_id"]}
+                                        ),
+                                    )
+                                    review_item.on(
+                                        "keydown.enter",
+                                        lambda _, row=item, kind=resource: open_dashboard_resource(
+                                            kind, {"id": row["entity_id"]}
+                                        ),
+                                    )
+                                    with review_item:
+                                        with ui.element("div").classes("dashboard-overview-icon"):
+                                            ui.icon(
+                                                "folder" if resource == "aggregations" else "description",
+                                                size="18px",
+                                            )
+                                        with ui.column().classes("gap-0 grow min-w-0"):
+                                            ui.label(item["title"]).classes(
+                                                "text-sm font-semibold text-slate-700 truncate w-full"
+                                            ).tooltip(item["title"])
+                                            ui.label(
+                                                f"{'Aggregation' if resource == 'aggregations' else 'Record'} · {number}"
+                                            ).classes("text-xs text-slate-500 truncate w-full")
+                                        ui.label(
+                                            format_timestamp(item["date_of_next_review"])
+                                        ).classes(
+                                            f"dashboard-review-date text-xs font-medium text-{color}"
+                                        )
+                                if total > len(items):
+                                    ui.label(f"Showing {len(items)} of {total}.").classes(
+                                        "text-xs text-slate-500 self-end px-3 py-2"
+                                    )
 
                 if unclassified_root_count or inactive_classification_count:
                     ui.label("Governance attention").classes("text-lg font-semibold mt-2")

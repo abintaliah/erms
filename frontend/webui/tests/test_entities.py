@@ -166,6 +166,51 @@ def test_dashboard_overview_shows_medium_breakdowns_and_admin_hold_total():
     assert 'format_file_size(component_metrics["storage_size_in_bytes"])' in APP_SOURCE
 
 
+def test_dashboard_adds_attention_chart_without_removing_overview_counts():
+    assert '"dashboard-attention-chart"' in APP_SOURCE
+    assert ".dashboard-attention-chart {" in APP_SOURCE
+    assert "width: 50%; margin-inline: auto;" in APP_SOURCE
+    assert "padding: 12px 32px 28px 54px" in APP_SOURCE
+    assert 'ui.label("Attention signals")' in APP_SOURCE
+    assert '"Visible vital and effectively held resources."' in APP_SOURCE
+    assert 'attention_counts["aggregations"]["vital"]' in APP_SOURCE
+    assert 'attention_counts["aggregations"]["held"]' in APP_SOURCE
+    assert 'attention_counts["records"]["vital"]' in APP_SOURCE
+    assert 'attention_counts["records"]["held"]' in APP_SOURCE
+    assert APP_SOURCE.index(
+        'with ui.element("div").classes("dashboard-overview-admin")'
+    ) < APP_SOURCE.index(
+        'with ui.element("section").classes("dashboard-attention-chart")'
+    )
+    assert '("vital", "emergency")' in APP_SOURCE
+    assert '("held", "gavel")' in APP_SOURCE
+
+
+def test_dashboard_adds_holdings_chart_without_removing_unit_rows():
+    assert '"dashboard-holdings-chart"' in APP_SOURCE
+    assert ".dashboard-holdings-chart {" in APP_SOURCE
+    assert ".dashboard-holdings-chart { width: 100%; }" in APP_SOURCE
+    assert 'ui.label("Records by medium")' in APP_SOURCE
+    assert '"Compare record volume and medium mix across your units."' in APP_SOURCE
+    assert 'owner_count[f"{medium}_record_count"]' in APP_SOURCE
+    assert '"dashboard-holdings-list"' in APP_SOURCE
+    assert APP_SOURCE.index(
+        'with ui.element("section").classes("dashboard-holdings-chart")'
+    ) < APP_SOURCE.index(
+        'with ui.element("div").classes("dashboard-holdings-list")'
+    )
+
+
+def test_dashboard_adds_review_urgency_chart_without_removing_reminder_lists():
+    assert '"dashboard-review-layout"' in APP_SOURCE
+    assert '"dashboard-review-summary"' in APP_SOURCE
+    assert 'ui.label("Review urgency")' in APP_SOURCE
+    assert 'overdue_total = int(summary["overdue_review_count"])' in APP_SOURCE
+    assert 'upcoming_total = int(summary["upcoming_review_count"])' in APP_SOURCE
+    assert '"dashboard-review-columns"' in APP_SOURCE
+    assert '"View all", icon="arrow_forward"' in APP_SOURCE
+
+
 def test_form_payload_converts_ids_and_omits_empty_create_fields():
     spec = ENTITIES["records"]
     controls = {

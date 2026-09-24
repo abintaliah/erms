@@ -51,6 +51,11 @@ defaults:
 Dashboard recent activity is attributed through the immutable audit event's
 `actor_user_id`. Created and updated cards display the matching event's
 `occurred_at` timestamp, rather than always displaying the entity creation date.
+The Dashboard also presents authorized attention signals, records by
+organizational unit and medium, and review urgency as additive charts while
+retaining the existing overview cards, holdings rows, and review-reminder
+lists. The charts use the consolidated Dashboard summary and do not introduce
+separate data requests or authorization scopes.
 Dashboard and classification limits must be positive integers and take effect when the web UI process
 is restarted. See [`../../docs/dashboard.md`](../../docs/dashboard.md) for the
 Dashboard's system-wide and user-specific data semantics.

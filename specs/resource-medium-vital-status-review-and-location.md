@@ -652,6 +652,23 @@ unrelated organizational units to the scope. A future notification worker
 should use an idempotent delivery design and the same authorization-safe data
 source.
 
+The Dashboard must supplement the existing review reminder lists with a
+**Review urgency** part-to-whole chart. The chart uses the complete
+`overdue_review_count` and `upcoming_review_count`, not the bounded preview
+lengths. Upcoming means due within the configured warning window. The chart is
+additive: the Overdue and Upcoming lists, dates, empty states, totals, and
+**View all** actions remain present and authoritative for item-level detail.
+
+The Dashboard must also supplement the Aggregations and Records overview with
+an **Attention signals** grouped bar chart immediately below the administration
+count strip. It compares the existing authorized vital and effectively held
+counts for aggregations and records. The chart requires no administration
+privilege beyond an authenticated session and must remain visible even when the
+caller has no administration-count items. Administration-count visibility
+continues to depend independently on the corresponding global privileges. The
+chart does not replace the existing vital and held values in the two overview
+cards.
+
 ## 15. Event history
 
 Automatic `CREATE` events include all fields applicable to that resource, and
