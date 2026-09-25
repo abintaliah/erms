@@ -177,17 +177,91 @@ def drifted_document_count(connection: Connection) -> int:
     ).fetchone()["count"]
 
 
+def current_failed_document_count(connection: Connection) -> int:
+    return connection.execute(
+        """SELECT count(*) AS count
+             FROM digital_component_search_documents document
+             JOIN digital_components component
+               ON component.id=document.digital_component_id
+             JOIN digital_component_content_sets content_set
+               ON content_set.id=component.active_content_set_id
+            WHERE document.status='failed'
+              AND component.content_status='available'
+              AND content_set.status='active'
+              AND document.content_set_id=content_set.id
+              AND document.extraction_config_version=%s
+              AND document.index_config_version=%s""",
+        (EXTRACTION_CONFIG, INDEX_CONFIG),
+    ).fetchone()["count"]
+
+
+def retry_failed(connection: Connection, batch_size: int, dry_run: bool) -> dict[str, int]:
+    rows = connection.execute(
+        """SELECT component.id AS component_id,component.record_id,component.mime_type,
+                  content_set.id AS content_set_id,content_set.checksum_algo,content_set.checksum_value
+             FROM digital_component_search_documents document
+             JOIN digital_components component ON component.id=document.digital_component_id
+             JOIN digital_component_content_sets content_set
+               ON content_set.id=component.active_content_set_id
+            WHERE document.status='failed'
+              AND component.content_status='available' AND content_set.status='active'
+              AND document.content_set_id=content_set.id
+              AND document.extraction_config_version=%s
+              AND document.index_config_version=%s
+              AND NOT EXISTS (
+                    SELECT 1 FROM content_indexing_jobs active_job
+                     WHERE active_job.digital_component_id=component.id
+                       AND active_job.content_set_id=content_set.id
+                       AND active_job.extraction_config_version=%s
+                       AND active_job.index_config_version=%s
+                       AND active_job.extractor_version=%s
+                       AND active_job.status IN ('queued','leased')
+              )
+            ORDER BY component.id LIMIT %s FOR UPDATE OF component SKIP LOCKED""",
+        (EXTRACTION_CONFIG, INDEX_CONFIG, EXTRACTION_CONFIG, INDEX_CONFIG,
+         EXTRACTOR_VERSION, batch_size),
+    ).fetchall()
+    if dry_run:
+        return {"examined": len(rows), "queued": 0}
+    queued = 0
+    for row in rows:
+        result = connection.execute(
+            """INSERT INTO content_indexing_jobs(
+                   digital_component_id,record_id,content_set_id,content_checksum_algo,content_checksum_value,
+                   trigger,priority,extraction_config_version,index_config_version,extractor_version,required_capabilities)
+               VALUES (%s,%s,%s,%s,%s,'retry',0,%s,%s,%s,
+                       jsonb_build_object('mime_type',%s::text,'max_input_bytes',52428800))
+               ON CONFLICT(digital_component_id,content_set_id,extraction_config_version,index_config_version,extractor_version)
+                   WHERE status IN ('queued','leased') DO NOTHING RETURNING id""",
+            (row["component_id"],row["record_id"],row["content_set_id"],row["checksum_algo"],
+             row["checksum_value"],EXTRACTION_CONFIG,INDEX_CONFIG,EXTRACTOR_VERSION,row["mime_type"]),
+        ).fetchone()
+        if result is None:
+            continue
+        connection.execute(
+            """UPDATE digital_component_search_documents
+                  SET status='pending',date_updated=CURRENT_TIMESTAMP
+                WHERE digital_component_id=%s AND status='failed'
+                  AND content_set_id=%s""",
+            (row["component_id"], row["content_set_id"]),
+        )
+        queued += 1
+    return {"examined": len(rows), "queued": queued}
+
+
 def readiness(connection: Connection) -> dict:
     state = metrics(connection)
     drift = drifted_document_count(connection)
     blocking_jobs = sum(state["queue"].get(name, 0) for name in ("queued", "leased"))
-    failed = state["queue"].get("failed", 0)
+    failed = current_failed_document_count(connection)
+    historical_failed = state["queue"].get("failed", 0)
     ready = drift == 0 and blocking_jobs == 0 and state["stale_documents"] == 0 and failed == 0
     return {
         "ready_for_search": ready,
         "drifted_documents": drift,
         "blocking_jobs": blocking_jobs,
-        "failed_jobs": failed,
+        "failed_documents": failed,
+        "historical_failed_jobs": historical_failed,
         "stale_documents": state["stale_documents"],
         "active_workers": state["workers"]["active"],
         "metrics": state,

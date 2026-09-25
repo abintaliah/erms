@@ -223,6 +223,9 @@ def test_dedicated_routes_reject_user_without_dedicated_privilege(client: TestCl
     assert client.post(
         "/api/v1/text-indexers/backfill", json={"batch_size": 1},
     ).status_code == 403
+    assert client.post(
+        "/api/v1/text-indexers/retry-failed", json={"batch_size": 1},
+    ).status_code == 403
     assert client.post("/api/v1/text-indexers", json=_payload()).status_code == 403
 
 
@@ -253,8 +256,8 @@ def test_health_is_privacy_safe_and_backfill_is_bounded_and_idempotent(
     assert snapshot["drifted_documents"] == 1
     assert set(snapshot) == {
         "status", "observed_at", "ready_for_search", "drifted_documents",
-        "blocking_jobs", "failed_jobs", "stale_documents", "active_workers",
-        "metrics",
+        "blocking_jobs", "failed_documents", "historical_failed_jobs",
+        "stale_documents", "active_workers", "metrics",
     }
     assert "secret" not in health.text.lower()
     assert "extracted_text" not in health.text
@@ -275,3 +278,40 @@ def test_health_is_privacy_safe_and_backfill_is_bounded_and_idempotent(
     )
     assert second.status_code == 200, second.text
     assert second.json() == {"batch_size": 1, "drifted": 0, "queued": 0}
+
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        connection.execute(
+            """UPDATE content_indexing_jobs
+                  SET status='failed',completed_at=CURRENT_TIMESTAMP
+                WHERE digital_component_id=%s AND status='queued'""",
+            (component_id,),
+        )
+        connection.execute(
+            """UPDATE digital_component_search_documents
+                  SET status='failed',last_error_code='extractor_unavailable',
+                      last_error_summary='test failure'
+                WHERE digital_component_id=%s""",
+            (component_id,),
+        )
+
+    failed_health = client.get("/api/v1/text-indexers/health").json()
+    assert failed_health["failed_documents"] == 1
+    assert failed_health["historical_failed_jobs"] == 1
+    assert failed_health["ready_for_search"] is False
+    assert client.post(
+        "/api/v1/text-indexers/retry-failed", json={"batch_size": 0},
+    ).status_code == 422
+    assert client.post(
+        "/api/v1/text-indexers/retry-failed", json={"batch_size": 501},
+    ).status_code == 422
+    retry = client.post(
+        "/api/v1/text-indexers/retry-failed", json={"batch_size": 1},
+    )
+    assert retry.status_code == 200, retry.text
+    assert retry.json() == {"batch_size": 1, "examined": 1, "queued": 1}
+    assert client.post(
+        "/api/v1/text-indexers/retry-failed", json={"batch_size": 1},
+    ).json() == {"batch_size": 1, "examined": 0, "queued": 0}
+    recovered_health = client.get("/api/v1/text-indexers/health").json()
+    assert recovered_health["failed_documents"] == 0
+    assert recovered_health["historical_failed_jobs"] == 1

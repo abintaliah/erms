@@ -189,6 +189,11 @@ class ErmsApiClient:
             "POST", "/api/v1/text-indexers/backfill", json={"batch_size": batch_size},
         )
 
+    async def retry_failed_text_indexer_documents(self, batch_size: int) -> dict[str, Any]:
+        return await self.request(
+            "POST", "/api/v1/text-indexers/retry-failed", json={"batch_size": batch_size},
+        )
+
     async def text_indexer(self, user_id: int) -> dict[str, Any]:
         return await self.request("GET", f"/api/v1/text-indexers/{user_id}")
 

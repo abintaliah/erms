@@ -3,12 +3,13 @@
 **Status:** Approved
 **Project:** ERMS / Wathiq  
 **Prepared:** 24 September 2026  
-**Revision:** 0.32 — Supervised automatic maintenance
+**Revision:** 0.33 — Current-failure recovery workflow
 
 ### Revision history
 
 | Revision | Date | Change |
 | --- | --- | --- |
+| 0.33 | 25 September 2026 | Separated currently failed search documents from retained failed-job history in Health/readiness and added a privilege-gated bounded retry action for current failures |
 | 0.32 | 25 September 2026 | Required the local stack and production deployment artifacts to run one supervised API-owned indexing/credential maintenance process with an hourly default interval |
 | 0.31 | 25 September 2026 | Added explanatory text for the protected text-indexer service role, server-side credential-history pagination, and bounded automatic cleanup of revoked and expired credential rows after configurable retention |
 | 0.30 | 25 September 2026 | Made built-in roles visible as read-only entries in ordinary Roles administration and linked the text-indexer role to its dedicated workflow |
@@ -1986,6 +1987,18 @@ actually queued, never queues duplicate active work, and does not wait for
 extraction to finish. Repeated bounded batches replace record-by-record manual
 reindexing for pre-existing content.
 
+The **Failed** Health indicator and rollout-readiness gate count only current
+eligible `digital_component_search_documents` whose status is `failed` and
+whose content/configuration identity still matches the active component.
+Retained terminal failed jobs and attempts are historical operational evidence;
+they are shown separately and never block readiness after a later successful
+reindex. The administration surface provides **Retry failed documents** after
+the cause has been corrected. Its administrator-selected batch limit is 1–500;
+it idempotently creates `retry` jobs only for current failed documents without
+an active queued/leased job, changes successfully queued documents to
+`pending`, preserves failure history, returns examined/queued counts, and does
+not wait for extraction.
+
 API liveness, indexing health and rollout readiness remain distinct. `/health`
 proves API/database liveness and reports feature flags; it does not claim that
 workers are active or the indexing backlog is healthy. The Text Indexers
@@ -2317,6 +2330,7 @@ rebuildable derived data, but their removal requires a later explicit migration.
 | FTS-59 | The privilege-gated Text Indexers Health section distinguishes API liveness from worker/queue health; shows privacy-safe readiness, worker heartbeat, backlog, failure, drift, stale-document and lease-recovery state; and can idempotently queue an administrator-bounded backfill batch of at most 500 components | API authorization/leakage/backfill tests and live-browser UI verification |
 | FTS-60 | One text-indexer service supervises `TEXT_INDEXER_PROCESS_COUNT` child processes (default `2`); each child claims one job, has a generated unique worker ID, and is restarted by slot without terminating healthy siblings | configuration-default, supervisor, worker-loop and deployment tests/review |
 | FTS-61 | Built-in roles are visible and clearly labelled in Roles administration but remain read-only and excluded from ordinary assignment selectors; the text-indexer role links authorized users to Text Indexers | API visibility/mutation tests and live-browser list/detail verification |
+| FTS-62 | Text Indexers Health/readiness counts only currently failed eligible search documents while exposing retained failed-job history separately; an administrator can idempotently queue a bounded 1–500 retry batch for current failures without deleting history or duplicating active work | disposable-database current/history/readiness, authorization, bounds, idempotency and UI workflow tests |
 
 The feature is not complete until every acceptance criterion has implementation
 and verification evidence. Database tests must follow the repository rule that

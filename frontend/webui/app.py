@@ -10588,6 +10588,47 @@ def index(q: str = "") -> None:
                     ).props("unelevated no-caps")
             dialog.open()
 
+        def retry_failed_dialog() -> None:
+            dialog = ui.dialog().props("persistent")
+            with dialog, ui.card().classes("w-[540px] max-w-full gap-3"):
+                ui.label("Retry failed documents").classes("text-xl font-semibold")
+                ui.label(
+                    "Queue a bounded retry only after correcting the extraction, "
+                    "dependency, content, or capacity problem that caused the failures."
+                ).classes("text-sm text-slate-500")
+                batch_size = ui.number(
+                    "Maximum failed documents", value=100, min=1, max=500, step=1,
+                ).props("outlined").classes("w-full")
+                ui.label(
+                    "Retained failed-job history is preserved. Documents leave the current "
+                    "failure count when the retry is queued and will be indexed asynchronously."
+                ).classes("text-xs text-slate-500")
+
+                async def submit_retry() -> None:
+                    try:
+                        requested = int(batch_size.value or 0)
+                        result = await api.retry_failed_text_indexer_documents(requested)
+                    except (TypeError, ValueError):
+                        ui.notify("Enter a whole number from 1 to 500", color="warning")
+                        return
+                    except ApiError as error:
+                        show_api_error(error)
+                        return
+                    dialog.close()
+                    ui.notify(
+                        f"Examined {result['examined']} failed documents; "
+                        f"queued {result['queued']} retries",
+                        color="positive",
+                    )
+                    await select_text_indexers()
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button(
+                        "Queue retries", icon="replay", on_click=submit_retry,
+                    ).props("unelevated no-caps")
+            dialog.open()
+
         with table_container, ui.column().classes("w-full p-5 gap-4"):
             metrics = health["metrics"]
             queue = metrics.get("queue", {})
@@ -10629,6 +10670,11 @@ def index(q: str = "") -> None:
                         "Queue backfill batch", icon="playlist_add",
                         on_click=queue_backfill_dialog,
                     ).props("unelevated dense no-caps")
+                    ui.button(
+                        "Retry failed", icon="replay", on_click=retry_failed_dialog,
+                    ).props("outline dense no-caps").set_enabled(
+                        int(health.get("failed_documents", 0)) > 0
+                    )
                 ui.label(
                     "API liveness is reported separately by /health. This section reports "
                     "whether indexers and derived search data are operationally ready."
@@ -10653,9 +10699,10 @@ def index(q: str = "") -> None:
                             "sync", False,
                         ),
                         (
-                            "Failed", queue.get("failed", 0),
+                            "Failed documents", health.get("failed_documents", 0),
+                            f"{health.get('historical_failed_jobs', 0)} historical failed jobs · "
                             f"{queue.get('unsupported', 0)} unsupported",
-                            "error_outline", int(queue.get("failed", 0)) > 0,
+                            "error_outline", int(health.get("failed_documents", 0)) > 0,
                         ),
                         (
                             "Drifted documents", health.get("drifted_documents", 0),

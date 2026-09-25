@@ -41,7 +41,7 @@ from disappearing during phased delivery.
 | 13 | Required domain events, safe operational history, metrics and health semantics | 1–3 | verified |
 | 14 | Parser isolation, credential/lease secrecy, dependency/resource defenses, safe SQL/rendering/backups | 1–5 | verified |
 | 15 | Execute Phases 0–5 with entry inventories and exit reconciliation | 0–5 | verified |
-| 16 | Satisfy FTS-01 through FTS-61 with cited evidence | 0–5 | verified |
+| 16 | Satisfy FTS-01 through FTS-62 with cited evidence | 0–5 | verified |
 
 ## 2. Phase 0 detailed matrix
 
@@ -128,6 +128,7 @@ and later rollout/final reconciliation may also apply.
 | FTS-59 | 5 | verified | Dedicated health/backfill endpoints and Wathiq Health section; authorization, privacy-safe serializer, bounded idempotency, refresh and live-browser verification |
 | FTS-60 | 2, 5 | verified | Runtime/default environments set claim size one and process count two; supervisor-owned child pool; generated per-run/per-slot IDs; worker and deployment guidance |
 | FTS-61 | 5 | verified | Built-in role opt-in listing, read-only API guards, Wathiq Built-in presentation and Text Indexers link; disposable PostgreSQL and live-browser evidence |
+| FTS-62 | 5 | pending | Current-failed-document readiness metric, separate historical count, bounded idempotent retry API/UI and preserved history; disposable PostgreSQL and live-browser evidence required |
 
 ## 4. Approved deferrals and departures
 
