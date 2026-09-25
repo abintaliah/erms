@@ -33,6 +33,19 @@ Review:
 - security-level downgrades and ACL/profile changes; and
 - repeated denials for one privilege that may indicate a misconfigured profile or client.
 
+The protected text-indexer authorization surface consists of two catalogue
+operations. `content.index.execute` belongs only to the service-only
+`TEXT_INDEXER_SERVICE` profile (and the deliberately comprehensive
+`ALL_PRIVS` profile); it authenticates the internal worker namespace, while
+Phase 2 applies exact live job ID, random lease token, and generation scope to
+heartbeat, content, staging, completion, and failure. Credentials are accepted
+only under `/api/v1/internal/text-indexing/`, are rate-limited per credential,
+and cannot enumerate content. `search.query.debug`
+is granted to `ALL_PRIVS`, `SYS_ADMIN`, `INFO_GOV_MGR`, and
+`INFO_GOV_OFFICER`; it never grants access to another user's results or permits
+raw SQL, plans, vectors, snippets, parameters, or protected metadata in
+diagnostics.
+
 The same aggregate is available to monitoring systems:
 
 ```sh

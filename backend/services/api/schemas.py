@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Any, Generic, Literal, TypeVar
 from uuid import UUID
 
@@ -49,6 +49,7 @@ class PrivilegeRead(ApiModel):
     description: str
     category: str
     is_reserved: bool
+    account_type_restriction: Literal["person", "service"] | None = None
     date_created: datetime
     date_updated: datetime
     version: int
@@ -1204,6 +1205,83 @@ class UserRead(ApiModel):
     version: int
 
 
+class ServiceCredentialCreate(ApiModel):
+    name: NonBlankString
+    expires_at: datetime
+
+    @model_validator(mode="after")
+    def expiry_is_future(self):
+        if not _is_future(self.expires_at):
+            raise ValueError("expires_at must be in the future")
+        return self
+
+
+class ServiceCredentialRotate(ServiceCredentialCreate):
+    overlap_until: datetime | None = None
+
+    @model_validator(mode="after")
+    def overlap_is_bounded(self):
+        if self.overlap_until is not None:
+            if not _is_future(self.overlap_until):
+                raise ValueError("overlap_until must be in the future")
+            now = datetime.now(self.overlap_until.tzinfo) if self.overlap_until.tzinfo else datetime.now()
+            if self.overlap_until > now + timedelta(days=7):
+                raise ValueError("credential overlap cannot exceed 7 days")
+        return self
+
+
+class ServiceCredentialRead(ApiModel):
+    id: int
+    service_user_id: int
+    name: str
+    credential_identifier: str
+    status: Literal["active", "expiring", "expired", "revoked"]
+    date_created: datetime
+    expires_at: datetime
+    last_used_at: datetime | None
+    last_worker_id: str | None
+    date_revoked: datetime | None
+    created_by_user_id: int | None
+    created_by_name: str | None
+
+
+class ServiceCredentialCreated(ServiceCredentialRead):
+    api_key: str
+
+
+class TextIndexerCreate(ServiceCredentialCreate):
+    name: NonBlankString
+    external_id: NonBlankString
+    credential_name: NonBlankString
+
+
+class TextIndexerRead(UserRead):
+    credential_count: int
+    active_credential_count: int
+    last_used_at: datetime | None
+
+
+class TextIndexerDetail(TextIndexerRead):
+    pass
+
+
+class ServiceCredentialPage(ApiModel):
+    items: list[ServiceCredentialRead]
+    total: int
+    limit: int
+    offset: int
+    retention_days: int
+
+
+class TextIndexerCreated(ApiModel):
+    text_indexer: TextIndexerRead
+    credential: ServiceCredentialCreated
+
+
+class TextIndexerBackfillRequest(ApiModel):
+    batch_size: int = Field(default=500, ge=1, le=500)
+
+
 class LoginRequest(ApiModel):
     email: NonBlankString
     password: str
@@ -1282,7 +1360,7 @@ class RoleUpdate(ApiModel):
 
 class RoleRead(ApiModel):
     id: int
-    org_unit_id: int
+    org_unit_id: int | None
     supervisor_role_id: int | None
     code: str
     name: str
@@ -1293,6 +1371,8 @@ class RoleRead(ApiModel):
     security_level_id: int
     profile_id: int
     is_information_governance: bool
+    is_system: bool = False
+    account_type_restriction: Literal["person", "service"] | None = None
     version: int
 
 
@@ -1349,6 +1429,11 @@ SearchOperator = Literal[
 ]
 
 
+class FullTextClause(ApiModel):
+    query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+    sources: list[str] | None = Field(default=None, min_length=1, max_length=2)
+
+
 class SearchExpression(ApiModel):
     field: str | None = None
     operator: SearchOperator | None = None
@@ -1356,18 +1441,18 @@ class SearchExpression(ApiModel):
     and_: list["SearchExpression"] | None = Field(default=None, alias="and", min_length=1)
     or_: list["SearchExpression"] | None = Field(default=None, alias="or", min_length=1)
     not_: "SearchExpression | None" = Field(default=None, alias="not")
+    full_text: FullTextClause | None = None
 
     @model_validator(mode="after")
     def validate_expression_shape(self):
         comparison_keys = self.model_fields_set & {"field", "operator", "value"}
-        logical_nodes = sum(
-            node is not None for node in (self.and_, self.or_, self.not_)
-        )
+        logical_nodes = sum(node is not None for node in (self.and_, self.or_, self.not_))
+        full_text_nodes = int(self.full_text is not None)
         is_comparison = self.field is not None or self.operator is not None
 
-        if logical_nodes + int(is_comparison) != 1:
-            raise ValueError("use exactly one comparison, and, or, or not expression")
-        if logical_nodes and comparison_keys:
+        if logical_nodes + full_text_nodes + int(is_comparison) != 1:
+            raise ValueError("use exactly one comparison, full_text, and, or, or not expression")
+        if (logical_nodes or full_text_nodes) and comparison_keys:
             raise ValueError("logical expressions cannot contain field, operator, or value")
         if is_comparison and (self.field is None or self.operator is None):
             raise ValueError("comparison expressions require field and operator")
@@ -1391,6 +1476,28 @@ class SearchRequest(ApiModel):
     sort: list[SearchSort] = Field(default_factory=list, max_length=10)
     limit: int = Field(default=100, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
+    include: list[Literal["full_text_matches"]] = Field(default_factory=list, max_length=1)
+    debug: bool = False
+
+
+class GlobalSearchRequest(ApiModel):
+    record_where: SearchExpression | None = None
+    aggregation_where: SearchExpression | None = None
+    result_types: list[Literal["records", "aggregations"]] = Field(min_length=1, max_length=2)
+    limit: int = Field(default=25, ge=1, le=100)
+    cursor: str | None = Field(default=None, max_length=2000)
+    debug: bool = False
+
+    @model_validator(mode="after")
+    def branches_match_result_types(self):
+        if len(set(self.result_types)) != len(self.result_types):
+            raise ValueError("result_types cannot contain duplicates")
+        supplied = ({"records"} if self.record_where is not None else set()) | (
+            {"aggregations"} if self.aggregation_where is not None else set()
+        )
+        if supplied != set(self.result_types):
+            raise ValueError("result_types must exactly match supplied resource branches")
+        return self
 
 
 SearchItem = TypeVar("SearchItem")

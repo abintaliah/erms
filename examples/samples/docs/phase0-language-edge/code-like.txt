@@ -1,0 +1,1 @@
+SELECT record_id FROM records WHERE status = 'active'; sha256 deadbeef

@@ -2476,6 +2476,7 @@ CREATE TABLE privilege_dependencies (
 WITH seed(code, category, reserved) AS (VALUES
  ('authorization.administer','administration',false), ('authorization.explain','administration',false),
  ('security_levels.administer','administration',false), ('identity.users.administer','administration',false),
+ ('identity.text_indexers.administer','administration',false),
  ('identity.sessions.administer','administration',false), ('organization.browse','administration',false),
  ('organization.administer','administration',false), ('organization.ownership.correct','exceptional',false),
  ('classifications.administer','administration',false), ('audit.view','administration',false),
@@ -2516,7 +2517,7 @@ WHERE profile.code='ALL_PRIVS';
 INSERT INTO profile_privileges(profile_id,privilege_id)
 SELECT profile.id, privilege.id FROM profiles profile JOIN privileges privilege ON privilege.code IN (
  'authorization.administer','authorization.explain','security_levels.administer',
- 'identity.users.administer','identity.sessions.administer','organization.browse','organization.administer',
+ 'identity.users.administer','identity.text_indexers.administer','identity.sessions.administer','organization.browse','organization.administer',
  'classifications.administer','audit.view') WHERE profile.code='SYS_ADMIN';
 
 INSERT INTO profile_privileges(profile_id,privilege_id)
@@ -3903,6 +3904,268 @@ SELECT resource.id,
 FROM records resource;
 
 
+-- Full-text content search Phase 2 begins.
+DO $$ BEGIN
+    IF current_setting('server_version_num')::integer < 180000 THEN
+        RAISE EXCEPTION 'Full-text search requires PostgreSQL 18 or newer';
+    END IF;
+END $$;
+
+CREATE TABLE digital_component_search_documents (
+    digital_component_id bigint PRIMARY KEY REFERENCES digital_components(id) ON DELETE CASCADE,
+    record_id bigint NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+    content_set_id bigint REFERENCES digital_component_content_sets(id) ON DELETE CASCADE,
+    content_checksum_algo text,
+    content_checksum_value text,
+    status text NOT NULL,
+    detected_mime_type text,
+    detected_language text,
+    extractor_name text,
+    extractor_version text,
+    extraction_config_version text NOT NULL,
+    index_config_version text NOT NULL,
+    indexed_at timestamptz,
+    last_attempt_at timestamptz,
+    last_error_code text,
+    last_error_summary text,
+    date_updated timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT component_search_status_valid CHECK (
+        status IN ('pending','processing','indexed','unsupported','failed','stale')
+    ),
+    CONSTRAINT component_search_identity_complete CHECK (
+        (content_set_id IS NULL AND content_checksum_algo IS NULL AND content_checksum_value IS NULL)
+        OR (content_set_id IS NOT NULL AND btrim(content_checksum_algo)<>'' AND btrim(content_checksum_value)<>'')
+    ),
+    CONSTRAINT component_search_error_summary_bounded CHECK (
+        last_error_summary IS NULL OR length(last_error_summary)<=500
+    )
+);
+CREATE INDEX component_search_status_reconcile_idx ON digital_component_search_documents
+    (status,date_updated,digital_component_id);
+CREATE INDEX component_search_record_idx ON digital_component_search_documents
+    (record_id,digital_component_id);
+
+CREATE TABLE digital_component_search_chunks (
+    id bigserial PRIMARY KEY,
+    digital_component_id bigint NOT NULL REFERENCES digital_component_search_documents(digital_component_id) ON DELETE CASCADE,
+    chunk_no integer NOT NULL CHECK (chunk_no>=0),
+    page_from integer,
+    page_to integer,
+    extracted_text text NOT NULL,
+    search_vector tsvector NOT NULL,
+    text_search_config regconfig NOT NULL,
+    CONSTRAINT component_search_chunks_unique UNIQUE(digital_component_id,chunk_no),
+    CONSTRAINT component_search_chunks_text_bounded CHECK (length(extracted_text)<=20000),
+    CONSTRAINT component_search_chunks_pages_valid CHECK (
+        (page_from IS NULL AND page_to IS NULL)
+        OR (page_from>0 AND page_to>=page_from)
+    )
+);
+CREATE INDEX component_search_chunks_vector_gin ON digital_component_search_chunks USING gin(search_vector);
+
+CREATE TABLE content_indexing_jobs (
+    id bigserial PRIMARY KEY,
+    digital_component_id bigint NOT NULL REFERENCES digital_components(id) ON DELETE CASCADE,
+    record_id bigint NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+    content_set_id bigint NOT NULL REFERENCES digital_component_content_sets(id) ON DELETE CASCADE,
+    content_checksum_algo text NOT NULL,
+    content_checksum_value text NOT NULL,
+    trigger text NOT NULL,
+    priority smallint NOT NULL DEFAULT 0 CHECK (priority BETWEEN -100 AND 100),
+    status text NOT NULL DEFAULT 'queued',
+    not_before timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lease_owner text,
+    lease_token uuid,
+    lease_expires_at timestamptz,
+    lease_generation bigint NOT NULL DEFAULT 0 CHECK (lease_generation>=0),
+    attempt_no integer NOT NULL DEFAULT 0 CHECK (attempt_no>=0),
+    extraction_config_version text NOT NULL,
+    index_config_version text NOT NULL,
+    extractor_version text NOT NULL,
+    required_capabilities jsonb NOT NULL DEFAULT '{}'::jsonb,
+    queued_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at timestamptz,
+    completed_at timestamptz,
+    date_updated timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT content_indexing_jobs_trigger_valid CHECK (
+        trigger IN ('upload','replacement','manual_component','manual_record','backfill','retry','config_change')
+    ),
+    CONSTRAINT content_indexing_jobs_status_valid CHECK (
+        status IN ('queued','leased','succeeded','failed','unsupported','cancelled','skipped')
+    ),
+    CONSTRAINT content_indexing_jobs_lease_shape CHECK (
+        (status='leased' AND lease_owner IS NOT NULL AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL)
+        OR (status<>'leased')
+    ),
+    CONSTRAINT content_indexing_jobs_capabilities_object CHECK (jsonb_typeof(required_capabilities)='object')
+);
+CREATE UNIQUE INDEX content_indexing_jobs_active_unique
+    ON content_indexing_jobs(
+        digital_component_id,content_set_id,extraction_config_version,index_config_version,extractor_version
+    ) WHERE status IN ('queued','leased');
+CREATE INDEX content_indexing_jobs_claim_idx
+    ON content_indexing_jobs(priority DESC,not_before,id)
+    WHERE status IN ('queued','leased');
+CREATE INDEX content_indexing_jobs_expired_lease_idx
+    ON content_indexing_jobs(lease_expires_at,id) WHERE status='leased';
+
+CREATE TABLE content_indexing_attempts (
+    id bigserial PRIMARY KEY,
+    digital_component_id bigint REFERENCES digital_components(id) ON DELETE SET NULL,
+    record_id bigint REFERENCES records(id) ON DELETE SET NULL,
+    content_set_id bigint REFERENCES digital_component_content_sets(id) ON DELETE SET NULL,
+    content_checksum_algo text NOT NULL,
+    content_checksum_value text NOT NULL,
+    trigger text NOT NULL,
+    requested_by_user_id bigint REFERENCES users(id) ON DELETE SET NULL,
+    job_id bigint REFERENCES content_indexing_jobs(id) ON DELETE SET NULL,
+    worker_id text,
+    lease_generation bigint,
+    status text NOT NULL,
+    attempt_no integer NOT NULL CHECK (attempt_no>0),
+    queued_at timestamptz NOT NULL,
+    started_at timestamptz,
+    completed_at timestamptz,
+    extractor_name text,
+    extractor_version text,
+    extraction_config_version text NOT NULL,
+    index_config_version text NOT NULL,
+    characters_extracted bigint CHECK (characters_extracted IS NULL OR characters_extracted>=0),
+    chunks_created integer CHECK (chunks_created IS NULL OR chunks_created>=0),
+    ocr_used boolean NOT NULL DEFAULT false,
+    error_code text,
+    error_summary text,
+    request_id text,
+    correlation_id text,
+    CONSTRAINT content_indexing_attempts_status_valid CHECK (
+        status IN ('processing','succeeded','failed','unsupported','cancelled','lease_lost','skipped')
+    ),
+    CONSTRAINT content_indexing_attempts_error_bounded CHECK (error_summary IS NULL OR length(error_summary)<=500),
+    CONSTRAINT content_indexing_attempts_generation_unique UNIQUE(job_id,lease_generation)
+);
+CREATE INDEX content_indexing_attempts_completed_idx ON content_indexing_attempts(completed_at,id)
+    WHERE status<>'processing';
+
+CREATE TABLE content_indexing_result_chunks (
+    job_id bigint NOT NULL REFERENCES content_indexing_jobs(id) ON DELETE CASCADE,
+    lease_generation bigint NOT NULL,
+    chunk_no integer NOT NULL CHECK (chunk_no>=0),
+    page_from integer,
+    page_to integer,
+    extracted_text text NOT NULL,
+    text_digest text NOT NULL,
+    detected_language text,
+    language_decision text NOT NULL,
+    text_search_config regconfig NOT NULL,
+    characters_count integer NOT NULL CHECK (characters_count>=0),
+    date_staged timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(job_id,lease_generation,chunk_no),
+    CONSTRAINT result_chunks_text_bounded CHECK (length(extracted_text)<=20000),
+    CONSTRAINT result_chunks_digest_format CHECK (text_digest~'^[0-9a-f]{64}$'),
+    CONSTRAINT result_chunks_language_decision_valid CHECK (
+        language_decision IN ('english','arabic','mixed','unknown','short','low_confidence','unsupported_script','code_like')
+    ),
+    CONSTRAINT result_chunks_pages_valid CHECK (
+        (page_from IS NULL AND page_to IS NULL) OR (page_from>0 AND page_to>=page_from)
+    )
+);
+CREATE INDEX result_chunks_cleanup_idx ON content_indexing_result_chunks(date_staged,job_id,lease_generation);
+
+CREATE TABLE content_indexing_operations (
+    job_id bigint NOT NULL REFERENCES content_indexing_jobs(id) ON DELETE CASCADE,
+    lease_generation bigint NOT NULL,
+    operation text NOT NULL CHECK (operation IN ('chunk','complete','fail')),
+    idempotency_key text NOT NULL,
+    response jsonb NOT NULL,
+    date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(job_id,lease_generation,operation,idempotency_key),
+    CONSTRAINT content_indexing_operations_key_bounded CHECK (
+        btrim(idempotency_key)<>'' AND length(idempotency_key)<=200
+    )
+);
+
+CREATE TABLE text_indexing_workers (
+    service_user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    worker_id text NOT NULL,
+    contract_version text NOT NULL,
+    extractor_version text NOT NULL,
+    extraction_config_version text NOT NULL,
+    index_config_version text NOT NULL,
+    capabilities jsonb NOT NULL,
+    registered_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_contact_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    active_until timestamptz NOT NULL,
+    current_job_id bigint REFERENCES content_indexing_jobs(id) ON DELETE SET NULL,
+    PRIMARY KEY(service_user_id,worker_id),
+    CONSTRAINT text_indexing_workers_id_bounded CHECK (btrim(worker_id)<>'' AND length(worker_id)<=200),
+    CONSTRAINT text_indexing_workers_capabilities_object CHECK (jsonb_typeof(capabilities)='object')
+);
+CREATE INDEX text_indexing_workers_active_idx ON text_indexing_workers(active_until,service_user_id,worker_id);
+
+CREATE FUNCTION validate_component_search_identity()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.content_set_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM digital_component_content_sets content_set
+        WHERE content_set.id=NEW.content_set_id
+          AND content_set.digital_component_id=NEW.digital_component_id
+    ) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='search content set does not belong to component'; END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM digital_components component
+        WHERE component.id=NEW.digital_component_id AND component.record_id=NEW.record_id
+    ) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='search record does not match component'; END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER component_search_validate_identity BEFORE INSERT OR UPDATE
+ON digital_component_search_documents FOR EACH ROW EXECUTE FUNCTION validate_component_search_identity();
+
+CREATE FUNCTION schedule_component_content_indexing()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    active_set digital_component_content_sets%ROWTYPE;
+    schedule_trigger text;
+BEGIN
+    IF NEW.content_status<>'available' OR NEW.active_content_set_id IS NULL THEN
+        UPDATE digital_component_search_documents SET status='stale',date_updated=CURRENT_TIMESTAMP
+         WHERE digital_component_id=NEW.id;
+        RETURN NEW;
+    END IF;
+    SELECT * INTO STRICT active_set FROM digital_component_content_sets
+     WHERE id=NEW.active_content_set_id AND digital_component_id=NEW.id AND status='active';
+    schedule_trigger:=CASE WHEN TG_OP='INSERT' OR OLD.active_content_set_id IS NULL THEN 'upload' ELSE 'replacement' END;
+    UPDATE digital_component_search_documents SET status='stale',date_updated=CURRENT_TIMESTAMP
+     WHERE digital_component_id=NEW.id AND content_set_id IS DISTINCT FROM active_set.id;
+    INSERT INTO digital_component_search_documents(
+        digital_component_id,record_id,content_set_id,content_checksum_algo,content_checksum_value,
+        status,extraction_config_version,index_config_version,date_updated
+    ) VALUES (NEW.id,NEW.record_id,active_set.id,active_set.checksum_algo,active_set.checksum_value,
+              'pending','tika-4.0.0-ocr-eng-ara-v1','fts-content-v1',CURRENT_TIMESTAMP)
+    ON CONFLICT(digital_component_id) DO UPDATE SET
+        record_id=EXCLUDED.record_id,content_set_id=EXCLUDED.content_set_id,
+        content_checksum_algo=EXCLUDED.content_checksum_algo,
+        content_checksum_value=EXCLUDED.content_checksum_value,status='pending',
+        extraction_config_version=EXCLUDED.extraction_config_version,
+        index_config_version=EXCLUDED.index_config_version,indexed_at=NULL,
+        last_error_code=NULL,last_error_summary=NULL,date_updated=CURRENT_TIMESTAMP;
+    IF coalesce(nullif(current_setting('app.content_indexing_scheduling_enabled',true),''),'true')<>'true' THEN
+        RETURN NEW;
+    END IF;
+    INSERT INTO content_indexing_jobs(
+        digital_component_id,record_id,content_set_id,content_checksum_algo,content_checksum_value,
+        trigger,extraction_config_version,index_config_version,extractor_version,required_capabilities
+    ) VALUES (NEW.id,NEW.record_id,active_set.id,active_set.checksum_algo,active_set.checksum_value,
+              schedule_trigger,'tika-4.0.0-ocr-eng-ara-v1','fts-content-v1','4.0.0',
+              jsonb_build_object('mime_type',NEW.mime_type,'max_input_bytes',52428800))
+    ON CONFLICT(digital_component_id,content_set_id,extraction_config_version,index_config_version,extractor_version)
+        WHERE status IN ('queued','leased') DO NOTHING;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER digital_components_schedule_content_indexing
+AFTER INSERT OR UPDATE OF active_content_set_id,content_status ON digital_components
+FOR EACH ROW EXECUTE FUNCTION schedule_component_content_indexing();
+
+-- Full-text content search Phase 2 ends.
+
 COMMIT;
 
 -- Legal holds: persistence and non-bypassable policy enforcement.
@@ -4766,4 +5029,457 @@ CREATE INDEX aggregations_review_due_idx ON aggregations (date_of_next_review,id
 CREATE INDEX records_review_due_idx ON records (date_of_next_review,id) WHERE date_of_next_review IS NOT NULL;
 CREATE INDEX aggregations_owner_review_due_idx ON aggregations (owning_org_unit_id,date_of_next_review,id) WHERE date_of_next_review IS NOT NULL;
 CREATE INDEX records_owner_review_due_idx ON records (owning_org_unit_id,date_of_next_review,id) WHERE date_of_next_review IS NOT NULL;
+
+SELECT set_config('app.actor_type','automated_process',true),
+       set_config('app.actor_name','Database migration 010',true),
+       set_config('app.event_source','migration',true),
+       set_config('app.change_reason','Install full-text search Phase 1 metadata and service-authentication foundation',true),
+       set_config('app.event_metadata','{"migration":"010_add_full_text_search_phase1"}',true);
+
+DO $$
+BEGIN
+    IF current_setting('server_version_num')::integer < 180000 THEN
+        RAISE EXCEPTION 'Full-text search requires PostgreSQL 18 or newer';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_ts_config config
+        JOIN pg_catalog.pg_namespace namespace ON namespace.oid=config.cfgnamespace
+        WHERE namespace.nspname='pg_catalog' AND config.cfgname='simple'
+    ) OR NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_ts_config config
+        JOIN pg_catalog.pg_namespace namespace ON namespace.oid=config.cfgnamespace
+        WHERE namespace.nspname='pg_catalog' AND config.cfgname='english'
+    ) OR NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_ts_config config
+        JOIN pg_catalog.pg_namespace namespace ON namespace.oid=config.cfgnamespace
+        WHERE namespace.nspname='pg_catalog' AND config.cfgname='arabic'
+    ) THEN
+        RAISE EXCEPTION 'Required PostgreSQL text-search configurations are unavailable';
+    END IF;
+END;
+$$;
+
+CREATE TABLE record_search_documents (
+    record_id bigint PRIMARY KEY REFERENCES records(id) ON DELETE CASCADE,
+    search_vector tsvector NOT NULL,
+    text_search_config regconfig NOT NULL,
+    indexed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    index_config_version text NOT NULL,
+    CONSTRAINT record_search_documents_config_version_not_blank
+        CHECK (btrim(index_config_version) <> '')
+);
+
+CREATE INDEX record_search_documents_vector_gin
+    ON record_search_documents USING gin(search_vector);
+
+CREATE TABLE aggregation_search_documents (
+    aggregation_id bigint PRIMARY KEY REFERENCES aggregations(id) ON DELETE CASCADE,
+    search_vector tsvector NOT NULL,
+    text_search_config regconfig NOT NULL,
+    indexed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    index_config_version text NOT NULL,
+    CONSTRAINT aggregation_search_documents_config_version_not_blank
+        CHECK (btrim(index_config_version) <> '')
+);
+
+CREATE INDEX aggregation_search_documents_vector_gin
+    ON aggregation_search_documents USING gin(search_vector);
+
+CREATE FUNCTION refresh_record_metadata_search_document()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO record_search_documents(
+        record_id,search_vector,text_search_config,indexed_at,index_config_version
+    ) VALUES (
+        NEW.id,
+        setweight(to_tsvector('pg_catalog.simple',coalesce(NEW.record_number,'')),'A') ||
+        setweight(to_tsvector('pg_catalog.simple',coalesce(NEW.title,'')),'A') ||
+        setweight(to_tsvector('pg_catalog.simple',coalesce(NEW.description,'')),'B'),
+        'pg_catalog.simple'::regconfig,
+        CURRENT_TIMESTAMP,
+        'fts-metadata-v1'
+    )
+    ON CONFLICT(record_id) DO UPDATE SET
+        search_vector=EXCLUDED.search_vector,
+        text_search_config=EXCLUDED.text_search_config,
+        indexed_at=EXCLUDED.indexed_at,
+        index_config_version=EXCLUDED.index_config_version;
+    RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION refresh_aggregation_metadata_search_document()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO aggregation_search_documents(
+        aggregation_id,search_vector,text_search_config,indexed_at,index_config_version
+    ) VALUES (
+        NEW.id,
+        setweight(to_tsvector('pg_catalog.simple',coalesce(NEW.aggregation_number,'')),'A') ||
+        setweight(to_tsvector('pg_catalog.simple',coalesce(NEW.title,'')),'A') ||
+        setweight(to_tsvector('pg_catalog.simple',coalesce(NEW.description,'')),'B'),
+        'pg_catalog.simple'::regconfig,
+        CURRENT_TIMESTAMP,
+        'fts-metadata-v1'
+    )
+    ON CONFLICT(aggregation_id) DO UPDATE SET
+        search_vector=EXCLUDED.search_vector,
+        text_search_config=EXCLUDED.text_search_config,
+        indexed_at=EXCLUDED.indexed_at,
+        index_config_version=EXCLUDED.index_config_version;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER records_refresh_metadata_search
+AFTER INSERT OR UPDATE OF record_number,title,description ON records
+FOR EACH ROW EXECUTE FUNCTION refresh_record_metadata_search_document();
+
+CREATE TRIGGER aggregations_refresh_metadata_search
+AFTER INSERT OR UPDATE OF aggregation_number,title,description ON aggregations
+FOR EACH ROW EXECUTE FUNCTION refresh_aggregation_metadata_search_document();
+
+INSERT INTO record_search_documents(
+    record_id,search_vector,text_search_config,indexed_at,index_config_version
+)
+SELECT record.id,
+       setweight(to_tsvector('pg_catalog.simple',coalesce(record.record_number,'')),'A') ||
+       setweight(to_tsvector('pg_catalog.simple',coalesce(record.title,'')),'A') ||
+       setweight(to_tsvector('pg_catalog.simple',coalesce(record.description,'')),'B'),
+       'pg_catalog.simple'::regconfig,CURRENT_TIMESTAMP,'fts-metadata-v1'
+FROM records record;
+
+INSERT INTO aggregation_search_documents(
+    aggregation_id,search_vector,text_search_config,indexed_at,index_config_version
+)
+SELECT aggregation.id,
+       setweight(to_tsvector('pg_catalog.simple',coalesce(aggregation.aggregation_number,'')),'A') ||
+       setweight(to_tsvector('pg_catalog.simple',coalesce(aggregation.title,'')),'A') ||
+       setweight(to_tsvector('pg_catalog.simple',coalesce(aggregation.description,'')),'B'),
+       'pg_catalog.simple'::regconfig,CURRENT_TIMESTAMP,'fts-metadata-v1'
+FROM aggregations aggregation;
+
+CREATE VIEW authorized_record_search_documents AS
+SELECT document.record_id,document.search_vector,document.text_search_config,
+       document.indexed_at,document.index_config_version
+FROM record_search_documents document
+WHERE current_user_can_view_record(document.record_id);
+
+CREATE VIEW authorized_aggregation_search_documents AS
+SELECT document.aggregation_id,document.search_vector,document.text_search_config,
+       document.indexed_at,document.index_config_version
+FROM aggregation_search_documents document
+WHERE current_user_can_view_aggregation(document.aggregation_id);
+
+ALTER TABLE privileges
+    ADD COLUMN account_type_restriction text;
+ALTER TABLE privileges
+    ADD CONSTRAINT privileges_account_type_restriction_valid
+    CHECK (account_type_restriction IS NULL OR account_type_restriction IN ('person','service'));
+
+UPDATE privileges
+SET name='Administer Text Indexers',
+    description='Create and manage non-interactive text-indexer identities and their API credentials.',
+    account_type_restriction='person'
+WHERE code='identity.text_indexers.administer';
+
+INSERT INTO privileges(code,name,description,category,is_reserved,account_type_restriction)
+VALUES
+    ('content.index.execute','Execute Content Indexing',
+     'Use the lease-scoped internal text-indexing worker contract.','administration',false,'service'),
+    ('search.query.debug','Debug Search Query',
+     'Request sanitized API-level diagnostics for searches performed by the current user.','administration',false,'person')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO profile_privileges(profile_id,privilege_id)
+SELECT profile.id,privilege.id
+FROM profiles profile CROSS JOIN privileges privilege
+WHERE profile.code='ALL_PRIVS'
+  AND privilege.code IN ('content.index.execute','search.query.debug')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO profile_privileges(profile_id,privilege_id)
+SELECT profile.id,privilege.id
+FROM profiles profile CROSS JOIN privileges privilege
+WHERE profile.code IN ('SYS_ADMIN','INFO_GOV_MGR','INFO_GOV_OFFICER')
+  AND privilege.code='search.query.debug'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO profiles(code,name,description,is_system)
+VALUES ('TEXT_INDEXER_SERVICE','Text Indexer Service',
+        'Protected non-interactive profile for the internal text-indexing worker contract.',true);
+
+INSERT INTO profile_privileges(profile_id,privilege_id)
+SELECT profile.id,privilege.id
+FROM profiles profile CROSS JOIN privileges privilege
+WHERE profile.code='TEXT_INDEXER_SERVICE' AND privilege.code='content.index.execute';
+
+ALTER TABLE roles ADD COLUMN is_system boolean NOT NULL DEFAULT false;
+ALTER TABLE roles ADD COLUMN account_type_restriction text;
+ALTER TABLE roles ALTER COLUMN org_unit_id DROP NOT NULL;
+ALTER TABLE roles ADD CONSTRAINT roles_account_type_restriction_valid
+    CHECK (account_type_restriction IS NULL OR account_type_restriction IN ('person','service'));
+ALTER TABLE roles ADD CONSTRAINT roles_system_service_shape
+    CHECK (
+        (is_system AND account_type_restriction='service' AND org_unit_id IS NULL
+         AND supervisor_role_id IS NULL AND NOT is_information_governance)
+        OR
+        (NOT is_system AND account_type_restriction IS NULL AND org_unit_id IS NOT NULL)
+    );
+
+CREATE OR REPLACE FUNCTION role_effectively_active(p_role_id bigint)
+RETURNS boolean LANGUAGE sql STABLE AS $$
+    SELECT COALESCE(
+        role.date_deactivated IS NULL
+        AND CASE
+            WHEN role.is_system THEN
+                role.account_type_restriction='service' AND role.org_unit_id IS NULL
+            ELSE org_unit_effectively_active(role.org_unit_id)
+        END,
+        false
+    )
+    FROM roles role WHERE role.id=p_role_id;
+$$;
+
+CREATE OR REPLACE FUNCTION validate_active_role_assignment()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    selected_account_type text;
+    selected_role_restriction text;
+    selected_role_is_system boolean;
+BEGIN
+    SELECT account_type INTO selected_account_type
+    FROM users
+    WHERE id=NEW.user_id AND date_deactivated IS NULL AND date_suspended IS NULL;
+    IF selected_account_type IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='role assignments require an active user';
+    END IF;
+    SELECT account_type_restriction,is_system
+      INTO selected_role_restriction,selected_role_is_system
+      FROM roles WHERE id=NEW.role_id;
+    IF NOT role_effectively_active(NEW.role_id) THEN
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='role assignments require an effectively active role and organization hierarchy';
+    END IF;
+    IF selected_role_restriction IS NOT NULL
+       AND selected_role_restriction<>selected_account_type THEN
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='role account type restriction does not match user account type';
+    END IF;
+    IF selected_role_is_system AND EXISTS (
+        SELECT 1 FROM user_role_assignments existing
+        WHERE existing.user_id=NEW.user_id AND existing.id<>COALESCE(NEW.id,0)
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='service system role must be the account only role assignment';
+    END IF;
+    IF NOT selected_role_is_system AND EXISTS (
+        SELECT 1 FROM user_role_assignments existing
+        JOIN roles existing_role ON existing_role.id=existing.role_id
+        WHERE existing.user_id=NEW.user_id AND existing.id<>COALESCE(NEW.id,0)
+          AND existing_role.is_system AND existing_role.account_type_restriction='service'
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='service system role must be the account only role assignment';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+INSERT INTO roles(
+    org_unit_id,supervisor_role_id,code,name,description,security_level_id,
+    profile_id,is_information_governance,is_system,account_type_restriction
+)
+SELECT NULL,NULL,'text-indexer-service','Text Indexer Service',
+       'Protected non-organizational role for text-indexer service accounts.',
+       level.id,profile.id,false,true,'service'
+FROM security_levels level CROSS JOIN profiles profile
+WHERE level.level_number=(SELECT min(level_number) FROM security_levels)
+  AND profile.code='TEXT_INDEXER_SERVICE';
+
+CREATE FUNCTION protect_text_indexer_profile_membership()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    target_profile_id bigint;
+    target_privilege_id bigint;
+    target_profile_code text;
+    target_privilege_code text;
+BEGIN
+    IF TG_OP='DELETE' THEN
+        target_profile_id:=OLD.profile_id;
+        target_privilege_id:=OLD.privilege_id;
+    ELSE
+        target_profile_id:=NEW.profile_id;
+        target_privilege_id:=NEW.privilege_id;
+    END IF;
+    SELECT code INTO target_profile_code FROM profiles
+    WHERE id=target_profile_id;
+    SELECT code INTO target_privilege_code FROM privileges
+    WHERE id=target_privilege_id;
+    IF target_profile_code='TEXT_INDEXER_SERVICE' THEN
+        IF TG_OP='DELETE' OR target_privilege_code<>'content.index.execute' THEN
+            RAISE EXCEPTION USING ERRCODE='P0001',
+                MESSAGE='TEXT_INDEXER_SERVICE profile is protected and contains exactly content.index.execute';
+        END IF;
+    END IF;
+    IF TG_OP='DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER profile_privileges_protect_text_indexer
+BEFORE INSERT OR UPDATE OR DELETE ON profile_privileges
+FOR EACH ROW EXECUTE FUNCTION protect_text_indexer_profile_membership();
+
+CREATE FUNCTION protect_text_indexer_profile()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.code='TEXT_INDEXER_SERVICE' THEN
+        RAISE EXCEPTION USING ERRCODE='P0001',
+            MESSAGE='TEXT_INDEXER_SERVICE profile is protected';
+    END IF;
+    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER profiles_protect_text_indexer
+BEFORE UPDATE OR DELETE ON profiles
+FOR EACH ROW EXECUTE FUNCTION protect_text_indexer_profile();
+
+CREATE FUNCTION protect_text_indexer_role()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.code='text-indexer-service' AND OLD.is_system THEN
+        RAISE EXCEPTION USING ERRCODE='P0001',
+            MESSAGE='text-indexer-service role is protected';
+    END IF;
+    IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER roles_protect_text_indexer
+BEFORE UPDATE OR DELETE ON roles
+FOR EACH ROW EXECUTE FUNCTION protect_text_indexer_role();
+
+CREATE TABLE service_account_credentials (
+    id bigserial PRIMARY KEY,
+    service_user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name text NOT NULL,
+    credential_identifier text NOT NULL,
+    secret_hash text NOT NULL,
+    status text NOT NULL DEFAULT 'active',
+    date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at timestamptz NOT NULL,
+    last_used_at timestamptz,
+    last_worker_id text,
+    date_revoked timestamptz,
+    created_by_user_id bigint REFERENCES users(id) ON DELETE SET NULL,
+    revoked_by_user_id bigint REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT service_account_credentials_name_not_blank CHECK (btrim(name)<>''),
+    CONSTRAINT service_account_credentials_identifier_format
+        CHECK (credential_identifier ~ '^[0-9A-HJKMNP-TV-Z]{26}$'),
+    CONSTRAINT service_account_credentials_identifier_unique UNIQUE(credential_identifier),
+    CONSTRAINT service_account_credentials_hash_format CHECK (secret_hash ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT service_account_credentials_status_valid CHECK (status IN ('active','revoked')),
+    CONSTRAINT service_account_credentials_expiry_valid CHECK (expires_at>date_created),
+    CONSTRAINT service_account_credentials_last_worker_not_blank
+        CHECK (last_worker_id IS NULL OR btrim(last_worker_id)<>''),
+    CONSTRAINT service_account_credentials_revocation_state CHECK (
+        (status='active' AND date_revoked IS NULL AND revoked_by_user_id IS NULL)
+        OR (status='revoked' AND date_revoked IS NOT NULL)
+    )
+);
+
+CREATE INDEX service_account_credentials_service_user_idx
+    ON service_account_credentials(service_user_id,date_created DESC,id DESC);
+CREATE INDEX service_account_credentials_active_expiry_idx
+    ON service_account_credentials(expires_at,id) WHERE status='active';
+CREATE INDEX service_account_credentials_history_cleanup_idx
+    ON service_account_credentials((coalesce(date_revoked,expires_at)),id);
+
+CREATE FUNCTION validate_service_account_credential()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM users account
+        WHERE account.id=NEW.service_user_id AND account.account_type='service'
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='API key target must be a service account';
+    END IF;
+    IF NEW.created_by_user_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM users actor
+        WHERE actor.id=NEW.created_by_user_id AND actor.account_type='person'
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='API key creator must be a person account';
+    END IF;
+    IF NEW.revoked_by_user_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM users actor
+        WHERE actor.id=NEW.revoked_by_user_id AND actor.account_type='person'
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='API key revoker must be a person account';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER service_account_credentials_validate
+BEFORE INSERT OR UPDATE ON service_account_credentials
+FOR EACH ROW EXECUTE FUNCTION validate_service_account_credential();
+
+CREATE FUNCTION reject_service_account_password()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM users account WHERE account.id=NEW.user_id AND account.account_type='service') THEN
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='service accounts cannot have interactive passwords';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER user_credentials_reject_service_account
+BEFORE INSERT OR UPDATE OF user_id ON user_credentials
+FOR EACH ROW EXECUTE FUNCTION reject_service_account_password();
+
+-- Full-text content search Phase 3 begins.
+INSERT INTO privileges(code,name,description,category,is_reserved,account_type_restriction)
+VALUES ('record.component.reindex','Reindex Record Components',
+        'Request forced indexing of an authorized component or all eligible components of an authorized record.',
+        'component',false,'person')
+ON CONFLICT DO NOTHING;
+UPDATE privileges SET name='Reindex Record Components',
+       description='Request forced indexing of an authorized component or all eligible components of an authorized record.',
+       category='component',account_type_restriction='person'
+ WHERE code='record.component.reindex';
+
+INSERT INTO profile_privileges(profile_id,privilege_id)
+SELECT profile.id,privilege.id FROM profiles profile CROSS JOIN privileges privilege
+WHERE profile.code IN ('ALL_PRIVS','SYS_ADMIN','INFO_GOV_MGR','INFO_GOV_OFFICER')
+  AND privilege.code='record.component.reindex'
+ON CONFLICT DO NOTHING;
+
+CREATE TABLE content_indexing_batches (
+    id uuid PRIMARY KEY,
+    record_id bigint REFERENCES records(id) ON DELETE SET NULL,
+    requested_by_user_id bigint REFERENCES users(id) ON DELETE SET NULL,
+    date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    total_components integer NOT NULL CHECK(total_components>=0),
+    queued_count integer NOT NULL CHECK(queued_count>=0),
+    already_in_progress_count integer NOT NULL CHECK(already_in_progress_count>=0),
+    unavailable_count integer NOT NULL CHECK(unavailable_count>=0),
+    CONSTRAINT content_indexing_batch_counts_valid CHECK (
+        queued_count+already_in_progress_count+unavailable_count=total_components
+    )
+);
+
+CREATE TABLE content_indexing_batch_items (
+    batch_id uuid NOT NULL REFERENCES content_indexing_batches(id) ON DELETE CASCADE,
+    digital_component_id bigint REFERENCES digital_components(id) ON DELETE SET NULL,
+    job_id bigint REFERENCES content_indexing_jobs(id) ON DELETE SET NULL,
+    disposition text NOT NULL CHECK(disposition IN ('queued','already_in_progress','unsupported_or_no_content')),
+    component_identifier bigint NOT NULL,
+    PRIMARY KEY(batch_id,component_identifier)
+);
+CREATE INDEX content_indexing_batch_items_job_idx ON content_indexing_batch_items(job_id) WHERE job_id IS NOT NULL;
+-- Full-text content search Phase 3 ends.
+
 COMMIT;

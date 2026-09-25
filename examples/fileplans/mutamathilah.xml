@@ -170,30 +170,30 @@
 					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
 				</Classification>
 			</Classification>
-		</Classification>
-		<Classification code="1340" title_ar="التميز المؤسسي" title_en="Institutional Excellence">
-			<Classification code="1341" title_ar="خطط وبرامج التميز المؤسسي" title_en="Institutional Excellence Plans and Programs">
-				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			<Classification code="1340" title_ar="التميز المؤسسي" title_en="Institutional Excellence">
+				<Classification code="1341" title_ar="خطط وبرامج التميز المؤسسي" title_en="Institutional Excellence Plans and Programs">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1342" title_ar="إعداد معايير الإدارة المتميزة" title_en="Development of Management Excellence Criteria">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1343" title_ar="تقييم معايير الإدارة المتميزة" title_en="Evaluation of Management Excellence Criteria">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
 			</Classification>
-			<Classification code="1342" title_ar="إعداد معايير الإدارة المتميزة" title_en="Development of Management Excellence Criteria">
-				<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
-			</Classification>
-			<Classification code="1343" title_ar="تقييم معايير الإدارة المتميزة" title_en="Evaluation of Management Excellence Criteria">
-				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
-			</Classification>
-		</Classification>
-		<Classification code="1350" title_ar="الجودة" title_en="Quality">
-			<Classification code="1351" title_ar="إعداد وتطوير أدلة إجراءات الأعمال الإدارية للجهة" title_en="Preparation and Development of the Entity's Administrative Procedure Manuals">
-				<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
-			</Classification>
-			<Classification code="1352" title_ar="متابعة تطبيق أنظمة الجودة" title_en="Monitoring Implementation of Quality Systems">
-				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
-			</Classification>
-			<Classification code="1353" title_ar="قياس مؤشرات أداء خدمات الجهة" title_en="Measurement of Performance Indicators for the Entity's Services">
-				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
-			</Classification>
-			<Classification code="1354" title_ar="إدارة التغيير" title_en="Change Management">
-				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			<Classification code="1350" title_ar="الجودة" title_en="Quality">
+				<Classification code="1351" title_ar="إعداد وتطوير أدلة إجراءات الأعمال الإدارية للجهة" title_en="Preparation and Development of the Entity's Administrative Procedure Manuals">
+					<Retention current="1" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1352" title_ar="متابعة تطبيق أنظمة الجودة" title_en="Monitoring Implementation of Quality Systems">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1353" title_ar="قياس مؤشرات أداء خدمات الجهة" title_en="Measurement of Performance Indicators for the Entity's Services">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1354" title_ar="إدارة التغيير" title_en="Change Management">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
 			</Classification>
 		</Classification>
 		<Classification code="1400" title_ar="علاقات عامة وإعلام وتعاون دولي" title_en="Public Relations, Media and International Cooperation">
@@ -328,35 +328,35 @@
 			<Classification code="1540" title_ar="الدعم الفني لمستخدمي أجهزة وشبكات تقنية المعلومات" title_en="Technical Support for Users of IT Devices and Networks">
 				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
 			</Classification>
-		</Classification>
-		<Classification code="1550" title_ar="الحفظ الإلكتروني" title_en="Electronic Preservation">
-			<Classification code="1551" title_ar="حفظ البيانات الإلكترونية" title_en="Preservation of Electronic Data">
-				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			<Classification code="1550" title_ar="الحفظ الإلكتروني" title_en="Electronic Preservation">
+				<Classification code="1551" title_ar="حفظ البيانات الإلكترونية" title_en="Preservation of Electronic Data">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1552" title_ar="حفظ نسخ احتياطية من البرامج والأنظمة" title_en="Retention of Backup Copies of Software and Systems">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
 			</Classification>
-			<Classification code="1552" title_ar="حفظ نسخ احتياطية من البرامج والأنظمة" title_en="Retention of Backup Copies of Software and Systems">
-				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+			<Classification code="1560" title_ar="أمن المعلومات" title_en="Information Security">
+				<Classification code="1561" title_ar="متابعة تنفيذ الضوابط والمعايير ومواصفات الأمن والحماية" title_en="Monitoring Implementation of Security and Protection Controls, Standards and Specifications">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1562" title_ar="مراقبة سلامة حركة البيانات" title_en="Monitoring Data Traffic Integrity">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1563" title_ar="حظر وصول المستخدمين إلى المواقع وتحديد الصلاحيات" title_en="Blocking User Access to Websites and Defining Access Permissions">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
 			</Classification>
-		</Classification>
-		<Classification code="1560" title_ar="أمن المعلومات" title_en="Information Security">
-			<Classification code="1561" title_ar="متابعة تنفيذ الضوابط والمعايير ومواصفات الأمن والحماية" title_en="Monitoring Implementation of Security and Protection Controls, Standards and Specifications">
-				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
-			</Classification>
-			<Classification code="1562" title_ar="مراقبة سلامة حركة البيانات" title_en="Monitoring Data Traffic Integrity">
-				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
-			</Classification>
-			<Classification code="1563" title_ar="حظر وصول المستخدمين إلى المواقع وتحديد الصلاحيات" title_en="Blocking User Access to Websites and Defining Access Permissions">
-				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
-			</Classification>
-		</Classification>
-		<Classification code="1570" title_ar="الحوادث الأمنية وإدارة المخاطر" title_en="Security Incidents and Risk Management">
-			<Classification code="1571" title_ar="فحص وتحليل الثغرات الأمنية" title_en="Examination and Analysis of Security Vulnerabilities">
-				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
-			</Classification>
-			<Classification code="1572" title_ar="اختبار الاختراقات الأمنية والتحقيق فيها" title_en="Security Penetration Testing and Investigation">
-				<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
-			</Classification>
-			<Classification code="1573" title_ar="تقييم وإدارة مخاطر تقنية المعلومات" title_en="Assessment and Management of IT Risks">
-				<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+			<Classification code="1570" title_ar="الحوادث الأمنية وإدارة المخاطر" title_en="Security Incidents and Risk Management">
+				<Classification code="1571" title_ar="فحص وتحليل الثغرات الأمنية" title_en="Examination and Analysis of Security Vulnerabilities">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1572" title_ar="اختبار الاختراقات الأمنية والتحقيق فيها" title_en="Security Penetration Testing and Investigation">
+					<Retention current="2" intermediate="10" disposition="Permanent Preservation"/>
+				</Classification>
+				<Classification code="1573" title_ar="تقييم وإدارة مخاطر تقنية المعلومات" title_en="Assessment and Management of IT Risks">
+					<Retention current="2" intermediate="5" disposition="Permanent Preservation"/>
+				</Classification>
 			</Classification>
 		</Classification>
 		<Classification code="1600" title_ar="البريد والوثائق" title_en="Correspondence and Records">

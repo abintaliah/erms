@@ -166,6 +166,69 @@ class ErmsApiClient:
     async def issue_temporary_password(self, user_id: int) -> dict[str, Any]:
         return await self.request("POST", f"/api/v1/auth/users/{user_id}/temporary-password")
 
+    async def service_credentials(self, user_id: int) -> list[dict[str, Any]]:
+        return await self.request("GET", f"/api/v1/users/{user_id}/api-credentials")
+
+    async def create_service_credential(self, user_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/users/{user_id}/api-credentials", json=payload)
+
+    async def rotate_service_credential(self, user_id: int, credential_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/users/{user_id}/api-credentials/{credential_id}/rotate", json=payload)
+
+    async def revoke_service_credential(self, user_id: int, credential_id: int) -> None:
+        await self.request("POST", f"/api/v1/users/{user_id}/api-credentials/{credential_id}/revoke")
+
+    async def text_indexers(self) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/text-indexers")
+
+    async def text_indexers_health(self) -> dict[str, Any]:
+        return await self.request("GET", "/api/v1/text-indexers/health")
+
+    async def queue_text_indexers_backfill(self, batch_size: int) -> dict[str, Any]:
+        return await self.request(
+            "POST", "/api/v1/text-indexers/backfill", json={"batch_size": batch_size},
+        )
+
+    async def text_indexer(self, user_id: int) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/text-indexers/{user_id}")
+
+    async def text_indexer_credentials(
+        self, user_id: int, *, history: str = "all", limit: int = 5, offset: int = 0,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "GET", f"/api/v1/text-indexers/{user_id}/credentials",
+            params={"history": history, "limit": limit, "offset": offset},
+        )
+
+    async def create_text_indexer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", "/api/v1/text-indexers", json=payload)
+
+    async def create_text_indexer_credential(self, user_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/text-indexers/{user_id}/credentials", json=payload)
+
+    async def rotate_text_indexer_credential(
+        self, user_id: int, credential_id: int, payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/text-indexers/{user_id}/credentials/{credential_id}/rotate",
+            json=payload,
+        )
+
+    async def revoke_text_indexer_credential(self, user_id: int, credential_id: int) -> None:
+        await self.request(
+            "POST", f"/api/v1/text-indexers/{user_id}/credentials/{credential_id}/revoke",
+        )
+
+    async def set_text_indexer_status(
+        self, user_id: int, version: int, action: str,
+    ) -> dict[str, Any]:
+        if action not in {"activate", "suspend", "unsuspend"}:
+            raise ValueError("unsupported text-indexer lifecycle action")
+        return await self.request(
+            "POST", f"/api/v1/text-indexers/{user_id}/{action}",
+            headers={"If-Match": str(version)},
+        )
+
     async def list(self, resource: str, *, limit: int = 500, **filters: Any) -> list[dict[str, Any]]:
         return await self.request(
             "GET", f"/api/v1/{resource}", params={"limit": limit, **filters}
@@ -447,6 +510,9 @@ class ErmsApiClient:
     async def search_request(self, resource: str, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.request("POST", f"/api/v1/{resource}/search", json=payload)
 
+    async def full_text_search(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", "/api/v1/full-text-search", json=payload)
+
     async def count(self, resource: str) -> int:
         result = await self.search_request(resource, {"limit": 1, "offset": 0})
         return int(result["total"])
@@ -712,6 +778,18 @@ class ErmsApiClient:
 
     async def view_component_pdf(self, component_id: int) -> bytes:
         return await self.request("GET", f"/api/v1/digital-components/{component_id}/rendition")
+
+    async def reindex_component(self, component_id: int) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/digital-components/{component_id}/reindex")
+
+    async def reindex_record(self, record_id: int) -> dict[str, Any]:
+        return await self.request("POST", f"/api/v1/records/{record_id}/reindex")
+
+    async def indexing_status(self, status_url: str) -> dict[str, Any]:
+        return await self.request("GET", status_url)
+
+    async def component_indexing_status(self, component_id: int) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/digital-components/{component_id}/indexing-status")
 
     async def create_record_draft(self) -> dict[str, Any]:
         return await self.request("POST", "/api/v1/record-drafts", json={})

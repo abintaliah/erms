@@ -537,6 +537,7 @@ def require_global_privilege(privilege: str) -> Callable[[Request], Authorizatio
 
 
 require_identity_users_admin = require_global_privilege("identity.users.administer")
+require_identity_text_indexers_admin = require_global_privilege("identity.text_indexers.administer")
 require_identity_sessions_admin = require_global_privilege("identity.sessions.administer")
 require_organization_browse = require_global_privilege("organization.browse")
 require_organization_admin = require_global_privilege("organization.administer")

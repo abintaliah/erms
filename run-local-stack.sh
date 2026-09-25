@@ -26,19 +26,38 @@ fi
 readonly STACK_DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:5433/erms}"
 readonly STACK_DB_CONTAINER="${ERMS_LOCAL_DB_CONTAINER:-erms-postgres-local}"
 readonly STACK_DB_VOLUME="${ERMS_LOCAL_DB_VOLUME:-erms-postgres-local-data}"
-readonly STACK_DB_IMAGE="${ERMS_LOCAL_DB_IMAGE:-postgres:17-alpine}"
+readonly STACK_DB_IMAGE="${ERMS_LOCAL_DB_IMAGE:-postgres:18-alpine}"
 readonly STACK_DB_PORT="${ERMS_LOCAL_DB_PORT:-5433}"
 readonly STACK_API_URL="${WEBUI_API_URL:-http://127.0.0.1:8000}"
 readonly STACK_UI_URL="${ERMS_LOCAL_UI_URL:-http://127.0.0.1:8080}"
+readonly STACK_INDEXER_ENABLED="${TEXT_INDEXER_ENABLED:-false}"
+readonly STACK_INDEXER_SECRET_FILE="${TEXT_INDEXER_API_KEY_FILE:-${PROJECT_DIR}/.secrets/text-indexer-api-key}"
+# A worker ID identifies one live process incarnation. Reusing the fixed local
+# name during the API's ten-minute active-registration window is correctly
+# rejected as split brain. Give each launcher invocation its own default while
+# preserving an explicitly configured deployment ID.
+readonly STACK_INDEXER_WORKER_ID="${TEXT_INDEXER_WORKER_ID:-local-stack-indexer-$$}"
+readonly STACK_INDEXER_PROCESS_COUNT="${TEXT_INDEXER_PROCESS_COUNT:-2}"
+readonly STACK_INDEXING_MAINTENANCE_ENABLED="${CONTENT_INDEXING_MAINTENANCE_ENABLED:-true}"
 
 API_PID=""
 UI_PID=""
+INDEXER_PID=""
+INDEXING_MAINTENANCE_PID=""
 MANAGED_DATABASE=false
 
 cleanup() {
     local exit_code=$?
     trap - EXIT INT TERM
 
+    if [[ -n "${INDEXING_MAINTENANCE_PID}" ]] && kill -0 "${INDEXING_MAINTENANCE_PID}" 2>/dev/null; then
+        kill "${INDEXING_MAINTENANCE_PID}" 2>/dev/null || true
+        wait "${INDEXING_MAINTENANCE_PID}" 2>/dev/null || true
+    fi
+    if [[ -n "${INDEXER_PID}" ]] && kill -0 "${INDEXER_PID}" 2>/dev/null; then
+        kill "${INDEXER_PID}" 2>/dev/null || true
+        wait "${INDEXER_PID}" 2>/dev/null || true
+    fi
     if [[ -n "${UI_PID}" ]] && kill -0 "${UI_PID}" 2>/dev/null; then
         kill "${UI_PID}" 2>/dev/null || true
         wait "${UI_PID}" 2>/dev/null || true
@@ -55,7 +74,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-for command_name in docker curl psql; do
+for command_name in curl psql; do
     if ! command -v "${command_name}" >/dev/null 2>&1; then
         echo "${command_name} is required to run the local stack." >&2
         exit 1
@@ -82,6 +101,33 @@ wait_for_database() {
     return 1
 }
 
+wait_for_indexer() {
+    local attempt
+    local registered_count
+    local worker_prefix
+    local sql_worker_prefix
+    worker_prefix="${STACK_INDEXER_WORKER_ID}-${INDEXER_PID}-"
+    sql_worker_prefix="${worker_prefix//\'/\'\'}"
+    for attempt in {1..60}; do
+        if [[ -n "${INDEXER_PID}" ]] && ! kill -0 "${INDEXER_PID}" 2>/dev/null; then
+            wait "${INDEXER_PID}" || true
+            echo "The managed text-indexer stopped before becoming ready." >&2
+            exit 1
+        fi
+        registered_count="$(psql "${STACK_DATABASE_URL}" -v ON_ERROR_STOP=1 -At \
+            -c "SELECT count(*) FROM text_indexing_workers
+                 WHERE active_until>=CURRENT_TIMESTAMP
+                   AND worker_id LIKE '${sql_worker_prefix}%'" 2>/dev/null || true)"
+        if [[ "${registered_count}" == "${STACK_INDEXER_PROCESS_COUNT}" ]]; then
+            echo "Text indexer is ready (${STACK_INDEXER_PROCESS_COUNT} worker processes; base ID ${STACK_INDEXER_WORKER_ID})."
+            return
+        fi
+        sleep 1
+    done
+    echo "Text indexer did not become ready within 60 seconds." >&2
+    exit 1
+}
+
 wait_for_http() {
     local name="$1"
     local url="$2"
@@ -106,6 +152,10 @@ start_database() {
     if [[ "${STACK_DATABASE_URL}" != "${DEFAULT_LOCAL_URL}" ]]; then
         echo "DATABASE_URL is not reachable: ${STACK_DATABASE_URL}" >&2
         echo "Automatic PostgreSQL startup is limited to the default local-stack URL." >&2
+        exit 1
+    fi
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "Docker is required only when the configured local PostgreSQL database is unavailable." >&2
         exit 1
     fi
     if ! docker info >/dev/null 2>&1; then
@@ -137,6 +187,15 @@ export WEBUI_API_URL="${STACK_API_URL}"
 
 start_database
 
+if [[ "${STACK_INDEXING_MAINTENANCE_ENABLED}" == true ]]; then
+    echo "Starting API-owned text-indexing maintenance worker."
+    PYTHONPATH="${PROJECT_DIR}" "${PROJECT_DIR}/backend/services/api/.venv/bin/python" \
+        -m backend.services.api.text_indexing_maintenance cleanup --watch &
+    INDEXING_MAINTENANCE_PID=$!
+else
+    echo "Text-indexing maintenance is explicitly disabled (CONTENT_INDEXING_MAINTENANCE_ENABLED=${STACK_INDEXING_MAINTENANCE_ENABLED})."
+fi
+
 if http_ready "${STACK_API_URL}/health"; then
     echo "Using API already running at ${STACK_API_URL}."
 else
@@ -144,6 +203,28 @@ else
     "${PROJECT_DIR}/run-api.sh" &
     API_PID=$!
     wait_for_http "API" "${STACK_API_URL}/health"
+fi
+
+if [[ "${STACK_INDEXER_ENABLED}" == true ]]; then
+    export TEXT_INDEXER_API_URL="${STACK_API_URL}"
+    export TEXT_INDEXER_API_KEY
+    export TEXT_INDEXER_WORKER_ID="${STACK_INDEXER_WORKER_ID}"
+    export TEXT_INDEXER_PROCESS_COUNT="${STACK_INDEXER_PROCESS_COUNT}"
+    if [[ -n "${TEXT_INDEXER_API_KEY:-}" ]]; then
+        echo "Using the explicitly supplied text-indexer API key."
+    else
+        echo "Provisioning loopback-only text-indexer identity."
+        PYTHONPATH="${PROJECT_DIR}" "${PROJECT_DIR}/backend/services/api/.venv/bin/python" \
+            -m backend.services.api.provision_local_text_indexer \
+            --api-url "${STACK_API_URL}" --secret-file "${STACK_INDEXER_SECRET_FILE}"
+        TEXT_INDEXER_API_KEY="$(tr -d '\r\n' < "${STACK_INDEXER_SECRET_FILE}")"
+    fi
+    echo "Starting managed text-indexer."
+    "${PROJECT_DIR}/run-text-indexer.sh" &
+    INDEXER_PID=$!
+    wait_for_indexer
+else
+    echo "Text indexer is explicitly disabled (TEXT_INDEXER_ENABLED=${STACK_INDEXER_ENABLED})."
 fi
 
 if http_ready "${STACK_UI_URL}"; then
@@ -160,6 +241,9 @@ echo "ERMS local stack is ready:"
 echo "  Web UI:  ${STACK_UI_URL}"
 echo "  API:     ${STACK_API_URL}"
 echo "  API docs:${STACK_API_URL}/docs"
+if [[ -n "${INDEXING_MAINTENANCE_PID}" ]]; then
+    echo "  Cleanup: API-owned indexing/credential maintenance is running"
+fi
 echo "Press Ctrl-C to stop services started by this script."
 
 while true; do
@@ -171,6 +255,16 @@ while true; do
     if [[ -n "${UI_PID}" ]] && ! kill -0 "${UI_PID}" 2>/dev/null; then
         wait "${UI_PID}" || true
         echo "The web UI process stopped unexpectedly." >&2
+        exit 1
+    fi
+    if [[ -n "${INDEXER_PID}" ]] && ! kill -0 "${INDEXER_PID}" 2>/dev/null; then
+        wait "${INDEXER_PID}" || true
+        echo "The managed text-indexer stopped unexpectedly." >&2
+        exit 1
+    fi
+    if [[ -n "${INDEXING_MAINTENANCE_PID}" ]] && ! kill -0 "${INDEXING_MAINTENANCE_PID}" 2>/dev/null; then
+        wait "${INDEXING_MAINTENANCE_PID}" || true
+        echo "The API-owned text-indexing maintenance worker stopped unexpectedly." >&2
         exit 1
     fi
     sleep 1

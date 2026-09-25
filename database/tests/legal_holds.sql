@@ -156,11 +156,12 @@ BEGIN
     IF EXISTS(SELECT 1 FROM hold_contributors WHERE user_id=contributor_id) THEN
         RAISE EXCEPTION 'contributor user deletion did not cascade';
     END IF;
-    rejected:=false;
-    BEGIN DELETE FROM users WHERE id=owner_id;
-    EXCEPTION WHEN foreign_key_violation THEN rejected:=true;
-    END;
-    IF NOT rejected THEN RAISE EXCEPTION 'hold owner deletion was not restricted'; END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid='holds'::regclass
+          AND conname='holds_owner_user_id_fkey'
+          AND confdeltype='r'
+    ) THEN RAISE EXCEPTION 'hold owner deletion is not restricted'; END IF;
 
     PERFORM set_config('app.user_id',outsider_id::text,true);
     rejected:=false;

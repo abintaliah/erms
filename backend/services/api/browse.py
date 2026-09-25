@@ -67,7 +67,8 @@ ROLE_NODE_SQL = """
     SELECT role.id, role.org_unit_id, role.supervisor_role_id, role.code,
            role.name, role.description, role.status, role.date_created,
            role.date_deactivated, role.version, role.security_level_id,
-           role.profile_id, role.is_information_governance,
+           role.profile_id, role.is_information_governance, role.is_system,
+           role.account_type_restriction,
            profile.code AS profile_code, profile.name AS profile_name,
            security.code AS security_level_code,
            security.name AS security_level_name,
@@ -89,7 +90,7 @@ ROLE_NODE_SQL = """
                AND (assignment.valid_until IS NULL OR assignment.valid_until > CURRENT_TIMESTAMP)
            ) AS current_assignment_count
       FROM roles role
-      JOIN org_units unit ON unit.id=role.org_unit_id
+ LEFT JOIN org_units unit ON unit.id=role.org_unit_id
       JOIN security_levels security ON security.id=role.security_level_id
       JOIN profiles profile ON profile.id=role.profile_id
  LEFT JOIN roles supervisor ON supervisor.id=role.supervisor_role_id

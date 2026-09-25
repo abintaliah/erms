@@ -36,4 +36,37 @@ the pure-Python `msgforge` package to construct MSG compound files, and the
 PPTX generator uses the bundled artifact-tool presentation runtime.
 
 Generated QA intermediates use dot-prefixed names and are not part of the
-1,000-file manifest. They may be removed after visual review.
+1,200-file manifest. They may be removed after visual review.
+
+## Phase 0 edge and robustness corpus
+
+`generate_phase0_edge_corpus.py` creates the supplementary fixtures required
+by the approved full-text-search Phase 0 gate. They are deliberately separated
+from the 1,200-document quality corpus:
+
+- `phase0-formats/`: DOC, XLS, PPT, ODT, ODS, ODP, RTF, CSV and TIFF coverage;
+- `phase0-scanned-pdf/`: English, Arabic and mixed image-only PDFs;
+- `phase0-corrupt/`: truncated or invalid PDF, DOCX, XLSX and PNG inputs;
+- `phase0-protected/`: an AES-256 password-protected PDF;
+- `phase0-oversized/`: a deterministic 52 MiB file above the approved 50 MiB limit;
+- `phase0-adversarial/`: external-entity XML, active/external HTML, high-compression
+  and nested archives, and pathological whitespace; and
+- `phase0-language-edge/`: short, numeric, code-like, balanced mixed,
+  unsupported-script and symbols-only inputs.
+
+`phase0-edge-manifest.json` records the exact byte size and SHA-256 digest of
+every supplementary fixture. Regenerate them with the bundled workspace Python
+and the LibreOffice binary configured in `.env`. Install the pinned benchmark
+dependencies from `requirements-phase0.txt` in an isolated environment first:
+
+```bash
+<workspace-python> -m pip install -r examples/samples/docs/requirements-phase0.txt
+<workspace-python> examples/samples/docs/generate_phase0_edge_corpus.py
+```
+
+`benchmark_phase0.py` records machine-readable extraction, OCR, language-policy
+and robustness results in `phase0-benchmark-results.json`.
+`verify_phase0_postgresql18.py` creates an isolated PostgreSQL 18 cluster and a
+uniquely named disposable database, verifies the required text-search catalogue
+objects and matching behavior, drops the database, stops the server, and removes
+the temporary cluster.

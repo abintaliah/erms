@@ -37,6 +37,18 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/008_rename_hold_membership_to_held_items.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/009_preserve_relationship_truth_for_search.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/010_add_full_text_search_phase1.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/011_add_full_text_search_phase2.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/012_add_full_text_search_phase3.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/013_add_full_text_search_rollout_controls.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/014_rename_system_role_to_platform_role.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/015_restore_system_role_terminology.sql
 ```
 
 Migration 004 makes lifecycle timestamps authoritative. Organization units and
@@ -71,8 +83,28 @@ relationships. Inaccessible parent/container identifiers remain redacted at
 the API response boundary and are distinguished from absent relationships by
 explicit relationship-state fields.
 
+Migration 010 installs the PostgreSQL 18 full-text-search foundation: weighted
+record and aggregation metadata documents, protected service-indexer
+authorization, opaque API-key persistence, and authorization-filtered metadata
+relations. It fails atomically unless the server is PostgreSQL 18 or newer and
+provides the built-in `pg_catalog.simple`, `pg_catalog.english`, and
+`pg_catalog.arabic` text-search configurations.
+
 Migration files are not initialization scripts and must never be run against a
 new database already created from the latest `schema.sql`.
+
+Migration 013 adds the transaction-local automatic-indexing scheduling gate
+used by the staged full-text rollout. It keeps search-document freshness
+truthful while scheduling is disabled; bounded reconciliation creates the jobs
+after scheduling and workers are enabled.
+
+Migration 014 renames the protected non-organizational role discriminator to
+`is_platform_role`, avoiding ambiguity with the ordinary System Administrator
+role while preserving all role data and constraints.
+
+Migration 015 restores the discriminator name to `is_system` for consistency
+with built-in profiles. In both cases “system” means implementation-owned; it
+does not identify or grant the System Administrator role.
 
 ## Targeted data corrections
 

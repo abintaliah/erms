@@ -1,14 +1,26 @@
 # Full-Text Content Search — Implementation Specification
 
-**Status:** Proposed — awaiting approval  
+**Status:** Approved
 **Project:** ERMS / Wathiq  
 **Prepared:** 24 September 2026  
-**Revision:** 0.20 — wide-XLSX preview normalization
+**Revision:** 0.32 — Supervised automatic maintenance
 
 ### Revision history
 
 | Revision | Date | Change |
 | --- | --- | --- |
+| 0.32 | 25 September 2026 | Required the local stack and production deployment artifacts to run one supervised API-owned indexing/credential maintenance process with an hourly default interval |
+| 0.31 | 25 September 2026 | Added explanatory text for the protected text-indexer service role, server-side credential-history pagination, and bounded automatic cleanup of revoked and expired credential rows after configurable retention |
+| 0.30 | 25 September 2026 | Made built-in roles visible as read-only entries in ordinary Roles administration and linked the text-indexer role to its dedicated workflow |
+| 0.29 | 25 September 2026 | Defined one text-indexer service per deployment as a supervisor-owned process pool controlled by `TEXT_INDEXER_PROCESS_COUNT`, with one claimed job per child process and generated unique worker IDs |
+| 0.28 | 25 September 2026 | Fixed each text-indexer process to one claimed job at a time and required extraction concurrency to use independently supervised worker processes with unique IDs |
+| 0.27 | 25 September 2026 | Added a dedicated privilege-gated Text Indexers Health section exposing privacy-safe worker, queue, failure, drift, stale-document, lease-recovery and rollout-readiness state |
+| 0.26 | 25 September 2026 | Replaced generic service-account provisioning with a dedicated Text Indexers administration workflow and dedicated `identity.text_indexers.administer` privilege granted by default only to `ALL_PRIVS` and `SYS_ADMIN` |
+| 0.25 | 25 September 2026 | Restored `roles.is_system` for consistency with built-in `profiles.is_system`; clarified that it denotes implementation-owned authorization objects, not the System Administrator role |
+| 0.24 | 25 September 2026 | Renamed the protected non-organizational role discriminator from `is_system` to `is_platform_role` to avoid confusion with the System Administrator role |
+| 0.23 | 24 September 2026 | Required the complete checksum-pinned official Apache Tika binary distribution with Pipes fork isolation; prohibited Homebrew Tika and Docker as indexer runtime dependencies |
+| 0.22 | 24 September 2026 | Recorded the approved Phase 0 format allowlist, extraction/OCR/language quality gates, benchmark-derived initial limits, detector decision, and valid PostgreSQL 18 configuration precondition SQL |
+| 0.21 | 24 September 2026 | Approved as the normative product and engineering contract |
 | 0.1 | 24 September 2026 | Initial proposed full-text content-search design |
 | 0.2 | 24 September 2026 | Added separately provisioned non-interactive indexer identities, a service-only indexing privilege, workload credentials, endpoint restrictions, and related verification requirements |
 | 0.3 | 24 September 2026 | Added header/results screen designs and clarified lease-scoped access across ACLs and security levels, credential audiences, and optional local credential storage |
@@ -174,11 +186,24 @@ or on one or more separate servers. It communicates with
 `backend/services/api` only through authenticated internal REST endpoints and
 has no direct PostgreSQL credentials or database connectivity.
 
-Each text-indexer instance runs Tika and Tesseract in a sandboxed worker or
-container with no general outbound network access, a read-only runtime, a
-private temporary directory, and explicit CPU, memory, input-size, output-size,
+Each text-indexer instance runs Tika and Tesseract in a sandboxed worker process
+with no general outbound network access, a read-only runtime, a private
+temporary directory, and explicit CPU, memory, input-size, output-size,
 page-count, embedded-object-count, recursion-depth, and wall-time limits.
-Untrusted documents must never be parsed by a long-lived API worker process.
+Untrusted documents must never be parsed by a long-lived API or text-indexer
+Python process.
+
+The runtime shall use the complete official Apache Tika binary distribution,
+including its adjacent libraries and `tika-pipes-fork-parser` implementation,
+with a pinned version and verified published checksum. It shall invoke Tika's
+Pipes fork mode so parsing occurs in a disposable, resource-bounded child JVM.
+Running a thin standalone JAR, relying on Homebrew's Tika packaging, embedding
+Tika in the Python process, or requiring Docker/container execution is
+prohibited. Local development and deployed indexers use the same distribution
+layout and fork-isolation semantics. The configured distribution may be
+provisioned by the deployment system or installed into the indexer's dedicated
+runtime directory; it must never be downloaded implicitly while processing a
+job.
 
 The first deployment shall install only required Tika parsers and Tesseract
 language packs. English and Arabic are required initial OCR languages. OCR
@@ -211,6 +236,48 @@ must never expose SQL text, bound SQL parameters as a separate database trace,
 query plans, table/view names not already public in the API contract, hidden
 authorization predicates, session cookies, bearer/API keys, CSRF tokens,
 database credentials, lease tokens, or results the user cannot otherwise see.
+
+### 2.6 Initial format allowlist and Phase 0 quality gates
+
+The initial extraction allowlist is PDF; DOC and DOCX; XLS and XLSX; PPT and
+PPTX; ODT, ODS and ODP; RTF; UTF-8 plain text and CSV; HTML; XML; Markdown;
+EML; MSG; PNG; JPEG; and TIFF. Detection remains byte-based: an extension or
+submitted MIME type alone never makes content eligible for a parser. Archive
+formats and embedded objects are not indexed in the initial release. A format
+outside this allowlist is `unsupported` until an approved specification
+revision adds its corpus and security evidence.
+
+The Phase 0 corpus establishes these minimum release quality gates:
+
+| Measurement | Minimum |
+| --- | ---: |
+| English native-text word recall | 98% |
+| Arabic native-text word recall | 95% |
+| English OCR word recall | 90% |
+| Arabic OCR word recall | 75% |
+| Unique-marker retrieval for native text and OCR | 95% |
+| Dominant English/Arabic and mixed/unknown language-policy decision accuracy | 90% |
+| Corrupt/protected fixture bounded termination with no extracted-content publication | 100% |
+
+Word recall is measured against normalized ground truth after Unicode and
+whitespace normalization; punctuation-only differences do not count as lost
+words. OCR gates are evaluated separately by language on 300-DPI-equivalent
+fixtures. A corpus run fails when an aggregate falls below its gate or when
+one supported format has a systemic zero-extraction failure hidden by the
+aggregate. Phase 0 evidence is recorded in
+`docs/full-text-search-phase-0-benchmark.md`; Phase 2 must repeat the gates with
+the approved official binary distribution and deployed process sandbox before
+rollout.
+
+The approved local language detector is `lingua-language-detector` 2.1.1,
+restricted to English and Arabic models and operated without network access.
+The decision layer requires at least 40 alphabetic characters, at least 80%
+detector confidence, at least 90% supported-script coverage, and a dominant
+Latin-or-Arabic script share above the corpus-calibrated mixed-language
+boundary. Short, numeric, code-like, unsupported-script, low-confidence, and
+mixed inputs use `pg_catalog.simple`. The exact mixed-language boundary is a
+versioned index-configuration value, not a client setting, and must continue
+to meet the Phase 0 decision-accuracy gate when corpus composition changes.
 
 ## 3. Scope
 
@@ -417,20 +484,34 @@ The human and service privileges are intentionally distinct and approved as:
 | `record.component.reindex` | Authorized person account | Request a forced reindex of one component or all eligible components in one record, subject to the additional resource authorization and clearance gates in section 9.4 |
 | `content.index.execute` | Active text-indexer service account only | Execute the lease-scoped internal extraction protocol; it cannot request arbitrary reindexing or use ordinary content APIs |
 
-Provisioning a text-indexer identity is an explicit administrative operation:
+Provisioning and managing text-indexer identities uses the dedicated **Text
+Indexers** administration API and UI and requires the global privilege
+`identity.text_indexers.administer`. The canonical seed grants this privilege
+only to the protected `ALL_PRIVS` and `SYS_ADMIN` profiles. It is not granted
+to `INFO_GOV_MGR`, `INFO_GOV_OFFICER`, or `TEXT_INDEXER_SERVICE`; custom
+profiles receive it only through an explicit authorization-administration
+change.
 
-1. an administrator with `identity.users.administer` creates the service
-   account without a password;
-2. an administrator with `organization.administer` assigns the dedicated
-   service role where the existing role model requires an assignment;
-3. an administrator with `authorization.administer` verifies that the assigned
-   profile is the protected `TEXT_INDEXER_SERVICE` profile; and
-4. an opaque API key is issued separately and delivered through the
-   deployment's secret-management mechanism.
+The dedicated create operation atomically creates an active non-interactive
+service account, assigns the protected `text-indexer-service` role as its sole
+role, and issues its initial server-generated API key. The administrator
+supplies a descriptive deployment/pool name, immutable unique external
+identifier, credential name, and expiry. Multiple identities are supported for
+environment and pool separation. A failed account, assignment, or credential
+step rolls back the complete operation.
+
+Generic user and role administration must not create, mutate, delete, or alter
+the protected assignment of a text-indexer identity. Text-indexer account
+status and credential lifecycle are managed only through the dedicated
+workflow. The protected role/profile remains implementation-owned and is not
+selectable in ordinary role-assignment controls.
 
 If the existing UI/API cannot safely create the protected role/profile
 assignment without also granting organizational resource access, the migration
-shall create a protected system role for this sole purpose. That role is not an
+shall create a protected system role for this sole purpose. The role is
+identified by `roles.is_system`, consistently with built-in profiles; this
+denotes an implementation-owned role and does not mean the ordinary System
+Administrator role. That role is not an
 organizational custodian, does not satisfy access-continuity requirements, and
 must not be selectable for person accounts. This exception must be represented
 explicitly in schema and authorization rules rather than simulated with a
@@ -856,9 +937,9 @@ boundary.
 A dedicated API-side database maintenance process owns cleanup:
 
 ```bash
-python -m backend.services.api.content_indexing_cleanup --dry-run
-python -m backend.services.api.content_indexing_cleanup --batch-size 500
-python -m backend.services.api.content_indexing_cleanup --watch
+python -m backend.services.api.text_indexing_maintenance cleanup --dry-run
+python -m backend.services.api.text_indexing_maintenance cleanup --batch-size 500
+python -m backend.services.api.text_indexing_maintenance cleanup --watch
 ```
 
 Production runs either one `--watch` process or scheduled one-shot executions.
@@ -871,8 +952,9 @@ Configuration includes:
 
 ```text
 CONTENT_INDEXING_HISTORY_RETENTION_DAYS=365
-CONTENT_INDEXING_CLEANUP_INTERVAL_SECONDS=<configured interval>
+CONTENT_INDEXING_CLEANUP_INTERVAL_SECONDS=3600
 CONTENT_INDEXING_CLEANUP_BATCH_SIZE=500
+TEXT_INDEXER_CREDENTIAL_HISTORY_RETENTION_DAYS=365
 ```
 
 The cleanup process may delete only:
@@ -892,9 +974,13 @@ immediately before deletion so a race cannot remove active work.
 Failures are logged and surfaced in operational health/metrics without
 advancing or hiding the affected rows. Cleanup records aggregate counts and
 oldest retained timestamps, never extracted text. A dry run reports bounded
-eligible counts without deleting anything. Local development may invoke the
-one-shot command explicitly; the full local stack need not keep a dedicated
-365-day retention worker running.
+eligible counts without deleting anything. `run-local-stack.sh` starts and
+supervises exactly one `cleanup --watch` process by default and stops it with
+the stack. Production provides
+`backend/services/api/deploy/erms-text-indexing-maintenance.service`, which runs
+the same API-owned process independently of FastAPI and the text-indexer
+service. An environment with an existing scheduler may invoke the one-shot
+command instead, but must not also enable the continuous service.
 
 The centralized inventory, invocation summary, configuration list, and links
 to all other backend cleanup services are maintained in the
@@ -1011,9 +1097,28 @@ perform an installation precondition check equivalent to:
 ```sql
 DO $$
 BEGIN
-    IF to_regconfig('pg_catalog.simple') IS NULL
-       OR to_regconfig('pg_catalog.english') IS NULL
-       OR to_regconfig('pg_catalog.arabic') IS NULL THEN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_ts_config AS config
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = config.cfgnamespace
+        WHERE namespace.nspname = 'pg_catalog'
+          AND config.cfgname = 'simple'
+    ) OR NOT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_ts_config AS config
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = config.cfgnamespace
+        WHERE namespace.nspname = 'pg_catalog'
+          AND config.cfgname = 'english'
+    ) OR NOT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_ts_config AS config
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = config.cfgnamespace
+        WHERE namespace.nspname = 'pg_catalog'
+          AND config.cfgname = 'arabic'
+    ) THEN
         RAISE EXCEPTION
             'Required PostgreSQL text-search configurations are unavailable';
     END IF;
@@ -1086,9 +1191,12 @@ directory. The launcher shall:
 
 The text-indexer has its own dependency file because Tika/OCR client and
 extraction dependencies need not be installed in the API or web-UI runtime.
-Tika, Tesseract, OCR language packs, and LibreOffice fallback are system or
-container dependencies checked at startup; the launcher must fail with a clear
-non-secret diagnostic when required capabilities are unavailable.
+The official Tika binary distribution, Tesseract, OCR language packs, and
+LibreOffice fallback are runtime dependencies checked at startup. The launcher
+must fail with a clear non-secret diagnostic when required capabilities are
+unavailable. The Tika check must verify the pinned version/checksum, adjacent
+library layout, presence of `PipesForkParserConfig`, and successful fork-mode
+self-test; a plain `tika --version` check is insufficient.
 
 Minimum runtime configuration is:
 
@@ -1096,8 +1204,9 @@ Minimum runtime configuration is:
 TEXT_INDEXER_API_URL=http://127.0.0.1:8000
 TEXT_INDEXER_API_KEY=<secret supplied by secret management>
 TEXT_INDEXER_WORKER_ID=<unique instance identifier>
+TEXT_INDEXER_PROCESS_COUNT=2
 TEXT_INDEXER_POLL_INTERVAL_SECONDS=<configured value>
-TEXT_INDEXER_CLAIM_BATCH_SIZE=<bounded configured value>
+TEXT_INDEXER_CLAIM_BATCH_SIZE=1
 TEXT_INDEXER_LEASE_HEARTBEAT_SECONDS=<less than the server lease duration>
 ```
 
@@ -1105,6 +1214,29 @@ The production launcher neither creates service accounts nor generates keys.
 Provisioning is an explicit administrative/deployment operation, and the
 opaque API key is supplied through a protected environment file or deployment
 secret store.
+
+One text-indexer service invocation is a supervisor-owned process pool.
+`TEXT_INDEXER_PROCESS_COUNT` is the number of child worker processes and
+defaults to `2`. Each child process shall claim and process exactly one job at
+a time. The supervisor derives a unique runtime worker ID from the configured
+`TEXT_INDEXER_WORKER_ID` base, the supervisor-process incarnation, and the
+one-based child slot; operators configure a base ID, not individual child IDs.
+If a child exits unexpectedly, the supervisor restarts that slot without
+terminating healthy siblings. Stopping the service terminates the complete
+pool. Implementations shall not use claim prefetching or an in-process
+extraction thread pool. Operators choose the process count according to the
+host's aggregate CPU and memory budget.
+
+The service-account boundary is the deployed text-indexer service or trusted
+pool, not an individual child worker. One deployed service normally uses one
+dedicated Text Indexers service account and one active API key; every child
+process supervised by that service shares the credential but registers with a
+distinct runtime worker ID. Child processes shall not require separately
+provisioned accounts or keys. Independently operated servers or pools should
+use separate service accounts and keys so each deployment can be audited,
+rotated, revoked, suspended, or contained without interrupting another. A
+trusted group of identically operated instances may deliberately share an
+account only when the shared audit and revocation boundary is acceptable.
 
 ### 8.2 Local development stack integration
 
@@ -1221,8 +1353,31 @@ maximum input size, maximum extracted characters, chunk size, maximum pages,
 embedded-object policy, OCR enablement/languages, retry count, attempt-history
 retention, and extractor endpoint/binary location.
 
-Defaults must be selected after representative English and Arabic corpus tests;
-this specification deliberately does not invent production capacity numbers.
+The Phase 0 benchmark approves these conservative initial defaults. They are
+configuration values, not hard-coded parser behavior:
+
+| Setting | Initial default |
+| --- | ---: |
+| Claim batch size | 4 jobs |
+| Poll interval | 5 seconds |
+| Worker lease / heartbeat | 300 / 60 seconds |
+| Extraction wall timeout | 120 seconds per component |
+| Extractor CPU / memory limit | 2 CPU / 1 GiB |
+| Maximum input size | 50 MiB |
+| Maximum extracted characters | 5,000,000 |
+| Chunk target / hard maximum | 16,000 / 20,000 characters |
+| Maximum pages | 1,000 |
+| Embedded objects / archive recursion | Disabled / depth 0 |
+| OCR | Enabled for supported images and insufficient-text PDF pages; `eng+ara` |
+| Automatic retries | 3 transient attempts with bounded exponential backoff |
+| Private temporary storage | 1 GiB per active job |
+
+Inputs over the byte/page limits are rejected before expensive extraction when
+the size is known. Output is stopped at the configured character limit and the
+attempt records `limit_exceeded`; silent truncation is prohibited. Production
+operators may lower these limits. Raising them requires a repeatable corpus and
+resource benchmark under the intended process-sandbox CPU/memory constraints and an
+operations-document update; it does not require a schema change.
 
 ## 9. Reindex operations
 
@@ -1781,21 +1936,64 @@ responsive navigation. Exact colors, icon glyphs, shadows, radii, and font
 metrics come from existing design tokens/components rather than being copied
 from the conceptual wireframe.
 
-### 11.3 Service-account details and API-key management
+### 11.3 Dedicated Text Indexers administration and API-key management
 
-The existing User details page shall provide an **API credentials** section
-only when the selected account has `account_type = 'service'`. Person-account
-pages never show API-key controls. Viewing the service account follows the
-existing user-administration authorization; generating, rotating, or revoking
-a credential requires `identity.users.administer` and server-side revalidation
-of the target account type and status.
+The **Text Indexers** administration surface is separate from ordinary human
+user and organizational-role administration. The navigation entry, list,
+details, create, status, and credential operations require
+`identity.text_indexers.administer`; users without that privilege cannot see
+the entry and receive `403` from every dedicated mutation API. Person-account
+pages never show API-key controls, and text-indexer identities are not editable
+through ordinary user or role-assignment controls.
 
-The page header reuses the existing user-details identity, status, profile/role,
+The dedicated details page reuses the existing identity, status, profile/role,
 metadata, event-history, and navigation patterns. It explicitly labels the
 identity **Service account** and **Non-interactive** so it cannot be mistaken
 for a person who can sign in.
 
-The API credentials section shows:
+Ordinary **Roles** administration includes built-in roles in its list and
+details presentation, clearly labels them **Built-in**, and exposes their
+metadata and audit history read-only. It exposes no ordinary edit, assignment,
+lifecycle, or deletion actions for a built-in role, and those generic API
+mutation paths reject direct attempts. The built-in `text-indexer-service`
+role details link authorized administrators to the dedicated **Text Indexers**
+workflow. Its details explain that it is an implementation-owned role for
+non-interactive processes, is assigned automatically when a Text Indexer is
+created, is not a human role, and must be administered through that dedicated
+workflow. Ordinary human-role selectors and assignment pickers continue to
+exclude built-in roles.
+
+The Text Indexers list shows each deployment/pool name, immutable external ID,
+account status, active/total credential counts, and most recent safe last-used
+time. It supports deliberate loading, empty, error, filter, and pagination
+states using the established Wathiq administration-list presentation. **Add
+text indexer** performs the atomic create-and-initial-key operation and proceeds
+directly to the one-time reveal state.
+
+The same administration surface contains a **Health** section backed by a
+dedicated read-only endpoint requiring `identity.text_indexers.administer`.
+It displays the current rollout-readiness result, active and stale registered
+worker counts, queued and leased/processing job counts, failed and unsupported
+job counts, oldest queued-job age, drifted and stale-document counts, expired
+leases and lease-loss attempts. A manual **Refresh** action retrieves a new
+database snapshot and exposes deliberate loading and error states.
+
+The Health section also provides **Queue backfill batch**. The administrator
+chooses a positive batch limit no greater than 500; the API scans at most that
+many eligible missing or obsolete component indexes and idempotently queues
+low-priority `backfill` jobs. It reports the number examined and the number
+actually queued, never queues duplicate active work, and does not wait for
+extraction to finish. Repeated bounded batches replace record-by-record manual
+reindexing for pre-existing content.
+
+API liveness, indexing health and rollout readiness remain distinct. `/health`
+proves API/database liveness and reports feature flags; it does not claim that
+workers are active or the indexing backlog is healthy. The Text Indexers
+Health section consumes only privacy-safe counts, durations and bounded status
+or error-code labels. It never exposes extracted text, file names, credentials,
+key hashes, lease tokens or source-content identifiers.
+
+The details-page API credentials section shows:
 
 - credential display name and non-secret identifier/prefix;
 - status (`Active`, `Expiring`, `Expired`, or `Revoked`);
@@ -1806,14 +2004,27 @@ The API credentials section shows:
 - **Rotate** and **Revoke** actions for an active credential; and
 - an explicit empty state when no credential exists.
 
+Credential metadata is fetched with server-side pagination and the page shows
+five entries by default. Administrators can filter between all credentials,
+currently usable credentials, and revoked/expired history. The API accepts a
+bounded page size no greater than 50 and never requires the browser to load the
+complete credential history.
+
 ![Conceptual service-account API credentials page](assets/full-text-search/service-account-api-credentials.png)
 
 *Conceptual service-account details page with the dedicated profile, privilege,
 credential metadata, and management actions.*
 
 It never shows a stored secret or secret hash. Revoked and expired entries
-remain visible as security history but cannot be reactivated; an administrator
-must generate a new credential.
+remain visible as security history during the configured retention period but
+cannot be reactivated; an administrator must generate a new credential.
+`TEXT_INDEXER_CREDENTIAL_HISTORY_RETENTION_DAYS` defaults to 365. The scheduled,
+API-side text-indexing maintenance command deletes at most its configured batch
+size of credential rows per run when they have been revoked for longer than the
+retention period or expired longer than the retention period. It never deletes
+a usable credential. Credential creation, rotation and revocation audit events
+are not deleted with the credential row. A zero-day setting permits cleanup of
+already revoked or expired credentials on the next maintenance run.
 
 ```text
 Service account / Production Text Indexer                         [Edit]
@@ -1959,7 +2170,7 @@ indexing backlog; a backlog does not make content download unavailable.
 The implementation shall treat every file and extracted string as hostile.
 It must cover:
 
-- process/container isolation and least privilege for Tika, Tesseract, and
+- process-sandbox isolation and least privilege for Tika, Tesseract, and
   LibreOffice fallback;
 - no extractor endpoint exposed to untrusted networks;
 - service-to-service authentication, authorization, credential rotation, and
@@ -2100,6 +2311,12 @@ rebuildable derived data, but their removal requires a later explicit migration.
 | FTS-53 | Fresh schema and upgrade migration require the built-in `pg_catalog.simple`, `pg_catalog.english`, and `pg_catalog.arabic` configurations without modifying catalogue objects or the database default; representative Arabic vectors and queries use the same explicit configuration | disposable PostgreSQL 18 schema/migration precondition, catalogue, tokenization, matching, and parity tests |
 | FTS-54 | The opaque-key baseline enforces validated HTTPS, environment/pool-specific keys, protected secret handling, route and privilege isolation, network restrictions, lease fencing, rate limits, redacted telemetry, expiry, rotation, revocation, and monitoring | deployment, authentication, authorization, TLS-negative, secret-leakage, rate-limit, rotation, and incident-response tests/security review |
 | FTS-55 | Every phase and the final delivery reconcile all applicable normative requirements in both directions through the maintained requirement-to-implementation-to-test matrix; no phase or feature is complete with an unexplained omission or unapproved implementation behavior | reviewed phase-entry inventories, phase-exit reports, final full-spec audit, traceability matrix, and evidence-link validation |
+| FTS-56 | `identity.text_indexers.administer` is granted by default only to `ALL_PRIVS` and `SYS_ADMIN`; it alone gates the dedicated Text Indexers UI and management APIs while `TEXT_INDEXER_SERVICE` remains exactly `content.index.execute` | seed/parity, authorization-matrix, and navigation-visibility tests |
+| FTS-57 | Dedicated creation atomically creates one active non-interactive service identity, its sole protected role assignment, and an initial one-time API key; multiple environment/pool identities are supported and partial failure leaves no account | API transaction, uniqueness, persistence, and one-time-secret tests |
+| FTS-58 | Generic user/role-assignment administration cannot mutate a text-indexer identity or its protected assignment; suspension, activation, key generation, rotation, and revocation are available through the dedicated workflow with list/detail monitoring | negative API tests and live-browser workflow tests |
+| FTS-59 | The privilege-gated Text Indexers Health section distinguishes API liveness from worker/queue health; shows privacy-safe readiness, worker heartbeat, backlog, failure, drift, stale-document and lease-recovery state; and can idempotently queue an administrator-bounded backfill batch of at most 500 components | API authorization/leakage/backfill tests and live-browser UI verification |
+| FTS-60 | One text-indexer service supervises `TEXT_INDEXER_PROCESS_COUNT` child processes (default `2`); each child claims one job, has a generated unique worker ID, and is restarted by slot without terminating healthy siblings | configuration-default, supervisor, worker-loop and deployment tests/review |
+| FTS-61 | Built-in roles are visible and clearly labelled in Roles administration but remain read-only and excluded from ordinary assignment selectors; the text-indexer role links authorized users to Text Indexers | API visibility/mutation tests and live-browser list/detail verification |
 
 The feature is not complete until every acceptance criterion has implementation
 and verification evidence. Database tests must follow the repository rule that

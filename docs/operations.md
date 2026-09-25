@@ -60,8 +60,8 @@ and a link to its specialized normative documentation.
 | --- | --- | --- | --- | --- |
 | Segmented content, upload session, draft, and superseded-content cleanup | `backend.services.api.content_cleanup` | Implemented | Scheduled one shot or one supervised `--watch` process | [Segmented-content cleanup](#5-segmented-content-cleanup), [content-storage guide](content-storage.md), [storage specification](../specs/segmented-postgresql-content-storage.md#11-cleanup-and-recovery) |
 | Expired and retained revoked login-session cleanup | `backend.services.api.session_cleanup` | Implemented | Scheduled one shot or one supervised `--watch` process | [Login-session cleanup](#6-login-session-cleanup), [authentication guide](authentication.md), [session-lifecycle specification](../specs/authentication-and-login-session-lifecycle.md#8-retention-and-cleanup) |
-| Full-text indexing attempt/job history and abandoned result-staging cleanup | `backend.services.api.content_indexing_cleanup` | Proposed in full-text-search specification | Scheduled one shot or one supervised `--watch` process | [Full-text indexing cleanup](#7-full-text-indexing-history-and-staging-cleanup), [full-text-search specification](../specs/full-text-search.md#66-content_indexing_attempts) |
-| Per-job text-indexer temporary-file cleanup | `backend.services.text_indexer` | Proposed in full-text-search specification | Immediate `finally` cleanup plus bounded startup recovery sweep; not a database scheduler | [Full-text indexing cleanup](#7-full-text-indexing-history-and-staging-cleanup), [security and robustness requirements](../specs/full-text-search.md#14-security-and-robustness) |
+| Full-text indexing attempt/job history, abandoned result staging, and retained text-indexer credential cleanup | `backend.services.api.text_indexing_maintenance` | Implemented | Scheduled one shot or one supervised `--watch` process | [Full-text indexing cleanup](#7-full-text-indexing-history-and-staging-cleanup), [full-text-search specification](../specs/full-text-search.md#66-content_indexing_attempts) |
+| Per-job text-indexer temporary-file cleanup | `backend.services.text_indexer` | Implemented | Immediate `finally` cleanup plus bounded startup recovery sweep; not a database scheduler | [Full-text indexing cleanup](#7-full-text-indexing-history-and-staging-cleanup), [security and robustness requirements](../specs/full-text-search.md#14-security-and-robustness) |
 
 The inventory distinguishes automatic retention/temporary-data cleanup from
 explicit governed deletion. Permanent deletion of a record, aggregation, user,
@@ -75,7 +75,7 @@ cleanup merely because dependent rows cascade.
 | --- | --- | --- | --- | --- |
 | `backend.services.api.content_cleanup` | Implemented | One shot | Remove abandoned uploads, expired drafts, and unreferenced content sets | [Section 5](#5-segmented-content-cleanup) |
 | `backend.services.api.session_cleanup` | Implemented | One shot | Audit and remove expired or long-revoked login sessions | [Section 6](#6-login-session-cleanup) |
-| `backend.services.api.content_indexing_cleanup` | Proposed | One shot | Remove expired terminal indexing history/jobs and abandoned result staging | [Section 7](#7-full-text-indexing-history-and-staging-cleanup) |
+| `backend.services.api.text_indexing_maintenance cleanup` | Implemented | One shot or supervised `--watch` | Remove expired terminal indexing history/jobs, abandoned result staging, and retained revoked/expired text-indexer credentials | [Section 7](#7-full-text-indexing-history-and-staging-cleanup) |
 | `backend.services.api.manage_auth` | Implemented | One shot | Bootstrap authentication and perform deliberate credential recovery | [Section 8](#8-authentication-bootstrap-and-credential-recovery) |
 | Database migration commands | Implemented | One shot | Upgrade the schema exactly once per database | [Section 9](#9-database-migrations) |
 | Database seed commands | Implemented | One shot | Install optional reference, demonstration, or load-test data | [Section 10](#10-optional-database-seeds) |
@@ -151,43 +151,209 @@ The normative lifecycle, audit, retention, and cleanup requirements are in
 
 ## 7. Full-text indexing history and staging cleanup
 
-**Status:** Proposed — specified, not yet implemented
-**Module:** `backend.services.api.content_indexing_cleanup`
+**Status:** Implemented in Phase 2
+**Module:** `backend.services.api.text_indexing_maintenance`
 
 This API-side database maintenance worker removes expired terminal indexing
 attempt history and eligible terminal job rows after their retention period. It
-also removes abandoned result-staging chunks belonging to terminal jobs or
-expired lease generations after the shorter configured staging-retention
-period. It does not run in the separately deployed text-indexer service.
+also removes abandoned result-staging chunks and text-indexer API-credential
+rows that have been revoked or expired longer than their retention period. It
+does not run in the separately deployed text-indexer service. Active,
+unexpired credentials are never eligible, and credential lifecycle audit events
+remain after credential-row cleanup.
 
 ```bash
-python -m backend.services.api.content_indexing_cleanup --dry-run
-python -m backend.services.api.content_indexing_cleanup --batch-size 500
-python -m backend.services.api.content_indexing_cleanup \
-  --watch --batch-size 500 --interval-seconds 3600
+cd /absolute/path/to/erms
+set -a
+source .env
+set +a
+backend/services/api/.venv/bin/python -m backend.services.api.text_indexing_maintenance cleanup --dry-run
+backend/services/api/.venv/bin/python -m backend.services.api.text_indexing_maintenance cleanup --batch-size 500
+backend/services/api/.venv/bin/python -m backend.services.api.text_indexing_maintenance cleanup --watch
+backend/services/api/.venv/bin/python -m backend.services.api.text_indexing_maintenance reconcile --dry-run
+backend/services/api/.venv/bin/python -m backend.services.api.text_indexing_maintenance reconcile --batch-size 500
+backend/services/api/.venv/bin/python -m backend.services.api.text_indexing_maintenance metrics
+backend/services/api/.venv/bin/python -m backend.services.api.text_indexing_maintenance readiness
+backend/services/api/.venv/bin/python -m backend.services.api.text_indexing_maintenance quality-gate \
+  examples/samples/docs/phase2-worker-benchmark-results.json
 ```
+
+Administrators with `identity.text_indexers.administer` can perform the common
+operational checks without a terminal: open **Administration → Text Indexers**
+and use the **Health** section. It shows the same privacy-safe readiness,
+worker, queue, stale-data and lease-recovery signals. **Refresh** requests a new
+snapshot. **Queue backfill batch** accepts a limit from 1 through 500 and runs
+one idempotent low-priority reconciliation pass; it reports how many eligible
+components were examined and how many jobs were queued. Repeat bounded passes
+until a pass reports zero examined and zero queued, then allow workers to drain
+the queue and confirm **Ready for search**. The action only queues work; it does
+not wait for extraction to finish.
+
+### Understanding the Text Indexers Health indicators
+
+The Health section is a point-in-time operational snapshot. Its headline is
+calculated as follows:
+
+```text
+blocking jobs = waiting (queued) jobs + processing (leased) jobs
+
+Ready for search =
+    drifted documents = 0
+AND blocking jobs = 0
+AND stale documents = 0
+AND failed jobs = 0
+```
+
+If any condition in that formula is false, the headline is **Attention
+required**. Active-worker count, unsupported jobs, expired leases, and
+historical lease-loss attempts remain important operational signals but do not
+currently enter the readiness formula. Consequently, an empty and fully
+current index can report Ready for search even when no worker is active; it
+will not remain current when new work arrives unless a worker is restored.
+
+| Indicator | Meaning and interpretation |
+| --- | --- |
+| **Active workers** | Worker child processes whose registration has an unexpired activity window. Under the process-pool model, each healthy child registers separately and handles one job at a time. Zero is highlighted because queued work cannot drain without a worker. |
+| **Stale registrations** | Persisted worker registrations whose activity window has expired, usually after a service restart, replaced child process, or lost worker. They are not active and do not process jobs. This is not a count of stale documents. |
+| **Waiting** | Jobs in `queued` state that have not been leased to a worker. **Oldest** is the approximate age of the oldest queued job. A rising oldest age indicates that extraction capacity is not keeping up, workers are unavailable, or work is repeatedly deferred. |
+| **Processing** | Jobs in `leased` state. A worker has exclusive time-bounded authority to process each one. With `TEXT_INDEXER_CLAIM_BATCH_SIZE=1`, this should normally be no greater than the active child-worker count; temporary differences can appear during restarts, lease recovery, or while older prefetched work drains. |
+| **Failed** | Terminal jobs whose extraction or publication did not succeed and was not scheduled for another automatic retry. These block Ready for search and require investigation or an explicit retry/reindex after the cause is corrected. |
+| **Unsupported** | Terminal jobs whose detected format is outside the approved extraction support policy. They are reported beside failures but do not currently block the readiness formula. Review unexpected growth because it may indicate incorrectly classified or newly encountered formats. |
+| **Drifted documents** | Eligible digital components whose required current derived search document is missing, points at a different active content set, or uses an obsolete extraction/index configuration. Use bounded reconciliation/backfill to schedule them. |
+| **Stale documents** | Previously published search documents explicitly marked no longer current. These block readiness until current content is successfully indexed. This is distinct from drift and from stale worker registrations. |
+| **Expired leases** | Jobs still recorded as leased even though their lease deadline has passed. They are current recovery candidates and should normally be reclaimed by another worker. Persistent growth suggests heartbeat, worker, API, or capacity trouble. |
+| **Lease-loss attempts** | Cumulative indexing-attempt history whose worker lost authority before committing. This is historical evidence, not a count of current failed or expired jobs, and it does not by itself block readiness. Investigate a rising value rather than expecting it to return to zero. |
+| **Blocking jobs** | Exactly Waiting plus Processing. The observation timestamp beneath it identifies when the snapshot was taken. Blocking jobs prevent Ready for search. |
+
+The counts are not all disjoint and must not be added together. In particular:
+
+- **Blocking jobs** already contains **Waiting** and **Processing**.
+- A **drifted document** may already have a waiting or processing job, so drift
+  must not be added to the queue to calculate outstanding documents.
+- **Failed** and **Unsupported** are job states, while **Drifted** and **Stale**
+  describe derived search-document state; the same component can therefore be
+  represented in both kinds of metric.
+- **Stale registrations** and **lease-loss attempts** are operational history,
+  not additional documents awaiting extraction.
+
+#### Why Waiting can fall while Drifted documents stays unchanged
+
+This is expected when the jobs currently draining belong to components whose
+search-document identity is already current and whose status is merely
+`pending` or `processing`. Completing those jobs reduces **Waiting**,
+**Processing**, and therefore **Blocking jobs**, but it does not change the
+separate drift predicate.
+
+**Drifted documents** is the population whose derived search-document state is
+missing, points to a different active content set, or records an obsolete
+extraction/index configuration. Those components require a reconciliation
+pass before workers can drain their indexing work. They are not automatically
+represented by every job already in the queue.
+
+For example:
+
+```text
+Waiting: 1,580; Processing: 6
+    = 1,586 already scheduled jobs
+
+Drifted documents: 1,199
+    = components requiring reconciliation of missing/obsolete index state
+```
+
+As the existing 1,586 jobs finish, Waiting and Blocking can decrease while the
+1,199 drifted count remains unchanged. This does not mean workers are idle or
+that completed jobs failed; it means they are processing a different or only
+partly overlapping population.
+
+Use **Queue backfill batch** to reconcile drift safely:
+
+1. Choose a bounded limit from 1 through 500 and queue one batch.
+2. Refresh Health. Drifted should fall by up to the number examined because
+   reconciliation creates or updates the required search-document identity;
+   Waiting may rise by the number of newly queued jobs.
+3. Observe active workers, oldest queued age, failures, and host/database load
+   before adding another batch.
+4. Repeat until a batch reports zero examined and zero queued.
+5. Allow Waiting and Processing to reach zero and confirm **Ready for search**.
+
+Do not assume `drifted + waiting + processing` is the remaining document
+total: the populations may overlap. If a successful backfill action reports
+examined components but Drifted does not decrease after **Refresh**, treat that
+as a reconciliation persistence fault and investigate rather than repeatedly
+queuing more batches.
+
+Amber card highlighting draws attention to a current actionable condition:
+zero active workers, a non-empty waiting queue, failed jobs, drifted or stale
+documents, current expired leases, or blocking jobs. Processing alone is not
+amber because active processing is expected. Historical lease-loss attempts
+and unsupported counts are displayed as supporting context but do not turn
+their cards amber unless the card's current primary condition is also present.
+
+**Refresh** retrieves a new snapshot; it does not change queue state. **Queue
+backfill batch** scans at most the selected 1–500 eligible components and
+idempotently queues missing or obsolete work. The reported drift and queue
+counts will change independently while reconciliation adds jobs and workers
+process them.
 
 | Setting | Initial default | Meaning |
 | --- | ---: | --- |
 | `CONTENT_INDEXING_HISTORY_RETENTION_DAYS` | `365` | Retain completed indexing attempt/job operational history |
-| `CONTENT_INDEXING_CLEANUP_INTERVAL_SECONDS` | `3600` | Initial proposed delay between continuous cleanup passes; confirm during implementation |
-| `CONTENT_INDEXING_CLEANUP_BATCH_SIZE` | `500` | Maximum rows processed in one proposed cleanup batch |
-| `CONTENT_INDEXING_STAGING_RETENTION_HOURS` | To be selected during implementation | Retain abandoned terminal/expired-generation result staging before deletion |
+| `TEXT_INDEXER_CREDENTIAL_HISTORY_RETENTION_DAYS` | `365` | Retain revoked/expired API credential metadata before bounded cleanup |
+| `CONTENT_INDEXING_CLEANUP_INTERVAL_SECONDS` | `3600` | Delay between supervised watch-loop passes |
+| `CONTENT_INDEXING_CLEANUP_BATCH_SIZE` | `500` | Maximum rows processed per cleanup pass |
+| Abandoned staging | Immediate after terminal status, generation replacement, or lease expiry | Staging is derived and never published directly |
 
-The worker uses its own PostgreSQL advisory-lock key, bounded keyset batches,
+The worker uses its own PostgreSQL advisory-lock key, bounded batches,
 short transactions, and database time. It may delete only rows that still meet
 the terminal-state and retention predicates while locked. It never deletes
 queued/leased jobs, a valid lease generation's active staging, current search
 documents, published search chunks, source content, or event history.
 
-The text-indexer separately removes its private temporary extraction files in a
-`finally` path after every job. At startup it performs a bounded recovery sweep
-of its own private temporary directory for files left by a process/host crash.
+`run-local-stack.sh` starts and monitors this worker automatically unless
+`CONTENT_INDEXING_MAINTENANCE_ENABLED=false`. Production installations without
+an external scheduler install and supervise
+`backend/services/api/deploy/erms-text-indexing-maintenance.service`. Sites
+using a platform scheduler run the one-shot `cleanup` command hourly instead
+and do not also run the continuous service. The process uses the API host's
+environment and database credentials; it is not part of the text-indexer
+extraction service.
+
+The text-indexer separately removes its mode-`0700` temporary directory in a
+`finally` path after every job through Python's temporary-directory lifecycle.
+At startup it examines at most `TEXT_INDEXER_TEMP_SWEEP_LIMIT` entries and
+removes only owned `wathiq-index-*` entries older than
+`TEXT_INDEXER_STALE_TEMP_HOURS`.
 That filesystem responsibility does not grant it database cleanup authority and
 does not use this API-side cleanup command.
 
+One text-indexer service supervises a pool of child worker processes.
+`TEXT_INDEXER_PROCESS_COUNT=2` starts two children, and each child claims and
+processes one job at a time because `TEXT_INDEXER_CLAIM_BATCH_SIZE=1`. The
+configured `TEXT_INDEXER_WORKER_ID` is a base; the supervisor appends its run
+identity and child slot to produce unique API worker IDs. If one child exits,
+the supervisor restarts that slot while the other child continues. Do not
+increase the claim batch or add extraction threads: Tika and OCR are
+resource-heavy subprocess workloads, and child processes provide the intended
+failure isolation.
+
 The normative data eligibility, safety, and verification requirements are in
 [Full-Text Content Search](../specs/full-text-search.md#66-content_indexing_attempts).
+
+Queue health is separate from API health. Alert on increasing
+`oldest_queued_seconds`, sustained `failed`/`unsupported` outcomes, stale
+documents, lease-loss recovery, cleanup failures, and workers whose
+`active_until` has passed. Metrics contain counts, durations, sizes, OCR flags,
+and bounded status/error labels only—never extracted text, file names, keys, or
+lease tokens.
+The API `/health` endpoint proves API/database liveness and exposes rollout
+flags. The Text Indexers **Health** section and the `readiness` command prove
+indexing readiness; neither substitutes for the other.
+
+Interactive controlled searches are limited by
+`SEARCH_RATE_LIMIT_PER_MINUTE` (default 600 per user). Manual component/record
+reindex requests use the deliberately stronger
+`MANUAL_REINDEX_RATE_LIMIT_PER_MINUTE` limit (default 60 per user). A rejected
+request returns `429` with a bounded code and `Retry-After`; it creates no job.
 
 ## 8. Authentication bootstrap and credential recovery
 

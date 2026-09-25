@@ -1,0 +1,170 @@
+{
+  "distribution": {
+    "version": "4.0.0",
+    "sha512": "59970cecd51dbd22f51eec1f14bfdefdf660dd9cd6f726dd7ec5dfafcd089d80927d6034c7514f8d87571a05715126e984e5e07dbf6d9033d54075a19884b92a",
+    "fork_parser": "tika-pipes-fork-parser-4.0.0.jar"
+  },
+  "limits": {
+    "wall_seconds": 120,
+    "heap_mib": 768,
+    "embedded_depth": 0,
+    "pages": 1000
+  },
+  "cases": [
+    {
+      "path": "docx/sample-0001-finance-english.docx",
+      "mode": "english",
+      "seconds": 9.174,
+      "english_recall": 1.0,
+      "arabic_recall": 1.0,
+      "marker_found": true
+    },
+    {
+      "path": "pdf/sample-0430-project-management-english.pdf",
+      "mode": "english",
+      "seconds": 10.807,
+      "english_recall": 1.0,
+      "arabic_recall": 1.0,
+      "marker_found": true
+    },
+    {
+      "path": "html/sample-0859-general-administration-english.html",
+      "mode": "english",
+      "seconds": 8.494,
+      "english_recall": 1.0,
+      "arabic_recall": 1.0,
+      "marker_found": true
+    },
+    {
+      "path": "png/sample-0575-information-technology-english.png",
+      "mode": "english",
+      "seconds": 1.13,
+      "english_recall": 1.0,
+      "arabic_recall": 0.9487,
+      "marker_found": true
+    },
+    {
+      "path": "png/sample-0578-human-resources-english.png",
+      "mode": "english",
+      "seconds": 1.03,
+      "english_recall": 1.0,
+      "arabic_recall": 0.9459,
+      "marker_found": true
+    },
+    {
+      "path": "docx/sample-0002-human-resources-arabic.docx",
+      "mode": "arabic",
+      "seconds": 8.504,
+      "english_recall": 1.0,
+      "arabic_recall": 1.0,
+      "marker_found": true
+    },
+    {
+      "path": "pdf/sample-0431-information-technology-arabic.pdf",
+      "mode": "arabic",
+      "seconds": 10.417,
+      "english_recall": 1.0,
+      "arabic_recall": 1.0,
+      "marker_found": true
+    },
+    {
+      "path": "html/sample-0860-asset-management-arabic.html",
+      "mode": "arabic",
+      "seconds": 8.404,
+      "english_recall": 1.0,
+      "arabic_recall": 1.0,
+      "marker_found": true
+    },
+    {
+      "path": "png/sample-0573-records-management-arabic.png",
+      "mode": "arabic",
+      "seconds": 1.207,
+      "english_recall": 1.0,
+      "arabic_recall": 0.9638,
+      "marker_found": true
+    },
+    {
+      "path": "png/sample-0576-procurement-arabic.png",
+      "mode": "arabic",
+      "seconds": 1.546,
+      "english_recall": 1.0,
+      "arabic_recall": 0.9658,
+      "marker_found": true
+    },
+    {
+      "path": "docx/sample-0003-general-administration-mixed.docx",
+      "mode": "mixed",
+      "seconds": 8.44,
+      "english_recall": 1.0,
+      "arabic_recall": 1.0,
+      "marker_found": true
+    },
+    {
+      "path": "pdf/sample-0432-procurement-mixed.pdf",
+      "mode": "mixed",
+      "seconds": 10.572,
+      "english_recall": 1.0,
+      "arabic_recall": 1.0,
+      "marker_found": true
+    },
+    {
+      "path": "html/sample-0861-records-management-mixed.html",
+      "mode": "mixed",
+      "seconds": 8.466,
+      "english_recall": 1.0,
+      "arabic_recall": 1.0,
+      "marker_found": true
+    },
+    {
+      "path": "png/sample-0574-project-management-mixed.png",
+      "mode": "mixed",
+      "seconds": 1.378,
+      "english_recall": 1.0,
+      "arabic_recall": 0.9659,
+      "marker_found": true
+    },
+    {
+      "path": "png/sample-0577-finance-mixed.png",
+      "mode": "mixed",
+      "seconds": 1.558,
+      "english_recall": 1.0,
+      "arabic_recall": 0.9899,
+      "marker_found": true
+    },
+    {
+      "path": "phase0-scanned-pdf/scanned-english.pdf",
+      "mode": "english",
+      "seconds": 11.706,
+      "english_recall": 0.9814,
+      "arabic_recall": 0.9231,
+      "marker_found": true,
+      "ocr_used": true
+    },
+    {
+      "path": "phase0-scanned-pdf/scanned-arabic.pdf",
+      "mode": "arabic",
+      "seconds": 11.201,
+      "english_recall": 0.9839,
+      "arabic_recall": 0.9348,
+      "marker_found": true,
+      "ocr_used": true
+    },
+    {
+      "path": "phase0-scanned-pdf/scanned-mixed.pdf",
+      "mode": "mixed",
+      "seconds": 10.808,
+      "english_recall": 0.9821,
+      "arabic_recall": 0.9091,
+      "marker_found": true,
+      "ocr_used": true
+    }
+  ],
+  "summary": {
+    "case_count": 18,
+    "marker_recall": 1.0,
+    "english_recall": 0.9969,
+    "arabic_recall": 0.9774,
+    "median_seconds": 8.48,
+    "max_seconds": 11.706
+  }
+}

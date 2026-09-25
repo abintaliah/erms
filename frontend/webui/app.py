@@ -29,6 +29,7 @@ from .config import (
     dashboard_recent_days,
     dashboard_recent_item_limit,
     default_root_aggregation_medium,
+    full_text_search_enabled,
     classification_recent_selection_limit,
     host,
     port,
@@ -360,7 +361,7 @@ def buffer_upload_batch(event: events.MultiUploadEventArguments) -> list[tuple[b
 
 def render_component_cards(
     rows: list[dict[str, Any]], on_move, on_remove, on_history=None,
-    on_view=None, on_download=None, *, readonly: bool = False,
+    on_view=None, on_download=None, on_reindex=None, *, readonly: bool = False,
     capabilities: dict[str, bool] | None = None,
 ) -> None:
     for index, component in enumerate(rows):
@@ -391,6 +392,10 @@ def render_component_cards(
                             ui.button(icon="download", on_click=lambda _, item=component: on_download(item)).props(
                                 "flat round dense" + (" disable" if status != "available" or not capability_allowed(capabilities, "download_component") else "")
                             ).tooltip("Download original" if capability_allowed(capabilities, "download_component") else "Your effective roles do not grant component downloading")
+                        if on_reindex is not None and capability_allowed(capabilities, "reindex_components"):
+                            ui.button(icon="manage_search", on_click=lambda _, item=component: on_reindex(item)).props(
+                                "flat round dense" + (" disable" if status != "available" else "")
+                            ).tooltip("Reindex component content")
                         ui.button(icon="arrow_upward", on_click=lambda _, item=component: on_move(item, -1)).props(
                             "flat round dense" + (" disable" if readonly or not capability_allowed(capabilities, "reorder_components") or index == 0 else "")
                         ).tooltip("Move earlier")
@@ -404,6 +409,16 @@ def render_component_cards(
                             ui.button(icon="history", color="blue-grey", on_click=lambda _, item=component: on_history(item)).props("flat round dense").tooltip("Event history")
             with ui.row().classes("w-full items-center gap-2"):
                 ui.badge(status.replace("_", " ").title(), color=status_color).props("rounded")
+                indexing = component.get("_indexing")
+                if indexing:
+                    index_status = indexing.get("status", "pending")
+                    ui.badge(f"Index: {index_status.replace('_',' ').title()}", color={
+                        "indexed":"positive","succeeded":"positive","failed":"negative",
+                        "unsupported":"orange","processing":"primary","leased":"primary",
+                        "queued":"warning","pending":"warning","stale":"warning",
+                    }.get(index_status,"blue-grey")).props("outline rounded")
+                    if indexing.get("indexed_at"):
+                        ui.label(f"Last indexed {format_timestamp(indexing['indexed_at'])}").classes("text-xs text-slate-500")
                 ui.label(format_file_size(component.get("size_in_bytes"))).classes("text-sm font-medium text-slate-600")
             ui.separator()
             with ui.grid(columns=2).classes("w-full gap-x-6 gap-y-3"):
@@ -792,7 +807,7 @@ def form_payload(spec: EntitySpec, controls: dict[str, Any], *, creating: bool) 
 
 
 @ui.page("/")
-def index() -> None:
+def index(q: str = "") -> None:
     # A client per page prevents one browser's token leaking into another and
     # keeps it available when dashboard calls run in child asyncio tasks.
     api = ErmsApiClient(api_url())
@@ -805,6 +820,10 @@ def index() -> None:
         "lifecycle_filter": "all", "aggregation_mode": "search",
         "favourites": {"aggregations": [], "records": []},
         "favourite_ids": {"aggregations": set(), "records": set()},
+        "global_search_query": q.strip(), "global_search_items": [],
+        "global_search_cursor": None, "global_search_filter": "all",
+        "search_diagnostics_enabled": False, "search_diagnostics_sent": None,
+        "search_diagnostics_accepted": None, "search_diagnostics_error": None,
     }
     stored_navigation = app.storage.user.get("navigation_trail")
     navigation_state: dict[str, Any] = {
@@ -848,11 +867,42 @@ def index() -> None:
             border-bottom: 1px solid var(--erms-border); box-shadow: none !important;
             min-height: 54px; padding: 0 18px;
         }
+        .erms-header > .erms-global-search-wrap {
+            position: absolute; z-index: 2; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 6px; min-width: 0;
+        }
+        .erms-global-search { width: min(48vw, 680px); min-width: 260px; }
+        .erms-global-search .q-field__control { background: white; border-radius: 9px; }
+        .global-search-card { border: 1px solid var(--erms-border); border-radius: 10px;
+            box-shadow: none; padding: 0; overflow: hidden; }
+        .global-search-card-header { background: #f7fbfe; border-bottom: 1px solid var(--erms-border); }
+        .global-search-component { border-top: 1px solid #e7edf2; padding: 12px 16px; }
+        .global-search-highlight { background: #fff0a8; color: #573f00; border-radius: 3px;
+            padding: 0 2px; font-weight: 600; }
+        .global-search-json { max-height: 280px; overflow: auto; white-space: pre-wrap;
+            overflow-wrap: anywhere; background: #f5f7f9; border: 1px solid #dce3e8;
+            border-radius: 7px; padding: 12px; font-size: 12px; min-width: 0; max-width: 100%; }
+        .global-search-json .nicegui-markdown,
+        .global-search-json .codehilite,
+        .global-search-json pre { min-width: 0 !important; max-width: 100% !important;
+            white-space: pre-wrap !important; overflow-wrap: anywhere !important;
+            word-break: break-word !important; }
+        @media (max-width: 760px) {
+            .erms-header { flex-wrap: wrap; height: auto; }
+            .erms-header > .erms-global-search-wrap {
+                position: relative; left: auto; transform: none; order: 3;
+                width: 100%;
+            }
+            .erms-global-search { width: auto; min-width: 0; flex: 1; }
+            .global-search-result-action { width: 100%; }
+        }
         .wathiq-header-network {
             position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%;
             pointer-events: none; background: transparent;
         }
-        .erms-header > :not(.wathiq-header-network) { position: relative; z-index: 1; }
+        .erms-header > :not(.wathiq-header-network):not(.erms-global-search-wrap) {
+            position: relative; z-index: 1;
+        }
         .erms-footer {
             min-height: 34px; padding: 0 18px;
             background: #f4f6f8; color: #687386;
@@ -1745,6 +1795,17 @@ def index() -> None:
                 "fit=contain alt='Wathiq mark'"
             )
             ui.label("wathiq").classes("erms-brand-name")
+        with ui.row().classes("erms-global-search-wrap no-wrap") as global_search_wrap:
+            global_search_input = ui.input(
+                placeholder="Search records, files and aggregations",
+            ).props(
+                "outlined dense clearable aria-label='Search records, files and aggregations'"
+            ).classes("erms-global-search")
+            global_search_input.value = q.strip()
+            global_search_submit = ui.button(icon="search").props(
+                "flat round color=blue-grey-8 aria-label='Submit global search'"
+            ).tooltip("Search")
+        global_search_wrap.set_visibility(full_text_search_enabled())
         ui.space()
         user_menu_button = ui.button(icon="account_circle").props("flat round color=blue-grey-9")
         with user_menu_button, ui.menu() as user_menu:
@@ -1848,7 +1909,11 @@ def index() -> None:
             drawer_sections.append((system_heading, (
                 "audit-trail", "login-sessions", "security-operations",
                 "security-levels", "profiles", "governance-custody", "holds",
+                "text-indexers",
             )))
+            text_indexers_navigation = drawer_link(
+                "Text Indexers", "manage_search", navigation_key="text-indexers",
+            )
             audit_navigation = drawer_link(
                 "Audit trail", "manage_history", navigation_key="audit-trail",
             )
@@ -1995,6 +2060,8 @@ def index() -> None:
             "org-units": "corporate_fare",
             "roles": "badge",
             "users": "group",
+            "text-indexers": "manage_search",
+            "text-indexer-details": "manage_search",
             "organization-browser": "lan",
             "audit-trail": "manage_history",
             "login-sessions": "devices",
@@ -2014,7 +2081,207 @@ def index() -> None:
             "search_text": str(search_input.value or ""),
             "lifecycle_filter": state.get("lifecycle_filter", "all"),
             "aggregation_mode": state.get("aggregation_mode", "search"),
+            "global_search_query": state.get("global_search_query", ""),
         }
+
+    def global_search_payload(query: str, *, cursor: str | None = None) -> dict[str, Any]:
+        full_text = {"full_text": {"query": query}}
+        payload: dict[str, Any] = {
+            "record_where": full_text,
+            "aggregation_where": full_text,
+            "result_types": ["records", "aggregations"],
+            "limit": 25,
+        }
+        if cursor:
+            payload["cursor"] = cursor
+        if state["search_diagnostics_enabled"]:
+            payload["debug"] = True
+        return payload
+
+    def render_safe_snippet(value: str | None) -> None:
+        """Render server markers as elements so snippet text can never become HTML."""
+        text = value or "No preview available"
+        with ui.row().classes("items-baseline gap-0 text-sm text-slate-600 flex-wrap"):
+            highlighted = False
+            for segment in text.replace("⟧", "⟧\x00").replace("⟦", "\x00⟦").split("\x00"):
+                if not segment:
+                    continue
+                if segment.startswith("⟦"):
+                    highlighted = True
+                    segment = segment[1:]
+                closes = segment.endswith("⟧")
+                if closes:
+                    segment = segment[:-1]
+                if segment:
+                    label = ui.label(segment).classes("whitespace-pre-wrap")
+                    if highlighted:
+                        label.classes(add="global-search-highlight")
+                if closes:
+                    highlighted = False
+
+    async def copy_diagnostic_json(value: dict[str, Any]) -> None:
+        encoded = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
+        await ui.run_javascript(
+            f"navigator.clipboard.writeText({json.dumps(encoded)}).then(() => true)",
+            timeout=5,
+        )
+        ui.notify("JSON copied", color="positive")
+
+    def render_search_diagnostics() -> None:
+        if not state["search_diagnostics_enabled"]:
+            return
+        with ui.expansion("Search diagnostics", icon="bug_report").props(
+            "dense header-class='text-slate-700'"
+        ).classes("w-full border border-slate-200 rounded-lg"):
+            sent = state.get("search_diagnostics_sent")
+            accepted = state.get("search_diagnostics_accepted")
+            with ui.column().classes("w-full p-3 gap-3"):
+                with ui.row().classes("w-full items-center flex-wrap min-w-0"):
+                    ui.label("Sent to API").classes("font-semibold")
+                    ui.label("POST /api/v1/full-text-search").classes("text-xs text-slate-500")
+                    ui.space()
+                    if sent is not None:
+                        ui.button("Copy JSON", icon="content_copy", on_click=lambda: copy_diagnostic_json(sent)).props("flat dense no-caps")
+                ui.code(json.dumps(sent, ensure_ascii=False, indent=2, sort_keys=True) if sent else "No diagnostic request has been sent.").classes("global-search-json w-full")
+                with ui.row().classes("w-full items-center flex-wrap min-w-0"):
+                    ui.label("Accepted by API").classes("font-semibold")
+                    if accepted:
+                        ui.label(
+                            f"Request ID: {accepted.get('request_id') or 'unavailable'} · "
+                            f"Fingerprint: {accepted.get('query_fingerprint') or 'unavailable'}"
+                        ).classes("text-xs text-slate-500 break-all min-w-0")
+                    ui.space()
+                    if accepted:
+                        ui.button("Copy JSON", icon="content_copy", on_click=lambda: copy_diagnostic_json(accepted)).props("flat dense no-caps")
+                if accepted:
+                    ui.code(json.dumps(accepted, ensure_ascii=False, indent=2, sort_keys=True)).classes("global-search-json w-full")
+                else:
+                    ui.label("Unavailable — the API did not accept or return this diagnostic request.").classes("text-sm text-slate-500 italic")
+
+    def render_global_search_results() -> None:
+        table_container.clear()
+        query = state["global_search_query"]
+        items = state["global_search_items"]
+        selected = state["global_search_filter"]
+        visible = [item for item in items if selected == "all" or item["type"] == selected]
+        record_count = sum(item["type"] == "record" for item in items)
+        aggregation_count = sum(item["type"] == "aggregation" for item in items)
+        with table_container, ui.column().classes("w-full p-5 gap-4"):
+            with ui.row().classes("w-full items-center gap-2 flex-wrap"):
+                ui.label(f"Results for “{query}”").classes("text-sm text-slate-600 grow")
+                if "search.query.debug" in set((auth_state.get("principal") or {}).get("global_privileges", [])):
+                    def toggle_diagnostics(event) -> None:
+                        state["search_diagnostics_enabled"] = bool(event.value)
+                        state["search_diagnostics_sent"] = None
+                        state["search_diagnostics_accepted"] = None
+                        ui.notify("Diagnostics will apply to the next explicit search.", color="primary")
+                        render_global_search_results()
+                    secondary_actions = ui.button(icon="more_vert").props(
+                        "flat round aria-label='Search result actions'"
+                    ).tooltip("Search result actions")
+                    with secondary_actions, ui.menu():
+                        diagnostics_toggle = ui.switch(
+                            "Search diagnostics", value=state["search_diagnostics_enabled"],
+                        ).props("dense color=primary").classes("px-3 py-2")
+                        diagnostics_toggle.on_value_change(toggle_diagnostics)
+            with ui.row().classes("items-center gap-1"):
+                for key, label in (("all", f"All · {len(items)}"), ("record", f"Records · {record_count}"), ("aggregation", f"Aggregations · {aggregation_count}")):
+                    button = ui.button(label, on_click=lambda _, value=key: (state.__setitem__("global_search_filter", value), render_global_search_results())).props("dense no-caps")
+                    button.props("unelevated color=primary" if selected == key else "flat color=blue-grey")
+            if state.get("global_search_loading"):
+                with ui.row().classes("w-full justify-center items-center py-12 gap-3").props("role=status aria-label='Loading search results'"):
+                    ui.spinner("dots", size="32px", color="primary")
+                    ui.label("Searching records, files and aggregations…").classes("text-slate-500")
+                return
+            render_search_diagnostics()
+            if state.get("global_search_error"):
+                with ui.card().classes("w-full shadow-none border border-red-200 bg-red-50 p-5"):
+                    ui.icon("error_outline", color="negative", size="30px")
+                    ui.label("Search could not be completed").classes("font-semibold")
+                    ui.label(state["global_search_error"]).classes("text-sm text-slate-600")
+                    ui.button("Try again", icon="refresh", on_click=lambda: run_global_search(query)).props("outline no-caps color=negative")
+                return
+            if state.get("global_search_pending"):
+                with ui.row().classes("w-full items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 p-3").props("role=status"):
+                    ui.icon("info", color="primary")
+                    ui.label("Recently added content may still be indexing, so these results may be incomplete.").classes("text-sm text-slate-700")
+            if not visible:
+                with ui.column().classes("w-full items-center py-12 gap-2").props("role=status"):
+                    ui.icon("search_off", size="42px").classes("text-slate-300")
+                    ui.label("No results found").classes("text-lg font-semibold")
+                    ui.label("Try different words or check the spelling.").classes("text-sm text-slate-500")
+            for item in visible:
+                if item["type"] == "record":
+                    record = item["record"]
+                    with ui.card().classes("global-search-card w-full"):
+                        with ui.row().classes("global-search-card-header w-full items-start p-4 gap-3"):
+                            ui.icon("description", color="primary", size="26px")
+                            with ui.column().classes("gap-0 grow min-w-0"):
+                                ui.label("RECORD").classes("text-[11px] font-bold tracking-wide text-primary")
+                                ui.label(record["title"]).classes("font-semibold text-base")
+                                ui.label(" · ".join(filter(None, (record.get("record_number"), record.get("aggregation_number"))))).classes("text-sm text-slate-500")
+                                if item.get("matched_record_metadata"):
+                                    ui.badge("Record metadata matched", color="primary").props("outline").classes("mt-1")
+                            ui.button("Open record", icon="open_in_new", on_click=lambda _, entity_id=record["id"]: select_record_details(entity_id)).props("outline no-caps").classes("global-search-result-action")
+                        for component in item.get("matching_components", []):
+                            with ui.column().classes("global-search-component w-full gap-1"):
+                                with ui.row().classes("items-center gap-2"):
+                                    ui.icon("attach_file", size="18px").classes("text-slate-500")
+                                    ui.label(component.get("file_name") or "Unnamed file").classes("text-sm font-medium")
+                                render_safe_snippet(component.get("snippet"))
+                else:
+                    aggregation = item["aggregation"]
+                    with ui.card().classes("global-search-card w-full"):
+                        with ui.row().classes("global-search-card-header w-full items-start p-4 gap-3"):
+                            ui.icon("folder", color="secondary", size="26px")
+                            with ui.column().classes("gap-0 grow min-w-0"):
+                                ui.label("AGGREGATION").classes("text-[11px] font-bold tracking-wide text-secondary")
+                                ui.label(aggregation["title"]).classes("font-semibold text-base")
+                                ui.label(aggregation.get("aggregation_number") or "").classes("text-sm text-slate-500")
+                                render_safe_snippet(item.get("snippet"))
+                            ui.button("Open aggregation", icon="open_in_new", on_click=lambda _, entity=aggregation: open_aggregation(entity)).props("outline no-caps").classes("global-search-result-action")
+            if state.get("global_search_cursor"):
+                ui.button("Load more results", icon="expand_more", on_click=lambda: run_global_search(query, load_more=True)).props("outline no-caps").classes("self-center")
+
+    async def run_global_search(query: str, *, load_more: bool = False) -> None:
+        query = query.strip()
+        if not query:
+            ui.notify("Enter words to search for", color="warning")
+            return
+        if not load_more:
+            register_navigation("full-text-search", "Search results")
+            state.update(resource="full-text-search", global_search_query=query,
+                         global_search_items=[], global_search_cursor=None,
+                         global_search_filter="all", search_diagnostics_sent=None,
+                         search_diagnostics_accepted=None, search_diagnostics_error=None)
+            global_search_input.value = query
+            global_search_input.update()
+            await ui.run_javascript(
+                f"history.replaceState(null, '', '/?q=' + encodeURIComponent({json.dumps(query)})); true",
+                timeout=5,
+            )
+        payload = global_search_payload(query, cursor=state.get("global_search_cursor") if load_more else None)
+        if state["search_diagnostics_enabled"]:
+            state["search_diagnostics_sent"] = payload
+        state["global_search_loading"] = True
+        state["global_search_error"] = None
+        title.text = "Search results"
+        subtitle.text = "Records, files and aggregations"
+        show_authenticated_view()
+        search_bar.set_visibility(False); aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False); add_record_button.set_visibility(False)
+        render_global_search_results()
+        try:
+            result = await api.full_text_search(payload)
+            state["global_search_items"].extend(result.get("items", []))
+            state["global_search_cursor"] = result.get("next_cursor")
+            state["global_search_pending"] = bool(result.get("index_freshness", {}).get("has_pending_content"))
+            state["search_diagnostics_accepted"] = result.get("_debug")
+        except ApiError as error:
+            state["global_search_error"] = error_message(error)
+        finally:
+            state["global_search_loading"] = False
+            render_global_search_results()
 
     def persist_navigation_trail() -> None:
         app.storage.user["navigation_trail"] = navigation_state["trail"]
@@ -2090,6 +2357,10 @@ def index() -> None:
         page: str, label: str, *, entity_id: int | None = None,
         accessible_label: str | None = None,
     ) -> None:
+        if page != "full-text-search":
+            state["search_diagnostics_sent"] = None
+            state["search_diagnostics_accepted"] = None
+            state["search_diagnostics_error"] = None
         if page == "dashboard":
             content_card.classes(add="erms-dashboard-card")
         else:
@@ -2126,6 +2397,12 @@ def index() -> None:
         entity_id = entry.get("entity_id")
         if page == "dashboard":
             await select_dashboard()
+        elif page == "full-text-search":
+            query = str(saved.get("global_search_query") or state.get("global_search_query") or "")
+            if query:
+                await run_global_search(query)
+            else:
+                await select_dashboard()
         elif page in ENTITIES:
             if page == "aggregations":
                 state["aggregation_mode"] = saved.get("aggregation_mode", "search")
@@ -2152,6 +2429,10 @@ def index() -> None:
             await select_hold_details(entity_id)
         elif page == "security-operations":
             await select_security_operations()
+        elif page == "text-indexers":
+            await select_text_indexers()
+        elif page == "text-indexer-details" and entity_id is not None:
+            await select_text_indexer_details(entity_id)
         elif page == "aggregation-details" and entity_id is not None:
             await open_aggregation(await api.get("aggregations", entity_id))
         elif page == "record-details" and entity_id is not None:
@@ -2602,6 +2883,19 @@ def index() -> None:
             except ApiError as error:
                 ui.notify(error_message(error), color="negative", close_button=True)
 
+        async def reindex_component(component: dict[str, Any]) -> None:
+            try:
+                result=await api.reindex_component(component["id"])
+                component["_indexing"]={"status":result["status"]}
+                render_current_components()
+                ui.notify(
+                    "Component indexing is already in progress" if result.get("already_in_progress")
+                    else "Component reindex queued; processing continues in the background",
+                    color="info",
+                )
+            except ApiError as error:
+                ui.notify(error_message(error),color="negative",close_button=True)
+
         async def view_component(component: dict[str, Any]) -> None:
             converting = requires_document_conversion(component)
             progress_dialog = ui.dialog().props("persistent")
@@ -2741,13 +3035,19 @@ def index() -> None:
                     render_component_cards(
                         current_rows, move_component, remove_component,
                         lambda item: show_entity_history("digital-components", item),
-                        view_component, download_component, readonly=readonly,
+                        view_component, download_component, reindex_component, readonly=readonly,
                         capabilities=component_capabilities,
                     )
 
         async def refresh_components() -> None:
             try:
                 rows = await api.components(record["id"])
+                if capability_allowed(component_capabilities,"reindex_components"):
+                    statuses=await asyncio.gather(*[
+                        api.component_indexing_status(item["id"]) for item in rows
+                    ],return_exceptions=True)
+                    for item,indexing in zip(rows,statuses):
+                        if isinstance(indexing,dict): item["_indexing"]=indexing
                 current_rows.clear()
                 current_rows.extend(rows)
                 render_current_components()
@@ -3898,6 +4198,18 @@ def index() -> None:
         async def refresh_record_view(saved: dict[str, Any] | None = None) -> None:
             await select_record_details((saved or record)["id"])
 
+        async def reindex_record_components() -> None:
+            try:
+                result=await api.reindex_record(record["id"])
+                ui.notify(
+                    f"Reindex batch queued: {result['queued']} new, "
+                    f"{result['already_in_progress']} already processing, "
+                    f"{result['unsupported_or_no_content']} unavailable",
+                    color="info",close_button=True,
+                )
+            except ApiError as error:
+                ui.notify(error_message(error),color="negative",close_button=True)
+
         async def leave_record_page() -> None:
             await breadcrumb_back(lambda: select_entity("records"))
 
@@ -4050,6 +4362,13 @@ def index() -> None:
                             "Why this access?", icon="fact_check",
                             on_click=lambda: show_access_explanation("record", record["id"]),
                         ).props("outline dense no-caps").tooltip("Explain the authorization decision gate by gate")
+                        if capabilities.get("reindex_components"):
+                            ui.button(
+                                "Reindex components",icon="manage_search",
+                                on_click=reindex_record_components,
+                            ).props("outline dense no-caps").tooltip(
+                                "Queue a background reindex for every eligible component in this record"
+                            )
                     if capabilities.get("manage_acl"):
                         with record_security_actions:
                             ui.button(
@@ -4732,6 +5051,7 @@ def index() -> None:
             "org-unit-details": "org-units",
             "role-details": "roles",
             "user-details": "users",
+            "text-indexer-details": "text-indexers",
         }.get(state["resource"], state["resource"])
         spec = ENTITIES[resolved_resource]
         creating = row is None
@@ -7042,6 +7362,8 @@ def index() -> None:
                                             ui.label(row.get("description") or "No description provided").classes("text-xs text-slate-500 mt-1 leading-5")
                                     if spec.key == "profiles":
                                         ui.badge("Built-in" if row.get("is_system") else "Custom", color="blue-grey").props("outline")
+                                    elif spec.key == "roles" and row.get("is_system"):
+                                        ui.badge("Built-in", color="blue-grey").props("outline")
                                     elif spec.key in {"users", "roles", "org-units"}:
                                         status_value = row.get("effective_status", row.get("status", "active"))
                                         ui.badge(
@@ -7072,7 +7394,7 @@ def index() -> None:
                                             ("Organization unit", " — ".join(filter(None, ((row.get("org_unit_display") or {}).get("code"), (row.get("org_unit_display") or {}).get("name")))) or "—"),
                                             ("Profile", " — ".join(filter(None, ((row.get("profile_display") or {}).get("code"), (row.get("profile_display") or {}).get("name")))) or "—"),
                                             ("Security clearance", " — ".join(filter(None, ((row.get("security_level_display") or {}).get("code"), (row.get("security_level_display") or {}).get("name")))) or "—"),
-                                            ("Information governance", "Yes" if row.get("is_information_governance") else "No"),
+                                            ("Role type", "Built-in" if row.get("is_system") else "Custom"),
                                         ),
                                         "org-units": (
                                             ("Parent unit", " — ".join(filter(None, ((row.get("parent_org_unit_display") or {}).get("code"), (row.get("parent_org_unit_display") or {}).get("name")))) or "Top-level unit"),
@@ -7111,10 +7433,13 @@ def index() -> None:
                                         ui.button(icon="open_in_new", on_click=lambda _, item=row: select_role_details(item["id"])).props("outline dense color=primary").tooltip("Open role")
                                     elif spec.key == "org-units":
                                         ui.button(icon="open_in_new", on_click=lambda _, item=row: select_organization_unit_details(item["id"])).props("outline dense color=primary").tooltip("Open organization unit")
-                                    ui.button(icon="edit", on_click=lambda _, item=row: open_editor(item)).props("outline dense color=primary").tooltip("Edit")
+                                    if not (spec.key == "roles" and row.get("is_system")):
+                                        ui.button(icon="edit", on_click=lambda _, item=row: open_editor(item)).props("outline dense color=primary").tooltip("Edit")
                                     if spec.key == "profiles":
                                         ui.button(icon="key", on_click=lambda _, item=row: show_profile_privilege_editor(item)).props("outline dense color=primary").tooltip("Manage privileges")
-                                    if spec.key in {"users", "roles"}:
+                                    if spec.key in {"users", "roles"} and not (
+                                        spec.key == "roles" and row.get("is_system")
+                                    ):
                                         ui.button(
                                             icon="group",
                                             on_click=lambda _, item=row, user_view=spec.key == "users": show_memberships(item, for_user=user_view),
@@ -8998,7 +9323,11 @@ def index() -> None:
                     state["rows"] = await decorate_for_spec(spec, rows)
                     state["searched"] = True
             else:
-                rows = await api.list(spec.key)
+                rows = (
+                    await api.list(spec.key, include_system=True)
+                    if spec.key == "roles"
+                    else await api.list(spec.key)
+                )
                 state["rows"] = await decorate_for_spec(spec, rows)
                 state["searched"] = True
             set_connection_status(True)
@@ -9894,28 +10223,55 @@ def index() -> None:
             except ApiError as error:
                 show_api_error(error)
 
+        is_builtin = bool(role.get("is_system"))
         with table_container, ui.column().classes("w-full p-5 gap-4"):
             with ui.element("div").classes("identity-command-layout w-full"):
                 with ui.card().classes(
                     "detail-surface identity-command-actions shadow-none p-4 gap-3"
                 ):
                     ui.label("Role actions").classes("aggregation-panel-heading w-full")
-                    ui.label("Manage and assignments").classes("record-action-group-label")
-                    with ui.row().classes("w-full gap-2 flex-wrap"):
-                        ui.button("Edit", icon="edit", on_click=lambda: open_editor(role, on_saved=refresh, resource_key="roles")).props("outline dense no-caps")
-                        ui.button("User assignments", icon="group", on_click=lambda: show_memberships(role, for_user=False)).props("outline dense no-caps")
+                    if is_builtin:
+                        ui.badge("Built-in · read-only", color="blue-grey").props("outline")
+                        if role.get("code") == "text-indexer-service":
+                            ui.label(
+                                "This is a platform-managed service role for non-interactive text-indexer "
+                                "processes, not a role for a person. Wathiq assigns it automatically when a "
+                                "Text Indexer is created. It cannot be edited, manually assigned, deactivated, "
+                                "or deleted here; manage its service identities and API keys in Text Indexers."
+                            ).classes("text-xs text-slate-500 leading-5")
+                        else:
+                            ui.label(
+                                "Built-in roles are provisioned by the platform and cannot be edited, "
+                                "assigned, deactivated, or deleted through ordinary role administration."
+                            ).classes("text-xs text-slate-500 leading-5")
+                        if (
+                            role.get("code") == "text-indexer-service"
+                            and "identity.text_indexers.administer" in set(
+                                (auth_state.get("principal") or {}).get("global_privileges", [])
+                            )
+                        ):
+                            ui.button(
+                                "Open Text Indexers", icon="manage_search",
+                                on_click=select_text_indexers,
+                            ).props("outline dense no-caps")
+                    else:
+                        ui.label("Manage and assignments").classes("record-action-group-label")
+                        with ui.row().classes("w-full gap-2 flex-wrap"):
+                            ui.button("Edit", icon="edit", on_click=lambda: open_editor(role, on_saved=refresh, resource_key="roles")).props("outline dense no-caps")
+                            ui.button("User assignments", icon="group", on_click=lambda: show_memberships(role, for_user=False)).props("outline dense no-caps")
                     ui.label("Audit").classes("record-action-group-label")
                     with ui.row().classes("w-full gap-2 flex-wrap"):
                         ui.button("History", icon="history", on_click=lambda: show_entity_history("roles", role)).props("outline dense no-caps")
-                    ui.label("Lifecycle").classes("record-action-group-label")
-                    with ui.row().classes("w-full gap-2 flex-wrap"):
-                        ui.button("Activate" if role["status"] == "inactive" else "Deactivate", icon="toggle_on" if role["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline dense no-caps")
-                        ui.button(
-                            "Permanently delete", icon="delete_forever", color="negative",
-                            on_click=lambda: confirm_identity_deletion(
-                                "roles", role, label="role", on_deleted=lambda: select_entity("roles"),
-                            ),
-                        ).props("outline dense no-caps")
+                    if not is_builtin:
+                        ui.label("Lifecycle").classes("record-action-group-label")
+                        with ui.row().classes("w-full gap-2 flex-wrap"):
+                            ui.button("Activate" if role["status"] == "inactive" else "Deactivate", icon="toggle_on" if role["status"] == "inactive" else "toggle_off", on_click=change_status).props("outline dense no-caps")
+                            ui.button(
+                                "Permanently delete", icon="delete_forever", color="negative",
+                                on_click=lambda: confirm_identity_deletion(
+                                    "roles", role, label="role", on_deleted=lambda: select_entity("roles"),
+                                ),
+                            ).props("outline dense no-caps")
                 role_metadata_panel = ui.card().classes(
                     "detail-surface identity-command-metadata shadow-none p-5 gap-4"
                 )
@@ -9925,6 +10281,8 @@ def index() -> None:
                     with ui.column().classes("gap-1 grow"):
                         ui.label(role["name"]).classes("text-xl font-semibold")
                         ui.label(role["code"]).classes("text-primary")
+                        if is_builtin:
+                            ui.badge("Built-in", color="blue-grey").props("outline")
                         if role.get("description"): ui.label(role["description"]).classes("text-slate-600")
                     ui.button(
                         "Back", icon="arrow_back",
@@ -10068,6 +10426,623 @@ def index() -> None:
                                                     )
                                                 )
 
+    def reveal_text_indexer_key(
+        result: dict[str, Any], on_closed: Any,
+    ) -> None:
+        api_key = result.pop("api_key")
+        dialog = ui.dialog().props("persistent")
+        with dialog, ui.card().classes("w-[680px] max-w-full gap-4"):
+            ui.label("New text-indexer API key").classes("text-xl font-semibold")
+            with ui.row().classes(
+                "w-full items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3"
+            ):
+                ui.icon("warning", color="warning")
+                ui.label(
+                    "Copy and store this key now. It will not be shown again."
+                ).classes("text-sm font-medium")
+            ui.label(api_key).classes(
+                "w-full font-mono text-sm bg-slate-100 rounded p-3 break-all select-all"
+            )
+
+            async def close_reveal() -> None:
+                nonlocal api_key
+                api_key = ""
+                dialog.close()
+                follow_up = on_closed()
+                if asyncio.iscoroutine(follow_up):
+                    await follow_up
+
+            with ui.row().classes("w-full justify-between gap-2 flex-wrap"):
+                ui.button(
+                    "Copy", icon="content_copy",
+                    on_click=lambda: ui.run_javascript(
+                        f"navigator.clipboard.writeText({json.dumps(api_key)}).then(() => true)",
+                        timeout=5,
+                    ),
+                ).props("outline no-caps")
+                ui.button(
+                    "Download credential file", icon="download",
+                    on_click=lambda: ui.run_javascript(
+                        "(() => { const b=new Blob([" + json.dumps(
+                            "TEXT_INDEXER_API_KEY=" + api_key + "\n"
+                        ) + "],{type:'text/plain'});const a=document.createElement('a');"
+                        "a.href=URL.createObjectURL(b);a.download='wathiq-text-indexer.env';"
+                        "a.click();URL.revokeObjectURL(a.href);return true;})()",
+                        timeout=5,
+                    ),
+                ).props("flat no-caps color=warning").tooltip(
+                    "Downloads a sensitive plaintext file"
+                )
+                ui.button(
+                    "I have stored it safely", on_click=close_reveal,
+                ).props("unelevated no-caps")
+        dialog.open()
+
+    async def select_text_indexers() -> None:
+        register_navigation("text-indexers", "Text Indexers")
+        show_authenticated_view()
+        state.update(resource="text-indexers", rows=[], searched=True, aggregation_detail=None)
+        search_bar.set_visibility(False)
+        aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
+        guidance.text = ""
+        title.text = "Text Indexers"
+        subtitle.text = "Non-interactive indexing identities and API credentials"
+        table_container.clear()
+        try:
+            indexers, health = await asyncio.gather(
+                api.text_indexers(), api.text_indexers_health(),
+            )
+        except ApiError as error:
+            with table_container, ui.column().classes("w-full p-5"):
+                ui.label(error_message(error)).classes("text-negative")
+                ui.button("Try again", icon="refresh", on_click=select_text_indexers).props(
+                    "outline no-caps"
+                )
+            return
+
+        def add_text_indexer_dialog() -> None:
+            dialog = ui.dialog().props("persistent")
+            with dialog, ui.card().classes("w-[580px] max-w-full gap-3"):
+                ui.label("Add text indexer").classes("text-xl font-semibold")
+                ui.label(
+                    "Creates a non-interactive identity, assigns its protected role, "
+                    "and generates the initial API key in one operation."
+                ).classes("text-sm text-slate-500")
+                name = ui.input("Deployment or pool name").props("outlined").classes("w-full")
+                external_id = ui.input("Immutable external ID").props("outlined").classes("w-full")
+                credential_name = ui.input("Initial credential name").props("outlined").classes("w-full")
+                expiry = ui.input(
+                    "Credential expiry (ISO 8601)",
+                    value=(datetime.now(timezone.utc) + timedelta(days=90)).replace(
+                        microsecond=0
+                    ).isoformat(),
+                ).props("outlined").classes("w-full")
+                ui.input(
+                    "Assigned role", value="Text Indexer Service (protected, sole role)",
+                ).props("outlined readonly").classes("w-full")
+
+                async def submit() -> None:
+                    payload = {
+                        "name": (name.value or "").strip(),
+                        "external_id": (external_id.value or "").strip(),
+                        "credential_name": (credential_name.value or "").strip(),
+                        "expires_at": (expiry.value or "").strip(),
+                    }
+                    try:
+                        created = await api.create_text_indexer(payload)
+                    except ApiError as error:
+                        show_api_error(error)
+                        return
+                    dialog.close()
+                    account = created["text_indexer"]
+                    reveal_text_indexer_key(
+                        created["credential"],
+                        lambda: select_text_indexer_details(account["id"]),
+                    )
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button("Create and generate key", icon="add", on_click=submit).props(
+                        "unelevated no-caps"
+                    )
+            dialog.open()
+
+        def queue_backfill_dialog() -> None:
+            dialog = ui.dialog().props("persistent")
+            with dialog, ui.card().classes("w-[520px] max-w-full gap-3"):
+                ui.label("Queue backfill batch").classes("text-xl font-semibold")
+                ui.label(
+                    "Queues low-priority indexing jobs for existing components whose "
+                    "derived index is missing or obsolete. Active jobs are not duplicated."
+                ).classes("text-sm text-slate-500")
+                batch_size = ui.number(
+                    "Maximum components", value=500, min=1, max=500, step=1,
+                ).props("outlined").classes("w-full")
+                ui.label(
+                    "This returns after queuing; text indexers process the jobs asynchronously."
+                ).classes("text-xs text-slate-500")
+
+                async def submit_backfill() -> None:
+                    try:
+                        requested = int(batch_size.value or 0)
+                        result = await api.queue_text_indexers_backfill(requested)
+                    except (TypeError, ValueError):
+                        ui.notify("Enter a whole number from 1 to 500", color="warning")
+                        return
+                    except ApiError as error:
+                        show_api_error(error)
+                        return
+                    dialog.close()
+                    ui.notify(
+                        f"Examined {result['drifted']} components; queued {result['queued']} jobs",
+                        color="positive",
+                    )
+                    await select_text_indexers()
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button(
+                        "Queue batch", icon="playlist_add", on_click=submit_backfill,
+                    ).props("unelevated no-caps")
+            dialog.open()
+
+        with table_container, ui.column().classes("w-full p-5 gap-4"):
+            metrics = health["metrics"]
+            queue = metrics.get("queue", {})
+            workers = metrics.get("workers", {})
+            recovery = metrics.get("recovery", {})
+
+            def backlog_age(value: Any) -> str:
+                if value is None:
+                    return "No queued jobs"
+                seconds = max(0, int(value))
+                if seconds < 60:
+                    return f"{seconds} seconds"
+                if seconds < 3600:
+                    return f"{seconds // 60} minutes"
+                if seconds < 86400:
+                    return f"{seconds // 3600} hours"
+                return f"{seconds // 86400} days"
+
+            with ui.card().classes("detail-surface shadow-none p-5 w-full gap-4"):
+                with ui.row().classes("w-full items-start gap-3"):
+                    with ui.element("div").classes("governance-card-icon"):
+                        ui.icon(
+                            "health_and_safety" if health["ready_for_search"] else "warning",
+                            size="22px",
+                        )
+                    with ui.column().classes("gap-0 grow min-w-0"):
+                        ui.label("Health").classes("text-lg font-semibold")
+                        ui.label(
+                            "Worker heartbeats, indexing queue and search-readiness snapshot"
+                        ).classes("text-sm text-slate-500")
+                    ui.badge(
+                        "Ready for search" if health["ready_for_search"] else "Attention required",
+                        color="positive" if health["ready_for_search"] else "warning",
+                    ).props("outline")
+                    ui.button(
+                        "Refresh", icon="refresh", on_click=select_text_indexers,
+                    ).props("outline dense no-caps")
+                    ui.button(
+                        "Queue backfill batch", icon="playlist_add",
+                        on_click=queue_backfill_dialog,
+                    ).props("unelevated dense no-caps")
+                ui.label(
+                    "API liveness is reported separately by /health. This section reports "
+                    "whether indexers and derived search data are operationally ready."
+                ).classes("text-xs text-slate-500")
+                with ui.element("div").classes(
+                    "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full"
+                ):
+                    for label, value, note, icon_name, attention in (
+                        (
+                            "Active workers", workers.get("active", 0),
+                            f"{workers.get('stale', 0)} stale registrations",
+                            "memory", int(workers.get("active", 0)) == 0,
+                        ),
+                        (
+                            "Waiting", queue.get("queued", 0),
+                            f"Oldest: {backlog_age(metrics.get('oldest_queued_seconds'))}",
+                            "schedule", int(queue.get("queued", 0)) > 0,
+                        ),
+                        (
+                            "Processing", queue.get("leased", 0),
+                            "Jobs with active worker leases",
+                            "sync", False,
+                        ),
+                        (
+                            "Failed", queue.get("failed", 0),
+                            f"{queue.get('unsupported', 0)} unsupported",
+                            "error_outline", int(queue.get("failed", 0)) > 0,
+                        ),
+                        (
+                            "Drifted documents", health.get("drifted_documents", 0),
+                            "Missing or obsolete derived index",
+                            "difference", int(health.get("drifted_documents", 0)) > 0,
+                        ),
+                        (
+                            "Stale documents", health.get("stale_documents", 0),
+                            "Published index is no longer current",
+                            "update_disabled", int(health.get("stale_documents", 0)) > 0,
+                        ),
+                        (
+                            "Expired leases", recovery.get("expired_leases", 0),
+                            f"{recovery.get('lease_lost_attempts', 0)} lease-loss attempts",
+                            "restart_alt", int(recovery.get("expired_leases", 0)) > 0,
+                        ),
+                        (
+                            "Blocking jobs", health.get("blocking_jobs", 0),
+                            f"Observed {format_timestamp(health.get('observed_at'))}",
+                            "hourglass_top", int(health.get("blocking_jobs", 0)) > 0,
+                        ),
+                    ):
+                        with ui.card().classes(
+                            "shadow-none border border-slate-200 p-3 gap-1"
+                            + (" bg-amber-50" if attention else "")
+                        ):
+                            with ui.row().classes("w-full items-center gap-2"):
+                                ui.icon(
+                                    icon_name,
+                                    color="warning" if attention else "primary",
+                                )
+                                ui.label(str(value)).classes("text-2xl font-semibold tabular-nums")
+                            ui.label(label).classes("text-sm font-semibold")
+                            ui.label(note).classes("text-xs text-slate-500")
+
+            with ui.row().classes("w-full items-center gap-3"):
+                query = ui.input("Filter by name or external ID").props(
+                    "outlined dense clearable"
+                ).classes("grow")
+                ui.button(
+                    "Add text indexer", icon="add", on_click=add_text_indexer_dialog,
+                ).props("unelevated no-caps")
+            results = ui.element("div").classes("governance-card-list w-full")
+            page = {"offset": 0}
+            page_size = 10
+            with ui.row().classes("w-full justify-end items-center gap-2"):
+                page_label = ui.label().classes("text-sm text-slate-500")
+                previous = ui.button("Previous", icon="chevron_left").props("flat dense no-caps")
+                next_button = ui.button("Next", icon="chevron_right").props("flat dense no-caps")
+
+            def filtered() -> list[dict[str, Any]]:
+                needle = str(query.value or "").strip().lower()
+                if not needle:
+                    return indexers
+                return [
+                    item for item in indexers
+                    if needle in item["name"].lower()
+                    or needle in item["external_id"].lower()
+                ]
+
+            def render() -> None:
+                rows = filtered()
+                if page["offset"] >= len(rows) and page["offset"]:
+                    page["offset"] = max(0, ((len(rows) - 1) // page_size) * page_size)
+                shown = rows[page["offset"]:page["offset"] + page_size]
+                results.clear()
+                with results:
+                    if not shown:
+                        with ui.card().classes("governance-empty-state shadow-none"):
+                            ui.icon("manage_search", size="34px").classes("text-slate-300")
+                            ui.label(
+                                "No matching text indexers" if indexers else "No text indexers"
+                            ).classes("font-semibold")
+                            ui.label(
+                                "Create a deployment or pool identity when an indexer is ready."
+                            ).classes("text-sm text-slate-500")
+                    for item in shown:
+                        with ui.card().classes(
+                            "governance-list-card shadow-none cursor-pointer"
+                        ).on(
+                            "click", lambda _, indexer_id=item["id"]:
+                                select_text_indexer_details(indexer_id),
+                        ):
+                            with ui.row().classes("w-full items-start gap-3 no-wrap"):
+                                with ui.element("div").classes("governance-card-icon"):
+                                    ui.icon("manage_search", size="20px")
+                                with ui.column().classes("gap-0 grow min-w-0"):
+                                    ui.label(item["name"]).classes("font-semibold")
+                                    ui.label(item["external_id"]).classes(
+                                        "text-xs text-slate-500 font-mono break-all"
+                                    )
+                                ui.badge(
+                                    item["status"].title(),
+                                    color={"active": "positive", "suspended": "warning"}.get(
+                                        item["status"], "grey-7"
+                                    ),
+                                ).props("outline")
+                            with ui.element("div").classes("governance-list-facts"):
+                                for label, value in (
+                                    ("Active credentials", str(item["active_credential_count"])),
+                                    ("Credential history", str(item["credential_count"])),
+                                    ("Last used", format_timestamp(item["last_used_at"]) if item.get("last_used_at") else "Never"),
+                                ):
+                                    with ui.column().classes("gap-0 min-w-0"):
+                                        ui.label(label).classes("detail-field-label")
+                                        ui.label(value).classes("text-sm")
+                start = page["offset"] + 1 if rows else 0
+                end = min(page["offset"] + page_size, len(rows))
+                page_label.text = f"{start}–{end} of {len(rows)}"
+                previous.set_enabled(page["offset"] > 0)
+                next_button.set_enabled(page["offset"] + page_size < len(rows))
+
+            def move(delta: int) -> None:
+                page["offset"] = max(0, page["offset"] + delta * page_size)
+                render()
+
+            query.on_value_change(lambda: (page.update(offset=0), render()))
+            previous.on("click", lambda: move(-1))
+            next_button.on("click", lambda: move(1))
+            render()
+
+    async def select_text_indexer_details(user_id: int) -> None:
+        register_navigation("text-indexer-details", f"Text indexer #{user_id}", entity_id=user_id)
+        show_authenticated_view()
+        state.update(resource="text-indexer-details", rows=[], searched=True, aggregation_detail=None)
+        search_bar.set_visibility(False)
+        aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
+        guidance.text = ""
+        table_container.clear()
+        try:
+            indexer, credential_page = await asyncio.gather(
+                api.text_indexer(user_id),
+                api.text_indexer_credentials(user_id, history="all", limit=5, offset=0),
+            )
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+        title.text = indexer["name"]
+        subtitle.text = "Text-indexer identity and credential administration"
+        register_navigation(
+            "text-indexer-details", indexer["name"], entity_id=user_id,
+            accessible_label=f"{indexer['name']} — {indexer['external_id']}",
+        )
+
+        async def change_status(action: str) -> None:
+            try:
+                await api.set_text_indexer_status(user_id, indexer["version"], action)
+            except ApiError as error:
+                show_api_error(error)
+                return
+            ui.notify("Text indexer status updated", color="positive")
+            await select_text_indexer_details(user_id)
+
+        def credential_dialog(existing: dict[str, Any] | None = None) -> None:
+            dialog = ui.dialog().props("persistent")
+            with dialog, ui.card().classes("w-[540px] max-w-full gap-3"):
+                ui.label("Rotate API key" if existing else "Generate API key").classes(
+                    "text-xl font-semibold"
+                )
+                name = ui.input(
+                    "Credential name", value=(existing or {}).get("name", ""),
+                ).props("outlined").classes("w-full")
+                expiry = ui.input(
+                    "Expiry (ISO 8601)",
+                    value=(datetime.now(timezone.utc) + timedelta(days=90)).replace(
+                        microsecond=0
+                    ).isoformat(),
+                ).props("outlined").classes("w-full")
+                ui.input("Allowed route", value="Internal text-indexing API only").props(
+                    "outlined readonly"
+                ).classes("w-full")
+                overlap = None
+                if existing:
+                    overlap = ui.input(
+                        "Old-key overlap until (optional, maximum 7 days)"
+                    ).props("outlined clearable").classes("w-full")
+
+                async def submit() -> None:
+                    payload = {
+                        "name": (name.value or "").strip(),
+                        "expires_at": (expiry.value or "").strip(),
+                    }
+                    if existing and overlap and overlap.value:
+                        payload["overlap_until"] = overlap.value.strip()
+                    try:
+                        result = (
+                            await api.rotate_text_indexer_credential(
+                                user_id, existing["id"], payload,
+                            ) if existing else
+                            await api.create_text_indexer_credential(user_id, payload)
+                        )
+                    except ApiError as error:
+                        show_api_error(error)
+                        return
+                    dialog.close()
+                    reveal_text_indexer_key(
+                        result, lambda: select_text_indexer_details(user_id),
+                    )
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button(
+                        "Rotate key" if existing else "Generate API key",
+                        icon="key", on_click=submit,
+                    ).props("unelevated no-caps")
+            dialog.open()
+
+        def confirm_revoke(credential: dict[str, Any]) -> None:
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("w-[520px] max-w-full gap-3"):
+                ui.label("Revoke API key?").classes("text-xl font-semibold")
+                ui.label(
+                    f"Revoke {credential['name']} ({credential['credential_identifier']})?"
+                ).classes("font-medium")
+                ui.label(
+                    "Affected indexers fail on their next request. Revocation cannot be undone."
+                ).classes("text-sm text-slate-600")
+
+                async def revoke() -> None:
+                    try:
+                        await api.revoke_text_indexer_credential(user_id, credential["id"])
+                    except ApiError as error:
+                        show_api_error(error)
+                        return
+                    dialog.close()
+                    ui.notify("API key revoked", color="positive")
+                    await select_text_indexer_details(user_id)
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button("Revoke", icon="block", color="negative", on_click=revoke).props(
+                        "unelevated no-caps"
+                    )
+            dialog.open()
+
+        with table_container, ui.column().classes("w-full p-5 gap-4"):
+            with ui.card().classes("detail-surface shadow-none p-5 w-full"):
+                with ui.row().classes("w-full items-start gap-3"):
+                    with ui.element("div").classes("governance-card-icon"):
+                        ui.icon("manage_search", size="22px")
+                    with ui.column().classes("gap-0 grow"):
+                        ui.label(indexer["name"]).classes("text-xl font-semibold")
+                        ui.label(indexer["external_id"]).classes(
+                            "text-sm text-slate-500 font-mono"
+                        )
+                        with ui.row().classes("items-center gap-2 mt-1"):
+                            ui.badge("Service account", color="primary").props("outline")
+                            ui.badge("Non-interactive", color="blue-grey").props("outline")
+                            ui.badge("Text Indexer Service", color="indigo").props("outline")
+                    ui.badge(
+                        indexer["status"].title(),
+                        color={"active": "positive", "suspended": "warning"}.get(
+                            indexer["status"], "grey-7"
+                        ),
+                    )
+                with ui.grid(columns=3).classes("w-full gap-4 mt-3"):
+                    for label, value in (
+                        ("External ID", indexer["external_id"]),
+                        ("Created", format_timestamp(indexer["date_created"])),
+                        ("Last used", format_timestamp(indexer["last_used_at"]) if indexer.get("last_used_at") else "Never"),
+                    ):
+                        with ui.column().classes("gap-1 border-b border-slate-100 pb-1.5"):
+                            ui.label(label).classes("detail-field-label")
+                            ui.label(value).classes("font-medium break-all")
+                with ui.row().classes("w-full justify-between gap-2 flex-wrap mt-2"):
+                    ui.button(
+                        "Back to Text Indexers", icon="arrow_back",
+                        on_click=lambda: breadcrumb_back(select_text_indexers),
+                    ).props("flat no-caps")
+                    with ui.row().classes("gap-2"):
+                        if indexer["status"] == "active":
+                            ui.button(
+                                "Suspend", icon="pause_circle", on_click=lambda: change_status("suspend"),
+                            ).props("outline no-caps color=warning")
+                        elif indexer["status"] == "suspended":
+                            ui.button(
+                                "Activate", icon="play_circle", on_click=lambda: change_status("unsuspend"),
+                            ).props("outline no-caps color=positive")
+
+            with ui.row().classes("w-full items-center"):
+                with ui.column().classes("gap-0 grow"):
+                    ui.label("API credentials").classes("text-lg font-semibold")
+                    ui.label("Internal text-indexing API only").classes("text-sm text-slate-500")
+                generate = ui.button(
+                    "Generate API key", icon="add", on_click=credential_dialog,
+                ).props("unelevated no-caps")
+                if indexer["status"] != "active":
+                    generate.disable()
+                    generate.tooltip("Activate this text indexer before generating a key")
+            credential_state = {"history": "all", "offset": 0, "page": credential_page}
+            with ui.row().classes("w-full items-end gap-3 flex-wrap"):
+                credential_filter = ui.select(
+                    {"all": "All credentials", "usable": "Usable", "history": "Revoked or expired"},
+                    value="all", label="Show",
+                ).props("outlined dense options-dense").classes("w-52")
+                ui.label(
+                    f"Revoked and expired credentials are retained for {credential_page['retention_days']} days, "
+                    "then removed by the scheduled API maintenance job. Security audit events are retained."
+                ).classes("text-xs text-slate-500 grow")
+            credential_results = ui.column().classes("w-full gap-3")
+            with ui.row().classes("w-full items-center justify-between gap-2"):
+                credential_summary = ui.label().classes("text-sm text-slate-500")
+                with ui.row().classes("gap-2"):
+                    credential_previous = ui.button("Previous", icon="chevron_left").props("outline dense no-caps")
+                    credential_next = ui.button("Next", icon="chevron_right").props("outline dense no-caps icon-right")
+
+            def render_credentials() -> None:
+                page = credential_state["page"]
+                items = page["items"]
+                credential_results.clear()
+                with credential_results:
+                    if not items:
+                        with ui.card().classes("governance-empty-state shadow-none"):
+                            ui.icon("key_off", size="34px").classes("text-slate-300")
+                            ui.label("No matching API credentials").classes("font-semibold")
+                    for credential in items:
+                        with ui.card().classes("governance-list-card shadow-none"):
+                            with ui.row().classes("w-full items-start gap-3 no-wrap"):
+                                with ui.element("div").classes("governance-card-icon"):
+                                    ui.icon("key", size="20px")
+                                with ui.column().classes("gap-0 grow min-w-0"):
+                                    ui.label(credential["name"]).classes("font-semibold")
+                                    ui.label(
+                                        f"ID: wti_{credential['credential_identifier']} · Internal text-indexing API only"
+                                    ).classes("text-xs text-slate-500 break-all")
+                                ui.badge(
+                                    credential["status"].title(),
+                                    color={"active": "positive", "expiring": "warning", "expired": "grey-7", "revoked": "negative"}.get(
+                                        credential["status"], "grey-7"
+                                    ),
+                                ).props("outline")
+                            with ui.element("div").classes("governance-list-facts"):
+                                for label, value in (
+                                    ("Created", format_timestamp(credential["date_created"])),
+                                    ("Expires", format_timestamp(credential["expires_at"])),
+                                    ("Last used", format_timestamp(credential["last_used_at"]) if credential.get("last_used_at") else "Never"),
+                                    ("Created by", credential.get("created_by_name") or "System"),
+                                    ("Last worker", credential.get("last_worker_id") or "—"),
+                                ):
+                                    with ui.column().classes("gap-0 min-w-0"):
+                                        ui.label(label).classes("detail-field-label")
+                                        ui.label(value).classes("text-sm break-all")
+                            if credential["status"] == "active":
+                                with ui.row().classes("w-full justify-end gap-2 border-t border-slate-100 pt-2"):
+                                    rotate = ui.button(
+                                        "Rotate", icon="sync",
+                                        on_click=lambda _, item=credential: credential_dialog(item),
+                                    ).props("outline dense no-caps")
+                                    if indexer["status"] != "active":
+                                        rotate.disable()
+                                    ui.button(
+                                        "Revoke", icon="block", color="negative",
+                                        on_click=lambda _, item=credential: confirm_revoke(item),
+                                    ).props("outline dense no-caps")
+                start = page["offset"] + 1 if page["total"] else 0
+                end = min(page["offset"] + len(items), page["total"])
+                credential_summary.text = f"Showing {start}–{end} of {page['total']}"
+                credential_previous.set_enabled(page["offset"] > 0)
+                credential_next.set_enabled(page["offset"] + page["limit"] < page["total"])
+
+            async def load_credentials(*, offset: int | None = None) -> None:
+                requested_offset = credential_state["offset"] if offset is None else max(0, offset)
+                try:
+                    page = await api.text_indexer_credentials(
+                        user_id, history=credential_state["history"], limit=5,
+                        offset=requested_offset,
+                    )
+                except ApiError as error:
+                    show_api_error(error)
+                    return
+                if requested_offset and not page["items"] and page["total"]:
+                    await load_credentials(offset=max(0, requested_offset - 5))
+                    return
+                credential_state.update(offset=page["offset"], page=page)
+                render_credentials()
+
+            async def filter_credentials() -> None:
+                credential_state.update(history=credential_filter.value, offset=0)
+                await load_credentials(offset=0)
+
+            credential_filter.on_value_change(filter_credentials)
+            credential_previous.on("click", lambda: load_credentials(offset=credential_state["offset"] - 5))
+            credential_next.on("click", lambda: load_credentials(offset=credential_state["offset"] + 5))
+            render_credentials()
+
     async def select_user_details(user_id: int) -> None:
         """Render the extensible single-user management view."""
         register_navigation("user-details", f"User #{user_id}", entity_id=user_id)
@@ -10088,6 +11063,20 @@ def index() -> None:
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
             return
+        if (
+            person.get("account_type") == "service"
+            and "identity.text_indexers.administer" in set(
+                (auth_state.get("principal") or {}).get("global_privileges", [])
+            )
+        ):
+            try:
+                await api.text_indexer(user_id)
+            except ApiError as error:
+                if error.status_code != 404:
+                    raise
+            else:
+                await select_text_indexer_details(user_id)
+                return
         title.text = person["name"]
         subtitle.text = "User details and account administration"
         register_navigation(
@@ -10095,6 +11084,14 @@ def index() -> None:
             accessible_label=" — ".join(filter(None, (person["name"], person.get("email")))),
         )
         role_by_id = {item["id"]: item for item in roles}
+        can_administer_text_indexers = "identity.text_indexers.administer" in set(
+            (auth_state.get("principal") or {}).get("global_privileges", [])
+        ) and person.get("account_type") != "service"
+        service_credentials = (
+            await api.service_credentials(user_id)
+            if person.get("account_type") == "service" and can_administer_text_indexers
+            else []
+        )
 
         async def refresh_user(_: Any = None) -> None:
             await select_user_details(user_id)
@@ -10130,6 +11127,87 @@ def index() -> None:
                 ui.button("I have copied it", on_click=dialog.close).props("unelevated no-caps").classes("self-end")
             dialog.open()
 
+        def reveal_api_key(result: dict[str, Any]) -> None:
+            api_key = result.pop("api_key")
+            dialog = ui.dialog().props("persistent")
+            with dialog, ui.card().classes("w-[680px] max-w-full"):
+                ui.label("New API key").classes("text-xl font-semibold")
+                with ui.row().classes("w-full items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3"):
+                    ui.icon("warning", color="warning")
+                    ui.label("Copy and store this key now. It will not be shown again.").classes("text-sm font-medium")
+                ui.label(api_key).classes("w-full font-mono text-sm bg-slate-100 rounded p-3 break-all select-all")
+                with ui.row().classes("w-full justify-between gap-2 flex-wrap"):
+                    ui.button(
+                        "Copy", icon="content_copy",
+                        on_click=lambda: ui.run_javascript(
+                            f"navigator.clipboard.writeText({json.dumps(api_key)}).then(() => true)", timeout=5,
+                        ),
+                    ).props("outline no-caps")
+                    ui.button(
+                        "Download credential file", icon="download",
+                        on_click=lambda: ui.run_javascript(
+                            "(() => { const b=new Blob([" + json.dumps("TEXT_INDEXER_API_KEY=" + api_key + "\n") + "],{type:'text/plain'});"
+                            "const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='wathiq-text-indexer.env';a.click();URL.revokeObjectURL(a.href);return true;})()",
+                            timeout=5,
+                        ),
+                    ).props("flat no-caps color=warning").tooltip("Downloads a sensitive plaintext file")
+                    async def close_reveal() -> None:
+                        nonlocal api_key
+                        api_key = ""
+                        dialog.close()
+                        await select_user_details(user_id)
+                    ui.button("I have stored it safely", on_click=close_reveal).props("unelevated no-caps")
+            dialog.open()
+
+        def credential_dialog(existing: dict[str, Any] | None = None) -> None:
+            dialog = ui.dialog().props("persistent")
+            with dialog, ui.card().classes("w-[540px] max-w-full"):
+                ui.label("Rotate API key" if existing else "Generate API key").classes("text-xl font-semibold")
+                name = ui.input("Credential name", value=(existing or {}).get("name", "")).props("outlined").classes("w-full")
+                expiry = ui.input(
+                    "Expiry (ISO 8601)",
+                    value=(datetime.now(timezone.utc) + timedelta(days=90)).replace(microsecond=0).isoformat(),
+                ).props("outlined").classes("w-full")
+                ui.input("Allowed route", value="Internal text-indexing API only").props("outlined readonly").classes("w-full")
+                overlap = None
+                if existing:
+                    overlap = ui.input("Old-key overlap until (optional, maximum 7 days)").props("outlined clearable").classes("w-full")
+                async def submit_credential() -> None:
+                    payload = {"name": (name.value or "").strip(), "expires_at": (expiry.value or "").strip()}
+                    if existing and overlap and overlap.value:
+                        payload["overlap_until"] = overlap.value.strip()
+                    try:
+                        result = (
+                            await api.rotate_service_credential(user_id, existing["id"], payload)
+                            if existing else await api.create_service_credential(user_id, payload)
+                        )
+                    except ApiError as error:
+                        show_api_error(error); return
+                    dialog.close()
+                    reveal_api_key(result)
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button("Rotate key" if existing else "Generate API key", icon="key", on_click=submit_credential).props("unelevated no-caps")
+            dialog.open()
+
+        def confirm_revoke_credential(credential: dict[str, Any]) -> None:
+            dialog = ui.dialog()
+            with dialog, ui.card().classes("w-[520px] max-w-full"):
+                ui.label("Revoke API key?").classes("text-xl font-semibold")
+                ui.label(f"Revoke {credential['name']} ({credential['credential_identifier']})?").classes("font-medium")
+                ui.label("Affected indexer instances will fail on their next API request. Revocation cannot be undone.").classes("text-sm text-slate-600")
+                async def revoke() -> None:
+                    try:
+                        await api.revoke_service_credential(user_id, credential["id"])
+                    except ApiError as error:
+                        show_api_error(error); return
+                    dialog.close(); ui.notify("API key revoked", color="positive")
+                    await select_user_details(user_id)
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    ui.button("Revoke", icon="block", color="negative", on_click=revoke).props("unelevated no-caps")
+            dialog.open()
+
         with table_container:
             with ui.column().classes("w-full p-5 gap-4"):
                 with ui.element("div").classes("identity-command-layout w-full"):
@@ -10139,30 +11217,40 @@ def index() -> None:
                         ui.label("User actions").classes("aggregation-panel-heading w-full")
                         ui.label("Account and assignments").classes("record-action-group-label")
                         with ui.row().classes("w-full gap-2 flex-wrap"):
-                            ui.button("Edit", icon="edit", on_click=lambda: open_editor(person, on_saved=refresh_user, resource_key="users")).props("outline dense no-caps")
-                            ui.button("Role assignments", icon="group", on_click=lambda: show_memberships(person, for_user=True)).props("outline dense no-caps")
-                            ui.button("Temporary password", icon="password", on_click=issue_password).props("outline dense no-caps color=orange")
+                            if person.get("account_type") == "person":
+                                ui.button("Edit", icon="edit", on_click=lambda: open_editor(person, on_saved=refresh_user, resource_key="users")).props("outline dense no-caps")
+                                ui.button("Role assignments", icon="group", on_click=lambda: show_memberships(person, for_user=True)).props("outline dense no-caps")
+                                ui.button("Temporary password", icon="password", on_click=issue_password).props("outline dense no-caps color=orange")
+                            elif can_administer_text_indexers:
+                                ui.button(
+                                    "Open Text Indexer administration", icon="manage_search",
+                                    on_click=lambda: select_text_indexer_details(user_id),
+                                ).props("outline dense no-caps")
                         ui.label("Status and access").classes("record-action-group-label")
                         with ui.row().classes("w-full gap-2 flex-wrap"):
-                            if person["status"] == "inactive":
-                                ui.button("Activate", icon="toggle_on", on_click=lambda: change_status("activate")).props("outline dense no-caps color=positive")
+                            if person.get("account_type") == "person":
+                                if person["status"] == "inactive":
+                                    ui.button("Activate", icon="toggle_on", on_click=lambda: change_status("activate")).props("outline dense no-caps color=positive")
+                                else:
+                                    ui.button("Deactivate", icon="toggle_off", on_click=lambda: change_status("deactivate")).props("outline dense no-caps color=negative")
+                                if person["status"] == "suspended":
+                                    ui.button("Unsuspend", icon="play_circle", on_click=lambda: change_status("unsuspend")).props("outline dense no-caps color=positive")
+                                else:
+                                    suspend = ui.button("Suspend", icon="pause_circle", on_click=lambda: change_status("suspend")).props("outline dense no-caps color=warning")
+                                    if person["status"] != "active":
+                                        suspend.disable(); suspend.tooltip("Activate the user before suspending")
                             else:
-                                ui.button("Deactivate", icon="toggle_off", on_click=lambda: change_status("deactivate")).props("outline dense no-caps color=negative")
-                            if person["status"] == "suspended":
-                                ui.button("Unsuspend", icon="play_circle", on_click=lambda: change_status("unsuspend")).props("outline dense no-caps color=positive")
-                            else:
-                                suspend = ui.button("Suspend", icon="pause_circle", on_click=lambda: change_status("suspend")).props("outline dense no-caps color=warning")
-                                if person["status"] != "active":
-                                    suspend.disable(); suspend.tooltip("Activate the user before suspending")
+                                ui.label("Managed through the dedicated Text Indexers workflow.").classes("text-sm text-slate-500")
                         ui.label("Audit and lifecycle").classes("record-action-group-label")
                         with ui.row().classes("w-full gap-2 flex-wrap"):
                             ui.button("History", icon="history", on_click=lambda: show_entity_history("users", person)).props("outline dense no-caps")
-                            ui.button(
-                                "Permanently delete", icon="delete_forever", color="negative",
-                                on_click=lambda: confirm_identity_deletion(
-                                    "users", person, label="user", on_deleted=lambda: select_entity("users"),
-                                ),
-                            ).props("outline dense no-caps")
+                            if person.get("account_type") == "person":
+                                ui.button(
+                                    "Permanently delete", icon="delete_forever", color="negative",
+                                    on_click=lambda: confirm_identity_deletion(
+                                        "users", person, label="user", on_deleted=lambda: select_entity("users"),
+                                    ),
+                                ).props("outline dense no-caps")
                     user_metadata_panel = ui.card().classes(
                         "detail-surface identity-command-metadata shadow-none p-5"
                     )
@@ -10175,6 +11263,10 @@ def index() -> None:
                                 f"{person['account_type'].title()} account · "
                                 f"{person.get('email') or 'No email address'}"
                             ).classes("text-sm text-slate-500")
+                            if person.get("account_type") == "service":
+                                with ui.row().classes("items-center gap-1"):
+                                    ui.badge("Service account", color="primary").props("outline")
+                                    ui.badge("Non-interactive", color="blue-grey").props("outline")
                         with ui.row().classes("gap-1"):
                             ui.button(
                                 "Back", icon="arrow_back",
@@ -10216,6 +11308,47 @@ def index() -> None:
                             ui.label("User ID").classes("detail-field-label")
                             ui.label(str(person["id"])).classes("font-medium tabular-nums")
                     user_metadata_panel.__exit__(None, None, None)
+                if person.get("account_type") == "service" and can_administer_text_indexers:
+                    with ui.row().classes("w-full items-center"):
+                        with ui.column().classes("gap-0 grow"):
+                            ui.label("API credentials").classes("text-lg font-semibold")
+                            ui.label("Internal text-indexing API only · Non-interactive service account").classes("text-sm text-slate-500")
+                        if "identity.users.administer" in set((auth_state.get("principal") or {}).get("global_privileges", [])):
+                            generate_key = ui.button("Generate API key", icon="add", on_click=credential_dialog).props("unelevated no-caps")
+                            if person.get("status") != "active":
+                                generate_key.disable(); generate_key.tooltip("Activate the service account before generating a key")
+                    if not service_credentials:
+                        with ui.card().classes("governance-empty-state shadow-none"):
+                            ui.icon("key_off", size="34px").classes("text-slate-300")
+                            ui.label("No API credentials").classes("font-semibold")
+                            ui.label("Generate a key when this text-indexer deployment is ready.").classes("text-sm text-slate-500")
+                    for credential in service_credentials:
+                        with ui.card().classes("governance-list-card shadow-none"):
+                            with ui.row().classes("w-full items-start gap-3 no-wrap"):
+                                with ui.element("div").classes("governance-card-icon"):
+                                    ui.icon("key", size="20px")
+                                with ui.column().classes("gap-0 grow min-w-0"):
+                                    ui.label(credential["name"]).classes("font-semibold")
+                                    ui.label(f"ID: wti_{credential['credential_identifier']} · Internal text-indexing API only").classes("text-xs text-slate-500 break-all")
+                                ui.badge(credential["status"].title(), color={"active": "positive", "expiring": "warning", "expired": "grey-7", "revoked": "negative"}.get(credential["status"], "grey-7")).props("outline")
+                                if person.get("status") != "active" and credential["status"] in {"active", "expiring"}:
+                                    ui.badge("Disabled with account", color="negative").props("outline")
+                            with ui.grid(columns=3).classes("w-full gap-3"):
+                                for label, value in (
+                                    ("Created", format_timestamp(credential.get("date_created"))),
+                                    ("Expires", format_timestamp(credential.get("expires_at"))),
+                                    ("Last used", format_timestamp(credential.get("last_used_at")) if credential.get("last_used_at") else "Never"),
+                                    ("Created by", credential.get("created_by_name") or "System"),
+                                    ("Last worker", credential.get("last_worker_id") or "—"),
+                                ):
+                                    with ui.column().classes("gap-0"):
+                                        ui.label(label).classes("detail-field-label")
+                                        ui.label(value).classes("text-sm")
+                            if credential["status"] == "active" and "identity.users.administer" in set((auth_state.get("principal") or {}).get("global_privileges", [])):
+                                with ui.row().classes("w-full justify-end gap-2 border-t border-slate-100 pt-2"):
+                                    ui.button("Rotate", icon="sync", on_click=lambda _, item=credential: credential_dialog(item)).props("outline dense no-caps")
+                                    ui.button("Revoke", icon="block", color="negative", on_click=lambda _, item=credential: confirm_revoke_credential(item)).props("outline dense no-caps")
+
                 ui.label("Role assignments").classes("text-lg font-semibold")
                 if not assignments:
                     ui.label("No role assignments").classes("text-slate-400")
@@ -10314,14 +11447,15 @@ def index() -> None:
                                                         "expired": "grey-7",
                                                     }.get(row["validity"], "grey-7"),
                                                 ).props("outline")
-                                        remove_button = ui.button(icon="person_remove").props(
-                                            "flat round dense color=negative "
-                                            "aria-label='Remove role assignment'"
-                                        ).tooltip("Remove role assignment")
-                                        remove_button.on(
-                                            "click.stop",
-                                            lambda _, item=row: confirm_remove_role_assignment(item),
-                                        )
+                                        if person.get("account_type") == "person":
+                                            remove_button = ui.button(icon="person_remove").props(
+                                                "flat round dense color=negative "
+                                                "aria-label='Remove role assignment'"
+                                            ).tooltip("Remove role assignment")
+                                            remove_button.on(
+                                                "click.stop",
+                                                lambda _, item=row: confirm_remove_role_assignment(item),
+                                            )
                                     with ui.element("div").classes(
                                         "governance-list-facts user-role-assignment-facts"
                                     ):
@@ -13398,6 +14532,7 @@ def index() -> None:
     audit_navigation.on("click", select_audit_trail)
     sessions_navigation.on("click", lambda: select_login_sessions())
     security_operations_navigation.on("click", select_security_operations)
+    text_indexers_navigation.on("click", select_text_indexers)
     custody_navigation.on("click", select_governance_custody)
     holds_navigation.on("click", select_holds)
     change_password_menu.on("click", show_change_password)
@@ -13443,6 +14578,9 @@ def index() -> None:
     add_record_button.on("click", add_record_for_current_aggregation)
     search_button.on("click", lambda: load_rows())
     search_input.on("keydown.enter", lambda: load_rows())
+    if full_text_search_enabled():
+        global_search_submit.on("click", lambda: run_global_search(global_search_input.value or ""))
+        global_search_input.on("keydown.enter", lambda: run_global_search(global_search_input.value or ""))
     login_dialog = ui.dialog().props("persistent")
     with login_dialog:
         ui.element("canvas").classes(
@@ -13570,7 +14708,10 @@ def index() -> None:
                     await reload_favourites()
                 if principal["must_change_password"]:
                     return
-                if navigation_state["trail"]:
+                if q.strip():
+                    navigation_state["trail"] = []
+                    await run_global_search(q)
+                elif navigation_state["trail"]:
                     navigation_state["restoring"] = True
                     try:
                         await restore_navigation_entry(navigation_state["trail"][-1])

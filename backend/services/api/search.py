@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+import hashlib
+import json
+import re
+import base64
 from typing import Any
 from uuid import UUID
 
@@ -8,13 +12,20 @@ from fastapi import HTTPException, status
 from psycopg import Connection, sql
 from pydantic import TypeAdapter, ValidationError
 
-from .schemas import SearchExpression, SearchRequest
+from .schemas import GlobalSearchRequest, SearchExpression, SearchRequest
 from .crud import redact_hidden_relationships
+from .config import boolean_environment
 
 
 MAX_SEARCH_DEPTH = 5
 MAX_SEARCH_CONDITIONS = 50
 MAX_IN_VALUES = 100
+MAX_FULL_TEXT_TOKENS = 50
+FULL_TEXT_SOURCES = {
+    "records": ("metadata", "components"),
+    "aggregations": ("metadata",),
+    "digital_components": ("metadata", "content"),
+}
 
 
 class FieldType(str, Enum):
@@ -240,16 +251,16 @@ def _compile_comparison(
     if field_name == "effective_hold_id":
         if operator in {"eq", "ne"}:
             value = _coerce_value(field_name, field, expression.value)
-            clause = sql.SQL("%s = ANY(effective_hold_ids)")
+            clause = sql.SQL("%s = ANY(resource.effective_hold_ids)")
             return (sql.SQL("NOT ({})").format(clause) if operator == "ne" else clause), [value]
         if operator in SET_OPERATORS:
             if not isinstance(expression.value, list) or not expression.value or len(expression.value) > MAX_IN_VALUES:
                 raise _invalid(f"operator '{operator}' requires 1 to {MAX_IN_VALUES} values")
             values = [_coerce_value(field_name, field, value) for value in expression.value]
-            clause = sql.SQL("effective_hold_ids && %s::bigint[]")
+            clause = sql.SQL("resource.effective_hold_ids && %s::bigint[]")
             return (sql.SQL("NOT ({})").format(clause) if operator == "not_in" else clause), [values]
         raise _invalid("effective_hold_id supports eq, ne, in, and not_in")
-    identifier = sql.Identifier(field_name)
+    identifier = sql.SQL("resource.{} ").format(sql.Identifier(field_name))
 
     if operator in TEXT_OPERATORS and field.type is not FieldType.TEXT:
         raise _invalid(f"operator '{operator}' is only valid for text fields")
@@ -301,6 +312,7 @@ def _compile_expression(
     expression: SearchExpression,
     fields: dict[str, SearchField],
     *,
+    resource: str,
     depth: int,
     condition_counter: list[int],
 ) -> tuple[sql.Composable, list[Any]]:
@@ -313,9 +325,61 @@ def _compile_expression(
             raise _invalid(f"searches may contain at most {MAX_SEARCH_CONDITIONS} conditions")
         return _compile_comparison(expression, fields)
 
+    if expression.full_text is not None:
+        condition_counter[0] += 1
+        if condition_counter[0] > MAX_SEARCH_CONDITIONS:
+            raise _invalid(f"searches may contain at most {MAX_SEARCH_CONDITIONS} conditions")
+        query = expression.full_text.query
+        if len(re.findall(r"\S+", query)) > MAX_FULL_TEXT_TOKENS:
+            raise _invalid(f"full-text queries may contain at most {MAX_FULL_TEXT_TOKENS} tokens")
+        allowed = FULL_TEXT_SOURCES.get(resource)
+        if allowed is None:
+            raise _invalid(f"full_text is not supported for {resource}")
+        sources = expression.full_text.sources or list(allowed)
+        if len(sources) != len(set(sources)) or any(source not in allowed for source in sources):
+            raise _invalid(f"invalid full-text sources for {resource}")
+        predicates: list[sql.Composable] = []
+        parameters: list[Any] = []
+        if resource == "records":
+            if "metadata" in sources:
+                predicates.append(sql.SQL(
+                    "EXISTS (SELECT 1 FROM authorized_record_search_documents ftd "
+                    "WHERE ftd.record_id=resource.id AND ftd.search_vector@@websearch_to_tsquery(ftd.text_search_config,%s))"
+                )); parameters.append(query)
+            if "components" in sources:
+                predicates.append(sql.SQL(
+                    "EXISTS (SELECT 1 FROM digital_components ftc "
+                    "JOIN digital_component_search_documents fts ON fts.digital_component_id=ftc.id "
+                    "LEFT JOIN digital_component_search_chunks ftk ON ftk.digital_component_id=ftc.id "
+                    "WHERE ftc.record_id=resource.id AND fts.status IN ('indexed','processing') AND fts.indexed_at IS NOT NULL "
+                    "AND fts.content_set_id=ftc.active_content_set_id "
+                    "AND current_user_can_record_component_operation(ftc.record_id,'record.component.view','record.component.view') "
+                    "AND (to_tsvector('pg_catalog.simple',coalesce(ftc.file_name,''))@@websearch_to_tsquery('pg_catalog.simple',%s) "
+                    "OR ftk.search_vector@@websearch_to_tsquery(ftk.text_search_config,%s)))"
+                )); parameters.extend((query, query))
+        elif resource == "aggregations":
+            predicates.append(sql.SQL(
+                "EXISTS (SELECT 1 FROM authorized_aggregation_search_documents ftd "
+                "WHERE ftd.aggregation_id=resource.id AND ftd.search_vector@@websearch_to_tsquery(ftd.text_search_config,%s))"
+            )); parameters.append(query)
+        else:
+            if "metadata" in sources:
+                predicates.append(sql.SQL(
+                    "to_tsvector('pg_catalog.simple',coalesce(resource.file_name,''))@@websearch_to_tsquery('pg_catalog.simple',%s)"
+                )); parameters.append(query)
+            if "content" in sources:
+                predicates.append(sql.SQL(
+                    "EXISTS (SELECT 1 FROM digital_component_search_documents fts "
+                    "JOIN digital_component_search_chunks ftk ON ftk.digital_component_id=fts.digital_component_id "
+                    "WHERE fts.digital_component_id=resource.id AND fts.status IN ('indexed','processing') AND fts.indexed_at IS NOT NULL "
+                    "AND fts.content_set_id=resource.active_content_set_id "
+                    "AND ftk.search_vector@@websearch_to_tsquery(ftk.text_search_config,%s))"
+                )); parameters.append(query)
+        return sql.SQL("({})").format(sql.SQL(" OR ").join(predicates)), parameters
+
     if expression.not_ is not None:
         clause, parameters = _compile_expression(
-            expression.not_, fields, depth=depth + 1, condition_counter=condition_counter
+            expression.not_, fields, resource=resource, depth=depth + 1, condition_counter=condition_counter
         )
         return sql.SQL("NOT ({})").format(clause), parameters
 
@@ -323,7 +387,7 @@ def _compile_expression(
     joiner = sql.SQL(" AND ") if expression.and_ is not None else sql.SQL(" OR ")
     compiled = [
         _compile_expression(
-            child, fields, depth=depth + 1, condition_counter=condition_counter
+            child, fields, resource=resource, depth=depth + 1, condition_counter=condition_counter
         )
         for child in children
     ]
@@ -332,25 +396,174 @@ def _compile_expression(
     return sql.SQL("({})").format(joiner.join(clauses)), parameters
 
 
+def _full_text_leaves(expression: SearchExpression | None, *, positive: bool = True) -> list[tuple[str, Any]]:
+    counter=[0]
+    def visit(node: SearchExpression | None, polarity: bool) -> list[tuple[str,Any]]:
+        if node is None: return []
+        if node.full_text is not None:
+            counter[0]+=1
+            return [(f"fts_{counter[0]}",node.full_text)] if polarity else []
+        if node.not_ is not None: return visit(node.not_,not polarity)
+        return [leaf for child in (node.and_ or node.or_ or []) for leaf in visit(child,polarity)]
+    return visit(expression,positive)
+
+
+def _validate_indexable(connection: Connection, leaves: list[tuple[str, Any]]) -> None:
+    for _, leaf in leaves:
+        indexable = connection.execute(
+            """SELECT numnode(websearch_to_tsquery('pg_catalog.simple',%s))>0
+                      OR numnode(websearch_to_tsquery('pg_catalog.english',%s))>0
+                      OR numnode(websearch_to_tsquery('pg_catalog.arabic',%s))>0 AS value""",
+            (leaf.query, leaf.query, leaf.query),
+        ).fetchone()["value"]
+        if not indexable:
+            raise HTTPException(status_code=422, detail={"code": "non_indexable_full_text_query"})
+
+
+def _canonical_request(resource: str, request: SearchRequest) -> dict[str, Any]:
+    value = request.model_dump(mode="json", by_alias=True, exclude_none=True)
+    leaves = _full_text_leaves(request.where)
+    for _, leaf in leaves:
+        leaf.sources = sorted(leaf.sources or FULL_TEXT_SOURCES[resource])
+    value = request.model_dump(mode="json", by_alias=True, exclude_none=True)
+    sort = value.get("sort", [])
+    if leaves and not sort:
+        sort = [{"field": "_relevance", "direction": "desc"}]
+    if not any(item["field"] == "id" for item in sort):
+        sort.append({"field": "id", "direction": "asc"})
+    value["sort"] = sort
+    value.pop("debug", None)
+    return value
+
+
+def _debug(connection: Connection, endpoint: str, received: dict, canonical: dict) -> dict:
+    from .resource_authorization import require_global
+    require_global(connection, "search.query.debug")
+    encoded = json.dumps(canonical, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    request_id = connection.execute("SELECT nullif(current_setting('app.request_id',true),'') AS value").fetchone()["value"]
+    return {"method": "POST", "endpoint": endpoint, "received_request": received,
+            "canonical_query": canonical, "request_id": request_id,
+            "query_fingerprint": "sha256:" + hashlib.sha256(encoded.encode()).hexdigest()}
+
+
+def _attribution(connection: Connection, resource: str, item: dict, leaves: list[tuple[str, Any]], score: float) -> dict:
+    metadata_matched = False
+    components: dict[int, dict[str, Any]] = {}
+    for leaf_id, leaf in leaves:
+        sources = leaf.sources or list(FULL_TEXT_SOURCES[resource])
+        if "metadata" in sources:
+            if resource == "records":
+                metadata_matched |= connection.execute(
+                    """SELECT EXISTS(SELECT 1 FROM authorized_record_search_documents d
+                           WHERE d.record_id=%s AND d.search_vector@@websearch_to_tsquery(d.text_search_config,%s)) AS value""",
+                    (item["id"],leaf.query),
+                ).fetchone()["value"]
+            elif resource == "aggregations":
+                metadata_matched |= connection.execute(
+                    """SELECT EXISTS(SELECT 1 FROM authorized_aggregation_search_documents d
+                           WHERE d.aggregation_id=%s AND d.search_vector@@websearch_to_tsquery(d.text_search_config,%s)) AS value""",
+                    (item["id"],leaf.query),
+                ).fetchone()["value"]
+            elif resource == "digital_components":
+                metadata_matched |= connection.execute(
+                    "SELECT to_tsvector('pg_catalog.simple',coalesce(%s,''))@@websearch_to_tsquery('pg_catalog.simple',%s) AS value",
+                    (item.get("file_name"),leaf.query),
+                ).fetchone()["value"]
+        component_source = "components" if resource == "records" else "content"
+        if component_source in sources and resource in {"records","digital_components"}:
+            if resource=="records":
+                file_rows=connection.execute(
+                    """SELECT component.id,component.file_name FROM digital_components component
+                        WHERE component.record_id=%s AND component.content_status='available'
+                          AND current_user_can_record_component_operation(component.record_id,'record.component.view','record.component.view')
+                          AND to_tsvector('pg_catalog.simple',coalesce(component.file_name,''))
+                              @@websearch_to_tsquery('pg_catalog.simple',%s)
+                        ORDER BY component.id LIMIT 4""",(item["id"],leaf.query),
+                ).fetchall()
+                for row in file_rows:
+                    if row["id"] not in components and len(components)<3:
+                        components[row["id"]]={"id":row["id"],"file_name":row["file_name"],
+                                               "snippet":None,"leaf_ids":[leaf_id],
+                                               "match_count_is_capped":len(file_rows)>3}
+            rows = connection.execute(
+                """SELECT component.id,component.file_name,
+                          ts_rank_cd(chunk.search_vector,websearch_to_tsquery(chunk.text_search_config,%s)) AS score,
+                          ts_headline(chunk.text_search_config,chunk.extracted_text,
+                              websearch_to_tsquery(chunk.text_search_config,%s),
+                              'StartSel=⟦,StopSel=⟧,MaxWords=35,MinWords=12,MaxFragments=1') AS snippet
+                     FROM digital_components component
+                     JOIN digital_component_search_documents document ON document.digital_component_id=component.id
+                     JOIN digital_component_search_chunks chunk ON chunk.digital_component_id=component.id
+                    WHERE component.id=CASE WHEN %s='digital_components' THEN %s ELSE component.id END
+                      AND component.record_id=CASE WHEN %s='records' THEN %s ELSE component.record_id END
+                      AND document.status IN ('indexed','processing') AND document.indexed_at IS NOT NULL
+                      AND document.content_set_id=component.active_content_set_id
+                      AND current_user_can_record_component_operation(component.record_id,'record.component.view','record.component.view')
+                      AND chunk.search_vector@@websearch_to_tsquery(chunk.text_search_config,%s)
+                    ORDER BY score DESC,component.id,chunk.chunk_no LIMIT 12""",
+                (leaf.query,leaf.query,resource,item["id"],resource,item.get("id"),leaf.query),
+            ).fetchall()
+            for row in rows:
+                if row["id"] not in components and len(components) < 3:
+                    components[row["id"]] = {"id":row["id"],"file_name":row["file_name"],
+                                              "snippet":row["snippet"],"leaf_ids":[leaf_id],
+                                              "match_count_is_capped":len(rows)>=12}
+                elif row["id"] in components and leaf_id not in components[row["id"]]["leaf_ids"]:
+                    components[row["id"]]["leaf_ids"].append(leaf_id)
+                if row["id"] in components and not components[row["id"]].get("snippet"):
+                    components[row["id"]]["snippet"]=row["snippet"]
+    return {"relevance": score, "metadata_matched": bool(metadata_matched),
+            "matching_components": list(components.values())}
+
+
+def _relevance_expression(resource: str, leaves: list[tuple[str, Any]]) -> tuple[sql.Composable,list[Any]]:
+    terms: list[sql.Composable]=[]; parameters: list[Any]=[]
+    for _, leaf in leaves:
+        sources=leaf.sources or list(FULL_TEXT_SOURCES[resource])
+        if resource=="records" and "metadata" in sources:
+            terms.append(sql.SQL("coalesce((SELECT ts_rank_cd(d.search_vector,websearch_to_tsquery(d.text_search_config,%s)) FROM authorized_record_search_documents d WHERE d.record_id=resource.id),0)")); parameters.append(leaf.query)
+        if resource=="records" and "components" in sources:
+            terms.append(sql.SQL("coalesce((SELECT max(ts_rank_cd(k.search_vector,websearch_to_tsquery(k.text_search_config,%s))) FROM digital_component_search_documents s JOIN digital_component_search_chunks k ON k.digital_component_id=s.digital_component_id WHERE s.record_id=resource.id AND s.status IN ('indexed','processing') AND s.indexed_at IS NOT NULL),0)")); parameters.append(leaf.query)
+        if resource=="aggregations":
+            terms.append(sql.SQL("coalesce((SELECT ts_rank_cd(d.search_vector,websearch_to_tsquery(d.text_search_config,%s)) FROM authorized_aggregation_search_documents d WHERE d.aggregation_id=resource.id),0)")); parameters.append(leaf.query)
+        if resource=="digital_components" and "content" in sources:
+            terms.append(sql.SQL("coalesce((SELECT max(ts_rank_cd(k.search_vector,websearch_to_tsquery(k.text_search_config,%s))) FROM digital_component_search_chunks k WHERE k.digital_component_id=resource.id),0)")); parameters.append(leaf.query)
+        if resource=="digital_components" and "metadata" in sources:
+            terms.append(sql.SQL("ts_rank_cd(to_tsvector('pg_catalog.simple',coalesce(resource.file_name,'')),websearch_to_tsquery('pg_catalog.simple',%s))")); parameters.append(leaf.query)
+    return (sql.SQL(" + ").join(terms) if terms else sql.SQL("0.0")),parameters
+
+
 def search_rows(
     connection: Connection,
     table: str,
     request: SearchRequest,
+    *, endpoint: str | None = None,
 ) -> dict[str, Any]:
+    if _full_text_leaves(request.where) and not boolean_environment("FULL_TEXT_SEARCH_ENABLED", True):
+        raise HTTPException(status_code=503, detail={
+            "code": "full_text_search_disabled",
+            "message": "Full-text search is temporarily disabled.",
+        })
     fields = SEARCH_FIELDS[table]
     visibility = {
-        "aggregations": sql.SQL("current_user_can_view_aggregation(id)"),
-        "records": sql.SQL("current_user_can_view_record(id)"),
+        "aggregations": sql.SQL("current_user_can_view_aggregation(resource.id)"),
+        "records": sql.SQL("current_user_can_view_record(resource.id)"),
         "digital_components": sql.SQL(
-            "EXISTS (SELECT 1 FROM records visible_record WHERE visible_record.id=record_id "
+            "EXISTS (SELECT 1 FROM records visible_record WHERE visible_record.id=resource.record_id "
             "AND current_user_can_list_record_components(visible_record.id))"
         ),
+        "roles": sql.SQL("NOT is_system"),
     }.get(table)
     clauses: list[sql.Composable] = []
     parameters: list[Any] = []
+    positive_leaves = _full_text_leaves(request.where)
+    all_leaves = _full_text_leaves(request.where, positive=True) + _full_text_leaves(request.where, positive=False)
+    _validate_indexable(connection, all_leaves)
+    if request.include and not positive_leaves:
+        raise _invalid("full_text_matches requires a positive full_text expression")
     if request.where is not None:
         expression, parameters = _compile_expression(
-            request.where, fields, depth=1, condition_counter=[0]
+            request.where, fields, resource=table, depth=1, condition_counter=[0]
         )
         clauses.append(expression)
     if visibility is not None:
@@ -362,13 +575,16 @@ def search_rows(
 
     sort_fields: list[tuple[str, str]] = []
     for item in request.sort:
-        if item.field not in fields:
+        if item.field == "_relevance":
+            if not positive_leaves:
+                raise _invalid("_relevance requires a positive full_text expression")
+        elif item.field not in fields:
             raise _invalid(f"sort field '{item.field}' is not allowed")
         if item.field in {field for field, _ in sort_fields}:
             raise _invalid(f"sort field '{item.field}' is duplicated")
         sort_fields.append((item.field, item.direction))
     if not sort_fields:
-        sort_fields.append(("id", "asc"))
+        sort_fields.extend([("_relevance", "desc"), ("id", "asc")] if positive_leaves else [("id", "asc")])
     elif "id" not in {field for field, _ in sort_fields}:
         sort_fields.append(("id", "asc"))
 
@@ -377,23 +593,25 @@ def search_rows(
         "aggregations": "authorized_aggregations_for_search",
         "records": "authorized_records_for_search",
     }.get(table, table))
-    count_query = sql.SQL("SELECT count(*) AS total FROM {}{}").format(
+    count_query = sql.SQL("SELECT count(*) AS total FROM {} resource{}").format(
         table_identifier, where_clause
     )
     total = connection.execute(count_query, parameters).fetchone()["total"]
 
+    relevance,relevance_parameters=_relevance_expression(table,positive_leaves)
     order_clause = sql.SQL(", ").join(
-        sql.SQL("{} {}").format(sql.Identifier(field), sql.SQL(direction.upper()))
+        sql.SQL("{} {}").format(relevance if field == "_relevance" else sql.SQL("resource.{}").format(sql.Identifier(field)), sql.SQL(direction.upper()))
         for field, direction in sort_fields
     )
-    result_query = sql.SQL("SELECT * FROM {}{} ORDER BY {} LIMIT %s OFFSET %s").format(
+    result_query = sql.SQL("SELECT resource.*,({})::double precision AS _fts_relevance FROM {} resource{} ORDER BY {} LIMIT %s OFFSET %s").format(
+        relevance,
         table_identifier,
         where_clause,
         order_clause,
     )
     items = list(
         connection.execute(
-            result_query, [*parameters, request.limit, request.offset]
+            result_query, [*relevance_parameters, *parameters, *relevance_parameters, request.limit, request.offset]
         ).fetchall()
     )
     items = redact_hidden_relationships(connection, table, items)
@@ -401,10 +619,162 @@ def search_rows(
         # This internal array enables effective_hold_id filtering but must not
         # disclose hold identities through ordinary resource search results.
         item.pop("effective_hold_ids", None)
-    return {
+        score = item.pop("_fts_relevance", 0.0)
+        if "full_text_matches" in request.include:
+            item["_search"] = _attribution(connection, table, item, positive_leaves, score)
+    result = {
         "items": items,
         "total": total,
         "limit": request.limit,
         "offset": request.offset,
         "returned": len(items),
     }
+    if request.debug:
+        received = request.model_dump(mode="json", by_alias=True, exclude_unset=True, exclude_none=True)
+        result["_debug"] = _debug(connection, endpoint or f"/api/v1/{table.replace('_','-')}/search",
+                                  received, _canonical_request(table, request))
+    return result
+
+
+def _condition_count(expression: SearchExpression | None) -> int:
+    if expression is None:
+        return 0
+    if expression.field is not None or expression.full_text is not None:
+        return 1
+    if expression.not_ is not None:
+        return _condition_count(expression.not_)
+    return sum(_condition_count(child) for child in (expression.and_ or expression.or_ or []))
+
+
+def _cursor_encode(value: dict[str, Any]) -> str:
+    raw=json.dumps(value,separators=(",",":"),sort_keys=True).encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def _cursor_decode(value: str) -> dict[str, Any]:
+    try:
+        raw=base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+        decoded=json.loads(raw)
+        if set(decoded)!={"fingerprint","score","type","id"}:
+            raise ValueError
+        return decoded
+    except (ValueError,TypeError,json.JSONDecodeError) as exception:
+        raise _invalid("invalid global-search cursor") from exception
+
+
+def _global_branch(
+    connection: Connection,resource: str,expression: SearchExpression,
+    limit: int,after: dict[str,Any] | None,
+) -> list[dict[str,Any]]:
+    leaves=_full_text_leaves(expression)
+    if not leaves:
+        raise _invalid("global-search branches require a positive full_text expression")
+    _validate_indexable(connection,leaves)
+    clause,clause_parameters=_compile_expression(
+        expression,SEARCH_FIELDS[resource],resource=resource,depth=1,condition_counter=[0],
+    )
+    relevance,relevance_parameters=_relevance_expression(resource,leaves)
+    table=sql.Identifier("authorized_records_for_search" if resource=="records" else "authorized_aggregations_for_search")
+    visibility=sql.SQL("current_user_can_view_record(resource.id)") if resource=="records" else sql.SQL("current_user_can_view_aggregation(resource.id)")
+    outer=sql.SQL("")
+    outer_parameters: list[Any]=[]
+    branch_type="record" if resource=="records" else "aggregation"
+    if after:
+        # Global order is score DESC, type ASC, id ASC. Apply its exact
+        # continuation tuple independently to each authorized SQL branch.
+        if branch_type>after["type"]:
+            outer=sql.SQL("WHERE score<=%s") ; outer_parameters=[after["score"]]
+        elif branch_type<after["type"]:
+            outer=sql.SQL("WHERE score<%s") ; outer_parameters=[after["score"]]
+        else:
+            outer=sql.SQL("WHERE score<%s OR (score=%s AND id>%s)")
+            outer_parameters=[after["score"],after["score"],after["id"]]
+    query=sql.SQL(
+        "WITH matched AS (SELECT resource.*,({})::double precision AS score FROM {} resource "
+        "WHERE ({}) AND ({})) SELECT * FROM matched {} ORDER BY score DESC,id ASC LIMIT %s"
+    ).format(relevance,table,visibility,clause,outer)
+    return list(connection.execute(
+        query,[*relevance_parameters,*clause_parameters,*outer_parameters,limit+1],
+    ).fetchall())
+
+
+def global_search_rows(connection: Connection, request: GlobalSearchRequest) -> dict[str, Any]:
+    if not boolean_environment("FULL_TEXT_SEARCH_ENABLED", True):
+        raise HTTPException(status_code=503, detail={
+            "code": "full_text_search_disabled",
+            "message": "Full-text search is temporarily disabled.",
+        })
+    if _condition_count(request.record_where)+_condition_count(request.aggregation_where)>MAX_SEARCH_CONDITIONS:
+        raise _invalid(f"global search may contain at most {MAX_SEARCH_CONDITIONS} combined conditions")
+    received=request.model_dump(mode="json",by_alias=True,exclude_unset=True,exclude_none=True)
+    canonical=request.model_dump(mode="json",by_alias=True,exclude_none=True)
+    canonical.pop("cursor",None); canonical.pop("debug",None)
+    canonical["result_types"]=sorted(canonical["result_types"])
+    if request.record_where is not None:
+        canonical["record_where"]=_canonical_request("records",SearchRequest(where=request.record_where))["where"]
+    if request.aggregation_where is not None:
+        canonical["aggregation_where"]=_canonical_request("aggregations",SearchRequest(where=request.aggregation_where))["where"]
+    fingerprint="sha256:"+hashlib.sha256(json.dumps(canonical,ensure_ascii=False,separators=(",",":"),sort_keys=True).encode()).hexdigest()
+    after=_cursor_decode(request.cursor) if request.cursor else None
+    if after and after["fingerprint"]!=fingerprint:
+        raise _invalid("global-search cursor does not belong to this query")
+    merged=[]
+    if request.record_where is not None:
+        branch=_global_branch(connection,"records",request.record_where,request.limit,after)
+        leaves=_full_text_leaves(request.record_where)
+        for record in branch:
+            score=record.pop("score")
+            search=_attribution(connection,"records",record,leaves,score)
+            aggregation=connection.execute(
+                """SELECT aggregation_number FROM aggregations
+                    WHERE id=%s AND current_user_can_view_aggregation(id)""",(record.get("aggregation_id"),),
+            ).fetchone()
+            merged.append({"type":"record","record":{
+                "id":record["id"],"record_number":record["record_number"],"title":record["title"],
+                "aggregation_id":record.get("aggregation_id"),
+                "aggregation_number":aggregation["aggregation_number"] if aggregation else None,
+            },"matched_record_metadata":search["metadata_matched"],
+                "matching_components":search["matching_components"],"score":search["relevance"],
+                "_id":record["id"]})
+    if request.aggregation_where is not None:
+        branch=_global_branch(connection,"aggregations",request.aggregation_where,request.limit,after)
+        leaves=_full_text_leaves(request.aggregation_where)
+        for aggregation in branch:
+            score=aggregation.pop("score")
+            search=_attribution(connection,"aggregations",aggregation,leaves,score)
+            leaf=_full_text_leaves(request.aggregation_where)[0][1]
+            snippet=connection.execute(
+                """SELECT ts_headline('pg_catalog.simple',concat_ws(' ',aggregation_number,title,description),
+                           websearch_to_tsquery('pg_catalog.simple',%s),
+                           'StartSel=⟦,StopSel=⟧,MaxWords=35,MinWords=12,MaxFragments=1') AS value
+                     FROM aggregations WHERE id=%s AND current_user_can_view_aggregation(id)""",
+                (leaf.query,aggregation["id"]),
+            ).fetchone()["value"]
+            merged.append({"type":"aggregation","aggregation":{
+                "id":aggregation["id"],"aggregation_number":aggregation["aggregation_number"],
+                "title":aggregation["title"]},"snippet":snippet,"score":search["relevance"],
+                "_id":aggregation["id"]})
+    merged.sort(key=lambda item:(-item["score"],item["type"],item["_id"]))
+    if after:
+        key=(-float(after["score"]),after["type"],int(after["id"]))
+        merged=[item for item in merged if (-item["score"],item["type"],item["_id"])>key]
+    page=merged[:request.limit]
+    more=len(merged)>request.limit
+    next_cursor=None
+    if more and page:
+        last=page[-1]
+        next_cursor=_cursor_encode({"fingerprint":fingerprint,"score":last["score"],
+                                    "type":last["type"],"id":last["_id"]})
+    for item in page: item.pop("_id",None)
+    pending=connection.execute(
+        """SELECT EXISTS(SELECT 1 FROM digital_component_search_documents document
+             JOIN digital_components component ON component.id=document.digital_component_id
+            WHERE document.status IN ('pending','processing','stale')
+              AND current_user_can_view_record(document.record_id)
+              AND current_user_can_record_component_operation(document.record_id,'record.component.view','record.component.view')) AS value"""
+    ).fetchone()["value"]
+    result={"items":page,"next_cursor":next_cursor,
+            "index_freshness":{"has_pending_content":pending}}
+    if request.debug:
+        result["_debug"]=_debug(connection,"/api/v1/full-text-search",received,canonical)
+    return result

@@ -15,7 +15,7 @@ from .audit_context import (
     event_source_context,
     request_id_context,
 )
-from .config import float_environment, integer_environment, required_environment
+from .config import boolean_environment, float_environment, integer_environment, required_environment
 
 
 def database_url() -> str:
@@ -56,7 +56,8 @@ def get_connection() -> Generator[Connection, None, None]:
                 set_config('app.request_id', %s, true),
                 set_config('app.correlation_id', %s, true),
                 set_config('app.change_reason', %s, true),
-                set_config('app.event_metadata', %s, true)
+                set_config('app.event_metadata', %s, true),
+                set_config('app.content_indexing_scheduling_enabled', %s, true)
             """,
             (
                 actor_user_id_context.get(),
@@ -68,6 +69,7 @@ def get_connection() -> Generator[Connection, None, None]:
                 correlation_id_context.get(),
                 change_reason_context.get(),
                 event_metadata_context.get(),
+                str(boolean_environment("CONTENT_INDEXING_SCHEDULING_ENABLED", True)).lower(),
             ),
         )
         yield connection

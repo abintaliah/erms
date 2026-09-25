@@ -12,6 +12,29 @@ Future OIDC providers will map their subject identifiers to the same internal
 users and issue the same internal sessions, keeping the rest of the application
 independent of the authentication provider.
 
+### Text-indexer service credentials
+
+The full-text indexer uses a dedicated service account and the protected,
+non-organizational `text-indexer-service` system role. That role is restricted
+to service accounts and its `TEXT_INDEXER_SERVICE` profile contains exactly
+`content.index.execute`. It is not an information-governance role and cannot be
+assigned to a person account.
+
+Indexer keys have the strict display-once form
+`wti_<26-character identifier>.<43-character random secret>`. PostgreSQL stores
+the identifier and the lowercase SHA-256 digest of the random-secret substring,
+never the complete key or plaintext secret. Each credential has independent
+expiry and revocation state. A service account cannot have an interactive
+password or login session.
+
+The API accepts these credentials only under
+`/api/v1/internal/text-indexing/`. It rejects them on ordinary user routes, and
+it rejects person sessions and cookies on the internal namespace. Phase 1
+installs this authentication boundary and persistence model; Phase 2 adds the
+lease-scoped worker operations. Until those operations and the approved
+administration workflow exist, operators must not provision keys with ad-hoc
+SQL.
+
 ## Credentials and passwords
 
 `user_credentials` contains one optional local credential per person account.
@@ -124,8 +147,9 @@ name. In this model, `service` accounts are non-interactive identities for
 software and cannot log in with passwords. The bootstrap user's administrative
 authority is derived from the normal reserved role; its email address or
 external ID is not a hidden authorization bypass. A user never belongs directly
-to an organizational unit, while every role—including this reserved platform
-role—must belong to exactly one.
+to an organizational unit. Every ordinary person role—including this reserved
+platform role—belongs to exactly one; the protected service-only text-indexer
+role is the sole non-organizational system-role exception.
 
 ### Bootstrap safeguards
 
@@ -158,8 +182,8 @@ it does not impersonate that user.
 Do not confuse this with `users.account_type = service`. Account type classifies
 a stored identity (`person` or `service`), while event actor type classifies how
 an event was caused (`user`, `anonymous`, or `automated_process`). An
-authenticated service identity will be recorded as actor type `user` with its
-own `actor_user_id`. See the actor taxonomy in
+authenticated text-indexer identity is recorded as actor type
+`automated_process` with its own `actor_user_id`. See the actor taxonomy in
 [`event-history.md`](event-history.md#actor-type-versus-account-type).
 
 After signing in, change the temporary password, create the real organizational

@@ -1,0 +1,36 @@
+{
+  "database": "erms_fts_phase0_bd90412e93e4",
+  "postgres_bin": "/opt/homebrew/opt/postgresql@18/bin",
+  "cleanup": {
+    "database_dropped": true,
+    "server_stopped": true,
+    "temporary_directory_removed": true
+  },
+  "server_version": "18.6 (Homebrew)",
+  "required_configurations": [
+    "simple",
+    "english",
+    "arabic"
+  ],
+  "arabic_dictionary_rows": [
+    "arabic|arabic_stem",
+    "arabic|arabic_stem",
+    "arabic|simple",
+    "arabic|simple",
+    "arabic|simple"
+  ],
+  "arabic_match": true,
+  "english_match": true,
+  "raw_output": [
+    "18.6 (Homebrew)",
+    "simple|english|arabic",
+    "arabic|arabic_stem",
+    "arabic|arabic_stem",
+    "arabic|simple",
+    "arabic|simple",
+    "arabic|simple",
+    "t",
+    "'معتمد':2 'ميزان':1 'والمصروفا':3",
+    "t"
+  ]
+}
