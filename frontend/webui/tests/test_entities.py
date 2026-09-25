@@ -1272,6 +1272,9 @@ def test_review_and_location_experience_has_accessible_text_labels():
     assert 'ui.textarea("Reason *")' in source
     assert '"Inherited assigned location", record.get("effective_assigned_location")' in source
     assert '"Inherited current location", record.get("effective_current_location")' in source
+    assert 'if record.get("medium") != "digital":' in source
+    assert 'if current.get("medium") != "digital":' in source
+    assert 'aggregation_metadata.extend([' in source
     assert '"Record status"' not in source
     assert '"Closure state"' not in source
     assert '"View all", icon="arrow_forward"' in source

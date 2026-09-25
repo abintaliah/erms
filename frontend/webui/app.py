@@ -4760,7 +4760,7 @@ def index(q: str = "") -> None:
                                 ),
                             ).props("flat dense no-caps color=warning")
                     with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
-                        for label, value in (
+                        record_metadata = [
                             ("Security level", f"{security_level['code']} — {security_level['name']}"),
                             (
                                 "Owning organizational unit",
@@ -4770,8 +4770,13 @@ def index(q: str = "") -> None:
                             ("Vital status", "Vital" if record.get("is_vital") else "Not vital"),
                             ("Originated", format_timestamp(record.get("date_originated"))),
                             ("Created", format_timestamp(record.get("date_created"))),
-                            ("Inherited assigned location", record.get("effective_assigned_location") or "Unknown"),
-                            ("Inherited current location", record.get("effective_current_location") or "Unknown"),
+                        ]
+                        if record.get("medium") != "digital":
+                            record_metadata.extend([
+                                ("Inherited assigned location", record.get("effective_assigned_location") or "Unknown"),
+                                ("Inherited current location", record.get("effective_current_location") or "Unknown"),
+                            ])
+                        record_metadata.extend([
                             ("Review", review_display(record.get("date_of_next_review"))),
                             # The state disambiguates a protected existing
                             # container from an absent relationship; records
@@ -4782,7 +4787,8 @@ def index(q: str = "") -> None:
                                 if record.get("aggregation_state") == "redacted"
                                 else record.get("aggregation_display"),
                             ),
-                        ):
+                        ])
+                        for label, value in record_metadata:
                             with ui.column().classes("detail-field gap-1"):
                                 ui.label(label).classes("detail-field-label")
                                 if label == "Containing aggregation" and isinstance(value, dict):
@@ -6618,7 +6624,7 @@ def index(q: str = "") -> None:
                                     ),
                                 ).props("flat dense no-caps color=warning")
                         with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
-                            aggregation_metadata = (
+                            aggregation_metadata = [
                                 ("Status", "Closed" if closure else "Open"),
                                 ("Security level", f"{security_level['code']} — {security_level['name']}"),
                                 (
@@ -6628,14 +6634,19 @@ def index(q: str = "") -> None:
                                 ("Medium", medium_label(current.get("medium"))),
                                 ("Vital status", "Vital" if current.get("is_vital") else "Not vital"),
                                 ("Date opened", format_timestamp(current.get("date_opened"))),
-                                ("Assigned location", current.get("effective_assigned_location") or "Unknown"),
-                                ("Current location", current.get("effective_current_location") or "Unknown"),
+                            ]
+                            if current.get("medium") != "digital":
+                                aggregation_metadata.extend([
+                                    ("Assigned location", current.get("effective_assigned_location") or "Unknown"),
+                                    ("Current location", current.get("effective_current_location") or "Unknown"),
+                                ])
+                            aggregation_metadata.extend([
                                 ("Review", review_display(current.get("date_of_next_review"))),
                                 ("Classification", " › ".join(
                                     f"{item['code']} — {item['title']}" for item in classification_path
                                 ) if classification_path else "Unclassified"),
                                 ("Contains", f"{len(children)} child aggregations · {len(records)} records"),
-                            )
+                            ])
                             for label, value in aggregation_metadata:
                                 with ui.column().classes("detail-field gap-1"):
                                     ui.label(label).classes("detail-field-label")
