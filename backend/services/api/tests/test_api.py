@@ -1194,6 +1194,22 @@ def test_pdf_rendition_is_inline_and_audited(client: TestClient, record: dict):
     assert "CONTENT_VIEWED" in [event["operation"] for event in history]
 
 
+def test_pdf_print_rendition_uses_print_authorization_route(client: TestClient, record: dict):
+    pdf = b"%PDF-1.4\n% printable test fixture\n%%EOF"
+    uploaded = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": "1"},
+        files={"file": ("printable.pdf", pdf, "application/pdf")},
+    ).json()
+    response = client.get(
+        f"/api/v1/digital-components/{uploaded['id']}/print-rendition"
+    )
+    assert response.status_code == 200
+    assert response.content == pdf
+    assert response.headers["content-type"].startswith("application/pdf")
+    assert response.headers["content-disposition"].startswith("inline;")
+
+
 @pytest.mark.parametrize(
     ("extension", "mime_type", "expected_method"),
     (

@@ -1765,19 +1765,11 @@ def download_digital_component_content(
     )
 
 
-@app.api_route(
-    "/api/v1/digital-components/{component_id}/rendition",
-    methods=["GET", "HEAD"],
-    tags=["digital component content"],
-)
-def view_digital_component_rendition(
-    component_id: int,
-    request: Request,
-    connection: Connection = Depends(get_connection, scope="function"),
+def _component_rendition_response(
+    component: dict, request: Request, connection: Connection,
 ):
-    component, _ = require_component_operation(
-        connection, component_id, "record.component.view", "record.component.view")
     storage = configured_storage()
+    component_id = component["id"]
     location = storage.location(connection, component_id)
     if location is None:
         raise HTTPException(status_code=404, detail="digital component content not found")
@@ -1840,6 +1832,37 @@ def view_digital_component_rendition(
             "Content-Security-Policy": "sandbox",
         },
     )
+
+
+@app.api_route(
+    "/api/v1/digital-components/{component_id}/rendition",
+    methods=["GET", "HEAD"],
+    tags=["digital component content"],
+)
+def view_digital_component_rendition(
+    component_id: int,
+    request: Request,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    component, _ = require_component_operation(
+        connection, component_id, "record.component.view", "record.component.view")
+    return _component_rendition_response(component, request, connection)
+
+
+@app.api_route(
+    "/api/v1/digital-components/{component_id}/print-rendition",
+    methods=["GET", "HEAD"],
+    tags=["digital component content"],
+)
+def print_digital_component_rendition(
+    component_id: int,
+    request: Request,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    """Return a printable rendition only when the print operation is authorized."""
+    component, _ = require_component_operation(
+        connection, component_id, "record.component.print", "record.component.print")
+    return _component_rendition_response(component, request, connection)
 
 
 @app.put(

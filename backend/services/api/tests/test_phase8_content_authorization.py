@@ -134,6 +134,31 @@ def test_metadata_only_record_viewer_cannot_enumerate_or_read_components(
     assert client.get(f"/api/v1/digital-components/{component['id']}/content").status_code == 404
 
 
+def test_component_preview_does_not_imply_print_authorization(
+    client: TestClient, record: dict,
+):
+    component = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": 1},
+        files={"file": ("view-only.pdf", b"%PDF-1.4\n%%EOF", "application/pdf")},
+    ).json()
+    _, role_id = _grant_principal({
+        "record.view", "record.component.view", "record.component.list",
+    })
+    _set_record_acl(record["id"], role_id, {
+        "record.view", "record.component.view", "record.component.list",
+    })
+    _login_as_phase7(client)
+    assert client.get(
+        f"/api/v1/digital-components/{component['id']}/rendition"
+    ).status_code == 200
+    denied = client.get(
+        f"/api/v1/digital-components/{component['id']}/print-rendition"
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["code"] == "insufficient_resource_permission"
+
+
 def test_governance_correction_into_closed_aggregation_preserves_closure_and_audits(
     client: TestClient, aggregation: dict, record: dict,
 ):
