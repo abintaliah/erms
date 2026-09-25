@@ -22,6 +22,9 @@ NAVIGATION_PRIVILEGES = {
 
 
 def can_navigate(navigation_key: str, privileges: Iterable[str]) -> bool:
+    if navigation_key == "advanced-search":
+        granted = set(privileges)
+        return bool({"aggregation.view", "record.view"} & granted)
     required = NAVIGATION_PRIVILEGES.get(navigation_key)
     return required is None or required in set(privileges)
 

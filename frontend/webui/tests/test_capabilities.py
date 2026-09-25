@@ -19,6 +19,9 @@ def test_unprivileged_principal_cannot_see_administration_destinations():
 
 
 def test_information_resource_destinations_require_their_exact_view_privilege():
+    assert can_navigate("advanced-search", {"aggregation.view"})
+    assert can_navigate("advanced-search", {"record.view"})
+    assert not can_navigate("advanced-search", set())
     assert can_navigate("aggregations", {"aggregation.view"})
     assert not can_navigate("records", {"aggregation.view"})
     assert can_navigate("records", {"record.view"})

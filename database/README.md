@@ -106,6 +106,11 @@ Migration 015 restores the discriminator name to `is_system` for consistency
 with built-in profiles. In both cases “system” means implementation-owned; it
 does not identify or grant the System Administrator role.
 
+Migration 018 installs Advanced Search Phase 1 persistence: saved-search
+definitions, role and organizational-unit audiences, owner/concurrency/history
+controls, the saved-search privilege family, and the approved built-in profile
+grants.
+
 ## Targeted data corrections
 
 Corrective scripts are optional, idempotent repairs for a database exhibiting

@@ -1844,10 +1844,15 @@ The results page shall:
 - clearly distinguish aggregation results from record results;
 - show record number/title and containing aggregation;
 - show whether record metadata matched;
-- list the matching component file names and safe highlighted snippets;
+- list only components attributed as matches, retain their safe highlighted
+  snippets, and provide governed component preview actions without enumerating
+  the record's other components;
 - show explicit loading, no-results, error, and partially-indexed states;
 - use cursor-based **Load more** or pagination controls;
 - open records and aggregations through their existing canonical navigation;
+- clear any page-specific discard guard after entering global results so Back
+  and breadcrumb navigation from a result detail page return normally rather
+  than displaying an unrelated unsaved-changes dialog;
 - never expose a direct component result detached from its record; and
 - remain keyboard accessible with visible focus and descriptive labels.
 
@@ -1923,9 +1928,14 @@ Results for “approved budget expenditure”
 
 Record results are the primary cards. Their top area shows type, title, record
 number, containing aggregation, whether metadata matched, and the existing
-open-record action. Each matching component is a subordinate bordered row with
-file name and one escaped highlighted snippet. Multiple matching chunks from
-one component do not create duplicate component rows.
+open-record action. Each matched component is a subordinate bordered row with
+file name, a preview icon, and its escaped highlighted snippet. Unmatched
+components are not rendered. Multiple matching chunks from one component do
+not create duplicate component rows. The client may obtain authorized metadata
+for those matched IDs solely to determine previewability. Preview opens the
+established governed record-component viewer focused on that component;
+unsupported or unavailable components retain a disabled icon with explanatory
+guidance.
 
 Aggregation results use the same surface and rhythm with a distinct type icon
 and open-aggregation action. Type tabs filter the already submitted query; they
@@ -2304,7 +2314,7 @@ rebuildable derived data, but their removal requires a later explicit migration.
 | FTS-05 | Replacement makes old text unsearchable at activation and publishes new text atomically | Concurrency integration test |
 | FTS-06 | Record number/title/description are searchable with documented weights | SQL ranking test |
 | FTS-07 | Aggregation metadata appears only as aggregation results | SQL/API test |
-| FTS-08 | Results identify matching components and provide bounded safe snippets | API and XSS UI tests |
+| FTS-08 | Record results show only components attributed as matches, preserve each matched component's bounded safe highlighted snippet, and offer governed preview on those rows without enumerating unmatched components | API attribution, authorization, preview-wiring, and XSS UI tests |
 | FTS-09 | Unauthorized resources, components, snippets, and counts cannot be inferred | authorization matrix and cross-user tests |
 | FTS-10 | Arabic and English native text and OCR meet corpus quality thresholds approved in Phase 0 | corpus evaluation report |
 | FTS-11 | Unsupported, corrupt, protected, oversized, timed-out, and malicious inputs fail safely without losing the prior valid index | worker robustness tests |

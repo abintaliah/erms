@@ -145,6 +145,14 @@ Poppler, LibreOffice, or PostgreSQL.
     supervisor plus one child, and documents are extracted serially. Do not
     change `TEXT_INDEXER_CLAIM_BATCH_SIZE=1` in either scenario.
 
+    For PDFs, the worker prefers an adequate native text layer and invokes OCR
+    only for scanned or text-poor content. If a text-rich, high-page-count PDF
+    repeatedly reaches `TEXT_INDEXER_EXTRACTION_TIMEOUT_SECONDS`, do not merely
+    raise the timeout: confirm that the current worker is running, restart it,
+    and retry one component from **Text Indexers → Health → Failure
+    diagnostics**. The operations guide documents this failure pattern and its
+    verification steps in **Text-rich PDF repeatedly reports `timeout`**.
+
     The local stack provisions one loopback-only Text Indexers service account
     and one protected API key for the complete local text-indexer service. All
     child workers share that credential and receive distinct runtime worker
