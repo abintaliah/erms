@@ -319,7 +319,7 @@ def my_recent_activity(
     reasons, other actors, or resources the caller can no longer view.
     """
     return list(connection.execute(
-        """WITH latest_resource_events AS (
+        """WITH governed_resource_events AS (
                SELECT DISTINCT ON (event.entity_type,event.entity_id,event.operation)
                       event.id,event.entity_type,event.entity_id,event.operation,
                       event.occurred_at
@@ -330,6 +330,34 @@ def my_recent_activity(
                   AND (%s::timestamptz IS NULL OR event.occurred_at >= %s)
                 ORDER BY event.entity_type,event.entity_id,event.operation,
                          event.occurred_at DESC,event.id DESC
+           ), content_view_targets AS (
+               SELECT event.id,'record'::text AS entity_type,
+                      component.record_id AS entity_id,event.operation,event.occurred_at
+                 FROM event_history event
+                 JOIN digital_components component ON component.id=event.entity_id
+                WHERE event.actor_user_id=%s
+                  AND event.entity_type='digital_component'
+                  AND event.operation='CONTENT_VIEWED'
+                  AND (%s::timestamptz IS NULL OR event.occurred_at >= %s)
+               UNION ALL
+               SELECT event.id,'aggregation'::text AS entity_type,
+                      record.aggregation_id AS entity_id,event.operation,event.occurred_at
+                 FROM event_history event
+                 JOIN digital_components component ON component.id=event.entity_id
+                 JOIN records record ON record.id=component.record_id
+                WHERE event.actor_user_id=%s
+                  AND event.entity_type='digital_component'
+                  AND event.operation='CONTENT_VIEWED'
+                  AND (%s::timestamptz IS NULL OR event.occurred_at >= %s)
+           ), content_view_events AS (
+               SELECT DISTINCT ON (entity_type,entity_id)
+                      id,entity_type,entity_id,operation,occurred_at
+                 FROM content_view_targets
+                ORDER BY entity_type,entity_id,occurred_at DESC,id DESC
+           ), latest_resource_events AS (
+               SELECT * FROM governed_resource_events
+               UNION ALL
+               SELECT * FROM content_view_events
            ), matching_events AS (
                SELECT event.entity_type,event.entity_id,event.operation,event.occurred_at,
                       row_number() OVER (
@@ -355,7 +383,12 @@ def my_recent_activity(
              FROM matching_events
             WHERE position <= %s
             ORDER BY occurred_at DESC, entity_type, entity_id""",
-        (principal.user_id, since, since, limit),
+        (
+            principal.user_id, since, since,
+            principal.user_id, since, since,
+            principal.user_id, since, since,
+            limit,
+        ),
     ).fetchall())
 
 

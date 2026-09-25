@@ -1064,7 +1064,7 @@ class SelfRecentActivityRead(ApiModel):
 
     entity_type: Literal["aggregation", "record"]
     entity_id: int
-    operation: Literal["CREATE", "UPDATE"]
+    operation: Literal["CREATE", "UPDATE", "CONTENT_VIEWED"]
     occurred_at: datetime
 
 

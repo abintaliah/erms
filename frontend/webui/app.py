@@ -1093,7 +1093,7 @@ def index(q: str = "") -> None:
     auth_state: dict[str, Any] = {"principal": None}
     state: dict[str, Any] = {
         "resource": "dashboard", "rows": [], "searched": False,
-        "recent_created": [], "recent_updated": [], "aggregation_detail": None,
+        "recent_created": [], "recent_updated": [], "recent_activity": [], "aggregation_detail": None,
         "lifecycle_filter": "all", "aggregation_mode": "search",
         "favourites": {"aggregations": [], "records": []},
         "favourite_ids": {"aggregations": set(), "records": set()},
@@ -5295,12 +5295,23 @@ def index(q: str = "") -> None:
         if not spec.search_first:
             state["recent_created"] = []
             state["recent_updated"] = []
+            state["recent_activity"] = []
             return
         if spec.key == "classifications":
             state["recent_created"] = []
             state["recent_updated"] = []
+            state["recent_activity"] = []
+            return
+        if spec.key in {"aggregations", "records"}:
+            since = datetime.now(timezone.utc) - timedelta(days=dashboard_recent_days())
+            activity = await api.recent_resource_activity(spec.key, limit=50, since=since)
+            decorated = await decorate_for_spec(spec, activity)
+            state["recent_activity"] = decorated
+            state["recent_created"] = [item for item in decorated if item["_operation"] == "CREATE"]
+            state["recent_updated"] = [item for item in decorated if item["_operation"] == "UPDATE"]
             return
         created, updated = await api.recently_created(spec.key), await api.recently_updated(spec.key)
+        state["recent_activity"] = []
         state["recent_created"] = await decorate_for_spec(spec, created)
         state["recent_updated"] = await decorate_for_spec(spec, updated)
 
@@ -7612,21 +7623,7 @@ def index(q: str = "") -> None:
         number_field = "aggregation_number" if resource == "aggregations" else "record_number"
         favourite_items = state["favourites"][resource]
         recent_items = sorted(
-            [
-                {
-                    **item,
-                    "_operation": operation,
-                    "_activity_at": (
-                        item.get("_activity_at")
-                        or item.get("date_updated" if operation == "UPDATE" else "date_created")
-                    ),
-                }
-                for operation, rows in (
-                    ("CREATE", state["recent_created"]),
-                    ("UPDATE", state["recent_updated"]),
-                )
-                for item in rows
-            ],
+            state["recent_activity"],
             key=lambda item: str(item.get("_activity_at") or ""),
             reverse=True,
         )
@@ -7673,6 +7670,7 @@ def index(q: str = "") -> None:
             activity_label, activity_icon, activity_class = {
                 "CREATE": ("Created", "add", "dashboard-activity-created"),
                 "UPDATE": ("Updated", "edit", "dashboard-activity-updated"),
+                "CONTENT_VIEWED": ("Viewed", "visibility", "dashboard-activity-viewed"),
             }[operation]
             row = ui.element("div").classes("dashboard-personal-item").props(
                 "role=button tabindex=0"

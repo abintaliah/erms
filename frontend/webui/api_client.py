@@ -695,6 +695,35 @@ class ErmsApiClient:
             if isinstance(result, dict)
         ]
 
+    async def recent_resource_activity(
+        self,
+        resource: str,
+        *,
+        limit: int = 50,
+        since: datetime | str | None = None,
+    ) -> list[dict[str, Any]]:
+        entity_type = {"aggregations": "aggregation", "records": "record"}[resource]
+        parsed_since = (
+            since if isinstance(since, datetime)
+            else datetime.fromisoformat(since.replace("Z", "+00:00")) if since
+            else None
+        )
+        activity = await self.my_recent_activity(limit=limit, since=parsed_since)
+        entries = [item for item in activity if item["entity_type"] == entity_type]
+        results = await asyncio.gather(
+            *(self.get(resource, entry["entity_id"]) for entry in entries),
+            return_exceptions=True,
+        )
+        return [
+            {
+                **result,
+                "_activity_at": entry["occurred_at"],
+                "_operation": entry["operation"],
+            }
+            for entry, result in zip(entries, results)
+            if isinstance(result, dict)
+        ]
+
     async def recently_created(
         self, resource: str, *, limit: int = 6, actor_user_id: int | None = None,
         since: datetime | str | None = None,

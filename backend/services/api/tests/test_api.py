@@ -1295,6 +1295,17 @@ def test_browser_native_image_preview_preserves_mime_type_and_is_audited(client:
         and item["operation"] == "CONTENT_VIEWED"
         for item in dashboard.json()["recent_activity"]
     )
+    personal_activity = client.get(
+        "/api/v1/auth/me/recent-activity", params={"limit": 7},
+    )
+    assert personal_activity.status_code == 200, personal_activity.text
+    viewed_resources = {
+        (item["entity_type"], item["entity_id"])
+        for item in personal_activity.json()
+        if item["operation"] == "CONTENT_VIEWED"
+    }
+    assert ("record", record["id"]) in viewed_resources
+    assert ("aggregation", record["aggregation_id"]) in viewed_resources
 
 
 def test_upload_size_limit(client: TestClient, record: dict, monkeypatch):

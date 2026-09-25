@@ -203,6 +203,9 @@ def test_records_and_aggregations_landing_use_dashboard_personal_panel_treatment
     assert '"dashboard-personal-columns w-full px-5 pt-5 pb-5"' in source
     assert source.count('"dashboard-personal-item"') >= 4
     assert 'f"dashboard-activity-badge {activity_class}"' in source
+    assert 'activity = await api.recent_resource_activity(spec.key, limit=50, since=since)' in source
+    assert '"CONTENT_VIEWED": ("Viewed", "visibility", "dashboard-activity-viewed")' in source
+    assert 'state["recent_activity"]' in source
     assert 'spec.key in {"aggregations", "records"}' in source
     assert 'render_resource_personal_sections(spec)' in source
     assert 'ui.label("Your recent records activity")' not in APP_SOURCE

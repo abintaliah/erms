@@ -189,11 +189,16 @@ An item qualifies when its immutable event-history entry:
   `CONTENT_VIEWED` event for one of a record's digital components; and
 - occurred within the configured rolling period.
 
-`CONTENT_VIEWED` activity is presented as activity on the containing record.
-Only the newest qualifying view for each record is retained in the recent
-preview. Each category is ordered by `event_history.occurred_at`, newest first. The time
-shown on a card is that activity timestamp. Deleted entities are omitted because
-there is no current entity to open.
+`CONTENT_VIEWED` activity is attributed to both the containing record and its
+containing aggregation. The Dashboard's recent-record stream presents the
+record attribution; the Records and Aggregations pages present the attribution
+appropriate to their resource type. Viewing a governed component therefore
+makes both resources recent without exposing the component through a separate
+activity card. Only the newest qualifying view for each record or aggregation
+is retained. Each category is ordered by `event_history.occurred_at`, newest
+first. The time shown on a card is that activity timestamp. Deleted or
+no-longer-visible entities are omitted because there is no currently authorized
+resource to open.
 
 ## Configuration
 

@@ -498,6 +498,36 @@ def test_recently_updated_uses_self_activity_without_audit_access():
     ]
 
 
+def test_recent_resource_activity_hydrates_content_views_for_aggregations():
+    requests = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request.url.path)
+        if request.url.path == "/api/v1/auth/me/recent-activity":
+            return httpx.Response(200, json=[{
+                "entity_type": "aggregation", "entity_id": 8,
+                "operation": "CONTENT_VIEWED", "occurred_at": "2026-09-25T18:00:00Z",
+            }])
+        assert request.url.path == "/api/v1/aggregations/8"
+        return httpx.Response(200, json={"id": 8, "title": "Parent aggregation"})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.recent_resource_activity("aggregations")
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise()) == [{
+        "id": 8, "title": "Parent aggregation",
+        "_activity_at": "2026-09-25T18:00:00Z",
+        "_operation": "CONTENT_VIEWED",
+    }]
+    assert requests == [
+        "/api/v1/auth/me/recent-activity", "/api/v1/aggregations/8",
+    ]
+
+
 @pytest.mark.parametrize(
     ("method_name", "operation"),
     (("recently_created", "CREATE"), ("recently_updated", "UPDATE")),

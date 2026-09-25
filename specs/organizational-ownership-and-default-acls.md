@@ -4,7 +4,7 @@
 **Approved:** 20 September 2026
 **Project:** ERMS / wathiq
 **Prepared:** 20 September 2026
-**Revision:** 1.3 — Phase 7 operational hardening and core-feature release completed
+**Revision:** 1.4 — Component views included in record and aggregation recent activity
 
 ## 1. Purpose
 
@@ -781,6 +781,14 @@ attention counts, per-effective-org-unit holdings, favourites, and hydrated
 self-only recent activity. This endpoint exists to bound dashboard database
 concurrency; it must not broaden any source dataset merely because several
 dashboard sections share one response.
+
+The Records and Aggregations landing pages use the authenticated user's
+self-only recent activity. Their lists include `CREATE`, `UPDATE`, and
+`CONTENT_VIEWED`. A digital-component `CONTENT_VIEWED` event is attributed to
+both its containing record and that record's containing aggregation; only the
+newest qualifying view per resource is retained. The UI labels these entries
+**Viewed**, applies current resource-visibility checks, and does not expose the
+component as a separate activity item.
 
 ## 15. Event history and audit
 
