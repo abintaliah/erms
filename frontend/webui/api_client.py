@@ -792,6 +792,9 @@ class ErmsApiClient:
     async def view_component_pdf(self, component_id: int) -> bytes:
         return await self.request("GET", f"/api/v1/digital-components/{component_id}/rendition")
 
+    async def print_component_pdf(self, component_id: int) -> bytes:
+        return await self.request("GET", f"/api/v1/digital-components/{component_id}/print-rendition")
+
     async def reindex_component(self, component_id: int) -> dict[str, Any]:
         return await self.request("POST", f"/api/v1/digital-components/{component_id}/reindex")
 

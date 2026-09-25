@@ -584,7 +584,7 @@ def test_unauthorized_response_clears_page_through_handler():
     assert handled == [True]
 
 
-def test_component_download_and_view_use_distinct_content_routes():
+def test_component_download_view_and_print_use_distinct_authorized_routes():
     paths = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -596,6 +596,7 @@ def test_component_download_and_view_use_distinct_content_routes():
         try:
             assert await client.download_component(8) == b"document"
             assert await client.view_component_pdf(8) == b"document"
+            assert await client.print_component_pdf(8) == b"document"
         finally:
             await client.close()
 
@@ -603,6 +604,7 @@ def test_component_download_and_view_use_distinct_content_routes():
     assert paths == [
         "/api/v1/digital-components/8/content",
         "/api/v1/digital-components/8/rendition",
+        "/api/v1/digital-components/8/print-rendition",
     ]
 
 

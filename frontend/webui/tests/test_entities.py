@@ -24,6 +24,7 @@ from frontend.webui.app import (
     buffer_upload_batch,
     component_uploader,
     component_file_icon,
+    component_is_previewable,
     decorate_relationship_rows,
     deletion_blocked_report,
     deletion_identity,
@@ -78,6 +79,42 @@ def test_native_preview_kind_uses_safe_browser_renderers():
     assert native_preview_kind("video/mp4") == "video"
     assert native_preview_kind("image/svg+xml") is None
     assert native_preview_kind("application/pdf") is None
+
+
+def test_phase1_previewability_requires_available_supported_content():
+    assert component_is_previewable({
+        "content_status": "available", "mime_type": "application/pdf", "file_name": "a.pdf",
+    })
+    assert component_is_previewable({
+        "content_status": "available", "mime_type": "text/plain", "file_name": "a.txt",
+    })
+    assert component_is_previewable({
+        "content_status": "available", "mime_type": "image/png", "file_name": "a.png",
+    })
+    assert not component_is_previewable({
+        "content_status": "pending", "mime_type": "application/pdf", "file_name": "a.pdf",
+    })
+    assert not component_is_previewable({
+        "content_status": "available", "mime_type": "application/zip", "file_name": "a.zip",
+    })
+
+
+def test_phase1_preview_controls_and_entry_points_are_present():
+    source = APP_SOURCE
+    assert "async def preview_record_components(" in source
+    assert "Preview digital components" in source
+    assert 'capabilities.get("download_component")' in source
+    assert 'capabilities.get("print_component")' in source
+    assert 'aria-label=\'Print document\'' in source
+    assert "window.__ermsPrintWindow = w" in source
+    assert 'record.get("medium") != "physical"' in source
+    assert 'component_order' in source
+    assert "viewer_client = context.client" in source
+    viewer_source = source.split("async def preview_record_components(", 1)[1].split(
+        "async def show_components(", 1
+    )[0]
+    assert "ui.run_javascript(" not in viewer_source
+    assert "viewer_client.run_javascript(" in viewer_source
 
 
 @pytest.mark.parametrize("extension", ("md", "msg", "eml", "html", "txt", "xml"))
@@ -455,9 +492,12 @@ def test_record_detail_long_values_are_aligned_and_bounded():
     assert ".record-containing-aggregation .q-btn__content" in source
     assert "justify-content: flex-start; text-align: left; white-space: normal" in source
     assert '"record-containing-aggregation font-semibold self-start -ml-2"' in source
-    assert "width: min(280px, 100%); height: 2.5em" in source
+    assert "width: 100%; min-width: 0; min-height: 2.5em" in source
     assert "-webkit-line-clamp: 2" in source
     assert ").tooltip(component_name)" in component_source
+    assert '"component-card-actions w-full items-center justify-end' in component_source
+    assert '"component-mime-type text-xs text-slate-500"' in component_source
+    assert ").tooltip(mime_type)" in component_source
 
 
 def test_identity_details_use_grouped_command_panels():

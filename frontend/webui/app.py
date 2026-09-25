@@ -322,6 +322,18 @@ def requires_document_conversion(component: dict[str, Any]) -> bool:
     )
 
 
+def component_is_previewable(component: dict[str, Any]) -> bool:
+    """Return whether the existing Phase 1 viewer supports this available component."""
+    if component.get("content_status", "pending") != "available":
+        return False
+    mime_type = (component.get("mime_type") or "").lower()
+    return bool(
+        native_preview_kind(mime_type)
+        or mime_type == "application/pdf"
+        or requires_document_conversion(component)
+    )
+
+
 def effective_closure(
     aggregation: dict[str, Any] | None,
     aggregations_by_id: dict[int, dict[str, Any]],
@@ -385,34 +397,38 @@ def render_component_cards(
                     ui.label(component_name).classes(
                         "component-filename font-semibold text-slate-800"
                     ).tooltip(component_name)
-                    ui.label(component.get("mime_type") or "Unknown file type").classes("text-xs text-slate-500")
-                with ui.column().classes("items-end gap-1"):
-                    ui.badge(f"#{component.get('component_order', '—')}").props("outline color=primary")
-                    with ui.row().classes("gap-0 no-wrap"):
-                        if on_view is not None:
-                            ui.button(icon="visibility", on_click=lambda _, item=component: on_view(item)).props(
-                                "flat round dense" + (" disable" if status != "available" or not capability_allowed(capabilities, "view_component") else "")
-                            ).tooltip("View document" if capability_allowed(capabilities, "view_component") else "Your effective roles do not grant component viewing")
-                        if on_download is not None:
-                            ui.button(icon="download", on_click=lambda _, item=component: on_download(item)).props(
-                                "flat round dense" + (" disable" if status != "available" or not capability_allowed(capabilities, "download_component") else "")
-                            ).tooltip("Download original" if capability_allowed(capabilities, "download_component") else "Your effective roles do not grant component downloading")
-                        if on_reindex is not None and capability_allowed(capabilities, "reindex_components"):
-                            ui.button(icon="manage_search", on_click=lambda _, item=component: on_reindex(item)).props(
-                                "flat round dense" + (" disable" if status != "available" else "")
-                            ).tooltip("Reindex component content")
-                        ui.button(icon="arrow_upward", on_click=lambda _, item=component: on_move(item, -1)).props(
-                            "flat round dense" + (" disable" if readonly or not capability_allowed(capabilities, "reorder_components") or index == 0 else "")
-                        ).tooltip("Move earlier")
-                        ui.button(icon="arrow_downward", on_click=lambda _, item=component: on_move(item, 1)).props(
-                            "flat round dense" + (" disable" if readonly or not capability_allowed(capabilities, "reorder_components") or index == len(rows) - 1 else "")
-                        ).tooltip("Move later")
-                        ui.button(icon="delete_outline", color="negative", on_click=lambda _, item=component: on_remove(item)).props(
-                            "flat round dense" + (" disable" if readonly or not capability_allowed(capabilities, "remove_component") else "")
-                        ).tooltip("Remove component" if not readonly and capability_allowed(capabilities, "remove_component") else "This operation is unavailable under the current resource state or access policy")
-                        if on_history is not None:
-                            ui.button(icon="history", color="blue-grey", on_click=lambda _, item=component: on_history(item)).props("flat round dense").tooltip("Event history")
-            with ui.row().classes("w-full items-center gap-2"):
+                    mime_type = component.get("mime_type") or "Unknown file type"
+                    ui.label(mime_type).classes(
+                        "component-mime-type text-xs text-slate-500"
+                    ).tooltip(mime_type)
+                ui.badge(f"#{component.get('component_order', '—')}").props(
+                    "outline color=primary"
+                ).classes("shrink-0")
+            with ui.row().classes("component-card-actions w-full items-center justify-end gap-0 no-wrap"):
+                if on_view is not None:
+                    ui.button(icon="visibility", on_click=lambda _, item=component: on_view(item)).props(
+                        "flat round dense" + (" disable" if status != "available" or not capability_allowed(capabilities, "view_component") else "")
+                    ).tooltip("View document" if capability_allowed(capabilities, "view_component") else "Your effective roles do not grant component viewing")
+                if on_download is not None:
+                    ui.button(icon="download", on_click=lambda _, item=component: on_download(item)).props(
+                        "flat round dense" + (" disable" if status != "available" or not capability_allowed(capabilities, "download_component") else "")
+                    ).tooltip("Download original" if capability_allowed(capabilities, "download_component") else "Your effective roles do not grant component downloading")
+                if on_reindex is not None and capability_allowed(capabilities, "reindex_components"):
+                    ui.button(icon="manage_search", on_click=lambda _, item=component: on_reindex(item)).props(
+                        "flat round dense" + (" disable" if status != "available" else "")
+                    ).tooltip("Reindex component content")
+                ui.button(icon="arrow_upward", on_click=lambda _, item=component: on_move(item, -1)).props(
+                    "flat round dense" + (" disable" if readonly or not capability_allowed(capabilities, "reorder_components") or index == 0 else "")
+                ).tooltip("Move earlier")
+                ui.button(icon="arrow_downward", on_click=lambda _, item=component: on_move(item, 1)).props(
+                    "flat round dense" + (" disable" if readonly or not capability_allowed(capabilities, "reorder_components") or index == len(rows) - 1 else "")
+                ).tooltip("Move later")
+                ui.button(icon="delete_outline", color="negative", on_click=lambda _, item=component: on_remove(item)).props(
+                    "flat round dense" + (" disable" if readonly or not capability_allowed(capabilities, "remove_component") else "")
+                ).tooltip("Remove component" if not readonly and capability_allowed(capabilities, "remove_component") else "This operation is unavailable under the current resource state or access policy")
+                if on_history is not None:
+                    ui.button(icon="history", color="blue-grey", on_click=lambda _, item=component: on_history(item)).props("flat round dense").tooltip("Event history")
+            with ui.row().classes("w-full items-center gap-2 flex-wrap"):
                 ui.badge(status.replace("_", " ").title(), color=status_color).props("rounded")
                 indexing = component.get("_indexing")
                 if indexing:
@@ -1405,9 +1421,16 @@ def index(q: str = "") -> None:
         .component-card { border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: none; overflow: hidden; }
         .component-card:hover { border-color: #a8bdd8; background: #fafdff; }
         .component-filename {
-            display: -webkit-box; width: min(280px, 100%); height: 2.5em;
+            display: -webkit-box; width: 100%; min-width: 0; min-height: 2.5em;
             overflow: hidden; overflow-wrap: anywhere; line-height: 1.25;
             -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+        }
+        .component-mime-type {
+            display: block; width: 100%; min-width: 0; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
+        }
+        .component-card-actions {
+            min-height: 34px; margin-top: -5px; padding-left: 56px;
         }
         .record-containing-aggregation { width: 100%; text-align: left; }
         .record-containing-aggregation .q-btn__content {
@@ -1415,6 +1438,60 @@ def index(q: str = "") -> None:
         }
         .component-meta-label { color: #94a3b8; font-size: .68rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
         .component-meta-value { color: #475569; font-size: .8rem; line-height: 1.3; }
+        .component-switcher-bar {
+            min-height: 56px; padding: 7px 16px; background: #fff;
+            border-bottom: 1px solid #dfe7ef;
+        }
+        .component-switcher-summary {
+            flex: 0 0 auto; color: #64748b; font-size: .76rem;
+            font-weight: 600; white-space: nowrap;
+        }
+        .component-switcher-divider {
+            width: 1px; height: 30px; background: #d7e0e9; flex: 0 0 1px;
+        }
+        .component-switcher-file {
+            min-width: 0; flex: 1 1 auto; overflow: hidden;
+        }
+        .component-switcher-filename {
+            min-width: 0; max-width: 440px; overflow: hidden; text-overflow: ellipsis;
+            color: #1e293b; font-size: .82rem; font-weight: 600; white-space: nowrap;
+        }
+        .component-switcher-position {
+            flex: 0 0 auto; color: #8291a3; font-size: .72rem; white-space: nowrap;
+        }
+        .component-switcher-scroll {
+            flex: 0 1 auto; max-width: 48vw; min-width: 0; overflow-x: auto;
+            scrollbar-width: thin; padding: 2px 3px;
+        }
+        .component-switcher-button {
+            flex: 0 0 30px; width: 30px !important; height: 30px !important;
+            min-width: 30px !important; min-height: 30px !important; padding: 0 !important;
+            border: 0 !important; border-radius: 999px !important;
+            background: #eef2f6 !important; color: #475569 !important;
+            box-shadow: none !important; font-size: .74rem; font-weight: 600;
+            letter-spacing: 0; text-transform: none;
+        }
+        .component-switcher-button:hover {
+            background: #dfeaf4 !important; color: #1e6091 !important;
+        }
+        .component-switcher-button--active {
+            background: #2f86c9 !important; color: #fff !important;
+            box-shadow: 0 1px 3px rgba(30, 96, 145, .24) !important;
+        }
+        .component-switcher-button .q-btn__content {
+            width: 100%; min-width: 0; flex-wrap: nowrap; justify-content: center;
+            overflow: hidden;
+        }
+        .component-viewer-toolbar { min-height: 52px; }
+        @media (max-width: 700px) {
+            .component-switcher-button { width: 30px; }
+            .component-switcher-bar { padding-inline: 10px; gap: 8px !important; }
+            .component-switcher-summary { display: none; }
+            .component-switcher-divider { display: none; }
+            .component-switcher-filename { max-width: 42vw; }
+            .component-switcher-position { display: none; }
+            .component-switcher-scroll { max-width: 44vw; }
+        }
         .record-uploader { border: 2px dashed #a9bfd9; border-radius: 12px; box-shadow: none; background: #fbfdff; }
         .record-uploader:hover { border-color: #5b8ec9; background: #f7fbff; }
         .record-uploader .q-uploader__header { background: transparent; color: inherit; }
@@ -2863,6 +2940,279 @@ def index(q: str = "") -> None:
             render_event_timeline(history, timeline)
         dialog.open()
 
+    async def preview_record_components(
+        record: dict[str, Any], initial_component_id: int | None = None,
+    ) -> None:
+        """Open the Phase 1 viewer for all previewable components of one record."""
+        # Async work and dynamic host clearing can delete the slot which originated
+        # this callback (especially a q-table body slot). Keep a stable client
+        # reference for the viewer's complete lifetime instead of resolving it
+        # later through NiceGUI's implicit current-slot context.
+        viewer_client = context.client
+        try:
+            components, capabilities = await asyncio.gather(
+                api.components(record["id"]),
+                api.resource_capabilities("records", record["id"]),
+            )
+        except ApiError as error:
+            ui.notify(error_message(error), color="negative", close_button=True)
+            return
+        previewable = sorted(
+            (item for item in components if component_is_previewable(item)),
+            key=lambda item: item.get("component_order", 0),
+        )
+        if not capabilities.get("view_component") or not previewable:
+            ui.notify("No previewable digital components are available", color="warning")
+            return
+        selected = next(
+            (item for item in previewable if item["id"] == initial_component_id),
+            previewable[0],
+        )
+        viewer_state: dict[str, Any] = {
+            "component": selected, "canvas_id": None, "loading_id": None, "request_id": 0,
+        }
+        dialog = ui.dialog().props("maximized transition-show=fade transition-hide=fade")
+
+        async def download_component(component: dict[str, Any]) -> None:
+            try:
+                content = await api.download_component(component["id"])
+                ui.download(
+                    content, component["file_name"],
+                    component.get("mime_type") or "application/octet-stream",
+                )
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+
+        async def print_component(component: dict[str, Any]) -> None:
+            try:
+                ui.notify("Preparing document for printing…", color="info")
+                printable = await api.print_component_pdf(component["id"])
+                encoded = base64.b64encode(printable).decode("ascii")
+                print_mime_type = (
+                    component.get("mime_type")
+                    if native_preview_kind(component.get("mime_type")) == "image"
+                    else "application/pdf"
+                )
+                await viewer_client.run_javascript(
+                    "import('/static/pdfjs/erms-viewer.mjs').then(() => "
+                    f"window.ermsPdfViewer.print({json.dumps(encoded)}, "
+                    f"{json.dumps(print_mime_type)}))",
+                    timeout=30,
+                )
+            except (ApiError, TimeoutError) as error:
+                message = error_message(error) if isinstance(error, ApiError) else "The print view did not finish loading"
+                ui.notify(message, color="negative", close_button=True)
+
+        def close_viewer() -> None:
+            canvas_id = viewer_state.get("canvas_id")
+            if canvas_id:
+                viewer_client.run_javascript(
+                    f"window.ermsPdfViewer?.close({json.dumps(canvas_id)})"
+                )
+            dialog.close()
+
+        switcher_host: Any = None
+        toolbar_host: Any = None
+        content_host: Any = None
+
+        def render_switcher() -> None:
+            switcher_host.clear()
+            active_id = viewer_state["component"]["id"]
+            active_index = next(
+                index for index, item in enumerate(previewable, start=1)
+                if item["id"] == active_id
+            )
+            active_component = viewer_state["component"]
+            with switcher_host:
+                with ui.row().classes("component-switcher-bar w-full items-center no-wrap gap-3"):
+                    ui.label(
+                        f"{len(previewable)} digital component{'s' if len(previewable) != 1 else ''}"
+                    ).classes("component-switcher-summary")
+                    ui.element("div").classes("component-switcher-divider")
+                    with ui.row().classes("component-switcher-file items-center no-wrap gap-3"):
+                        ui.icon(
+                            component_file_icon(active_component.get("mime_type")),
+                            color="primary", size="24px",
+                        )
+                        ui.label(
+                            active_component.get("file_name") or "Unnamed file"
+                        ).classes("component-switcher-filename").tooltip(
+                            active_component.get("file_name") or "Unnamed file"
+                        )
+                        ui.label(
+                            f"{active_index} of {len(previewable)}"
+                        ).classes("component-switcher-position")
+                    with ui.row().classes(
+                        "component-switcher-scroll items-center no-wrap gap-2"
+                    ):
+                        for index, item in enumerate(previewable, start=1):
+                            active = item["id"] == active_id
+                            button = ui.button(
+                                str(index),
+                                on_click=lambda _, component=item: select_component(component),
+                            ).props(
+                                "flat dense no-caps"
+                                + (" aria-pressed=true" if active else " aria-pressed=false")
+                            ).classes(
+                                "component-switcher-button"
+                                + (" component-switcher-button--active" if active else "")
+                            )
+                            if viewer_state.get("loading_id") == item["id"]:
+                                button.disable()
+                            button.tooltip(item.get("file_name") or "Unnamed file")
+
+        async def select_component(component: dict[str, Any]) -> None:
+            if viewer_state.get("loading_id") == component["id"]:
+                return
+            viewer_state["request_id"] += 1
+            request_id = viewer_state["request_id"]
+            old_canvas_id = viewer_state.get("canvas_id")
+            if old_canvas_id:
+                await viewer_client.run_javascript(
+                    f"window.ermsPdfViewer?.close({json.dumps(old_canvas_id)}); true"
+                )
+            viewer_state.update(component=component, canvas_id=None, loading_id=component["id"])
+            render_switcher()
+            toolbar_host.clear()
+            content_host.clear()
+            converting = requires_document_conversion(component)
+            with toolbar_host:
+                with ui.row().classes(
+                    "component-viewer-toolbar w-full items-center no-wrap px-4 py-2 bg-white border-b"
+                ):
+                    ui.space()
+                    ui.button(icon="close", on_click=close_viewer).props(
+                        "flat round dense aria-label='Close viewer'"
+                    ).tooltip("Close viewer")
+            with content_host:
+                with ui.column().classes("w-full h-full items-center justify-center gap-3"):
+                    ui.spinner("dots", size="3em", color="primary")
+                    ui.label(
+                        "Converting this document to PDF. Larger files may take a little while."
+                        if converting else "Loading the document. Larger files may take a little while."
+                    ).classes("text-sm text-slate-500")
+            try:
+                preview = await api.view_component_pdf(component["id"])
+            except ApiError as error:
+                if request_id != viewer_state["request_id"]:
+                    return
+                viewer_state["loading_id"] = None
+                render_switcher()
+                content_host.clear()
+                with content_host:
+                    with ui.column().classes("w-full h-full items-center justify-center gap-3"):
+                        ui.icon("error_outline", color="negative", size="42px")
+                        ui.label(error_message(error)).classes("text-sm text-negative")
+                        ui.label("Choose another component or try this component again.").classes(
+                            "text-xs text-slate-500"
+                        )
+                return
+
+            if request_id != viewer_state["request_id"]:
+                return
+            viewer_state["loading_id"] = None
+            render_switcher()
+
+            preview_kind = native_preview_kind(component.get("mime_type"))
+            toolbar_host.clear()
+            content_host.clear()
+            with toolbar_host:
+                with ui.row().classes(
+                    "component-viewer-toolbar w-full items-center no-wrap px-4 py-2 bg-white border-b"
+                ):
+                    ui.space()
+                    if not preview_kind:
+                        canvas_id = f"erms-pdf-canvas-{record['id']}-{component['id']}"
+                        viewer_state["canvas_id"] = canvas_id
+                        ui.button(icon="chevron_left", on_click=lambda: viewer_client.run_javascript(
+                            f"window.ermsPdfViewer.previous({json.dumps(canvas_id)})"
+                        )).props("flat round dense aria-label='Previous page'").tooltip("Previous page")
+                        ui.label("Loading…").props(f'id={canvas_id}-status').classes(
+                            "text-sm text-slate-500 min-w-32 text-center"
+                        )
+                        ui.button(icon="chevron_right", on_click=lambda: viewer_client.run_javascript(
+                            f"window.ermsPdfViewer.next({json.dumps(canvas_id)})"
+                        )).props("flat round dense aria-label='Next page'").tooltip("Next page")
+                        ui.button(icon="zoom_out", on_click=lambda: viewer_client.run_javascript(
+                            f"window.ermsPdfViewer.zoomOut({json.dumps(canvas_id)})"
+                        )).props("flat round dense aria-label='Zoom out'").tooltip("Zoom out")
+                        ui.button(icon="zoom_in", on_click=lambda: viewer_client.run_javascript(
+                            f"window.ermsPdfViewer.zoomIn({json.dumps(canvas_id)})"
+                        )).props("flat round dense aria-label='Zoom in'").tooltip("Zoom in")
+                    if (
+                        capabilities.get("print_component")
+                        and preview_kind not in {"audio", "video"}
+                    ):
+                        print_button = ui.button(icon="print").props(
+                            "flat round dense aria-label='Print document'"
+                        )
+                        print_button.on(
+                            "click",
+                            lambda: print_component(component),
+                            js_handler=(
+                                "() => { const w = window.open('', '_blank'); "
+                                "window.__ermsPrintWindow = w; "
+                                "if (w) { w.document.write('<title>Preparing print view...</title>"
+                                "<p style=\"font:16px Arial;padding:24px\">Preparing print view...</p>'); "
+                                "w.document.close(); } emit(); }"
+                            ),
+                        )
+                        print_button.tooltip("Print document")
+                    if capabilities.get("download_component"):
+                        ui.button(
+                            icon="download", on_click=lambda: download_component(component),
+                        ).props("flat round dense aria-label='Download original'").tooltip("Download original")
+                    ui.button(icon="close", on_click=close_viewer).props(
+                        "flat round dense aria-label='Close viewer'"
+                    ).tooltip("Close viewer")
+
+            if preview_kind:
+                mime_type = component.get("mime_type") or "application/octet-stream"
+                data_url = f"data:{mime_type};base64,{base64.b64encode(preview).decode('ascii')}"
+                with content_host:
+                    with ui.element("div").classes(
+                        "w-full h-full overflow-auto flex items-center justify-center p-6"
+                    ):
+                        if preview_kind == "image":
+                            ui.image(data_url).classes(
+                                "max-w-full max-h-[calc(100vh-150px)] object-contain shadow-lg"
+                            )
+                        elif preview_kind == "audio":
+                            with ui.card().classes("w-[680px] max-w-full p-8"):
+                                ui.icon("audio_file", size="72px").classes("self-center text-primary")
+                                ui.label(component["file_name"]).classes("self-center font-semibold")
+                                ui.audio(data_url, controls=True).classes("w-full")
+                        else:
+                            ui.video(data_url, controls=True).classes(
+                                "w-full max-w-[1200px] max-h-[calc(100vh-150px)] bg-black"
+                            )
+                return
+
+            canvas_id = viewer_state["canvas_id"]
+            with content_host:
+                with ui.element("div").classes(
+                    "w-full h-full overflow-auto flex justify-center items-start p-5"
+                ):
+                    ui.element("canvas").props(f"id={canvas_id}").classes("bg-white shadow-lg")
+            encoded = base64.b64encode(preview).decode("ascii")
+            try:
+                await viewer_client.run_javascript(
+                    "import('/static/pdfjs/erms-viewer.mjs').then(() => true)", timeout=15,
+                )
+                await viewer_client.run_javascript(
+                    f"window.ermsPdfViewer.open({json.dumps(canvas_id)}, {json.dumps(encoded)})",
+                    timeout=30,
+                )
+            except TimeoutError:
+                ui.notify("The PDF viewer did not finish loading", color="negative")
+
+        with dialog, ui.card().classes("w-full h-full p-0 gap-0 bg-slate-100"):
+            switcher_host = ui.column().classes("w-full gap-0 shrink-0")
+            toolbar_host = ui.column().classes("w-full gap-0 shrink-0")
+            content_host = ui.column().classes("w-full grow min-h-0 gap-0")
+        dialog.open()
+        await select_component(selected)
+
     async def show_components(
         record: dict[str, Any], *, container: Any | None = None,
         focused_component_id: int | None = None,
@@ -2903,98 +3253,6 @@ def index(q: str = "") -> None:
                 )
             except ApiError as error:
                 ui.notify(error_message(error),color="negative",close_button=True)
-
-        async def view_component(component: dict[str, Any]) -> None:
-            converting = requires_document_conversion(component)
-            progress_dialog = ui.dialog().props("persistent")
-            with progress_dialog, ui.card().classes("w-[440px] max-w-full p-6"):
-                with ui.row().classes("w-full items-center no-wrap gap-4"):
-                    ui.spinner("dots", size="3em", color="primary")
-                    with ui.column().classes("gap-1 grow min-w-0"):
-                        ui.label("Preparing preview").classes("text-lg font-semibold")
-                        ui.label(
-                            "Converting this document to PDF. Larger files may take a little while."
-                            if converting else
-                            "Loading the document. Larger files may take a little while."
-                        ).classes("text-sm text-slate-500")
-                        ui.label(component.get("file_name") or "Document").classes(
-                            "text-xs text-slate-400 truncate max-w-full"
-                        )
-                ui.linear_progress(show_value=False, color="primary").props(
-                    "indeterminate"
-                ).classes("w-full mt-3")
-            progress_dialog.open()
-            await asyncio.sleep(0)
-            try:
-                preview = await api.view_component_pdf(component["id"])
-            except ApiError as error:
-                progress_dialog.close()
-                ui.notify(error_message(error), color="negative", close_button=True)
-                return
-            progress_dialog.close()
-            preview_kind = native_preview_kind(component.get("mime_type"))
-            if preview_kind:
-                mime_type = component.get("mime_type") or "application/octet-stream"
-                data_url = f"data:{mime_type};base64,{base64.b64encode(preview).decode('ascii')}"
-                dialog = ui.dialog().props("maximized transition-show=fade transition-hide=fade")
-                with dialog, ui.card().classes("w-full h-full p-0 gap-0 bg-slate-100"):
-                    with ui.row().classes("w-full items-center no-wrap px-4 py-2 bg-white border-b"):
-                        ui.icon(component_file_icon(mime_type), color="primary", size="28px")
-                        ui.label(component["file_name"]).classes("font-semibold grow min-w-0 truncate")
-                        ui.button(icon="download", on_click=lambda: download_component(component)).props("flat round dense").tooltip("Download original")
-                        ui.button(icon="close", on_click=dialog.close).props("flat round dense").tooltip("Close viewer")
-                    with ui.element("div").classes("w-full grow overflow-auto flex items-center justify-center p-6"):
-                        if preview_kind == "image":
-                            ui.image(data_url).classes("max-w-full max-h-[calc(100vh-100px)] object-contain shadow-lg")
-                        elif preview_kind == "audio":
-                            with ui.card().classes("w-[680px] max-w-full p-8"):
-                                ui.icon("audio_file", size="72px").classes("self-center text-primary")
-                                ui.label(component["file_name"]).classes("self-center font-semibold")
-                                ui.audio(data_url, controls=True).classes("w-full")
-                        else:
-                            ui.video(data_url, controls=True).classes("w-full max-w-[1200px] max-h-[calc(100vh-110px)] bg-black")
-                dialog.open()
-                return
-            canvas_id = f"erms-pdf-canvas-{component['id']}"
-            dialog = ui.dialog().props("maximized transition-show=fade transition-hide=fade")
-
-            def close_viewer() -> None:
-                ui.run_javascript(f"window.ermsPdfViewer?.close({json.dumps(canvas_id)})")
-                dialog.close()
-
-            with dialog, ui.card().classes("w-full h-full p-0 gap-0 bg-slate-100"):
-                with ui.row().classes("w-full items-center no-wrap px-4 py-2 bg-white border-b"):
-                    ui.icon("picture_as_pdf", color="primary", size="28px")
-                    ui.label(component["file_name"]).classes("font-semibold grow min-w-0 truncate")
-                    ui.button(icon="chevron_left", on_click=lambda: ui.run_javascript(
-                        f"window.ermsPdfViewer.previous({json.dumps(canvas_id)})"
-                    )).props("flat round dense").tooltip("Previous page")
-                    ui.label("Loading…").props(f'id={canvas_id}-status').classes("text-sm text-slate-500 min-w-32 text-center")
-                    ui.button(icon="chevron_right", on_click=lambda: ui.run_javascript(
-                        f"window.ermsPdfViewer.next({json.dumps(canvas_id)})"
-                    )).props("flat round dense").tooltip("Next page")
-                    ui.button(icon="zoom_out", on_click=lambda: ui.run_javascript(
-                        f"window.ermsPdfViewer.zoomOut({json.dumps(canvas_id)})"
-                    )).props("flat round dense").tooltip("Zoom out")
-                    ui.button(icon="zoom_in", on_click=lambda: ui.run_javascript(
-                        f"window.ermsPdfViewer.zoomIn({json.dumps(canvas_id)})"
-                    )).props("flat round dense").tooltip("Zoom in")
-                    ui.button(icon="download", on_click=lambda: download_component(component)).props("flat round dense").tooltip("Download original")
-                    ui.button(icon="close", on_click=close_viewer).props("flat round dense").tooltip("Close viewer")
-                with ui.element("div").classes("w-full grow overflow-auto flex justify-center items-start p-5"):
-                    ui.element("canvas").props(f"id={canvas_id}").classes("bg-white shadow-lg")
-            dialog.open()
-            encoded = base64.b64encode(preview).decode("ascii")
-            try:
-                await ui.run_javascript(
-                    "import('/static/pdfjs/erms-viewer.mjs').then(() => true)", timeout=15,
-                )
-                await ui.run_javascript(
-                    f"window.ermsPdfViewer.open({json.dumps(canvas_id)}, {json.dumps(encoded)})",
-                    timeout=30,
-                )
-            except TimeoutError:
-                ui.notify("The PDF viewer did not finish loading", color="negative")
 
         def uploaded(event: events.MultiUploadEventArguments) -> None:
             try:
@@ -3043,7 +3301,8 @@ def index(q: str = "") -> None:
                     render_component_cards(
                         current_rows, move_component, remove_component,
                         lambda item: show_entity_history("digital-components", item),
-                        view_component, download_component, reindex_component, readonly=readonly,
+                        lambda item: preview_record_components(record, item["id"]),
+                        download_component, reindex_component, readonly=readonly,
                         capabilities=component_capabilities,
                         focused_component_id=focused_component_id,
                     )
@@ -4191,6 +4450,10 @@ def index(q: str = "") -> None:
             security_level = await api.get("security-levels", record["security_level_id"])
             capabilities = await api.resource_capabilities("records", record_id)
             effective_holds = await api.effective_holds("record", record_id)
+            record_components = (
+                await api.components(record_id)
+                if capabilities.get("list_components") else []
+            )
             location_source_ids = {
                 record.get("effective_assigned_location_source_aggregation_id"),
                 record.get("effective_current_location_source_aggregation_id"),
@@ -4343,6 +4606,18 @@ def index(q: str = "") -> None:
                         ui.label(record["title"]).classes("text-lg font-semibold break-words")
                     with ui.row().classes("items-center no-wrap gap-2 flex-none"):
                         favourite_button("records", record["id"])
+                        if (
+                            record.get("medium") != "physical"
+                            and capabilities.get("view_component")
+                            and any(component_is_previewable(item) for item in record_components)
+                        ):
+                            ui.button(
+                                icon="visibility",
+                                on_click=lambda: preview_record_components(record),
+                            ).props(
+                                "flat round dense color=primary "
+                                "aria-label='Preview digital components'"
+                            ).tooltip("Preview digital components")
                         ui.button(
                             "Back", icon="arrow_back", on_click=leave_record_page,
                         ).props("flat no-caps color=blue-grey-8")
@@ -6046,6 +6321,26 @@ def index(q: str = "") -> None:
                 if item.get("parent_aggregation_id") == current["id"]
             ]
             records = await api.list("records", aggregation_id=current["id"])
+            async def record_preview_available(record: dict[str, Any]) -> bool:
+                if record.get("medium") == "physical":
+                    return False
+                try:
+                    record_capabilities, components = await asyncio.gather(
+                        api.resource_capabilities("records", record["id"]),
+                        api.components(record["id"]),
+                    )
+                except ApiError:
+                    return False
+                return bool(
+                    record_capabilities.get("view_component")
+                    and any(component_is_previewable(item) for item in components)
+                )
+
+            preview_availability = await asyncio.gather(*[
+                record_preview_available(record) for record in records
+            ])
+            for record, available in zip(records, preview_availability):
+                record["_preview_available"] = available
             effective_rule = None
             local_retention_rule = None
             classification_path = []
@@ -6722,7 +7017,7 @@ def index(q: str = "") -> None:
                             {"name": "record_number", "label": "Number", "field": "record_number", "align": "left", "sortable": True, "style": "width: 230px; max-width: 230px", "headerStyle": "width: 230px; max-width: 230px"},
                             {"name": "title", "label": "Title", "field": "title", "align": "left", "sortable": True, "style": "max-width: 520px", "headerStyle": "width: auto"},
                             {"name": "date_originated", "label": "Originated", "field": "date_originated", "align": "left", "sortable": True, "style": "width: 190px; max-width: 190px", "headerStyle": "width: 190px; max-width: 190px"},
-                            {"name": "actions", "label": "", "field": "actions", "align": "right", "style": "width: 160px; max-width: 160px", "headerStyle": "width: 160px; max-width: 160px"},
+                            {"name": "actions", "label": "", "field": "actions", "align": "right", "style": "width: 200px; max-width: 200px", "headerStyle": "width: 200px; max-width: 200px"},
                         ],
                         rows=records,
                         row_key="id",
@@ -6748,7 +7043,11 @@ def index(q: str = "") -> None:
                         </q-td>
                     ''')
                     add_timestamp_slots(record_table, ["date_originated"])
-                    record_table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round :icon="props.row._is_favourite ? \'favorite\' : \'favorite_border\'" :color="props.row._is_favourite ? \'red\' : \'primary\'" :aria-label="props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\'" @click.stop="$parent.$emit(\'toggle_favourite\', props.row)"><q-tooltip>{{ props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\' }}</q-tooltip></q-btn><q-btn flat round icon="open_in_new" color="primary" @click="$parent.$emit(\'open_record\', props.row)"><q-tooltip>Open record</q-tooltip></q-btn><q-btn flat round icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn></q-td>')
+                    record_table.add_slot("body-cell-actions", '<q-td :props="props"><q-btn flat round :icon="props.row._is_favourite ? \'favorite\' : \'favorite_border\'" :color="props.row._is_favourite ? \'red\' : \'primary\'" :aria-label="props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\'" @click.stop="$parent.$emit(\'toggle_favourite\', props.row)"><q-tooltip>{{ props.row._is_favourite ? \'Remove from favourites\' : \'Add to favourites\' }}</q-tooltip></q-btn><q-btn v-if="props.row._preview_available" flat round icon="visibility" color="primary" aria-label="Preview digital components" @click.stop="$parent.$emit(\'preview_record\', props.row)"><q-tooltip>Preview digital components</q-tooltip></q-btn><q-btn flat round icon="open_in_new" color="primary" @click="$parent.$emit(\'open_record\', props.row)"><q-tooltip>Open record</q-tooltip></q-btn><q-btn flat round icon="history" color="blue-grey" @click="$parent.$emit(\'history\', props.row)"><q-tooltip>Event history</q-tooltip></q-btn></q-td>')
+                    record_table.on(
+                        "preview_record",
+                        lambda event: preview_record_components(event.args),
+                    )
                     record_table.on("open_record", lambda event: show_record_details(event.args))
                     record_table.on("history", lambda event: show_entity_history("records", event.args))
                     async def toggle_contained_record(event) -> None:
