@@ -18,7 +18,7 @@ def client():
 def clean_database(client: TestClient):
     password = "Temporary-Test-Password-123!"
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
-        connection.execute("TRUNCATE user_favourite_records, user_favourite_aggregations, user_classification_selections, aggregation_retention_rules, classification_retention_rules, classifications, classification_schemes, login_sessions, user_credentials, user_role_assignments, roles, users, org_units, record_draft_components, record_drafts, digital_components, records, aggregations RESTART IDENTITY CASCADE")
+        connection.execute("TRUNCATE saved_searches, user_favourite_records, user_favourite_aggregations, user_classification_selections, aggregation_retention_rules, classification_retention_rules, classifications, classification_schemes, login_sessions, user_credentials, user_role_assignments, roles, users, org_units, record_draft_components, record_drafts, digital_components, records, aggregations RESTART IDENTITY CASCADE")
         connection.execute("ALTER TABLE event_history DISABLE TRIGGER USER")
         # Security Levels are canonical seeded catalogue rows and are not
         # truncated between tests. Preserve their matching immutable baseline
@@ -62,6 +62,7 @@ def clean_database(client: TestClient):
         connection.execute(
             """
             TRUNCATE
+                saved_searches,
                 user_favourite_records,
                 user_favourite_aggregations,
                 record_draft_components,

@@ -140,7 +140,10 @@ def test_approved_seed_catalogue_and_dependencies_are_internally_consistent():
         "record.view",
         "record.component.download",
     } & set(profiles["SYS_ADMIN"]["privilege_codes"])
-    assert profiles["INFO_GOV_MGR"]["privilege_codes"] == profiles["INFO_GOV_OFFICER"]["privilege_codes"]
+    assert set(profiles["INFO_GOV_MGR"]["privilege_codes"]) == (
+        set(profiles["INFO_GOV_OFFICER"]["privilege_codes"])
+        | {"search.saved_search.administrator"}
+    )
     assert "classifications.administer" in profiles["INFO_GOV_MGR"]["privilege_codes"]
     assert "security_levels.administer" in profiles["INFO_GOV_MGR"]["privilege_codes"]
     assert "organization.browse" in profiles["SYS_ADMIN"]["privilege_codes"]

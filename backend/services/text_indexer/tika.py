@@ -14,6 +14,14 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+# Tika's plain-text output does not preserve reliable PDF page boundaries, so
+# use a conservative document-level density gate before paying the cost of
+# rendering and OCRing every page. Documents below the gate still take the OCR
+# path used for scanned and text-poor PDFs.
+PDF_NATIVE_MIN_CHARACTERS = 200
+PDF_NATIVE_MIN_CHARACTERS_PER_PAGE = 100
+
+
 class ExtractionError(RuntimeError):
     def __init__(self, code: str, summary: str, retryable: bool = False):
         super().__init__(summary)
@@ -177,11 +185,22 @@ def pdf_page_count(source: Path, timeout: int = 20) -> int:
     raise ExtractionError("corrupt","PDF page count is unavailable")
 
 
+def pdf_native_text_is_sufficient(text: str, pages: int) -> bool:
+    meaningful_characters = sum(character.isalnum() for character in text)
+    required_characters = max(
+        PDF_NATIVE_MIN_CHARACTERS,
+        pages * PDF_NATIVE_MIN_CHARACTERS_PER_PAGE,
+    )
+    return meaningful_characters >= required_characters
+
+
 def extract_pdf(home: Path,source: Path,timeout: int,max_pages: int,max_temp_bytes: int) -> tuple[str,bool]:
     pages=pdf_page_count(source,min(timeout,20))
     if pages>max_pages:
         raise ExtractionError("limit_exceeded","PDF exceeds configured page limit")
     native=extract(home,source,timeout)
+    if pdf_native_text_is_sufficient(native, pages):
+        return native,False
     with tempfile.TemporaryDirectory(prefix="pdf-ocr-",dir=source.parent) as directory:
         prefix=Path(directory)/"page"
         try:
@@ -194,6 +213,8 @@ def extract_pdf(home: Path,source: Path,timeout: int,max_pages: int,max_temp_byt
         except subprocess.TimeoutExpired as exc:
             raise ExtractionError("timeout","PDF OCR rendering exceeded wall-clock limit",True) from exc
         if rendered.returncode:
+            if rendered.returncode < 0:
+                raise ExtractionError("timeout","PDF OCR rendering exceeded resource limit",True)
             raise ExtractionError("corrupt","PDF OCR rendering failed")
         images=sorted(Path(directory).glob("page-*.png"))
         if len(images)!=pages or sum(image.stat().st_size for image in images)>max_temp_bytes:

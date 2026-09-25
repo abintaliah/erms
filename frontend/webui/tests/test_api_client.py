@@ -60,6 +60,54 @@ def test_search_builds_controlled_or_grammar():
     }
 
 
+def test_saved_search_execution_uses_the_dedicated_endpoint():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"items": [], "total": 0})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.execute_saved_search(17, {"limit": 50, "offset": 100})
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured == {
+        "method": "POST", "path": "/api/v1/saved-searches/17/execute",
+        "body": {"limit": 50, "offset": 100},
+    }
+
+
+def test_saved_search_update_sends_version_and_reason_headers():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(
+            method=request.method, path=request.url.path,
+            version=request.headers.get("if-match"),
+            reason=request.headers.get("x-change-reason"),
+        )
+        return httpx.Response(200, json={"id": 8, "version": 4})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.update_saved_search(8, 3, {"name": "Quarterly"}, "Refine criteria")
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured == {
+        "method": "PUT", "path": "/api/v1/saved-searches/8",
+        "version": "3", "reason": "Refine criteria",
+    }
+
+
 def test_classification_search_uses_literal_case_insensitive_containment():
     captured = {}
 

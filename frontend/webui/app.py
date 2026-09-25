@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import copy
 import inspect
 import json
 from datetime import datetime, timedelta, timezone
@@ -66,6 +67,190 @@ RELATIONSHIP_DISPLAY_FIELDS = frozenset({
 NAVIGATION_TRAIL_LIMIT = 20
 NAVIGATION_VISIBLE_LIMIT = 5
 STOP_PROPAGATION_CLICK_HANDLER = "(event) => { event.stopPropagation(); emit(); }"
+
+ADVANCED_SEARCH_FIELDS: dict[str, dict[str, tuple[str, str, bool]]] = {
+    "records": {
+        "record_number": ("Record number", "text", False),
+        "title": ("Title", "text", False),
+        "description": ("Description", "text", True),
+        "aggregation_id": ("Aggregation", "integer", True),
+        "date_created": ("Date created", "datetime", False),
+        "date_originated": ("Date originated", "datetime", False),
+        "medium": ("Medium", "text", False),
+        "is_vital": ("Vital record", "boolean", False),
+        "date_of_next_review": ("Next review", "datetime", True),
+        "effective_assigned_location": ("Assigned location", "text", True),
+        "effective_current_location": ("Current location", "text", True),
+        "security_level_id": ("Security level", "integer", False),
+        "owning_org_unit_id": ("Owning organizational unit", "integer", False),
+        "on_effective_hold": ("On hold", "boolean", False),
+        "component.file_name": ("File name", "text", False),
+        "component.mime_type": ("MIME type", "text", False),
+        "component.size_in_bytes": ("Size in bytes", "integer", False),
+        "component.date_created": ("Date created", "datetime", False),
+        "component.date_originated": ("Date originated", "datetime", False),
+        "component.checksum_algorithm": ("Checksum algorithm", "text", False),
+        "component.checksum_value": ("Checksum value", "text", False),
+        "component.content_status": ("Content status", "text", False),
+    },
+    "aggregations": {
+        "aggregation_number": ("Aggregation number", "text", False),
+        "title": ("Title", "text", False),
+        "description": ("Description", "text", True),
+        "parent_aggregation_id": ("Parent aggregation", "integer", True),
+        "classification_id": ("Classification", "integer", True),
+        "date_created": ("Date created", "datetime", False),
+        "date_opened": ("Date opened", "datetime", False),
+        "date_closed": ("Date closed", "datetime", True),
+        "medium": ("Medium", "text", False),
+        "is_vital": ("Vital aggregation", "boolean", False),
+        "date_of_next_review": ("Next review", "datetime", True),
+        "effective_assigned_location": ("Assigned location", "text", True),
+        "effective_current_location": ("Current location", "text", True),
+        "security_level_id": ("Security level", "integer", False),
+        "owning_org_unit_id": ("Owning organizational unit", "integer", False),
+        "on_effective_hold": ("On hold", "boolean", False),
+    },
+}
+
+ADVANCED_SEARCH_COMPONENT_FIELDS = frozenset(
+    field for field in ADVANCED_SEARCH_FIELDS["records"] if field.startswith("component.")
+)
+ADVANCED_SEARCH_RELATIONSHIP_FIELDS = frozenset({
+    "aggregation_id", "parent_aggregation_id", "classification_id",
+    "security_level_id", "owning_org_unit_id",
+})
+ADVANCED_SEARCH_CONTROLLED_VALUES: dict[str, dict[Any, str]] = {
+    "medium": {"digital": "Digital", "physical": "Physical", "mixed": "Mixed"},
+    "component.content_status": {
+        "pending": "Pending", "uploading": "Uploading", "available": "Available",
+        "failed": "Failed", "quarantined": "Quarantined", "deleted": "Deleted",
+    },
+}
+
+
+def advanced_search_field_options(resource: str) -> dict[str, str]:
+    """Return visibly grouped labels while retaining canonical field values."""
+    return {
+        field: (
+            f"Digital component — {details[0]}"
+            if field in ADVANCED_SEARCH_COMPONENT_FIELDS
+            else f"{'Record' if resource == 'records' else 'Aggregation'} — {details[0]}"
+        )
+        for field, details in ADVANCED_SEARCH_FIELDS[resource].items()
+    }
+
+
+def advanced_search_empty_value(field: str, operator: str, kind: str) -> Any:
+    if operator in {"between", "in", "not_in"}:
+        return []
+    if field in ADVANCED_SEARCH_RELATIONSHIP_FIELDS or kind in {"integer", "boolean"}:
+        return None
+    return ""
+
+
+def advanced_search_operators(kind: str, nullable: bool) -> dict[str, str]:
+    common = {"eq": "is", "ne": "is not"}
+    if kind == "text":
+        common |= {"contains_ci": "contains", "starts_with_ci": "starts with", "ends_with_ci": "ends with", "in": "is one of", "not_in": "is not one of"}
+    elif kind in {"integer", "datetime"}:
+        common |= {"lt": "is before / less than", "lte": "is at most", "gt": "is after / greater than", "gte": "is at least", "between": "is between", "in": "is one of", "not_in": "is not one of"}
+    if nullable:
+        common |= {"is_null": "is empty", "is_not_null": "is not empty"}
+    return common
+
+
+def advanced_search_leaf_count(node: dict[str, Any]) -> int:
+    if node.get("type") == "condition":
+        return 1
+    return sum(advanced_search_leaf_count(child) for child in node.get("children", []))
+
+
+def advanced_search_depth(node: dict[str, Any]) -> int:
+    if node.get("type") == "condition":
+        return 1
+    children = node.get("children", [])
+    return 1 + (max((advanced_search_depth(child) for child in children), default=0))
+
+
+def advanced_search_has_positive_full_text(node: dict[str, Any], positive: bool = True) -> bool:
+    if node.get("type") == "condition":
+        return positive and node.get("kind") == "full_text"
+    polarity = not positive if node.get("operator") == "not" else positive
+    return any(advanced_search_has_positive_full_text(child, polarity) for child in node.get("children", []))
+
+
+def advanced_search_has_component_field(node: dict[str, Any]) -> bool:
+    if node.get("type") == "condition":
+        return node.get("kind") == "structured" and node.get("field") in ADVANCED_SEARCH_COMPONENT_FIELDS
+    return any(advanced_search_has_component_field(child) for child in node.get("children", []))
+
+
+def compile_advanced_search_node(node: dict[str, Any], resource: str) -> dict[str, Any]:
+    if node.get("type") == "condition":
+        if node.get("kind") == "full_text":
+            query = str(node.get("query") or "").strip()
+            if not query:
+                raise ValueError("Enter text for every full-text condition.")
+            sources = node.get("sources") or (["metadata", "components"] if resource == "records" else ["metadata"])
+            return {"full_text": {"query": query, "sources": sources}}
+        field = node.get("field")
+        if field not in ADVANCED_SEARCH_FIELDS[resource]:
+            raise ValueError("Choose a field for every condition.")
+        _, kind, nullable = ADVANCED_SEARCH_FIELDS[resource][field]
+        operator = node.get("operator")
+        if operator not in advanced_search_operators(kind, nullable):
+            raise ValueError("Choose a valid operator for every condition.")
+        result: dict[str, Any] = {"field": field, "operator": operator}
+        if operator not in {"is_null", "is_not_null"}:
+            value = node.get("value")
+            if operator in {"between", "in", "not_in"}:
+                if not isinstance(value, list) or not value or any(item in (None, "") for item in value):
+                    raise ValueError("Complete every condition value.")
+            elif value in (None, ""):
+                raise ValueError("Complete every condition value.")
+            result["value"] = value
+        return result
+    children = node.get("children", [])
+    if not children:
+        raise ValueError("Every Boolean group must contain a condition.")
+    operator = node.get("operator", "and")
+    if operator == "not":
+        if len(children) != 1:
+            raise ValueError("A Not group must contain exactly one condition or group.")
+        return {"not": compile_advanced_search_node(children[0], resource)}
+    if operator not in {"and", "or"}:
+        raise ValueError("Choose All, Any, or Not for every group.")
+    return {operator: [compile_advanced_search_node(child, resource) for child in children]}
+
+
+def advanced_search_node_from_expression(expression: dict[str, Any]) -> dict[str, Any]:
+    """Convert canonical API grammar into the visual builder's editable tree."""
+    if "full_text" in expression:
+        full_text = expression["full_text"]
+        return {
+            "type": "condition", "kind": "full_text",
+            "query": full_text.get("query", ""),
+            "sources": list(full_text.get("sources") or []),
+        }
+    if "field" in expression:
+        node = {
+            "type": "condition", "kind": "structured",
+            "field": expression["field"], "operator": expression["operator"],
+        }
+        if "value" in expression:
+            node["value"] = expression["value"]
+        return node
+    if "not" in expression:
+        return {
+            "type": "group", "operator": "not",
+            "children": [advanced_search_node_from_expression(expression["not"])],
+        }
+    operator = "and" if "and" in expression else "or"
+    return {
+        "type": "group", "operator": operator,
+        "children": [advanced_search_node_from_expression(child) for child in expression[operator]],
+    }
 
 SECURITY_EVENT_HELP = {
     "AUTHORIZATION_DENIED": "An operation was refused because one or more authorization gates did not pass.",
@@ -534,6 +719,8 @@ def error_message(error: ApiError) -> str:
         return "Please explain why the security level is being lowered, then try again."
     if error.message == "X-Change-Reason is required when changing a security level":
         return "Please explain why the security level is being changed, then try again."
+    if "saved_searches_owner_name_ci_unique" in error.message:
+        return "You already have a saved search with this name. Choose a different name."
     if isinstance(error.detail, dict):
         messages = {
             "insufficient_privilege": "You do not have the required system privilege for this action.",
@@ -771,6 +958,67 @@ def style_person_select(control: Any, *, multiple: bool = False) -> None:
         """)
 
 
+def style_relationship_chip_select(control: Any, field_name: str = "") -> None:
+    """Render relationship choices as cards and the selected value compactly."""
+    icon = {
+        "aggregation_id": "folder",
+        "parent_aggregation_id": "folder",
+        "classification_id": "account_tree",
+        "security_level_id": "shield",
+        "owning_org_unit_id": "corporate_fare",
+        "role_id": "badge",
+        "user_id": "person",
+    }.get(field_name, "link")
+    control.props(
+        'use-input input-debounce=0 behavior=menu options-dense '
+        'popup-content-style="min-width:360px;max-width:calc(100vw - 48px)"'
+    ).classes("relationship-chip-select")
+    control.add_slot("option", """
+        <q-item v-bind="props.itemProps" class="relationship-option-card q-ma-xs q-py-sm">
+          <q-item-section avatar>
+            <q-avatar color="blue-1" text-color="primary" icon="__ICON__" size="36px" />
+          </q-item-section>
+          <q-item-section style="min-width:0">
+            <q-item-label class="text-weight-medium ellipsis">
+              {{ props.opt.label.includes(' · ') ? props.opt.label.split(' · ').slice(1).join(' · ') : props.opt.label }}
+            </q-item-label>
+            <q-item-label caption>
+              <q-badge v-if="props.opt.label.includes(' · ')" outline color="primary"
+                :label="props.opt.label.split(' · ')[0]" />
+            </q-item-label>
+          </q-item-section>
+        </q-item>
+    """.replace("__ICON__", icon))
+    control._props["hide-selected"] = False
+    control._props["fill-input"] = False
+    control.add_slot("selected-item", """
+        <q-chip outline color="primary" text-color="blue-grey-9" class="relationship-value-chip">
+          <q-badge v-if="props.opt.label.includes(' · ')" color="blue-1" text-color="primary"
+            :label="props.opt.label.split(' · ')[0]" />
+          <span class="text-weight-medium ellipsis">
+            {{ props.opt.label.includes(' · ') ? props.opt.label.split(' · ').slice(1).join(' · ') : props.opt.label }}
+          </span>
+          <q-tooltip>{{ props.opt.label }}</q-tooltip>
+        </q-chip>
+    """)
+
+
+def style_status_chip_select(control: Any) -> None:
+    """Render controlled component statuses as compact labelled chips."""
+    control.props("options-dense").classes("component-status-chip-select")
+    control.add_slot("option", """
+        <q-item v-bind="props.itemProps">
+          <q-item-section>
+            <q-chip outline color="primary" icon="task_alt" :label="props.opt.label" />
+          </q-item-section>
+        </q-item>
+    """)
+    control.add_slot("selected-item", """
+        <q-chip outline color="primary" icon="task_alt" removable
+          @remove="props.removeAtIndex(props.index)" :label="props.opt.label" />
+    """)
+
+
 def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | None = None):
     display_label = f"{field.label} *" if field.required else field.label
     if field.kind == "account_type":
@@ -905,7 +1153,7 @@ def index(q: str = "") -> None:
         .global-search-card { border: 1px solid var(--erms-border); border-radius: 10px;
             box-shadow: none; padding: 0; overflow: hidden; }
         .global-search-card-header { background: #f7fbfe; border-bottom: 1px solid var(--erms-border); }
-        .global-search-component { border-top: 1px solid #e7edf2; padding: 12px 16px; }
+        .global-search-component { border-top: 1px solid #e7edf2; padding: 8px 12px; }
         .global-search-highlight { background: #fff0a8; color: #573f00; border-radius: 3px;
             padding: 0 2px; font-weight: 600; }
         .global-search-json { max-height: 280px; overflow: auto; white-space: pre-wrap;
@@ -1417,6 +1665,14 @@ def index(q: str = "") -> None:
         }
         .person-select-chip { max-width: 240px; background: #f7fbfe !important; }
         .person-select-chip .q-chip__content { min-width: 0; flex-wrap: nowrap; }
+        .relationship-chip-select .q-field__native { min-width: 0; }
+        .relationship-value-chip { max-width: 100%; background: #f7fbfe !important; }
+        .relationship-value-chip .q-chip__content { min-width: 0; flex-wrap: nowrap; gap: 6px; }
+        .relationship-option-card {
+            min-width: 340px; border: 1px solid #e2e8f0; border-radius: 10px;
+            background: #fff; transition: border-color .15s ease, background .15s ease;
+        }
+        .relationship-option-card:hover { border-color: #93b4e8; background: #f8fcff; }
         .relationship-cell-name { color: #172033; }
         .recent-card { min-height: 62px; border: 1px solid #e2e8f0; border-radius: 10px; transition: all .16s ease; }
         .recent-card:hover { border-color: #93b4e8; background: #f8fcff; }
@@ -1873,6 +2129,43 @@ def index(q: str = "") -> None:
         @media (max-width: 440px) {
             .dashboard-activity-badge { display: none; }
         }
+        [dir="rtl"] .advanced-search-page { direction: rtl; text-align: right; }
+        [dir="rtl"] .advanced-search-group {
+            border-left-width: 1px !important;
+            border-right-width: 4px !important;
+            border-right-color: #93c5fd !important;
+        }
+        [dir="rtl"] .advanced-search-group .pl-2 {
+            padding-left: 0 !important;
+            padding-right: .5rem !important;
+        }
+        [dir="rtl"] .advanced-search-page .ml-auto {
+            margin-left: 0 !important;
+            margin-right: auto !important;
+        }
+        .advanced-search-workspace-layout {
+            display: grid; grid-template-columns: minmax(0, 1fr) 260px;
+            align-items: start; gap: 16px; width: 100%; min-width: 0;
+        }
+        .advanced-search-criteria-panel { min-width: 0; }
+        .advanced-search-group > .q-card__section,
+        .advanced-search-condition > .q-card__section { padding: 0; }
+        .advanced-search-condition-actions { flex-wrap: nowrap; margin-left: auto; }
+        [dir="rtl"] .advanced-search-condition-actions {
+            margin-left: 0; margin-right: auto;
+        }
+        .advanced-search-result-actions { flex-wrap: nowrap; align-self: center; }
+        .advanced-search-saved-panel {
+            position: sticky; top: 76px; min-width: 0;
+        }
+        .advanced-search-saved-panel .q-btn { width: 100%; justify-content: flex-start; }
+        .advanced-search-saved-panel .q-btn__content { justify-content: flex-start; }
+        @media (max-width: 900px) {
+            .advanced-search-workspace-layout { grid-template-columns: minmax(0, 1fr); }
+            .advanced-search-saved-panel { position: static; }
+            .advanced-search-saved-actions { flex-direction: row !important; flex-wrap: wrap; }
+            .advanced-search-saved-panel .q-btn { width: auto; }
+        }
     """)
 
     with ui.header().classes("erms-header items-center gap-3"):
@@ -1974,7 +2267,7 @@ def index(q: str = "") -> None:
                 "Dashboard", "dashboard", navigation_key="dashboard", extra_classes="mt-4",
             )
             for heading, entries in (
-                ("RECORDS MANAGEMENT", (("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
+                ("RECORDS MANAGEMENT", (("advanced-search", "manage_search"), ("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
                 ("ORGANIZATION STRUCTURE", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
             ):
                 heading_control = ui.label(heading).classes(
@@ -1990,7 +2283,8 @@ def index(q: str = "") -> None:
                 drawer_sections.append((heading_control, section_keys))
                 for key, icon in entries:
                     navigation[key] = drawer_link(
-                        ENTITIES[key].label, icon, navigation_key=key,
+                        "Advanced Search" if key == "advanced-search" else ENTITIES[key].label,
+                        icon, navigation_key=key,
                     )
             system_heading = ui.label("SYSTEM ADMINISTRATION").classes(
                 "erms-nav-heading px-4 pt-5 pb-2"
@@ -2145,6 +2439,7 @@ def index(q: str = "") -> None:
             "dashboard": "dashboard",
             "aggregations": "folder",
             "records": "description",
+            "advanced-search": "manage_search",
             "classification-schemes": "account_tree",
             "classification-workspace": "account_tree",
             "org-units": "corporate_fare",
@@ -2312,12 +2607,39 @@ def index(q: str = "") -> None:
                                 ui.label(" · ".join(filter(None, (record.get("record_number"), record.get("aggregation_number"))))).classes("text-sm text-slate-500")
                                 if item.get("matched_record_metadata"):
                                     ui.badge("Record metadata matched", color="primary").props("outline").classes("mt-1")
-                            ui.button("Open record", icon="open_in_new", on_click=lambda _, entity_id=record["id"]: select_record_details(entity_id)).props("outline no-caps").classes("global-search-result-action")
-                        for component in item.get("matching_components", []):
+                            ui.button(
+                                icon="open_in_new",
+                                on_click=lambda _, entity_id=record["id"]: open_global_record(entity_id),
+                            ).props("flat round dense color=primary aria-label='Open record'").classes(
+                                "global-search-result-action"
+                            ).tooltip("Open record")
+                        authorized_component_details = {
+                            int(component["id"]): component
+                            for component in item.get("authorized_component_details", [])
+                        }
+                        matching_components = [
+                            {**authorized_component_details.get(int(component["id"]), {}), **component}
+                            for component in item.get("matching_components", [])
+                            if component.get("id") is not None
+                        ]
+                        if matching_components:
+                            ui.label("Digital components").classes("text-xs font-semibold uppercase tracking-wide text-slate-500 px-4 pt-3")
+                        for component in matching_components:
                             with ui.column().classes("global-search-component w-full gap-1"):
-                                with ui.row().classes("items-center gap-2"):
+                                with ui.row().classes("w-full items-center gap-2"):
                                     ui.icon("attach_file", size="18px").classes("text-slate-500")
-                                    ui.label(component.get("file_name") or "Unnamed file").classes("text-sm font-medium")
+                                    ui.label(component.get("file_name") or "Unnamed file").classes("text-sm font-medium grow")
+                                    if component.get("id") is not None:
+                                        preview_button = ui.button(
+                                            icon="visibility",
+                                            on_click=lambda _, selected_record=record, component_id=int(component["id"]):
+                                                preview_record_components(selected_record, component_id),
+                                        ).props("flat round dense color=primary aria-label='Preview digital component'")
+                                        if not component_is_previewable(component):
+                                            preview_button.disable()
+                                            preview_button.tooltip("Preview is unavailable for this component")
+                                        else:
+                                            preview_button.tooltip("Preview digital component")
                                 render_safe_snippet(component.get("snippet"))
                 else:
                     aggregation = item["aggregation"]
@@ -2329,9 +2651,22 @@ def index(q: str = "") -> None:
                                 ui.label(aggregation["title"]).classes("font-semibold text-base")
                                 ui.label(aggregation.get("aggregation_number") or "").classes("text-sm text-slate-500")
                                 render_safe_snippet(item.get("snippet"))
-                            ui.button("Open aggregation", icon="open_in_new", on_click=lambda _, entity=aggregation: open_aggregation(entity)).props("outline no-caps").classes("global-search-result-action")
+                            ui.button(
+                                icon="open_in_new",
+                                on_click=lambda _, entity=aggregation: open_global_aggregation(entity),
+                            ).props("flat round dense color=primary aria-label='Open aggregation'").classes(
+                                "global-search-result-action"
+                            ).tooltip("Open aggregation")
             if state.get("global_search_cursor"):
                 ui.button("Load more results", icon="expand_more", on_click=lambda: run_global_search(query, load_more=True)).props("outline no-caps").classes("self-center")
+
+    async def open_global_record(record_id: int) -> None:
+        state.pop("discard_navigation_guard", None)
+        await select_record_details(record_id)
+
+    async def open_global_aggregation(aggregation: dict[str, Any]) -> None:
+        state.pop("discard_navigation_guard", None)
+        await open_aggregation(aggregation)
 
     async def run_global_search(query: str, *, load_more: bool = False) -> None:
         query = query.strip()
@@ -2339,6 +2674,7 @@ def index(q: str = "") -> None:
             ui.notify("Enter words to search for", color="warning")
             return
         if not load_more:
+            state.pop("discard_navigation_guard", None)
             register_navigation("full-text-search", "Search results")
             state.update(resource="full-text-search", global_search_query=query,
                          global_search_items=[], global_search_cursor=None,
@@ -2363,7 +2699,20 @@ def index(q: str = "") -> None:
         render_global_search_results()
         try:
             result = await api.full_text_search(payload)
-            state["global_search_items"].extend(result.get("items", []))
+            result_items = list(result.get("items", []))
+            record_items = [item for item in result_items if item.get("type") == "record"]
+            async def load_global_matching_component_details(result_item: dict[str, Any]) -> tuple[int, list[dict[str, Any]]]:
+                record_id = int(result_item["record"]["id"])
+                try:
+                    return record_id, await api.components(record_id)
+                except ApiError:
+                    return record_id, []
+            component_details = dict(await asyncio.gather(*(
+                load_global_matching_component_details(result_item) for result_item in record_items
+            ))) if record_items else {}
+            for result_item in record_items:
+                result_item["authorized_component_details"] = component_details.get(int(result_item["record"]["id"]), [])
+            state["global_search_items"].extend(result_items)
             state["global_search_cursor"] = result.get("next_cursor")
             state["global_search_pending"] = bool(result.get("index_freshness", {}).get("has_pending_content"))
             state["search_diagnostics_accepted"] = result.get("_debug")
@@ -2380,6 +2729,10 @@ def index(q: str = "") -> None:
         trail = navigation_state["trail"]
         if index < 0 or index >= len(trail):
             return
+        discard_guard = state.get("discard_navigation_guard")
+        if discard_guard is not None and not await discard_guard("leave this page"):
+            return
+        state.pop("discard_navigation_guard", None)
         entry = dict(trail[index])
         navigation_state["trail"] = trail[:index + 1]
         persist_navigation_trail()
@@ -2493,6 +2846,8 @@ def index(q: str = "") -> None:
                 await run_global_search(query)
             else:
                 await select_dashboard()
+        elif page == "advanced-search":
+            await select_advanced_search()
         elif page in ENTITIES:
             if page == "aggregations":
                 state["aggregation_mode"] = saved.get("aggregation_mode", "search")
@@ -13473,6 +13828,1188 @@ def index(q: str = "") -> None:
         apply_range.on("click", load_security_operations)
         await load_security_operations()
 
+    async def select_advanced_search() -> None:
+        privileges = set((auth_state.get("principal") or {}).get("global_privileges", []))
+        targets = {
+            key: label for key, label, privilege in (
+                ("records", "Records", "record.view"),
+                ("aggregations", "Aggregations", "aggregation.view"),
+            ) if privilege in privileges
+        }
+        if not targets:
+            ui.notify("You do not have permission to use Advanced Search.", color="negative")
+            return
+        relation_options: dict[str, dict[int, str]] = {}
+        for field_name, endpoint, label_fields in (
+            ("aggregation_id", "aggregations", ("aggregation_number", "title")),
+            ("parent_aggregation_id", "aggregations", ("aggregation_number", "title")),
+            ("classification_id", "classifications", ("code", "title")),
+            ("security_level_id", "security-levels", ("code", "name")),
+            ("owning_org_unit_id", "org-units", ("code", "name")),
+        ):
+            try:
+                if endpoint == "security-levels":
+                    page_items = await api.list(endpoint, limit=100)
+                else:
+                    page = await api.search_request(endpoint, {"limit": 100, "offset": 0})
+                    page_items = page.get("items", [])
+                relation_options[field_name] = relationship_options(page_items, label_fields)
+            except ApiError:
+                relation_options[field_name] = {}
+        register_navigation("advanced-search", "Advanced Search")
+        show_authenticated_view()
+        state.update(resource="advanced-search", rows=[], searched=False, aggregation_detail=None)
+        title.text = "Advanced Search"
+        subtitle.text = "Build nested searches across record or aggregation metadata and full text"
+        search_bar.set_visibility(False)
+        aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
+        guidance.text = ""
+        table_container.clear()
+
+        default_workspace: dict[str, Any] = {
+            "resource": next(iter(targets)),
+            "root": {"type": "group", "operator": "and", "children": [
+                {"type": "condition", "kind": "structured", "field": "title", "operator": "contains_ci", "value": ""},
+            ]},
+            "sort_field": "id", "sort_direction": "asc", "limit": 25,
+            "max_results": 1000, "offset": 0, "total": 0, "searched": False,
+            "busy": False, "error": None, "saved": None, "baseline": None,
+            "audience_mode": "private", "role_ids": [], "org_unit_ids": [],
+            "search_name": "", "search_category": None, "search_description": "",
+            "category_suggestions": [],
+            "last_result": None,
+        }
+        restored_workspace = state.get("advanced_search_workspace")
+        workspace: dict[str, Any] = copy.deepcopy(restored_workspace) if isinstance(restored_workspace, dict) else default_workspace
+        if workspace.get("resource") not in targets:
+            workspace = default_workspace
+        for key, value in default_workspace.items():
+            workspace.setdefault(key, copy.deepcopy(value))
+        workspace["busy"] = False
+        # Browser history and saved client state can outlive the option sets
+        # used by these selectors. NiceGUI rejects an initial value which is
+        # not present in the selector's options, so normalize restored values
+        # before constructing the controls.
+        if workspace.get("sort_direction") not in {"asc", "desc"}:
+            workspace["sort_direction"] = "asc"
+        if workspace.get("limit") not in {25, 50, 100}:
+            workspace["limit"] = 25
+
+        with table_container:
+            with ui.column().classes("advanced-search-page w-full gap-4 p-4"):
+                with ui.column().classes("hidden"):
+                    search_name = ui.input(value=workspace["search_name"])
+                    search_category = ui.input(value=str(workspace.get("search_category") or ""))
+                    search_description = ui.textarea(value=workspace["search_description"])
+                workspace_layout = ui.element("div").classes("advanced-search-workspace-layout")
+                workspace_layout.__enter__()
+                with ui.card().classes("advanced-search-criteria-panel w-full p-4 shadow-none border border-slate-200"):
+                    with ui.row().classes("w-full items-end gap-4 flex-wrap"):
+                        target = ui.select(targets, value=workspace["resource"], label="Search for").props(
+                            "outlined dense options-dense aria-label='Search target'"
+                        ).classes("w-56")
+                        max_results = ui.number("Maximum results", value=workspace["max_results"], min=1, max=5000, step=1).props(
+                            "outlined dense aria-label='Maximum results'"
+                        ).classes("w-48")
+                        ui.label("System maximum: 5,000").classes("text-xs text-slate-500 pb-2")
+                    ui.label("Criteria").classes("text-lg font-semibold mt-3")
+                    ui.label("Nest All, Any, and Not groups. Up to 50 conditions and five levels.").classes("text-sm text-slate-500")
+                    component_scope_help = ui.label(
+                        "File details narrow the record results. In an All group, one file you are allowed "
+                        "to access must meet every file condition in that group."
+                    ).classes("text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2")
+                    validation_summary = ui.column().classes("w-full rounded-lg border border-red-200 bg-red-50 p-3 gap-1").props(
+                        "role=alert tabindex=-1 aria-label='Search validation summary'"
+                    )
+                    builder_host = ui.column().classes("w-full gap-3")
+                    with ui.row().classes("w-full items-end gap-3 flex-wrap mt-2"):
+                        sort_field = ui.select({}, label="Sort by").props("outlined dense options-dense").classes("w-60")
+                        sort_direction = ui.select({"asc": "Ascending", "desc": "Descending"}, value=workspace["sort_direction"], label="Direction").props("outlined dense options-dense").classes("w-40")
+                        page_size = ui.select({25: "25 per page", 50: "50 per page", 100: "100 per page"}, value=workspace["limit"], label="Page size").props("outlined dense options-dense").classes("w-40")
+                    with ui.row().classes("w-full items-center gap-2 mt-2"):
+                        search_advanced = ui.button("Search", icon="search").props("unelevated no-caps")
+                        reset_advanced = ui.button("Reset", icon="restart_alt").props("flat no-caps")
+                        status_label = ui.label().classes("text-sm text-slate-500 ml-auto")
+                with ui.card().classes("advanced-search-saved-panel w-full p-4 gap-3 shadow-none border border-slate-200"):
+                    ui.label("Saved search").classes("text-base font-semibold")
+                    ui.label("Keep or reopen useful queries.").classes("text-xs text-slate-500")
+                    unsaved_context = ui.label("This query has not been saved.").classes(
+                        "w-full rounded-lg bg-slate-50 p-3 text-xs text-slate-600"
+                    )
+                    saved_context = ui.column().classes("w-full gap-1 rounded-lg border border-blue-200 bg-blue-50 p-3")
+                    saved_context.set_visibility(False)
+                    with ui.column().classes("advanced-search-saved-actions w-full gap-2"):
+                        save_button = ui.button("Save search", icon="save").props("outline no-caps")
+                        save_as_button = ui.button("Save as", icon="content_copy").props("outline no-caps")
+                        open_button = ui.button("Open saved search", icon="folder_open").props("flat no-caps")
+                        new_button = ui.button("New search", icon="add").props("flat no-caps")
+                        delete_button = ui.button("Delete", icon="delete", color="negative").props("flat no-caps")
+                workspace_layout.__exit__(None, None, None)
+                freshness_host = ui.column().classes("w-full")
+                results_host = ui.column().classes("w-full gap-3").props("aria-live=polite")
+                with ui.row().classes("w-full items-center justify-center gap-2") as pagination:
+                    first_page = ui.button(icon="first_page").props("flat round aria-label='First page'")
+                    previous_page = ui.button(icon="chevron_left").props("flat round aria-label='Previous page'")
+                    range_label = ui.label().classes("text-sm text-slate-600 min-w-36 text-center")
+                    next_page = ui.button(icon="chevron_right").props("flat round aria-label='Next page'")
+                    last_page = ui.button(icon="last_page").props("flat round aria-label='Last page'")
+                pagination.set_visibility(False)
+
+        def new_condition() -> dict[str, Any]:
+            return {"type": "condition", "kind": "structured", "field": "title", "operator": "contains_ci", "value": ""}
+
+        def persist_workspace() -> None:
+            state["advanced_search_workspace"] = copy.deepcopy(workspace)
+
+        def current_definition() -> dict[str, Any]:
+            expression = compile_advanced_search_node(workspace["root"], workspace["resource"])
+            request: dict[str, Any] = {
+                "where": expression,
+                "sort": [{"field": workspace["sort_field"], "direction": workspace["sort_direction"]}],
+                "limit": int(workspace["limit"]), "offset": 0,
+            }
+            if advanced_search_has_positive_full_text(workspace["root"]):
+                request["include"] = ["full_text_matches"]
+            return {
+                "schema_version": 1,
+                "resource_type": "record" if workspace["resource"] == "records" else "aggregation",
+                "max_results": max(1, min(5000, int(max_results.value or 1000))),
+                "request": request,
+            }
+
+        def current_saved_payload() -> dict[str, Any]:
+            return {
+                "name": str(workspace.get("search_name") or "").strip(),
+                "category": str(workspace.get("search_category") or "").strip() or None,
+                "description": str(workspace.get("search_description") or "").strip() or None,
+                "definition": current_definition(),
+                "audience_mode": workspace["audience_mode"],
+                "role_ids": sorted(int(value) for value in workspace["role_ids"]),
+                "org_unit_ids": sorted(int(value) for value in workspace["org_unit_ids"]),
+            }
+
+        def current_saved_signature() -> str:
+            try:
+                value = current_saved_payload()
+            except (TypeError, ValueError):
+                value = {
+                    "name": workspace.get("search_name"), "category": workspace.get("search_category"),
+                    "description": workspace.get("search_description"), "root": workspace["root"],
+                    "resource": workspace["resource"], "sort": workspace["sort_field"],
+                    "direction": workspace["sort_direction"], "limit": workspace["limit"],
+                    "maximum": max_results.value, "audience_mode": workspace["audience_mode"],
+                    "role_ids": workspace["role_ids"], "org_unit_ids": workspace["org_unit_ids"],
+                }
+            return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+
+        def is_dirty() -> bool:
+            baseline = workspace.get("baseline")
+            return baseline is not None and current_saved_signature() != baseline
+
+        async def confirm_discard_changes(action: str) -> bool:
+            if not is_dirty():
+                return True
+            with ui.dialog() as dialog, ui.card().classes("w-[500px] max-w-full p-5 gap-4"):
+                ui.label("Discard unsaved changes?").classes("text-lg font-semibold")
+                ui.label(f"Your changes will be lost if you {action}.").classes("text-sm text-slate-600")
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Keep editing", on_click=lambda: dialog.submit(False)).props("flat no-caps")
+                    ui.button("Discard changes", color="negative", on_click=lambda: dialog.submit(True)).props("unelevated no-caps")
+            return bool(await dialog)
+
+        state["discard_navigation_guard"] = confirm_discard_changes
+
+        def render_saved_context() -> None:
+            saved_context.clear()
+            saved = workspace.get("saved")
+            saved_context.set_visibility(saved is not None)
+            unsaved_context.set_visibility(saved is None)
+            if saved is None:
+                return
+            owner = saved.get("owner") or {}
+            with saved_context:
+                with ui.row().classes("w-full items-start gap-3"):
+                    ui.icon("bookmark", color="primary")
+                    with ui.column().classes("gap-0 grow min-w-0"):
+                        ui.label(saved["name"]).classes("font-semibold")
+                        ui.label(f"Category: {saved.get('category') or 'Uncategorized'}").classes("text-xs text-slate-600")
+                        ui.label(
+                            f"Owned by {owner.get('name') or 'Unknown owner'} · "
+                            f"updated {format_timestamp(saved.get('date_updated'))}"
+                        ).classes("text-xs text-slate-600")
+                    ui.badge("Mine" if saved.get("owner_user_id") == (auth_state.get("principal") or {}).get("user", {}).get("id") else "Shared").props("outline")
+
+        def refresh_saved_actions() -> None:
+            saved = workspace.get("saved")
+            capabilities = (saved or {}).get("capabilities") or {}
+            has_save = "search.saved_search.save" in privileges
+            editable = saved is None or capabilities.get("update") is True
+            can_execute = saved is None or capabilities.get("execute") is True
+            _, validation_error = validate_builder()
+            structurally_valid = validation_error is None
+            for control in (search_name, search_category, search_description, target, max_results, sort_field, sort_direction, page_size, reset_advanced):
+                control.set_enabled(editable)
+            if editable:
+                builder_host.props(remove="inert aria-disabled")
+                builder_host.classes(remove="pointer-events-none opacity-70")
+            else:
+                builder_host.props(add="inert aria-disabled=true")
+                builder_host.classes(add="pointer-events-none opacity-70")
+            search_advanced.set_enabled(can_execute and structurally_valid)
+            save_button.text = "Update saved search" if saved is not None else "Save search"
+            save_button.update()
+            save_button.set_visibility((saved is None and has_save) or capabilities.get("update") is True)
+            save_as_button.set_visibility(has_save and saved is not None)
+            save_button.set_enabled(structurally_valid)
+            save_as_button.set_enabled(structurally_valid)
+            delete_button.set_visibility(capabilities.get("delete") is True)
+            render_saved_context()
+
+        def load_saved_into_workspace(saved: dict[str, Any]) -> None:
+            definition = saved["definition"]
+            request = definition["request"]
+            workspace["loading"] = True
+            workspace["saved"] = saved
+            workspace["resource"] = "records" if definition["resource_type"] == "record" else "aggregations"
+            workspace["root"] = advanced_search_node_from_expression(request.get("where") or {
+                "field": "title", "operator": "contains_ci", "value": "",
+            })
+            visible_sort = next((item for item in request.get("sort", []) if item["field"] != "id"), None)
+            workspace["sort_field"] = (visible_sort or {"field": "id"})["field"]
+            workspace["sort_direction"] = (visible_sort or {"direction": "asc"})["direction"]
+            workspace["limit"] = int(request.get("limit", 25))
+            workspace["max_results"] = int(definition.get("max_results", 1000))
+            workspace["offset"] = 0
+            workspace["audience_mode"] = saved.get("audience_mode", "private")
+            workspace["role_ids"] = list(saved.get("role_ids") or [])
+            workspace["org_unit_ids"] = list(saved.get("org_unit_ids") or [])
+            workspace["search_name"] = saved["name"]
+            workspace["search_category"] = saved.get("category")
+            workspace["search_description"] = saved.get("description") or ""
+            if saved.get("category"):
+                workspace["category_suggestions"] = sorted({
+                    *workspace.get("category_suggestions", []), saved["category"],
+                }, key=str.casefold)
+            search_name.value = saved["name"]
+            search_category.value = saved.get("category")
+            search_description.value = saved.get("description")
+            target.value = workspace["resource"]
+            max_results.value = workspace["max_results"]
+            page_size.value = workspace["limit"]
+            sort_direction.value = workspace["sort_direction"]
+            results_host.clear(); freshness_host.clear(); pagination.set_visibility(False)
+            render_builder()
+            workspace["loading"] = False
+            workspace["baseline"] = current_saved_signature()
+            refresh_saved_actions()
+            persist_workspace()
+
+        async def show_stale_saved_search(saved_search_id: int) -> None:
+            with ui.dialog() as dialog, ui.card().classes("w-[500px] max-w-full p-5 gap-4"):
+                ui.label("This saved search changed").classes("text-lg font-semibold")
+                ui.label("Another update was saved after you opened it. Reload the latest version before making more changes.").classes("text-sm text-slate-600")
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=lambda: dialog.submit(False)).props("flat no-caps")
+                    ui.button("Reload latest", on_click=lambda: dialog.submit(True)).props("unelevated no-caps")
+            if await dialog:
+                load_saved_into_workspace(await api.saved_search(saved_search_id))
+
+        async def save_search(*, save_as: bool = False) -> None:
+            _, validation_error = validate_builder()
+            if validation_error:
+                show_validation(validation_error); validation_summary.run_method("focus"); return
+            saved = workspace.get("saved")
+            capabilities = (saved or {}).get("capabilities") or {}
+            creating = save_as or saved is None
+            can_manage_audience = creating or capabilities.get("manage_audience") is True
+            try:
+                audience_options = await api.saved_search_audience_options() if can_manage_audience else {"roles": [], "org_units": []}
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True); return
+            role_options = {int(item["id"]): f"{item['name']} ({item['code']})" for item in audience_options.get("roles", [])}
+            unit_options = {int(item["id"]): f"{item['name']} ({item['code']})" for item in audience_options.get("org_units", [])}
+            selected_role_ids = [
+                int(value) for value in ([] if save_as else workspace["role_ids"])
+                if int(value) in role_options
+            ]
+            selected_unit_ids = [
+                int(value) for value in ([] if save_as else workspace["org_unit_ids"])
+                if int(value) in unit_options
+            ]
+            with ui.dialog() as dialog, ui.card().classes("w-[680px] max-w-full p-5 gap-4"):
+                ui.label("Save as a new search" if save_as else ("Save search" if creating else "Update saved search")).classes("text-lg font-semibold")
+                current_name = str(workspace.get("search_name") or "")
+                name_control = ui.input("Name", value=(f"{current_name} copy" if save_as and current_name else current_name)).props("outlined maxlength=120").classes("w-full")
+                with ui.row().classes("w-full gap-3 flex-wrap"):
+                    category_control = ui.input(
+                        "Category", value=str(workspace.get("search_category") or ""),
+                        autocomplete=list(workspace.get("category_suggestions") or []),
+                    ).props("outlined clearable maxlength=80").classes("grow min-w-56")
+                    ui.label(f"{int(max_results.value or 1000):,} maximum results").classes("text-sm text-slate-500 self-center")
+                description_control = ui.textarea("Description", value=workspace.get("search_description") or "").props("outlined maxlength=500 autogrow").classes("w-full")
+                audience_mode = ui.radio({"private": "Only me", "shared": "Roles or organizational units"}, value="private" if save_as else workspace["audience_mode"]).props("inline")
+                audience_host = ui.column().classes("w-full gap-3")
+                with audience_host:
+                    role_control = ui.select(role_options, value=selected_role_ids, label="Roles", multiple=True).props("outlined use-chips options-dense").classes("w-full")
+                    unit_control = ui.select(unit_options, value=selected_unit_ids, label="Organizational units", multiple=True).props("outlined use-chips options-dense").classes("w-full")
+                    ui.label("Recipients can run this query, but results still respect each person's current record access.").classes("text-xs text-slate-500")
+                reason_control = None
+                if not creating:
+                    reason_control = ui.textarea("Reason for change").props("outlined maxlength=500 autogrow").classes("w-full")
+                error_label = ui.label().classes("text-sm text-negative")
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    submit = ui.button("Save", icon="save").props("unelevated no-caps")
+                def audience_visibility() -> None:
+                    audience_host.set_visibility(can_manage_audience and audience_mode.value == "shared")
+                audience_mode.on_value_change(audience_visibility); audience_visibility()
+                if not can_manage_audience:
+                    audience_mode.disable()
+
+                async def persist_saved_search() -> None:
+                    name = str(name_control.value or "").strip()
+                    if not name:
+                        error_label.text = "Name is required."; return
+                    mode = audience_mode.value
+                    roles = list(role_control.value or []) if mode == "shared" else []
+                    units = list(unit_control.value or []) if mode == "shared" else []
+                    if mode == "shared" and not (roles or units):
+                        error_label.text = "Choose at least one role or organizational unit."; return
+                    if reason_control is not None and not str(reason_control.value or "").strip():
+                        error_label.text = "A reason is required when updating a saved search."; return
+                    workspace["search_name"] = name
+                    workspace["search_category"] = str(category_control.value or "").strip() or None
+                    workspace["search_description"] = str(description_control.value or "").strip() or None
+                    payload = current_saved_payload()
+                    payload.update(audience_mode=mode, role_ids=roles, org_unit_ids=units)
+                    try:
+                        submit.disable()
+                        if creating:
+                            updated = await api.create_saved_search(payload)
+                        else:
+                            updated = await api.update_saved_search(
+                                int(saved["id"]), int(saved["version"]), payload,
+                                str(reason_control.value).strip(),
+                            )
+                        workspace["audience_mode"] = mode
+                        workspace["role_ids"] = roles
+                        workspace["org_unit_ids"] = units
+                        dialog.close(); load_saved_into_workspace(updated)
+                        ui.notify("Saved search created" if creating else "Saved search updated", color="positive")
+                    except ApiError as error:
+                        submit.enable()
+                        if error.status_code == 409 and saved is not None:
+                            dialog.close(); await show_stale_saved_search(int(saved["id"]))
+                        else:
+                            error_label.text = error_message(error)
+                submit.on("click", persist_saved_search)
+            dialog.open()
+
+        async def open_saved_search_dialog() -> None:
+            administrator = "search.saved_search.administrator" in privileges
+            audience_options = await api.saved_search_audience_options() if administrator else {"roles": [], "org_units": []}
+            with ui.dialog() as dialog, ui.card().classes("w-[900px] max-w-full max-h-[90vh] p-5 gap-4"):
+                ui.label("Open saved search").classes("text-lg font-semibold")
+                filters: dict[str, Any] = {"offset": 0, "limit": 25}
+                with ui.row().classes("w-full gap-3 items-end flex-wrap"):
+                    query_control = ui.input("Search saved searches").props("outlined dense clearable").classes("grow min-w-64")
+                    filter_button = ui.button("Filters", icon="tune").props("outline dense no-caps aria-expanded=false")
+                with ui.tabs(value="all").props("dense no-caps align=left") as scope_control:
+                    ui.tab("all", label="All")
+                    ui.tab("owned", label="Mine")
+                    ui.tab("shared_with_me", label="Shared with me")
+                advanced_filters = ui.column().classes("w-full gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3")
+                advanced_filters.set_visibility(False)
+                with advanced_filters:
+                    with ui.row().classes("w-full gap-3 items-end flex-wrap"):
+                        resource_control = ui.select({None: "All targets", "record": "Records", "aggregation": "Aggregations"}, value=None, label="Target").props("outlined dense options-dense clearable").classes("w-48")
+                        category_filter = ui.input("Category").props("outlined dense clearable").classes("w-48")
+                        apply_filters = ui.button("Apply filters", icon="filter_alt").props("outline dense no-caps")
+                    if administrator:
+                        ui.label("Administrative filters").classes("text-sm font-semibold text-slate-600")
+                        with ui.row().classes("w-full gap-3 items-end flex-wrap"):
+                            owner_filter = ui.number("Owner user ID", min=1).props("outlined dense").classes("w-40")
+                            role_filter = ui.select({int(item["id"]): item["name"] for item in audience_options.get("roles", [])}, label="Role audience").props("outlined dense clearable options-dense").classes("w-52")
+                            unit_filter = ui.select({int(item["id"]): item["name"] for item in audience_options.get("org_units", [])}, label="Unit audience").props("outlined dense clearable options-dense").classes("w-52")
+                            minimum_filter = ui.number("Minimum result cap", min=1, max=5000).props("outlined dense").classes("w-44")
+                            maximum_filter = ui.number("Maximum result cap", min=1, max=5000).props("outlined dense").classes("w-44")
+                            updated_from = ui.input("Updated from").props("outlined dense type=datetime-local").classes("w-48")
+                            updated_before = ui.input("Updated before").props("outlined dense type=datetime-local").classes("w-48")
+                list_host = ui.column().classes("w-full gap-3 overflow-y-auto")
+                with ui.row().classes("w-full items-center justify-center gap-2"):
+                    previous = ui.button("Previous", icon="chevron_left").props("flat no-caps")
+                    page_label = ui.label().classes("text-sm text-slate-500")
+                    following = ui.button("Next", icon="chevron_right").props("flat no-caps")
+
+                async def select_saved_search(selected: dict[str, Any]) -> None:
+                    if not await confirm_discard_changes("open another saved search"):
+                        return
+                    dialog.close()
+                    load_saved_into_workspace(selected)
+
+                async def load_saved_page() -> None:
+                    params: dict[str, Any] = {"limit": 25, "offset": filters["offset"]}
+                    administrative_all = administrator and scope_control.value == "all"
+                    if not administrative_all:
+                        params["scope"] = scope_control.value
+                    if query_control.value: params["q"] = str(query_control.value).strip()
+                    if resource_control.value: params["resource_type"] = resource_control.value
+                    if category_filter.value: params["category"] = str(category_filter.value).strip()
+                    if administrative_all:
+                        for key, control in (("owner_user_id", owner_filter), ("role_id", role_filter), ("org_unit_id", unit_filter), ("max_results_min", minimum_filter), ("max_results_max", maximum_filter), ("updated_from", updated_from), ("updated_before", updated_before)):
+                            if control.value not in (None, ""): params[key] = control.value
+                    try:
+                        page = await (api.saved_search_administration(**params) if administrative_all else api.saved_searches(**params))
+                    except ApiError as error:
+                        list_host.clear()
+                        with list_host: ui.label(error_message(error)).classes("text-negative")
+                        return
+                    list_host.clear()
+                    categories = {item.get("category") for item in page["items"] if item.get("category")}
+                    workspace["category_suggestions"] = sorted({
+                        *workspace.get("category_suggestions", []), *categories,
+                    }, key=str.casefold)
+                    with list_host:
+                        if not page["items"]:
+                            ui.label("No saved searches match these filters.").classes("text-sm text-slate-500 py-8 self-center")
+                        for item in page["items"]:
+                            owner = item.get("owner") or {}
+                            mine = item.get("owner_user_id") == (auth_state.get("principal") or {}).get("user", {}).get("id")
+                            audience_label = "Only me" if item.get("audience_mode") == "private" else (
+                                f"Shared with {len(item.get('role_ids') or [])} role(s) and "
+                                f"{len(item.get('org_unit_ids') or [])} organizational unit(s)"
+                            )
+                            with ui.card().classes("w-full shadow-none border border-slate-200 p-4"):
+                                with ui.row().classes("w-full items-start gap-3"):
+                                    ui.icon("description" if item["resource_type"] == "record" else "folder", color="primary")
+                                    with ui.column().classes("gap-1 grow min-w-0"):
+                                        ui.label(item["name"]).classes("font-semibold")
+                                        ui.label(item.get("description") or "No description").classes("text-sm text-slate-600")
+                                        ui.label(
+                                            f"{item['resource_type'].title()} · {item.get('category') or 'Uncategorized'} · "
+                                            f"updated {format_timestamp(item['date_updated'])} · "
+                                            f"{'owned by you' if mine else 'shared by ' + str(owner.get('name') or item['owner_user_id'])}"
+                                        ).classes("text-xs text-slate-500")
+                                        ui.label(
+                                            f"Maximum {item['definition']['max_results']:,} results · {audience_label}"
+                                        ).classes("text-xs text-slate-500")
+                                    ui.badge("Mine" if mine else "Shared", color="blue-grey").props("outline")
+                                    ui.button(
+                                        "Open", icon="folder_open",
+                                        on_click=lambda _, selected=item: select_saved_search(selected),
+                                    ).props("flat dense no-caps")
+                    start = page["offset"] + 1 if page["items"] else 0
+                    page_label.text = f"{start}–{page['offset'] + len(page['items'])} of {page['total']}"
+                    previous.set_enabled(page["offset"] > 0)
+                    following.set_enabled(page["offset"] + page["limit"] < page["total"])
+                async def apply_page_filters() -> None:
+                    filters["offset"] = 0; await load_saved_page()
+                def toggle_filters() -> None:
+                    visible = not advanced_filters.visible
+                    advanced_filters.set_visibility(visible)
+                    filter_button.props(f"aria-expanded={'true' if visible else 'false'}")
+                async def change_page(delta: int) -> None:
+                    filters["offset"] = max(0, filters["offset"] + delta); await load_saved_page()
+                filter_button.on("click", toggle_filters)
+                apply_filters.on("click", apply_page_filters)
+                query_control.on("keydown.enter", apply_page_filters)
+                if scope_control is not None:
+                    scope_control.on_value_change(apply_page_filters)
+                previous.on("click", lambda: change_page(-25)); following.on("click", lambda: change_page(25))
+                await load_saved_page()
+            dialog.open()
+
+        async def delete_saved_search() -> None:
+            saved = workspace.get("saved")
+            if not saved: return
+            with ui.dialog() as dialog, ui.card().classes("w-[520px] max-w-full p-5 gap-4"):
+                ui.label(f"Delete “{saved['name']}”? ").classes("text-lg font-semibold")
+                ui.label("This permanently deletes the saved query definition. It does not delete any records or aggregations.").classes("text-sm text-slate-600")
+                reason = ui.textarea("Reason for deletion").props("outlined maxlength=500 autogrow").classes("w-full")
+                error_label = ui.label().classes("text-sm text-negative")
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat no-caps")
+                    confirm = ui.button("Delete saved search", color="negative", icon="delete").props("unelevated no-caps")
+                async def remove() -> None:
+                    if not str(reason.value or "").strip(): error_label.text = "A reason is required."; return
+                    try:
+                        await api.delete_saved_search(int(saved["id"]), int(saved["version"]), str(reason.value).strip())
+                        dialog.close(); reset_search(clear_metadata=True)
+                        ui.notify("Saved search deleted", color="positive")
+                    except ApiError as error:
+                        if error.status_code == 409:
+                            dialog.close(); await show_stale_saved_search(int(saved["id"]))
+                        else: error_label.text = error_message(error)
+                confirm.on("click", remove)
+            dialog.open()
+
+        def validate_builder() -> tuple[dict[str, Any] | None, str | None]:
+            try:
+                if advanced_search_leaf_count(workspace["root"]) > 50:
+                    raise ValueError("A search can contain at most 50 conditions.")
+                if advanced_search_depth(workspace["root"]) > 5:
+                    raise ValueError("A search can be nested at most five levels.")
+                return compile_advanced_search_node(workspace["root"], workspace["resource"]), None
+            except ValueError as error:
+                return None, str(error)
+
+        def show_validation(message: str | None) -> None:
+            validation_summary.clear()
+            validation_summary.set_visibility(bool(message))
+            if message:
+                with validation_summary:
+                    ui.label("Check the search criteria").classes("font-semibold text-red-800")
+                    ui.label(message).classes("text-sm text-red-700")
+
+        def update_search_enabled() -> None:
+            _, error = validate_builder()
+            if error:
+                search_advanced.disable()
+            else:
+                search_advanced.enable()
+            show_validation(None)
+            refresh_saved_actions()
+            persist_workspace()
+
+        def replace_node(parent: list[dict[str, Any]], index: int, value: dict[str, Any]) -> None:
+            parent[index] = value
+            render_builder()
+
+        def remove_node(parent: list[dict[str, Any]], index: int) -> None:
+            parent.pop(index)
+            render_builder()
+
+        def duplicate_node(parent: list[dict[str, Any]], index: int, node: dict[str, Any]) -> None:
+            if advanced_search_leaf_count(workspace["root"]) + advanced_search_leaf_count(node) > 50:
+                ui.notify("A search can contain at most 50 conditions.", color="warning")
+                return
+            parent.insert(index + 1, json.loads(json.dumps(node)))
+            render_builder()
+
+        def negate_node(parent: list[dict[str, Any]], index: int, node: dict[str, Any]) -> None:
+            parent[index] = {"type": "group", "operator": "not", "children": [node]}
+            if advanced_search_depth(workspace["root"]) > 5:
+                parent[index] = node
+                ui.notify("Groups can be nested at most five levels.", color="warning")
+                return
+            render_builder()
+
+        async def browse_advanced_classification(target_control: Any) -> None:
+            dialog = ui.dialog()
+            content: Any = None
+
+            async def show_schemes() -> None:
+                schemes = await api.list("classification-schemes", eligible=True)
+                content.clear()
+                with content:
+                    ui.label("Choose a published scheme").classes("text-sm text-slate-500")
+                    for scheme in schemes:
+                        with ui.card().classes("w-full shadow-none border border-slate-200 cursor-pointer p-3").on(
+                            "click", lambda _, item=scheme: show_level(item, None, [])
+                        ):
+                            ui.label(scheme["title"]).classes("font-semibold")
+                            ui.badge(scheme["code"], color="primary").props("outline")
+
+            async def show_level(scheme: dict[str, Any], parent_item: dict[str, Any] | None, path: list[dict[str, Any]]) -> None:
+                rows = await api.list(
+                    "classifications", classification_scheme_id=scheme["id"],
+                    **({"roots_only": True} if parent_item is None else {"parent_classification_id": parent_item["id"]}),
+                )
+                content.clear()
+                with content:
+                    with ui.row().classes("w-full items-center gap-2"):
+                        ui.button(
+                            icon="arrow_back",
+                            on_click=show_schemes if parent_item is None else lambda: show_level(
+                                scheme, path[-1] if path else None, path[:-1],
+                            ),
+                        ).props("flat round dense aria-label='Back'")
+                        ui.label(scheme["title"]).classes("font-semibold")
+                        if parent_item:
+                            ui.badge(parent_item["code"], color="primary").props("outline")
+                    if not rows:
+                        ui.label("This branch has no child classifications.").classes("py-6 text-slate-500")
+                    for item in rows:
+                        async def choose(selected=item) -> None:
+                            if selected["is_terminal"]:
+                                apply_relationship_selection(
+                                    target_control, selected["id"],
+                                    f"{selected['code']} · {selected['title']}",
+                                )
+                                dialog.close()
+                            else:
+                                await show_level(
+                                    scheme, selected,
+                                    [*path, parent_item] if parent_item else path,
+                                )
+                        with ui.card().classes("w-full shadow-none border border-slate-200 cursor-pointer p-3").on("click", choose):
+                            with ui.row().classes("w-full items-center gap-3"):
+                                ui.avatar(icon="label" if item["is_terminal"] else "schema", color="blue-1", text_color="primary")
+                                with ui.column().classes("grow min-w-0 gap-0"):
+                                    ui.label(item["title"]).classes("font-semibold")
+                                    ui.badge(item["code"], color="primary").props("outline")
+                                ui.icon("check_circle" if item["is_terminal"] else "chevron_right", color="primary")
+
+            with dialog, ui.card().classes("w-[760px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)]"):
+                with ui.row().classes("w-full items-center"):
+                    ui.label("Browse classifications").classes("text-xl font-semibold")
+                    ui.space(); ui.button(icon="close", on_click=dialog.close).props("flat round")
+                content = ui.column().classes("w-full gap-2 overflow-y-auto max-h-[calc(100vh-150px)]")
+            dialog.open()
+            try:
+                await show_schemes()
+            except ApiError as error:
+                dialog.close(); ui.notify(error_message(error), color="negative", close_button=True)
+
+        async def browse_advanced_aggregation(target_control: Any) -> None:
+            dialog = ui.dialog()
+            content: Any = None
+            scheme_control: Any = None
+            browser = {"collections": {}, "expanded": set(), "scheme_id": None}
+
+            async def load_collection(path: str, *, append: bool = False) -> None:
+                current = browser["collections"].setdefault(path, {"items": [], "next_cursor": None})
+                page = await api.browse_page(
+                    path, cursor=current["next_cursor"] if append else None, limit=50,
+                )
+                current["items"] = [*current["items"], *page["items"]] if append else list(page["items"])
+                current["next_cursor"] = page.get("next_cursor")
+
+            async def toggle_node(kind: str, item: dict[str, Any]) -> None:
+                node = (kind, int(item["id"]))
+                if node in browser["expanded"]:
+                    browser["expanded"].remove(node)
+                    render_tree()
+                    return
+                browser["expanded"].add(node)
+                if kind == "classification":
+                    path = (
+                        f"classifications/{item['id']}/aggregations"
+                        if item["is_terminal"] else f"classifications/{item['id']}/children"
+                    )
+                else:
+                    path = f"aggregations/{item['id']}/children"
+                if path not in browser["collections"]:
+                    await load_collection(path)
+                render_tree()
+
+            def select_aggregation(item: dict[str, Any]) -> None:
+                apply_relationship_selection(
+                    target_control, item["id"],
+                    f"{item['aggregation_number']} · {item['title']}",
+                )
+                dialog.close()
+
+            def render_collection(path: str, kind: str, depth: int) -> None:
+                collection = browser["collections"].get(path, {"items": [], "next_cursor": None})
+                for item in collection["items"]:
+                    node_kind = "classification" if kind == "classification" else "aggregation"
+                    node = (node_kind, int(item["id"]))
+                    expanded = node in browser["expanded"]
+                    with ui.row().classes("w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50").style(
+                        f"padding-left:{depth * 20 + 4}px"
+                    ):
+                        ui.button(
+                            icon="expand_more" if expanded else "chevron_right",
+                            on_click=lambda _, selected=item, selected_kind=node_kind: toggle_node(selected_kind, selected),
+                        ).props("flat round dense size=sm color=blue-grey")
+                        ui.icon("schema" if node_kind == "classification" and not item.get("is_terminal") else "label" if node_kind == "classification" else "folder", color="primary")
+                        with ui.column().classes("grow min-w-0 gap-0"):
+                            ui.label(item["title"]).classes("text-sm font-semibold")
+                            ui.label(item.get("code") or item.get("aggregation_number")).classes("text-xs text-slate-500")
+                        if node_kind == "aggregation":
+                            ui.button(
+                                "Select", icon="check",
+                                on_click=lambda _, selected=item: select_aggregation(selected),
+                            ).props("flat dense no-caps")
+                    if expanded:
+                        child_path = (
+                            f"classifications/{item['id']}/aggregations"
+                            if node_kind == "classification" and item["is_terminal"] else
+                            f"classifications/{item['id']}/children"
+                            if node_kind == "classification" else
+                            f"aggregations/{item['id']}/children"
+                        )
+                        render_collection(
+                            child_path,
+                            "aggregation" if node_kind == "aggregation" or item.get("is_terminal") else "classification",
+                            depth + 1,
+                        )
+                if collection.get("next_cursor"):
+                    async def load_more(collection_path: str = path) -> None:
+                        await load_collection(collection_path, append=True)
+                        render_tree()
+                    ui.button("Load more", icon="more_horiz", on_click=load_more).props("flat dense no-caps").style(
+                        f"margin-left:{depth * 20 + 32}px"
+                    )
+
+            def render_tree() -> None:
+                content.clear()
+                with content:
+                    scheme_id = browser.get("scheme_id")
+                    if scheme_id is None:
+                        ui.label("Choose a classification scheme.").classes("text-sm text-slate-500 py-6 self-center")
+                        return
+                    render_collection(f"classification-schemes/{scheme_id}/roots", "classification", 0)
+
+            async def select_scheme(scheme_id: int | None) -> None:
+                if scheme_id is None:
+                    return
+                browser.update(scheme_id=int(scheme_id), collections={}, expanded=set())
+                await load_collection(f"classification-schemes/{scheme_id}/roots")
+                render_tree()
+
+            with dialog, ui.card().classes("w-[760px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)]"):
+                with ui.row().classes("w-full items-center"):
+                    ui.label("Browse classification and aggregation hierarchy").classes("text-xl font-semibold")
+                    ui.space(); ui.button(icon="close", on_click=dialog.close).props("flat round")
+                scheme_control = ui.select({}, label="Classification scheme").props("outlined dense options-dense").classes("w-full")
+                content = ui.column().classes("w-full gap-2 overflow-y-auto max-h-[calc(100vh-150px)]")
+            dialog.open()
+            try:
+                schemes = await api.browse_schemes()
+                scheme_control.options = {item["id"]: f"{item['code']} — {item['title']}" for item in schemes}
+                scheme_control.update()
+                if schemes:
+                    scheme_control.value = schemes[0]["id"]
+                    scheme_control.update()
+                    await select_scheme(schemes[0]["id"])
+                else:
+                    render_tree()
+            except ApiError as error:
+                dialog.close(); ui.notify(error_message(error), color="negative", close_button=True)
+            scheme_control.on_value_change(lambda event: select_scheme(event.value))
+
+        async def browse_advanced_relationship(field_name: str, target_control: Any) -> None:
+            if field_name == "classification_id":
+                await browse_advanced_classification(target_control)
+            elif field_name == "owning_org_unit_id":
+                await show_organization_structure(selection_mode="org_unit", target_control=target_control)
+            elif field_name in {"aggregation_id", "parent_aggregation_id"}:
+                await browse_advanced_aggregation(target_control)
+
+        def render_condition(node: dict[str, Any], parent: list[dict[str, Any]], index: int) -> None:
+            with ui.card().classes("advanced-search-condition w-full p-2 shadow-none border border-slate-200"):
+                with ui.row().classes("w-full items-end gap-2 flex-wrap"):
+                    kind = ui.select({"structured": "Metadata", "full_text": "Full text"}, value=node.get("kind", "structured"), label="Condition type").props("outlined dense options-dense").classes("w-36")
+                    if node.get("kind") == "full_text":
+                        query_control = ui.input("Search words or phrase", value=node.get("query", "")).props("outlined dense clearable").classes("grow min-w-64")
+                        query_control.on_value_change(lambda event: (
+                            node.__setitem__("query", event.value or ""),
+                            update_search_enabled(), refresh_sort_options(), persist_workspace(),
+                        ))
+                        if workspace["resource"] == "records":
+                            sources = ui.select({"metadata": "Record metadata", "components": "File names and content"}, value=node.get("sources") or ["metadata", "components"], label="Sources", multiple=True).props("outlined dense options-dense use-chips").classes("min-w-64")
+                            sources.on_value_change(lambda event: (
+                                node.__setitem__("sources", event.value or []),
+                                update_search_enabled(), refresh_sort_options(), persist_workspace(),
+                            ))
+                    else:
+                        fields = advanced_search_field_options(workspace["resource"])
+                        field_name = node.get("field") if node.get("field") in fields else "title"
+                        node["field"] = field_name
+                        field_control = ui.select(fields, value=field_name, label="Field").props("outlined dense options-dense").classes("min-w-44 grow")
+                        _, field_kind, nullable = ADVANCED_SEARCH_FIELDS[workspace["resource"]][field_name]
+                        operators = advanced_search_operators(field_kind, nullable)
+                        operator_name = node.get("operator") if node.get("operator") in operators else next(iter(operators))
+                        node["operator"] = operator_name
+                        operator_control = ui.select(operators, value=operator_name, label="Operator").props("outlined dense options-dense").classes("min-w-44")
+                        if operator_name not in {"is_null", "is_not_null"}:
+                            if field_kind == "boolean":
+                                value_control = ui.select({True: "Yes", False: "No"}, value=node.get("value"), label="Value").props("outlined dense options-dense clearable").classes("w-32")
+                            elif operator_name == "between":
+                                values = node.get("value") if isinstance(node.get("value"), list) else ["", ""]
+                                first = ui.input("From", value=values[0] if values else "").props("outlined dense clearable").classes("min-w-40")
+                                second = ui.input("To", value=values[1] if len(values) > 1 else "").props("outlined dense clearable").classes("min-w-40")
+                                if field_kind == "datetime":
+                                    first.props(add="type=datetime-local")
+                                    second.props(add="type=datetime-local")
+                                first.on_value_change(lambda event: (node.__setitem__("value", [event.value, (node.get("value") or ["", ""])[1]]), update_search_enabled()))
+                                second.on_value_change(lambda event: (node.__setitem__("value", [(node.get("value") or ["", ""])[0], event.value]), update_search_enabled()))
+                                value_control = None
+                            elif operator_name in {"in", "not_in"}:
+                                rendered = ", ".join(str(item) for item in node.get("value", [])) if isinstance(node.get("value"), list) else ""
+                                value_control = ui.input("Values (comma separated)", value=rendered).props("outlined dense clearable").classes("grow min-w-56")
+                                value_control.on_value_change(lambda event: (node.__setitem__("value", [part.strip() for part in str(event.value or "").split(",") if part.strip()][:100]), update_search_enabled()))
+                            elif field_name in relation_options:
+                                selected_value = node.get("value")
+                                if selected_value not in relation_options[field_name]:
+                                    selected_value = None
+                                    node["value"] = None
+                                value_control = ui.select(
+                                    relation_options[field_name], value=selected_value, label="Value",
+                                ).props("outlined dense clearable").classes("grow min-w-56")
+                                style_relationship_chip_select(value_control, field_name)
+                                if field_name in {
+                                    "aggregation_id", "parent_aggregation_id",
+                                    "classification_id", "owning_org_unit_id",
+                                }:
+                                    ui.button(
+                                        "Browse", icon="account_tree",
+                                        on_click=lambda _, relationship_field=field_name, control=value_control:
+                                            browse_advanced_relationship(relationship_field, control),
+                                    ).props("flat dense no-caps color=primary")
+                            elif field_name in ADVANCED_SEARCH_CONTROLLED_VALUES:
+                                controlled_options = ADVANCED_SEARCH_CONTROLLED_VALUES[field_name]
+                                selected_value = node.get("value")
+                                if selected_value not in controlled_options:
+                                    selected_value = None
+                                    node["value"] = None
+                                value_control = ui.select(
+                                    controlled_options, value=selected_value, label="Value",
+                                ).props("outlined dense options-dense clearable").classes("grow min-w-56")
+                                if field_name == "component.content_status":
+                                    style_status_chip_select(value_control)
+                            elif field_kind == "integer":
+                                value_control = ui.number("Value", value=node.get("value")).props("outlined dense clearable").classes("min-w-40")
+                            else:
+                                value_control = ui.input("Value", value=node.get("value", "")).props("outlined dense clearable").classes("grow min-w-56")
+                                if field_kind == "datetime":
+                                    value_control.props(add="type=datetime-local")
+                            if value_control is not None and operator_name not in {"in", "not_in"}:
+                                value_control.on_value_change(lambda event: (node.__setitem__("value", event.value), update_search_enabled()))
+                        field_control.on_value_change(lambda event: (
+                            node.update(
+                                field=event.value, operator="eq",
+                                value=advanced_search_empty_value(
+                                    event.value, "eq",
+                                    ADVANCED_SEARCH_FIELDS[workspace["resource"]][event.value][1],
+                                ),
+                            ),
+                            render_builder(),
+                        ))
+                        operator_control.on_value_change(lambda event: (
+                            node.update(
+                                operator=event.value,
+                                value=advanced_search_empty_value(field_name, event.value, field_kind),
+                            ),
+                            render_builder(),
+                        ))
+                    kind.on_value_change(lambda event: (node.clear(), node.update(new_condition() if event.value == "structured" else {"type": "condition", "kind": "full_text", "query": "", "sources": ["metadata", "components"] if workspace["resource"] == "records" else ["metadata"]}), render_builder()))
+                    with ui.row().classes("advanced-search-condition-actions items-center gap-0 self-end"):
+                        ui.button(icon="block", on_click=lambda: negate_node(parent, index, node)).props("flat round dense aria-label='Negate condition'").tooltip("Negate")
+                        ui.button(icon="content_copy", on_click=lambda: duplicate_node(parent, index, node)).props("flat round dense aria-label='Duplicate condition'").tooltip("Duplicate")
+                        ui.button(icon="delete", color="negative", on_click=lambda: remove_node(parent, index)).props("flat round dense aria-label='Remove condition'").tooltip("Remove")
+
+        def render_group(node: dict[str, Any], parent: list[dict[str, Any]] | None = None, index: int = 0, depth: int = 1) -> None:
+            labels = {"and": "All", "or": "Any", "not": "Not"}
+            with ui.card().classes("advanced-search-group w-full p-2 shadow-none border-l-4 border-blue-300 bg-slate-50").props(
+                f"role=group aria-label='{labels.get(node.get('operator', 'and'), 'Boolean')} criteria group at level {depth}'"
+            ):
+                with ui.row().classes("w-full items-center gap-2"):
+                    group_operator = ui.select(labels, value=node.get("operator", "and"), label="Match").props("outlined dense options-dense").classes("w-32")
+                    ui.label(f"Level {depth}").classes("text-xs text-slate-500")
+                    ui.space()
+                    add_condition = ui.button("Condition", icon="add").props("flat dense no-caps")
+                    add_group = ui.button("Group", icon="account_tree").props("flat dense no-caps")
+                    if parent is not None:
+                        ui.button(icon="block", on_click=lambda: negate_node(parent, index, node)).props("flat round dense aria-label='Negate group'").tooltip("Negate")
+                        ui.button(icon="content_copy", on_click=lambda: duplicate_node(parent, index, node)).props("flat round dense aria-label='Duplicate group'").tooltip("Duplicate")
+                        ui.button(icon="delete", color="negative", on_click=lambda: remove_node(parent, index)).props("flat round dense aria-label='Remove group'").tooltip("Remove")
+                children_host = ui.column().classes("w-full gap-1 pl-2")
+                children = node.setdefault("children", [])
+                with children_host:
+                    for child_index, child in enumerate(list(children)):
+                        if child.get("type") == "group":
+                            render_group(child, children, child_index, depth + 1)
+                        else:
+                            render_condition(child, children, child_index)
+                if node.get("operator") == "not" and children:
+                    add_condition.disable()
+                    add_group.disable()
+
+                def change_group_operator(event: Any) -> None:
+                    previous_operator = node.get("operator", "and")
+                    previous_children = list(children)
+                    if event.value == "not" and len(children) > 1:
+                        node["children"] = [{"type": "group", "operator": "and", "children": list(children)}]
+                    node["operator"] = event.value
+                    if advanced_search_depth(workspace["root"]) > 5:
+                        node["operator"] = previous_operator
+                        node["children"] = previous_children
+                        ui.notify("Groups can be nested at most five expression levels.", color="warning")
+                    render_builder()
+
+                group_operator.on_value_change(change_group_operator)
+                add_condition.on("click", lambda: (children.append(new_condition()), render_builder()) if advanced_search_leaf_count(workspace["root"]) < 50 else ui.notify("A search can contain at most 50 conditions.", color="warning"))
+                add_group.on("click", lambda: (children.append({"type": "group", "operator": "and", "children": [new_condition()]}), render_builder()) if depth < 4 and advanced_search_leaf_count(workspace["root"]) < 50 else ui.notify("Groups can be nested at most five expression levels.", color="warning"))
+
+        def render_builder() -> None:
+            component_scope_help.set_visibility(
+                workspace["resource"] == "records"
+                and advanced_search_has_component_field(workspace["root"])
+            )
+            builder_host.clear()
+            with builder_host:
+                render_group(workspace["root"])
+            update_search_enabled()
+            refresh_sort_options()
+            persist_workspace()
+
+        def refresh_sort_options() -> None:
+            options = {
+                name: details[0]
+                for name, details in ADVANCED_SEARCH_FIELDS[workspace["resource"]].items()
+                if name not in ADVANCED_SEARCH_COMPONENT_FIELDS
+            }
+            options["id"] = "Identifier"
+            try:
+                expression = compile_advanced_search_node(workspace["root"], workspace["resource"])
+                if advanced_search_has_positive_full_text(workspace["root"]):
+                    options = {"_relevance": "Relevance", **options}
+            except ValueError:
+                pass
+            sort_field.options = options
+            if workspace["sort_field"] not in options:
+                workspace["sort_field"] = "_relevance" if "_relevance" in options else "id"
+            sort_field.value = workspace["sort_field"]
+            sort_field.update()
+
+        async def execute_search() -> None:
+            expression, error = validate_builder()
+            if error:
+                show_validation(error)
+                validation_summary.run_method("focus")
+                return
+            workspace.update(busy=True, error=None)
+            search_advanced.disable()
+            status_label.text = "Searching…"
+            results_host.clear()
+            with results_host:
+                ui.spinner(size="lg").classes("self-center")
+            try:
+                maximum = max(1, min(5000, int(max_results.value or 1000)))
+                workspace["max_results"] = maximum
+                remaining = maximum - workspace["offset"]
+                if remaining <= 0:
+                    workspace["offset"] = 0
+                    remaining = maximum
+                payload = {
+                    "where": expression,
+                    "sort": [{"field": workspace["sort_field"], "direction": workspace["sort_direction"]}],
+                    "limit": min(workspace["limit"], remaining), "offset": workspace["offset"],
+                }
+                if advanced_search_has_positive_full_text(workspace["root"]):
+                    payload["include"] = ["full_text_matches"]
+                saved = workspace.get("saved")
+                if saved is not None and not is_dirty():
+                    result = await api.execute_saved_search(
+                        int(saved["id"]), {"limit": payload["limit"], "offset": payload["offset"]},
+                    )
+                else:
+                    result = await api.search_request(workspace["resource"], payload)
+                workspace["aggregation_labels"] = {}
+                workspace["record_component_details"] = {}
+                if workspace["resource"] == "records":
+                    for aggregation_id in sorted({
+                        int(item["aggregation_id"]) for item in result.get("items", [])
+                        if item.get("aggregation_id") is not None
+                    }):
+                        try:
+                            aggregation = await api.get("aggregations", aggregation_id)
+                            workspace["aggregation_labels"][aggregation_id] = (
+                                f"{aggregation.get('aggregation_number') or '#' + str(aggregation_id)} — "
+                                f"{aggregation.get('title') or 'Untitled'}"
+                            )
+                        except ApiError:
+                            workspace["aggregation_labels"][aggregation_id] = "Containing aggregation unavailable"
+                    async def load_matching_component_details(record_item: dict[str, Any]) -> tuple[int, list[dict[str, Any]]]:
+                        try:
+                            return int(record_item["id"]), await api.components(int(record_item["id"]))
+                        except ApiError:
+                            return int(record_item["id"]), []
+                    component_details = await asyncio.gather(*(
+                        load_matching_component_details(record_item) for record_item in result.get("items", [])
+                    ))
+                    workspace["record_component_details"] = dict(component_details)
+                workspace["total"] = min(int(result["total"]), maximum)
+                workspace["searched"] = True
+                render_results(result)
+            except ApiError as api_error:
+                results_host.clear()
+                with results_host, ui.card().classes("w-full border border-red-200 bg-red-50 p-4 shadow-none"):
+                    ui.label("The search could not be completed").classes("font-semibold text-red-800")
+                    ui.label(error_message(api_error)).classes("text-sm text-red-700")
+                status_label.text = "Search failed"
+            finally:
+                workspace["busy"] = False
+                search_advanced.enable()
+                persist_workspace()
+
+        def render_results(result: dict[str, Any]) -> None:
+            workspace["last_result"] = copy.deepcopy(result)
+            results_host.clear()
+            freshness_host.clear()
+            freshness = result.get("index_freshness") or {}
+            if freshness.get("has_pending_content"):
+                with freshness_host, ui.card().classes("w-full p-3 shadow-none border border-amber-200 bg-amber-50"):
+                    with ui.row().classes("w-full items-center gap-2"):
+                        ui.icon("hourglass_top").classes("text-amber-700")
+                        ui.label("Some authorized file content is still being indexed. Results may be incomplete until indexing finishes.").classes("text-sm text-amber-900")
+            items = result.get("items", [])
+            start = workspace["offset"] + 1 if items else 0
+            end = workspace["offset"] + len(items)
+            total = workspace["total"]
+            status_label.text = f"{total:,} authorized result{'s' if total != 1 else ''}"
+            range_label.text = f"{start:,}–{end:,} of {total:,}"
+            pagination.set_visibility(total > 0)
+            first_page.set_enabled(workspace["offset"] > 0)
+            previous_page.set_enabled(workspace["offset"] > 0)
+            next_page.set_enabled(end < total)
+            last_page.set_enabled(end < total)
+            if not items:
+                with results_host, ui.card().classes("w-full p-8 items-center shadow-none border border-slate-200"):
+                    ui.icon("search_off", size="42px").classes("text-slate-400")
+                    ui.label("No authorized results matched this search.").classes("font-semibold")
+                    ui.label("Change a condition or broaden the criteria, then search again.").classes("text-sm text-slate-500")
+                return
+            with results_host:
+                for item in items:
+                    number = item.get("record_number") or item.get("aggregation_number") or f"#{item['id']}"
+                    search_meta = item.get("_search") or {}
+                    authorized_component_details = {
+                        int(component["id"]): component
+                        for component in workspace.get("record_component_details", {}).get(int(item["id"]), [])
+                    }
+                    matching_components = [
+                        {**authorized_component_details.get(int(component["id"]), {}), **component}
+                        for component in search_meta.get("matching_components", [])
+                        if component.get("id") is not None
+                    ]
+                    open_action = open_advanced_record if workspace["resource"] == "records" else open_advanced_aggregation
+                    with ui.card().classes("global-search-card w-full shadow-none"):
+                        with ui.row().classes("global-search-card-header w-full items-center gap-2 px-3 py-2"):
+                            ui.icon("description" if workspace["resource"] == "records" else "folder", size="22px").classes("text-primary")
+                            with ui.column().classes("gap-0 grow min-w-0"):
+                                ui.label(item.get("title") or "Untitled").classes("font-semibold text-base")
+                                ui.label(str(number)).classes("text-xs text-slate-500")
+                            ui.badge("Record" if workspace["resource"] == "records" else "Aggregation", color="blue-grey").props("outline")
+                            with ui.row().classes("advanced-search-result-actions items-center gap-0"):
+                                ui.button(
+                                    icon="open_in_new",
+                                    on_click=lambda _, identifier=item["id"], action=open_action: action(identifier),
+                                ).props("flat round dense color=primary aria-label='Open result'").tooltip("Open")
+                        with ui.column().classes("w-full gap-1 px-3 py-2"):
+                            ui.label(item.get("description") or "No description").classes("text-sm text-slate-600 whitespace-pre-wrap")
+                            if workspace["resource"] == "records" and item.get("aggregation_id"):
+                                ui.label(workspace.get("aggregation_labels", {}).get(int(item["aggregation_id"]), "Containing aggregation unavailable")).classes("text-xs text-slate-500")
+                            if workspace["resource"] == "aggregations":
+                                lifecycle = "Closed" if item.get("date_closed") else "Open"
+                                ui.label(f"{lifecycle} · {str(item.get('medium') or 'Unspecified medium').title()}").classes("text-xs text-slate-500")
+                            if matching_components:
+                                ui.label("Digital components").classes("text-xs font-semibold uppercase tracking-wide text-slate-500 mt-1")
+                            for component in matching_components:
+                                with ui.column().classes("global-search-component w-full gap-1"):
+                                    with ui.row().classes("w-full items-center gap-2"):
+                                        ui.label(component.get("file_name") or "Digital component").classes("text-sm font-medium grow")
+                                        preview_button = ui.button(
+                                            icon="visibility",
+                                            on_click=lambda _, record=item, component_id=int(component["id"]):
+                                                preview_record_components(record, component_id),
+                                        ).props("flat round dense color=primary aria-label='Preview digital component'")
+                                        if not component_is_previewable(component):
+                                            preview_button.disable()
+                                            preview_button.tooltip("Preview is unavailable for this component")
+                                        else:
+                                            preview_button.tooltip(f"Preview {component.get('file_name') or 'digital component'}")
+                                    render_safe_snippet(component.get("snippet"))
+
+        async def open_advanced_record(identifier: int) -> None:
+            persist_workspace()
+            state.pop("discard_navigation_guard", None)
+            await select_record_details(identifier)
+
+        async def open_advanced_aggregation(identifier: int) -> None:
+            persist_workspace()
+            state.pop("discard_navigation_guard", None)
+            await open_aggregation(await api.get("aggregations", identifier))
+
+        async def confirm_target_reset() -> bool:
+            with ui.dialog() as dialog, ui.card().classes("w-[480px] max-w-full p-5 gap-4"):
+                ui.label("Change search target?").classes("text-lg font-semibold")
+                ui.label("Changing the target resets all criteria because searchable fields differ.").classes("text-sm text-slate-600")
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Cancel", on_click=lambda: dialog.submit(False)).props("flat no-caps")
+                    ui.button("Change target", on_click=lambda: dialog.submit(True)).props("unelevated no-caps")
+            return bool(await dialog)
+
+        async def change_target(event: Any) -> None:
+            if workspace.get("loading"):
+                return
+            requested = event.value
+            if requested == workspace["resource"]:
+                return
+            if advanced_search_leaf_count(workspace["root"]) > 0:
+                confirmed = await confirm_target_reset()
+                if not confirmed:
+                    target.value = workspace["resource"]
+                    target.update()
+                    return
+            workspace.update(resource=requested, root={"type": "group", "operator": "and", "children": [new_condition()]}, offset=0, searched=False, last_result=None)
+            results_host.clear()
+            pagination.set_visibility(False)
+            render_builder()
+            refresh_sort_options()
+
+        def reset_search(*, clear_metadata: bool = False) -> None:
+            workspace.update(root={"type": "group", "operator": "and", "children": [new_condition()]}, sort_field="id", sort_direction="asc", limit=25, max_results=1000, offset=0, total=0, searched=False, last_result=None)
+            if clear_metadata:
+                workspace.update(
+                    saved=None, audience_mode="private", role_ids=[], org_unit_ids=[],
+                    search_name="", search_category=None, search_description="",
+                )
+                search_name.value = ""; search_category.value = None; search_description.value = ""
+            max_results.value = 1000
+            page_size.value = 25
+            sort_direction.value = "asc"
+            results_host.clear()
+            freshness_host.clear()
+            pagination.set_visibility(False)
+            status_label.text = ""
+            render_builder()
+            refresh_sort_options()
+            workspace["baseline"] = current_saved_signature()
+            refresh_saved_actions()
+            persist_workspace()
+
+        async def start_new_search() -> None:
+            if await confirm_discard_changes("start a new search"):
+                reset_search(clear_metadata=True)
+
+        async def move_page(offset: int) -> None:
+            workspace["offset"] = max(0, min(offset, max(0, workspace["total"] - 1)))
+            workspace["offset"] = (workspace["offset"] // workspace["limit"]) * workspace["limit"]
+            await execute_search()
+
+        target.on_value_change(change_target)
+        max_results.on_value_change(lambda event: (
+            workspace.__setitem__("max_results", max(1, min(5000, int(event.value or 1000)))),
+            persist_workspace(),
+        ))
+        sort_field.on_value_change(lambda event: (workspace.__setitem__("sort_field", event.value), persist_workspace()))
+        sort_direction.on_value_change(lambda event: (workspace.__setitem__("sort_direction", event.value), persist_workspace()))
+        page_size.on_value_change(lambda event: (workspace.update(limit=int(event.value), offset=0), persist_workspace()))
+        search_advanced.on("click", execute_search)
+        reset_advanced.on("click", reset_search)
+        new_button.on("click", start_new_search)
+        open_button.on("click", open_saved_search_dialog)
+        save_button.on("click", lambda: save_search(save_as=False))
+        save_as_button.on("click", lambda: save_search(save_as=True))
+        delete_button.on("click", delete_saved_search)
+        first_page.on("click", lambda: move_page(0))
+        previous_page.on("click", lambda: move_page(workspace["offset"] - workspace["limit"]))
+        next_page.on("click", lambda: move_page(workspace["offset"] + workspace["limit"]))
+        last_page.on("click", lambda: move_page(max(0, workspace["total"] - 1)))
+        render_builder()
+        if workspace.get("baseline") is None:
+            workspace["baseline"] = current_saved_signature()
+        refresh_saved_actions()
+        if workspace.get("searched") and isinstance(workspace.get("last_result"), dict):
+            render_results(workspace["last_result"])
+        persist_workspace()
+
     async def select_entity(key: str) -> None:
         register_navigation(key, ENTITIES[key].label)
         show_authenticated_view()
@@ -15095,21 +16632,32 @@ def index(q: str = "") -> None:
                 remove_selected_held_items.on("click",remove_selected)
             await load_held_items()
 
+    async def guarded_page_navigation(callback: Callable[[], Any]) -> None:
+        discard_guard = state.get("discard_navigation_guard")
+        if discard_guard is not None and not await discard_guard("leave this page"):
+            return
+        state.pop("discard_navigation_guard", None)
+        result = callback()
+        if inspect.isawaitable(result):
+            await result
+
     for key, button in navigation.items():
         if key == "classification-schemes":
-            button.on("click", select_classification_workspace)
+            button.on("click", lambda: guarded_page_navigation(select_classification_workspace))
+        elif key == "advanced-search":
+            button.on("click", lambda: guarded_page_navigation(select_advanced_search))
         else:
-            button.on("click", lambda _, entity_key=key: select_entity(entity_key))
-    aggregation_search_mode.on("click", select_aggregation_search)
-    aggregation_browse_mode.on("click", select_aggregation_browser)
-    dashboard_navigation.on("click", select_dashboard)
-    organization_browser_navigation.on("click", show_organization_structure)
-    audit_navigation.on("click", select_audit_trail)
-    sessions_navigation.on("click", lambda: select_login_sessions())
-    security_operations_navigation.on("click", select_security_operations)
-    text_indexers_navigation.on("click", select_text_indexers)
-    custody_navigation.on("click", select_governance_custody)
-    holds_navigation.on("click", select_holds)
+            button.on("click", lambda _, entity_key=key: guarded_page_navigation(lambda: select_entity(entity_key)))
+    aggregation_search_mode.on("click", lambda: guarded_page_navigation(select_aggregation_search))
+    aggregation_browse_mode.on("click", lambda: guarded_page_navigation(select_aggregation_browser))
+    dashboard_navigation.on("click", lambda: guarded_page_navigation(select_dashboard))
+    organization_browser_navigation.on("click", lambda: guarded_page_navigation(show_organization_structure))
+    audit_navigation.on("click", lambda: guarded_page_navigation(select_audit_trail))
+    sessions_navigation.on("click", lambda: guarded_page_navigation(select_login_sessions))
+    security_operations_navigation.on("click", lambda: guarded_page_navigation(select_security_operations))
+    text_indexers_navigation.on("click", lambda: guarded_page_navigation(select_text_indexers))
+    custody_navigation.on("click", lambda: guarded_page_navigation(select_governance_custody))
+    holds_navigation.on("click", lambda: guarded_page_navigation(select_holds))
     change_password_menu.on("click", show_change_password)
     sign_out_menu.on("click", sign_out)
 

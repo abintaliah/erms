@@ -526,6 +526,44 @@ class ErmsApiClient:
     async def full_text_search(self, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.request("POST", "/api/v1/full-text-search", json=payload)
 
+    async def execute_saved_search(
+        self, saved_search_id: int, payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/saved-searches/{saved_search_id}/execute", json=payload,
+        )
+
+    async def saved_searches(self, **filters: Any) -> dict[str, Any]:
+        return await self.request("GET", "/api/v1/saved-searches", params=filters)
+
+    async def saved_search_administration(self, **filters: Any) -> dict[str, Any]:
+        return await self.request("GET", "/api/v1/saved-searches/administration", params=filters)
+
+    async def saved_search_audience_options(self) -> dict[str, Any]:
+        return await self.request("GET", "/api/v1/saved-searches/audience-options")
+
+    async def saved_search(self, saved_search_id: int) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/saved-searches/{saved_search_id}")
+
+    async def create_saved_search(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("POST", "/api/v1/saved-searches", json=payload)
+
+    async def update_saved_search(
+        self, saved_search_id: int, version: int, payload: dict[str, Any], reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "PUT", f"/api/v1/saved-searches/{saved_search_id}", json=payload,
+            headers={"If-Match": str(version), "X-Change-Reason": reason},
+        )
+
+    async def delete_saved_search(
+        self, saved_search_id: int, version: int, reason: str,
+    ) -> None:
+        await self.request(
+            "DELETE", f"/api/v1/saved-searches/{saved_search_id}",
+            headers={"If-Match": str(version), "X-Change-Reason": reason},
+        )
+
     async def count(self, resource: str) -> int:
         result = await self.search_request(resource, {"limit": 1, "offset": 0})
         return int(result["total"])

@@ -84,6 +84,7 @@ from .dashboard import router as dashboard_router
 from .holds import router as holds_router
 from .text_indexing import router as text_indexing_router
 from .reindexing import router as reindexing_router
+from .saved_searches import router as saved_searches_router
 from .authorization_policy import load_policy_context, require_audit_view
 
 
@@ -167,6 +168,7 @@ app.include_router(dashboard_router)
 app.include_router(holds_router)
 app.include_router(text_indexing_router)
 app.include_router(reindexing_router)
+app.include_router(saved_searches_router)
 
 
 @app.post("/api/v1/full-text-search", response_model=None, tags=["search"])

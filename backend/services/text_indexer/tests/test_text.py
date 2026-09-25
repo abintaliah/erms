@@ -10,7 +10,10 @@ from unittest.mock import patch
 
 from backend.services.text_indexer.config import Settings
 from backend.services.text_indexer.text import chunks, classify, normalize
-from backend.services.text_indexer.tika import ExtractionError, extract, extract_pdf, pdf_page_count
+from backend.services.text_indexer.tika import (
+    ExtractionError, extract, extract_pdf, pdf_native_text_is_sufficient,
+    pdf_page_count,
+)
 from backend.services.text_indexer.worker import Worker
 
 
@@ -37,6 +40,47 @@ class TextPolicyTests(unittest.TestCase):
             with self.assertRaisesRegex(ExtractionError,"page limit"):
                 extract_pdf(Path("/tika"),Path("/tmp/document.pdf"),120,1000,1024)
             tika_extract.assert_not_called()
+
+    def test_pdf_with_sufficient_native_text_skips_rendering_and_ocr(self):
+        native = "This page already contains searchable native text. " * 20
+        with patch("backend.services.text_indexer.tika.pdf_page_count", return_value=2), \
+             patch("backend.services.text_indexer.tika.extract", return_value=native), \
+             patch("backend.services.text_indexer.tika.subprocess.run") as render, \
+             patch("backend.services.text_indexer.tika.extract_image_ocr") as ocr:
+            text, ocr_used = extract_pdf(
+                Path("/tika"), Path("/tmp/document.pdf"), 120, 1000, 1024,
+            )
+        self.assertEqual(text, native)
+        self.assertFalse(ocr_used)
+        render.assert_not_called()
+        ocr.assert_not_called()
+
+    def test_pdf_native_text_density_gate_keeps_text_poor_documents_on_ocr_path(self):
+        self.assertTrue(pdf_native_text_is_sufficient("word " * 100, 2))
+        self.assertFalse(pdf_native_text_is_sufficient("cover page", 20))
+
+    def test_text_poor_pdf_still_uses_ocr(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "document.pdf"
+            source.write_bytes(b"pdf")
+
+            def render_pages(command, **_kwargs):
+                prefix = Path(command[-1])
+                prefix.with_name(prefix.name + "-1.png").write_bytes(b"one")
+                prefix.with_name(prefix.name + "-2.png").write_bytes(b"two")
+                return __import__('subprocess').CompletedProcess(command, 0, "", "")
+
+            ocr_text = "ن" * 30
+            with patch("backend.services.text_indexer.tika.pdf_page_count", return_value=2), \
+                 patch("backend.services.text_indexer.tika.extract", return_value="cover"), \
+                 patch("backend.services.text_indexer.tika.subprocess.run", side_effect=render_pages), \
+                 patch("backend.services.text_indexer.tika.extract_image_ocr", return_value=ocr_text) as ocr:
+                text, ocr_used = extract_pdf(
+                    Path("/tika"), source, 120, 1000, 1024,
+                )
+        self.assertEqual(text, f"{ocr_text}\n\n{ocr_text}")
+        self.assertTrue(ocr_used)
+        self.assertEqual(ocr.call_count, 2)
 
     def test_tika_fork_failure_is_retryable_extractor_unavailable(self):
         completed = __import__('subprocess').CompletedProcess(

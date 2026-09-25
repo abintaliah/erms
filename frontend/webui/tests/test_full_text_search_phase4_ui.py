@@ -21,6 +21,15 @@ def test_global_search_header_results_and_safe_snippets_are_present():
     assert 'ui.html(' not in source[source.index("def render_safe_snippet("):source.index("async def copy_diagnostic_json(")]
     assert 'await api.full_text_search(payload)' in source
     assert 'async def full_text_search(' in CLIENT.read_text()
+    assert 'result_item["authorized_component_details"] = component_details.get' in source
+    assert 'for component in item.get("matching_components", [])' in source
+    assert '{**authorized_component_details.get(int(component["id"]), {}), **component}' in source
+    assert 'preview_record_components(selected_record, component_id)' in source
+    assert "aria-label='Preview digital component'" in source
+    assert 'Preview is unavailable for this component' in source
+    assert 'async def open_global_record(record_id: int)' in source
+    assert 'async def open_global_aggregation(aggregation: dict[str, Any])' in source
+    assert source.count('state.pop("discard_navigation_guard", None)') >= 7
 
 
 def test_diagnostics_are_privileged_opt_in_transient_and_failure_aware():

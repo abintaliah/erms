@@ -15,9 +15,12 @@ readonly POSTGRES_PASSWORD="erms_test_password"
 readonly POSTGRES_DB="erms_test"
 readonly LIFECYCLE_MIGRATION_DB="erms_lifecycle_migration_test_$$"
 readonly HOLDS_MIGRATION_DB="erms_holds_migration_test_$$"
+readonly ADVANCED_SEARCH_MIGRATION_DB="erms_advanced_search_migration_test_$$"
 readonly PRE_HOLDS_SCHEMA="$(mktemp "${TMPDIR:-/tmp}/erms-pre-holds-schema.XXXXXX.sql")"
+readonly PRE_ADVANCED_SEARCH_SCHEMA="$(mktemp "${TMPDIR:-/tmp}/erms-pre-advanced-search-schema.XXXXXX.sql")"
 LIFECYCLE_MIGRATION_DB_CREATED=false
 HOLDS_MIGRATION_DB_CREATED=false
+ADVANCED_SEARCH_MIGRATION_DB_CREATED=false
 
 cleanup() {
     local exit_code=$?
@@ -36,7 +39,14 @@ cleanup() {
             exit_code=1
         fi
     fi
-    rm -f "${PRE_HOLDS_SCHEMA}"
+    if [[ "${ADVANCED_SEARCH_MIGRATION_DB_CREATED}" == true ]]; then
+        if ! docker exec "${CONTAINER_NAME}" dropdb --force --if-exists \
+            --username "${POSTGRES_USER}" "${ADVANCED_SEARCH_MIGRATION_DB}" >/dev/null; then
+            echo "Failed to drop disposable database ${ADVANCED_SEARCH_MIGRATION_DB}" >&2
+            exit_code=1
+        fi
+    fi
+    rm -f "${PRE_HOLDS_SCHEMA}" "${PRE_ADVANCED_SEARCH_SCHEMA}"
     docker rm --force "${CONTAINER_NAME}" >/dev/null 2>&1 || true
     exit "${exit_code}"
 }
@@ -88,6 +98,7 @@ readonly HOST_PORT="$(docker port "${CONTAINER_NAME}" 5432/tcp | sed 's/.*://')"
 readonly DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${POSTGRES_DB}"
 readonly LIFECYCLE_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${LIFECYCLE_MIGRATION_DB}"
 readonly HOLDS_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${HOLDS_MIGRATION_DB}"
+readonly ADVANCED_SEARCH_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${ADVANCED_SEARCH_MIGRATION_DB}"
 
 docker exec "${CONTAINER_NAME}" createdb \
     --username "${POSTGRES_USER}" "${LIFECYCLE_MIGRATION_DB}"
@@ -128,6 +139,24 @@ psql "${HOLDS_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --command \
 docker exec "${CONTAINER_NAME}" dropdb --force \
     --username "${POSTGRES_USER}" "${HOLDS_MIGRATION_DB}"
 HOLDS_MIGRATION_DB_CREATED=false
+
+awk '
+    /^-- Advanced Search Phase 1 begins\.$/ { skipping=1; next }
+    skipping && /^COMMIT;$/ { print; skipping=0; next }
+    !skipping { print }
+' "${DATABASE_DIR}/schema.sql" >"${PRE_ADVANCED_SEARCH_SCHEMA}"
+docker exec "${CONTAINER_NAME}" createdb \
+    --username "${POSTGRES_USER}" "${ADVANCED_SEARCH_MIGRATION_DB}"
+ADVANCED_SEARCH_MIGRATION_DB_CREATED=true
+psql "${ADVANCED_SEARCH_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${PRE_ADVANCED_SEARCH_SCHEMA}"
+psql "${ADVANCED_SEARCH_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/018_add_advanced_search_phase1.sql"
+psql "${ADVANCED_SEARCH_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --command \
+    "DO \$\$ BEGIN IF to_regclass('public.saved_searches') IS NULL OR to_regclass('public.saved_search_role_grants') IS NULL OR to_regclass('public.saved_search_org_unit_grants') IS NULL OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='018_add_advanced_search_phase1') OR NOT EXISTS(SELECT 1 FROM privileges WHERE code='search.saved_search.administrator') THEN RAISE EXCEPTION 'advanced-search migration verification failed'; END IF; END \$\$"
+docker exec "${CONTAINER_NAME}" dropdb --force \
+    --username "${POSTGRES_USER}" "${ADVANCED_SEARCH_MIGRATION_DB}"
+ADVANCED_SEARCH_MIGRATION_DB_CREATED=false
 
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/schema.sql"
 "${SCRIPT_DIR}/check_security_schema_parity.sh" "${DATABASE_URL}" "${DATABASE_DIR}/schema.sql"

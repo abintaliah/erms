@@ -45,6 +45,14 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         return "service_lease_scoped", "content.index.execute", None
     if path == "/api/v1/full-text-search":
         return "resource_scoped", "record.view", "record.view"
+    if path.startswith("/api/v1/saved-searches"):
+        if method == "POST" and path == "/api/v1/saved-searches":
+            return "globally_privileged", "search.saved_search.save", None
+        if path == "/api/v1/saved-searches/administration":
+            return "globally_privileged", "search.saved_search.administrator", None
+        if method == "DELETE":
+            return "globally_privileged", "search.saved_search.delete", None
+        return "relationship_scoped", None, None
     if path.startswith("/api/v1/content-indexing/"):
         return "resource_scoped", "record.component.view", "record.component.view"
     if path.endswith("/reindex"):

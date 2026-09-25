@@ -322,6 +322,38 @@ communication failures are `transient_io`, and extraction deadline exhaustion
 is `timeout`. Correct the shared runtime or communication problem before using
 **Retry failed** for those groups.
 
+##### Text-rich PDF repeatedly reports `timeout`
+
+A large PDF can contain a complete searchable text layer while also containing
+hundreds of page images. Native Tika extraction may finish quickly, but an
+incorrect unconditional OCR path can then spend the remaining deadline
+rendering and OCRing every page. Typical evidence is:
+
+- `pdfinfo` reports a high page count but a moderate file size;
+- native Tika extraction produces substantial text well within
+  `TEXT_INDEXER_EXTRACTION_TIMEOUT_SECONDS`;
+- the indexing attempt nevertheless ends as `timeout` during PDF rendering or
+  OCR; and
+- repeating the job produces the same failure at approximately the configured
+  deadline.
+
+The supported worker first extracts native PDF text. It skips rendering and
+OCR when the native result contains at least the greater of 200 meaningful
+alphanumeric characters or 100 per page. PDFs below that conservative density
+gate continue through bilingual OCR, preserving support for scanned and
+text-poor documents. A resource-limit termination during PDF rendering is
+reported as retryable `timeout`, not `corrupt`.
+
+Do not start by increasing `TEXT_INDEXER_EXTRACTION_TIMEOUT_SECONDS`. The
+worker also applies an independent subprocess CPU ceiling, and raising only the
+wall timeout can leave the same expensive OCR work or resource-limit failure in
+place. Confirm that the deployment includes the native-text OCR gate, restart
+the text-indexer service, and retry one affected component. In **Failure
+diagnostics**, verify that the new attempt succeeds with `ocr_used=false`
+before retrying a larger batch. Only reconsider approved timeout or resource
+limits when a document genuinely requires OCR and repeatable measurements in
+the deployment environment justify the change.
+
 Amber card highlighting draws attention to a current actionable condition:
 zero active workers, a non-empty waiting queue, current failed documents, drifted or stale
 documents, current expired leases, or blocking jobs. Processing alone is not

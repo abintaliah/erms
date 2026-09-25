@@ -191,6 +191,21 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
     },
 }
 
+# Public record-search names deliberately differ from physical component
+# columns where the API contract uses a clearer name. These fields are filters
+# only: they are compiled inside an authorized correlated component scope and
+# are never exposed as record columns or sort keys.
+RECORD_COMPONENT_SEARCH_FIELDS: dict[str, tuple[SearchField, str]] = {
+    "component.file_name": (TEXT, "file_name"),
+    "component.mime_type": (TEXT, "mime_type"),
+    "component.size_in_bytes": (INTEGER, "size_in_bytes"),
+    "component.date_created": (DATETIME, "date_created"),
+    "component.date_originated": (DATETIME, "date_originated"),
+    "component.checksum_algorithm": (TEXT, "checksum_algo"),
+    "component.checksum_value": (TEXT, "checksum_value"),
+    "component.content_status": (TEXT, "content_status"),
+}
+
 SET_OPERATORS = {"in", "not_in"}
 TEXT_OPERATORS = {"contains_ci", "starts_with_ci", "ends_with_ci", "matches_ci"}
 SIMPLE_SQL_OPERATORS = {
@@ -241,6 +256,9 @@ def _wildcard_like(value: str) -> str:
 def _compile_comparison(
     expression: SearchExpression,
     fields: dict[str, SearchField],
+    *,
+    table_alias: str = "resource",
+    column_name: str | None = None,
 ) -> tuple[sql.Composable, list[Any]]:
     field_name = expression.field
     operator = expression.operator
@@ -260,7 +278,9 @@ def _compile_comparison(
             clause = sql.SQL("resource.effective_hold_ids && %s::bigint[]")
             return (sql.SQL("NOT ({})").format(clause) if operator == "not_in" else clause), [values]
         raise _invalid("effective_hold_id supports eq, ne, in, and not_in")
-    identifier = sql.SQL("resource.{} ").format(sql.Identifier(field_name))
+    identifier = sql.SQL("{}.{} ").format(
+        sql.Identifier(table_alias), sql.Identifier(column_name or field_name),
+    )
 
     if operator in TEXT_OPERATORS and field.type is not FieldType.TEXT:
         raise _invalid(f"operator '{operator}' is only valid for text fields")
@@ -315,6 +335,8 @@ def _compile_expression(
     resource: str,
     depth: int,
     condition_counter: list[int],
+    component_alias: str | None = None,
+    component_absent: bool = False,
 ) -> tuple[sql.Composable, list[Any]]:
     if depth > MAX_SEARCH_DEPTH:
         raise _invalid(f"search expressions may be nested at most {MAX_SEARCH_DEPTH} levels")
@@ -323,6 +345,32 @@ def _compile_expression(
         condition_counter[0] += 1
         if condition_counter[0] > MAX_SEARCH_CONDITIONS:
             raise _invalid(f"searches may contain at most {MAX_SEARCH_CONDITIONS} conditions")
+        component_field = RECORD_COMPONENT_SEARCH_FIELDS.get(expression.field)
+        if component_field is not None:
+            if resource != "records":
+                raise _invalid(f"field '{expression.field}' is not searchable")
+            if component_absent:
+                return sql.SQL("FALSE"), []
+            if component_alias is None:
+                comparison, parameters = _compile_comparison(
+                    expression,
+                    {expression.field: component_field[0]},
+                    table_alias="search_component",
+                    column_name=component_field[1],
+                )
+                return sql.SQL(
+                    "EXISTS (SELECT 1 FROM digital_components search_component "
+                    "WHERE search_component.record_id=resource.id "
+                    "AND current_user_can_record_component_operation("
+                    "search_component.record_id,'record.component.view','record.component.view') "
+                    "AND ({}))"
+                ).format(comparison), parameters
+            return _compile_comparison(
+                expression,
+                {expression.field: component_field[0]},
+                table_alias=component_alias,
+                column_name=component_field[1],
+            )
         return _compile_comparison(expression, fields)
 
     if expression.full_text is not None:
@@ -379,21 +427,66 @@ def _compile_expression(
 
     if expression.not_ is not None:
         clause, parameters = _compile_expression(
-            expression.not_, fields, resource=resource, depth=depth + 1, condition_counter=condition_counter
+            expression.not_, fields, resource=resource, depth=depth + 1,
+            condition_counter=condition_counter, component_alias=component_alias,
+            component_absent=component_absent,
         )
         return sql.SQL("NOT ({})").format(clause), parameters
 
     children = expression.and_ if expression.and_ is not None else expression.or_
     joiner = sql.SQL(" AND ") if expression.and_ is not None else sql.SQL(" OR ")
+    opens_component_scope = (
+        resource == "records"
+        and not component_absent
+        and component_alias is None
+        and expression.and_ is not None
+        and any(_expression_has_component_field(child) for child in children)
+    )
+    active_component_alias = "search_component" if opens_component_scope else component_alias
     compiled = [
         _compile_expression(
-            child, fields, resource=resource, depth=depth + 1, condition_counter=condition_counter
+            child, fields, resource=resource, depth=depth + 1,
+            condition_counter=condition_counter, component_alias=active_component_alias,
+            component_absent=component_absent,
         )
         for child in children
     ]
     clauses = [clause for clause, _ in compiled]
     parameters = [value for _, values in compiled for value in values]
-    return sql.SQL("({})").format(joiner.join(clauses)), parameters
+    combined = sql.SQL("({})").format(joiner.join(clauses))
+    if opens_component_scope:
+        component_exists = sql.SQL(
+            "EXISTS (SELECT 1 FROM digital_components search_component "
+            "WHERE search_component.record_id=resource.id "
+            "AND current_user_can_record_component_operation("
+            "search_component.record_id,'record.component.view','record.component.view') "
+            "AND ({}))"
+        ).format(combined)
+        # Preserve ordinary Boolean meaning when a mixed alternative can be
+        # satisfied entirely by record predicates and the record has no
+        # authorized components. Component leaves evaluate false in that
+        # branch; otherwise one authorized component must satisfy the whole
+        # enclosing All scope.
+        without_component, without_parameters = _compile_expression(
+            expression, fields, resource=resource, depth=depth,
+            condition_counter=[0], component_absent=True,
+        )
+        combined = sql.SQL("(({}) OR ({}))").format(
+            without_component, component_exists,
+        )
+        parameters = [*without_parameters, *parameters]
+    return combined, parameters
+
+
+def _expression_has_component_field(expression: SearchExpression) -> bool:
+    if expression.field is not None:
+        return expression.field in RECORD_COMPONENT_SEARCH_FIELDS
+    if expression.not_ is not None:
+        return _expression_has_component_field(expression.not_)
+    return any(
+        _expression_has_component_field(child)
+        for child in (expression.and_ or expression.or_ or [])
+    )
 
 
 def _full_text_leaves(expression: SearchExpression | None, *, positive: bool = True) -> list[tuple[str, Any]]:
@@ -434,6 +527,35 @@ def _canonical_request(resource: str, request: SearchRequest) -> dict[str, Any]:
     value["sort"] = sort
     value.pop("debug", None)
     return value
+
+
+def canonicalize_search_request(
+    connection: Connection, resource: str, request: SearchRequest,
+) -> dict[str, Any]:
+    """Validate and canonicalize a request without executing the resource search."""
+    if resource not in {"records", "aggregations"}:
+        raise _invalid("saved searches support only records or aggregations")
+    fields = SEARCH_FIELDS[resource]
+    positive_leaves = _full_text_leaves(request.where)
+    all_leaves = positive_leaves + _full_text_leaves(request.where, positive=False)
+    _validate_indexable(connection, all_leaves)
+    if request.include and not positive_leaves:
+        raise _invalid("full_text_matches requires a positive full_text expression")
+    if request.where is not None:
+        _compile_expression(
+            request.where, fields, resource=resource, depth=1, condition_counter=[0]
+        )
+    seen: set[str] = set()
+    for item in request.sort:
+        if item.field == "_relevance":
+            if not positive_leaves:
+                raise _invalid("_relevance requires a positive full_text expression")
+        elif item.field in RECORD_COMPONENT_SEARCH_FIELDS or item.field not in fields:
+            raise _invalid(f"sort field '{item.field}' is not allowed")
+        if item.field in seen:
+            raise _invalid(f"sort field '{item.field}' is duplicated")
+        seen.add(item.field)
+    return _canonical_request(resource, request)
 
 
 def _debug(connection: Connection, endpoint: str, received: dict, canonical: dict) -> dict:
@@ -611,7 +733,13 @@ def search_rows(
     )
     items = list(
         connection.execute(
-            result_query, [*relevance_parameters, *parameters, *relevance_parameters, request.limit, request.offset]
+            result_query, [
+                *relevance_parameters,
+                *parameters,
+                *(relevance_parameters if any(field == "_relevance" for field, _ in sort_fields) else []),
+                request.limit,
+                request.offset,
+            ]
         ).fetchall()
     )
     items = redact_hidden_relationships(connection, table, items)
@@ -629,6 +757,18 @@ def search_rows(
         "offset": request.offset,
         "returned": len(items),
     }
+    if all_leaves:
+        if table == "records":
+            pending = connection.execute(
+                """SELECT EXISTS(SELECT 1 FROM digital_component_search_documents document
+                     WHERE document.status IN ('pending','processing','stale')
+                       AND current_user_can_view_record(document.record_id)
+                       AND current_user_can_record_component_operation(
+                           document.record_id,'record.component.view','record.component.view')) AS value"""
+            ).fetchone()["value"]
+            result["index_freshness"] = {"has_pending_content": bool(pending)}
+        elif table == "aggregations":
+            result["index_freshness"] = {"has_pending_content": False}
     if request.debug:
         received = request.model_dump(mode="json", by_alias=True, exclude_unset=True, exclude_none=True)
         result["_debug"] = _debug(connection, endpoint or f"/api/v1/{table.replace('_','-')}/search",
