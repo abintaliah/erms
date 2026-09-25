@@ -10,6 +10,7 @@ NAVIGATION_PRIVILEGES = {
     "org-units": "organization.administer",
     "roles": "organization.administer",
     "users": "identity.users.administer",
+    "text-indexers": "identity.text_indexers.administer",
     "organization-browser": "organization.browse",
     "audit-trail": "audit.view",
     "login-sessions": "identity.sessions.administer",

@@ -15,6 +15,7 @@ POST /api/v1/users/search
 POST /api/v1/org-units/search
 POST /api/v1/roles/search
 POST /api/v1/user-role-assignments/search
+POST /api/v1/full-text-search
 ```
 
 The ordinary `GET` collection endpoints remain available for simple equality
@@ -130,8 +131,62 @@ The child must not match:
 ```
 
 Boolean expressions can be nested. Each expression object must contain exactly
-one comparison or one of `and`, `or`, and `not`. `and` and `or` arrays cannot be
+one comparison, one `full_text` leaf, or one of `and`, `or`, and `not`. `and` and `or` arrays cannot be
 empty.
+
+## Full-text expressions
+
+Records, aggregations, and digital components support a controlled full-text
+leaf anywhere a comparison can appear:
+
+```json
+{"full_text":{"query":"\"approved budget\" expenditure -draft","sources":["metadata","components"]}}
+```
+
+The server uses parameterized `websearch_to_tsquery` with the stored explicit
+text-search configuration. Clients cannot select a configuration, submit raw
+`tsquery`, SQL, table names, weights, or dictionaries. Queries are limited to
+500 characters and 50 whitespace-delimited tokens. A query that produces no
+search nodes returns `422` with `non_indexable_full_text_query`.
+
+| Resource | Allowed sources | Default |
+| --- | --- | --- |
+| Records | `metadata`, `components` | both |
+| Aggregations | `metadata` | metadata |
+| Digital components | `metadata`, `content` | both |
+
+Unknown, duplicate, empty, and resource-incompatible source lists are rejected.
+Other resource searches reject `full_text`.
+
+`_relevance` is a virtual sort field available only with a positive full-text
+leaf. A full-text search without an explicit sort defaults to relevance
+descending and `id` ascending. The optional
+`"include":["full_text_matches"]` adds a namespaced `_search` object containing
+the query-local relevance value, metadata attribution, and up to three
+authorized component matches with one bounded snippet each. Highlight spans
+use the fixed `⟦` and `⟧` markers; they are data, not HTML. Negated leaves do
+not create attribution or affect positive relevance.
+
+## Global search
+
+`POST /api/v1/full-text-search` accepts independent `record_where` and
+`aggregation_where` branches. `result_types` must exactly match the supplied
+branches; omitting a branch excludes that resource type rather than matching
+every resource. The two branches share the 50-condition budget. Pages contain
+at most 100 results and use the returned opaque `next_cursor`; a cursor is
+rejected if reused with a different canonical query. The response also reports
+whether authorized content is pending indexing.
+
+## Privileged diagnostics
+
+Every controlled search accepts top-level `"debug":true`. It requires
+`search.query.debug`; otherwise the request fails with `403
+insufficient_privilege`. Authorized responses include `_debug` with the exact
+sanitized request body received, canonical API JSON after defaults and
+normalization, request ID, endpoint, method, and a SHA-256 query fingerprint.
+Diagnostics are absent by default and never contain SQL, plans, database
+authorization predicates, headers, cookies, credentials, API/lease tokens, or
+another user's query.
 
 ## Combined example
 
@@ -231,7 +286,7 @@ valid only for text fields. Null operators are valid only for nullable fields.
 
 - Values are always sent to PostgreSQL as parameters.
 - Fields, tables, operators, and sort directions come from server-side allowlists.
-- A query can contain at most 50 comparison conditions.
+- A query can contain at most 50 comparison or full-text conditions.
 - Boolean expressions can be nested at most five levels.
 - An `in` or `not_in` array can contain at most 100 values.
 - A request can contain at most 10 sort fields.

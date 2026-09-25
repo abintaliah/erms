@@ -9,7 +9,7 @@ readonly API_VENV="${ERMS_API_VENV:-${API_DIR}/.venv}"
 readonly TEST_REQUIREMENTS="${API_DIR}/requirements-test.txt"
 readonly TEST_DEPENDENCY_STAMP="${API_VENV}/.test-requirements-checksum"
 readonly CONTAINER_NAME="erms-postgres-test-$$"
-readonly POSTGRES_IMAGE="${POSTGRES_TEST_IMAGE:-postgres:17-alpine}"
+readonly POSTGRES_IMAGE="${POSTGRES_TEST_IMAGE:-postgres:18-alpine}"
 readonly POSTGRES_USER="erms_test"
 readonly POSTGRES_PASSWORD="erms_test_password"
 readonly POSTGRES_DB="erms_test"
@@ -133,6 +133,8 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/schema.sql
 "${SCRIPT_DIR}/check_security_schema_parity.sh" "${DATABASE_URL}" "${DATABASE_DIR}/schema.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${SCRIPT_DIR}/organizational_ownership_invariants.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${SCRIPT_DIR}/full_text_search_phase1.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/core_records_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/legal_holds.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"

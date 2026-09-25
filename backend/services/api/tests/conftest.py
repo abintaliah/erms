@@ -37,6 +37,18 @@ def clean_database(client: TestClient):
         org_id = connection.execute("INSERT INTO org_units (code,name) VALUES ('test-root','Test Root') RETURNING id").fetchone()[0]
         user_id = connection.execute("INSERT INTO users (name,email) VALUES ('Test Administrator','admin@test.invalid') RETURNING id").fetchone()[0]
         role_id = connection.execute("INSERT INTO roles (org_unit_id,code,name,is_information_governance) VALUES (%s,'system-administrator','System Administrator',true) RETURNING id", (org_id,)).fetchone()[0]
+        connection.execute(
+            """INSERT INTO roles(
+                   org_unit_id,supervisor_role_id,code,name,description,security_level_id,
+                   profile_id,is_information_governance,is_system,account_type_restriction
+               )
+               SELECT NULL,NULL,'text-indexer-service','Text Indexer Service',
+                      'Protected non-organizational role for text-indexer service accounts.',
+                      level.id,profile.id,false,true,'service'
+               FROM security_levels level CROSS JOIN profiles profile
+               WHERE level.level_number=(SELECT min(level_number) FROM security_levels)
+                 AND profile.code='TEXT_INDEXER_SERVICE'"""
+        )
         connection.execute("INSERT INTO user_role_assignments (user_id,role_id) VALUES (%s,%s)", (user_id,role_id))
         connection.execute("INSERT INTO user_credentials (user_id,password_hash,must_change_password) VALUES (%s,%s,false)", (user_id,hash_password(password)))
         scheme_id = connection.execute("INSERT INTO classification_schemes (code,title,date_published) VALUES ('TEST','Test Scheme',CURRENT_TIMESTAMP) RETURNING id").fetchone()[0]

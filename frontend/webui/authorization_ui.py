@@ -95,6 +95,7 @@ AUTHORIZATION_CODE_LABELS = {
     "record.component.reorder": "Reorder Digital Components",
     "record.component.share": "Share Digital Component",
     "record.component.print": "Print Digital Component",
+    "record.component.reindex": "Reindex Digital Component",
 }
 
 
@@ -137,6 +138,7 @@ PRIVILEGE_HELP = {
     "record.component.reorder": "Change the display order of a record's digital components.",
     "record.component.share": "Share a digital component through a supported sharing workflow.",
     "record.component.print": "Print a digital component through a supported printing workflow.",
+    "record.component.reindex": "Request asynchronous extraction and search indexing for authorized component content.",
     "security.resource.downgrade": "Lower a resource's security level after the required checks and audit reason.",
     "closure.correct_record_placement": "Correct record placement inside a closed aggregation without resetting its retention clock.",
     "authorization.recovery": "Perform explicitly controlled recovery when ordinary authorization administration cannot restore access.",

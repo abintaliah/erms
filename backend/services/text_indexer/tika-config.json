@@ -1,0 +1,29 @@
+{
+  "parsers": [
+    {
+      "pdf-parser": {
+        "maxPages": 1000,
+        "maxMainMemoryBytes": 536870912,
+        "imageStrategy": "NONE",
+        "ocr": {
+          "strategy": "AUTO",
+          "maxPagesToOcr": 1000,
+          "maxImagePixels": 100000000
+        }
+      }
+    },
+    {
+      "tesseract-ocr-parser": {
+        "language": "eng+ara",
+        "timeoutMillis": 120000,
+        "maxFileSizeToOcr": 52428800,
+        "skipOcr": false
+      }
+    },
+    {
+      "default-parser": {
+        "exclude": ["package-parser"]
+      }
+    }
+  ]
+}

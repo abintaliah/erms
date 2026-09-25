@@ -24,10 +24,13 @@ from .audit_context import (
     request_id_context,
 )
 from .authentication import CSRF_COOKIE, SESSION_COOKIE, hash_secret, resolve_principal, router as authentication_router
+from .service_authentication import (
+    TEXT_INDEXING_ROUTE_PREFIX, resolve_text_indexer_principal, service_request_allowed,
+)
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .concurrency import expected_version
 from .continuity_lock import acquire_continuity_shared_lock
-from .config import choice_environment, integer_environment
+from .config import boolean_environment, choice_environment, integer_environment
 from .content_storage import configured_storage, inspect_upload
 from .database import close_pool, get_connection, open_pool, pool
 from .document_conversion import ConversionUnavailable, UnsupportedPreview, pdf_rendition
@@ -54,12 +57,13 @@ from .schemas import (
     AggregationLocationPreviewRead,
     RecordUpdate,
     SearchRequest,
+    GlobalSearchRequest,
     SearchResponse,
     ResourceCapabilitiesRead,
     OwnershipDashboardCount,
     CreationRoleOption,
 )
-from .search import search_rows
+from .search import global_search_rows, search_rows
 from .security_level_events import append_security_level_event, validate_security_level_change
 from .resource_authorization import (
     audit_governance_view_if_used, lock_visible_resource, operation_allowed, require_clearance_for_level,
@@ -78,6 +82,8 @@ from .governance_authorization import router as governance_authorization_router
 from .security_operations import router as security_operations_router
 from .dashboard import router as dashboard_router
 from .holds import router as holds_router
+from .text_indexing import router as text_indexing_router
+from .reindexing import router as reindexing_router
 from .authorization_policy import load_policy_context, require_audit_view
 
 
@@ -159,6 +165,16 @@ app.include_router(governance_authorization_router)
 app.include_router(security_operations_router)
 app.include_router(dashboard_router)
 app.include_router(holds_router)
+app.include_router(text_indexing_router)
+app.include_router(reindexing_router)
+
+
+@app.post("/api/v1/full-text-search", response_model=None, tags=["search"])
+def full_text_search(
+    payload: GlobalSearchRequest,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return global_search_rows(connection,payload)
 
 EVENT_SOURCES = {
     "api", "web_ui", "bulk_import", "background_worker", "scheduled_job",
@@ -206,18 +222,29 @@ async def audit_request_context(request: Request, call_next):
     request_token = request_id_context.set(request_id)
     correlation_token = correlation_id_context.set(correlation_id)
     principal = None
+    service_principal = None
     cookie_token = request.cookies.get(SESSION_COOKIE)
     authorization = request.headers.get("authorization", "")
     bearer_token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else None
-    session_token = bearer_token or cookie_token
-    if session_token:
+    internal_text_indexing_path = request.url.path.startswith(TEXT_INDEXING_ROUTE_PREFIX)
+    service_key_present = bool(bearer_token and bearer_token.startswith("wti_"))
+    if service_key_present and not internal_text_indexing_path:
+        return JSONResponse(status_code=401, content={"detail": "invalid authentication credentials"})
+    session_token = None if internal_text_indexing_path else (bearer_token or cookie_token)
+    if internal_text_indexing_path or session_token:
         try:
             with pool.connection() as authentication_connection:
-                principal = resolve_principal(authentication_connection, session_token)
-                request.state.policy_context = (
-                    load_policy_context(authentication_connection, principal)
-                    if principal else None
-                )
+                if internal_text_indexing_path and bearer_token:
+                    service_principal = resolve_text_indexer_principal(
+                        authentication_connection, bearer_token,
+                        worker_id=request.headers.get("X-Worker-ID"),
+                    )
+                elif session_token:
+                    principal = resolve_principal(authentication_connection, session_token)
+                    request.state.policy_context = (
+                        load_policy_context(authentication_connection, principal)
+                        if principal else None
+                    )
         except PoolTimeout:
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -230,8 +257,30 @@ async def audit_request_context(request: Request, call_next):
         or request.url.path == "/api/v1/auth/login"
         or request.url.path in {"/docs", "/openapi.json", "/redoc"}
     )
-    if request.url.path.startswith("/api/v1/") and not public_path and principal is None:
+    authenticated = service_principal if internal_text_indexing_path else principal
+    if request.url.path.startswith("/api/v1/") and not public_path and authenticated is None:
         return JSONResponse(status_code=401, content={"detail": "authentication required"})
+    if service_principal and not service_request_allowed(
+        service_principal.credential_id,
+        integer_environment("TEXT_INDEXER_RATE_LIMIT_PER_MINUTE", 600, minimum=1),
+    ):
+        return JSONResponse(status_code=429, content={"detail": "request rate limit exceeded"},
+                            headers={"Retry-After": "1"})
+    if principal and request.method == "POST":
+        is_reindex = request.url.path.endswith("/reindex")
+        is_search = request.url.path.endswith("/search") or request.url.path == "/api/v1/full-text-search"
+        if is_reindex and not service_request_allowed(
+            -1_000_000_000-principal.user_id,
+            integer_environment("MANUAL_REINDEX_RATE_LIMIT_PER_MINUTE",60,minimum=1),
+        ):
+            return JSONResponse(status_code=429,content={"detail":{"code":"reindex_rate_limit_exceeded"}},
+                                headers={"Retry-After":"60"})
+        if is_search and not service_request_allowed(
+            -principal.user_id,
+            integer_environment("SEARCH_RATE_LIMIT_PER_MINUTE",600,minimum=1),
+        ):
+            return JSONResponse(status_code=429,content={"detail":{"code":"search_rate_limit_exceeded"}},
+                                headers={"Retry-After":"1"})
     if principal and principal.must_change_password and request.url.path not in {
         "/api/v1/auth/me", "/api/v1/auth/change-password", "/api/v1/auth/logout"
     }:
@@ -241,11 +290,15 @@ async def audit_request_context(request: Request, call_next):
         if not csrf or not secrets.compare_digest(hash_secret(csrf), hash_secret(request.cookies.get(CSRF_COOKIE, ""))):
             return JSONResponse(status_code=403, content={"detail": "CSRF validation failed"})
     request.state.principal = principal
+    request.state.service_principal = service_principal
     if not hasattr(request.state, "policy_context"):
         request.state.policy_context = None
-    actor_token = actor_type_context.set("user" if principal else "anonymous")
-    actor_user_token = actor_user_id_context.set(str(principal.user_id) if principal else "")
-    actor_name_token = actor_name_context.set(principal.name if principal else "")
+    actor = principal or service_principal
+    actor_token = actor_type_context.set(
+        "automated_process" if service_principal else ("user" if principal else "anonymous")
+    )
+    actor_user_token = actor_user_id_context.set(str(actor.user_id) if actor else "")
+    actor_name_token = actor_name_context.set(actor.name if actor else "")
     actor_email_token = actor_email_context.set(principal.email if principal else "")
     source_token = event_source_context.set(event_source)
     reason_token = change_reason_context.set(change_reason)
@@ -329,7 +382,7 @@ async def database_error_handler(_, exception: psycopg.Error):
     if isinstance(exception, PoolTimeout):
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         detail = "database connection pool is busy; retry shortly"
-    elif sqlstate in {"23503", "23505", "P0001"}:
+    elif sqlstate in {"23001", "23503", "23505", "P0001"}:
         status_code = status.HTTP_409_CONFLICT
         detail = (
             {
@@ -363,9 +416,15 @@ async def database_error_handler(_, exception: psycopg.Error):
 
 
 @app.get("/health", tags=["system"])
-def health(connection: Connection = Depends(get_connection, scope="function")) -> dict[str, str]:
+def health(connection: Connection = Depends(get_connection, scope="function")) -> dict[str, str | bool]:
     connection.execute("SELECT 1")
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "full_text_search_enabled": boolean_environment("FULL_TEXT_SEARCH_ENABLED", True),
+        "content_indexing_scheduling_enabled": boolean_environment(
+            "CONTENT_INDEXING_SCHEDULING_ENABLED", True,
+        ),
+    }
 
 
 def _creation_role_options(
@@ -541,14 +600,14 @@ def list_aggregations(
 
 @app.post(
     "/api/v1/aggregations/search",
-    response_model=SearchResponse[AggregationRead],
+    response_model=None,
     tags=["aggregations"],
 )
 def search_aggregations(
     payload: SearchRequest,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return search_rows(connection, "aggregations", payload)
+    return search_rows(connection, "aggregations", payload, endpoint="/api/v1/aggregations/search")
 
 
 @app.get("/api/v1/aggregations/{aggregation_id}", response_model=AggregationRead, tags=["aggregations"])
@@ -905,14 +964,14 @@ def list_records(
 
 @app.post(
     "/api/v1/records/search",
-    response_model=SearchResponse[RecordRead],
+    response_model=None,
     tags=["records"],
 )
 def search_records(
     payload: SearchRequest,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return search_rows(connection, "records", payload)
+    return search_rows(connection, "records", payload, endpoint="/api/v1/records/search")
 
 
 @app.get("/api/v1/records/{record_id}", response_model=RecordRead, tags=["records"])
@@ -947,6 +1006,7 @@ def get_record_capabilities(
         "reorder_components": ("record.component.reorder", "record.component.reorder"),
         "share_component": ("record.component.share", "record.component.share"),
         "print_component": ("record.component.print", "record.component.print"),
+        "reindex_components": ("record.component.reindex", "record.component.view"),
     }
     capabilities = {name: operation_allowed(connection, "record", record_id, *policy)
                     for name, policy in mappings.items()}
@@ -1488,14 +1548,14 @@ def list_digital_components(
 
 @app.post(
     "/api/v1/digital-components/search",
-    response_model=SearchResponse[DigitalComponentRead],
+    response_model=None,
     tags=["digital components"],
 )
 def search_digital_components(
     payload: SearchRequest,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return search_rows(connection, "digital_components", payload)
+    return search_rows(connection, "digital_components", payload, endpoint="/api/v1/digital-components/search")
 
 
 @app.get(
@@ -1877,7 +1937,7 @@ def list_event_history(
 
 @app.post(
     "/api/v1/event-history/search",
-    response_model=SearchResponse[EventHistoryRead],
+    response_model=None,
     tags=["event history"],
     dependencies=[Depends(require_audit_view)],
 )
@@ -1885,7 +1945,7 @@ def search_event_history(
     payload: SearchRequest,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return search_rows(connection, "event_history", payload)
+    return search_rows(connection, "event_history", payload, endpoint="/api/v1/event-history/search")
 
 
 @app.get(

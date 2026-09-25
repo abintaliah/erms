@@ -23,13 +23,18 @@ def _create_profile(client: TestClient, code: str = "RECORDS_EDITOR") -> dict:
 def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient):
     privileges = _by_code(client, "/api/v1/privileges?limit=500")
     profiles = _by_code(client, "/api/v1/profiles?limit=500")
-    assert len(privileges) == 46
+    assert len(privileges) == 50
     assert "holds.administer" in privileges
     assert "holds.held_items.manage_all" in privileges
     assert "organization.browse" in privileges
+    assert privileges["content.index.execute"]["account_type_restriction"] == "service"
+    assert privileges["search.query.debug"]["account_type_restriction"] == "person"
+    assert privileges["record.component.reindex"]["account_type_restriction"] == "person"
+    assert privileges["identity.text_indexers.administer"]["account_type_restriction"] == "person"
     assert set(profiles) >= {
         "ALL_PRIVS", "SYS_ADMIN",
         "INFO_GOV_MGR", "INFO_GOV_OFFICER",
+        "TEXT_INDEXER_SERVICE",
     }
     all_members = client.get(
         f"/api/v1/profiles/{profiles['ALL_PRIVS']['id']}/privileges"
@@ -44,6 +49,13 @@ def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient
         member_codes = {item["code"] for item in profile_members.json()}
         assert "holds.held_items.manage_all" in member_codes
         assert "holds.administer" not in member_codes
+        assert {"record.component.reindex","search.query.debug"} <= member_codes
+    system_members = client.get(
+        f"/api/v1/profiles/{profiles['SYS_ADMIN']['id']}/privileges"
+    ).json()
+    assert {"record.component.reindex","search.query.debug"} <= {
+        item["code"] for item in system_members
+    }
 
     role = client.get("/api/v1/roles/1")
     assert role.status_code == 200

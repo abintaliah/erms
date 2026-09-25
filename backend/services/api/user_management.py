@@ -1,4 +1,8 @@
+import hashlib
 import json
+import os
+import secrets
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from psycopg import Connection, sql
@@ -19,6 +23,16 @@ from .schemas import (
     ProfileReferenceRead,
     SearchRequest,
     SearchResponse,
+    ServiceCredentialCreate,
+    ServiceCredentialCreated,
+    ServiceCredentialPage,
+    ServiceCredentialRead,
+    ServiceCredentialRotate,
+    TextIndexerCreate,
+    TextIndexerBackfillRequest,
+    TextIndexerCreated,
+    TextIndexerDetail,
+    TextIndexerRead,
     UserCreate,
     UserRead,
     UserRoleAssignmentCreate,
@@ -36,13 +50,238 @@ from .authorization_admin import (
 from .authorization_policy import (
     require_audit_view,
     require_identity_users_admin,
+    require_identity_text_indexers_admin,
     require_organization_admin,
 )
 from .permanent_deletion import analyze_deletion, permanently_delete
 from .continuity_lock import acquire_continuity_lock
+from .text_indexing_maintenance import (
+    readiness as text_indexing_readiness,
+    reconcile as reconcile_text_indexing,
+)
 
 
 router = APIRouter(prefix="/api/v1")
+
+_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def _service_account(connection: Connection, user_id: int, *, active: bool = False):
+    account = get_or_404(connection, "users", user_id)
+    if account["account_type"] != "service":
+        raise HTTPException(status_code=422, detail="API credentials require a service account")
+    if active and account["status"] != "active":
+        raise HTTPException(status_code=409, detail="service account must be active")
+    return account
+
+
+def _is_text_indexer_account(connection: Connection, user_id: int) -> bool:
+    return bool(connection.execute(
+        """SELECT EXISTS(
+                 SELECT 1 FROM user_role_assignments assignment
+                 JOIN roles role ON role.id=assignment.role_id
+                WHERE assignment.user_id=%s
+                  AND role.code='text-indexer-service' AND role.is_system
+             ) AS value""",
+        (user_id,),
+    ).fetchone()["value"])
+
+
+def _text_indexer_account(connection: Connection, user_id: int, *, active: bool = False):
+    account = _service_account(connection, user_id, active=active)
+    if not _is_text_indexer_account(connection, user_id):
+        raise HTTPException(status_code=404, detail="text indexer not found")
+    return account
+
+
+def _reject_text_indexer_account(connection: Connection, user_id: int) -> None:
+    if _is_text_indexer_account(connection, user_id):
+        raise HTTPException(
+            status_code=409,
+            detail="text-indexer identities must be managed through the dedicated Text Indexers workflow",
+        )
+
+
+def _reject_text_indexer_assignment(connection: Connection, assignment_id: int) -> None:
+    row = connection.execute(
+        """SELECT assignment.user_id,role.code,role.is_system
+             FROM user_role_assignments assignment
+             JOIN roles role ON role.id=assignment.role_id
+            WHERE assignment.id=%s""",
+        (assignment_id,),
+    ).fetchone()
+    if row and row["code"] == "text-indexer-service" and row["is_system"]:
+        raise HTTPException(
+            status_code=409,
+            detail="the protected text-indexer role assignment is managed by the dedicated Text Indexers workflow",
+        )
+
+
+def _text_indexer_rows(connection: Connection, *, user_id: int | None = None):
+    parameters: tuple[int, ...] = (user_id,) if user_id is not None else ()
+    user_filter = "AND account.id=%s" if user_id is not None else ""
+    return connection.execute(
+        f"""SELECT account.*,
+                   count(DISTINCT credential.id)::integer AS credential_count,
+                   count(DISTINCT credential.id) FILTER (
+                       WHERE credential.status='active' AND credential.expires_at>CURRENT_TIMESTAMP
+                   )::integer AS active_credential_count,
+                   max(credential.last_used_at) AS last_used_at
+              FROM users account
+              JOIN user_role_assignments assignment ON assignment.user_id=account.id
+              JOIN roles role ON role.id=assignment.role_id
+              LEFT JOIN service_account_credentials credential
+                     ON credential.service_user_id=account.id
+             WHERE account.account_type='service'
+               AND role.code='text-indexer-service' AND role.is_system
+               {user_filter}
+             GROUP BY account.id
+             ORDER BY account.name,account.id""",
+        parameters,
+    ).fetchall()
+
+
+def _list_service_credentials(connection: Connection, user_id: int) -> list[dict]:
+    rows = connection.execute(
+        """SELECT credential.*, creator.name AS created_by_name
+             FROM service_account_credentials credential
+             LEFT JOIN users creator ON creator.id=credential.created_by_user_id
+            WHERE credential.service_user_id=%s
+            ORDER BY credential.date_created DESC,credential.id DESC""",
+        (user_id,),
+    ).fetchall()
+    return [_credential_result(row) for row in rows]
+
+
+def _credential_retention_days() -> int:
+    try:
+        return max(0, int(os.getenv("TEXT_INDEXER_CREDENTIAL_HISTORY_RETENTION_DAYS", "365")))
+    except ValueError:
+        return 365
+
+
+def _list_service_credentials_page(
+    connection: Connection, user_id: int, *, history: str, limit: int, offset: int,
+) -> dict:
+    predicates = {
+        "all": "TRUE",
+        "usable": "credential.status='active' AND credential.expires_at>CURRENT_TIMESTAMP",
+        "history": "credential.status='revoked' OR credential.expires_at<=CURRENT_TIMESTAMP",
+    }
+    predicate = predicates[history]
+    total = connection.execute(
+        f"""SELECT count(*) AS value FROM service_account_credentials credential
+             WHERE credential.service_user_id=%s AND ({predicate})""",
+        (user_id,),
+    ).fetchone()["value"]
+    rows = connection.execute(
+        f"""SELECT credential.*, creator.name AS created_by_name
+               FROM service_account_credentials credential
+               LEFT JOIN users creator ON creator.id=credential.created_by_user_id
+              WHERE credential.service_user_id=%s AND ({predicate})
+              ORDER BY credential.date_created DESC,credential.id DESC
+              LIMIT %s OFFSET %s""",
+        (user_id, limit, offset),
+    ).fetchall()
+    return {
+        "items": [_credential_result(row) for row in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "retention_days": _credential_retention_days(),
+    }
+
+
+def _credential_row(connection: Connection, user_id: int, credential_id: int):
+    row = connection.execute(
+        "SELECT * FROM service_account_credentials WHERE id=%s AND service_user_id=%s",
+        (credential_id, user_id),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="API credential not found")
+    return row
+
+
+def _credential_result(row: dict) -> dict:
+    allowed = {
+        "id", "service_user_id", "name", "credential_identifier", "status",
+        "date_created", "expires_at", "last_used_at", "last_worker_id",
+        "date_revoked", "created_by_user_id", "created_by_name", "api_key",
+    }
+    value = {key: item for key, item in dict(row).items() if key in allowed}
+    value.setdefault("created_by_name", None)
+    if value["status"] == "active":
+        now = datetime.now(value["expires_at"].tzinfo)
+        if value["expires_at"] <= now:
+            value["status"] = "expired"
+        elif value["expires_at"] <= now + timedelta(days=7):
+            value["status"] = "expiring"
+    return value
+
+
+def _issue_service_credential(connection: Connection, request: Request, user_id: int, payload: ServiceCredentialCreate) -> dict:
+    _text_indexer_account(connection, user_id, active=True)
+    identifier = "".join(secrets.choice(_CROCKFORD) for _ in range(26))
+    secret = secrets.token_urlsafe(32)
+    principal = request.state.principal
+    row = connection.execute(
+        """INSERT INTO service_account_credentials(
+               service_user_id,name,credential_identifier,secret_hash,expires_at,created_by_user_id)
+             VALUES (%s,%s,%s,%s,%s,%s) RETURNING *""",
+        (user_id, payload.name, identifier, hashlib.sha256(secret.encode("ascii")).hexdigest(),
+         payload.expires_at, principal.user_id),
+    ).fetchone()
+    connection.execute(
+        "SELECT append_domain_event('user',%s,'SERVICE_API_CREDENTIAL_CREATED',%s::jsonb,NULL)",
+        (user_id, json.dumps({"credential_identifier": identifier, "expires_at": payload.expires_at.isoformat()})),
+    )
+    row = dict(row); row["created_by_name"] = principal.name; row["api_key"] = f"wti_{identifier}.{secret}"
+    return _credential_result(row)
+
+
+def _rotate_service_credential(
+    connection: Connection, request: Request, user_id: int, credential_id: int,
+    payload: ServiceCredentialRotate,
+) -> dict:
+    old = _credential_row(connection, user_id, credential_id)
+    if old["status"] != "active" or old["expires_at"] <= datetime.now(old["expires_at"].tzinfo):
+        raise HTTPException(status_code=409, detail="only an active credential can be rotated")
+    if payload.overlap_until is None:
+        connection.execute(
+            """UPDATE service_account_credentials SET status='revoked',date_revoked=CURRENT_TIMESTAMP,
+                      revoked_by_user_id=%s WHERE id=%s""",
+            (request.state.principal.user_id, credential_id),
+        )
+    else:
+        connection.execute(
+            "UPDATE service_account_credentials SET expires_at=LEAST(expires_at,%s) WHERE id=%s",
+            (payload.overlap_until, credential_id),
+        )
+    result = _issue_service_credential(connection, request, user_id, payload)
+    connection.execute(
+        "SELECT append_domain_event('user',%s,'SERVICE_API_CREDENTIAL_ROTATED',%s::jsonb,NULL)",
+        (user_id, json.dumps({"old_credential_identifier": old["credential_identifier"],
+                              "new_credential_identifier": result["credential_identifier"],
+                              "overlap_until": payload.overlap_until.isoformat() if payload.overlap_until else None})),
+    )
+    return result
+
+
+def _revoke_service_credential(
+    connection: Connection, request: Request, user_id: int, credential_id: int,
+) -> None:
+    row = _credential_row(connection, user_id, credential_id)
+    if row["status"] != "active":
+        raise HTTPException(status_code=409, detail="credential is already revoked")
+    connection.execute(
+        """UPDATE service_account_credentials SET status='revoked',date_revoked=CURRENT_TIMESTAMP,
+                  revoked_by_user_id=%s WHERE id=%s""",
+        (request.state.principal.user_id, credential_id),
+    )
+    connection.execute(
+        "SELECT append_domain_event('user',%s,'SERVICE_API_CREDENTIAL_REVOKED',%s::jsonb,NULL)",
+        (user_id, json.dumps({"credential_identifier": row["credential_identifier"]})),
+    )
 
 
 def _change_lifecycle(
@@ -151,9 +390,9 @@ def list_org_units(
     )
 
 
-@router.post("/org-units/search", response_model=SearchResponse[OrgUnitRead], tags=["org units"])
+@router.post("/org-units/search", response_model=None, tags=["org units"])
 def search_org_units(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
-    return search_rows(connection, "org_units", payload)
+    return search_rows(connection, "org_units", payload, endpoint="/api/v1/org-units/search")
 
 
 @router.get("/org-units/{org_unit_id}", response_model=OrgUnitRead, tags=["org units"])
@@ -213,6 +452,152 @@ def get_org_unit_history(org_unit_id: int, connection: Connection = Depends(get_
     return _history(connection, "org_unit", org_unit_id)
 
 
+@router.get(
+    "/text-indexers", response_model=list[TextIndexerRead], tags=["text indexers"],
+    dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def list_text_indexers(connection: Connection = Depends(get_connection, scope="function")):
+    return _text_indexer_rows(connection)
+
+
+@router.post(
+    "/text-indexers", response_model=TextIndexerCreated, status_code=201,
+    tags=["text indexers"], dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def create_text_indexer(
+    request: Request, payload: TextIndexerCreate,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    account = create_row(connection, "users", {
+        "name": payload.name,
+        "external_id": payload.external_id,
+        "account_type": "service",
+    })
+    role = connection.execute(
+        "SELECT id FROM roles WHERE code='text-indexer-service' AND is_system FOR SHARE"
+    ).fetchone()
+    if role is None:
+        raise HTTPException(status_code=503, detail="protected text-indexer service role is unavailable")
+    create_row(connection, "user_role_assignments", {
+        "user_id": account["id"], "role_id": role["id"],
+    })
+    credential = _issue_service_credential(
+        connection, request, account["id"],
+        ServiceCredentialCreate(name=payload.credential_name, expires_at=payload.expires_at),
+    )
+    created = _text_indexer_rows(connection, user_id=account["id"])[0]
+    return {"text_indexer": created, "credential": credential}
+
+
+@router.get(
+    "/text-indexers/health", response_model=None, tags=["text indexers"],
+    dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def get_text_indexers_health(
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    snapshot = text_indexing_readiness(connection)
+    return {
+        "status": "ready" if snapshot["ready_for_search"] else "attention_required",
+        "observed_at": datetime.now().astimezone(),
+        **snapshot,
+    }
+
+
+@router.post(
+    "/text-indexers/backfill", response_model=None, tags=["text indexers"],
+    dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def queue_text_indexers_backfill(
+    payload: TextIndexerBackfillRequest,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    result = reconcile_text_indexing(connection, payload.batch_size, False)
+    return {"batch_size": payload.batch_size, **result}
+
+
+@router.get(
+    "/text-indexers/{user_id}", response_model=TextIndexerDetail,
+    tags=["text indexers"], dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def get_text_indexer(user_id: int, connection: Connection = Depends(get_connection, scope="function")):
+    rows = _text_indexer_rows(connection, user_id=user_id)
+    if not rows:
+        raise HTTPException(status_code=404, detail="text indexer not found")
+    return dict(rows[0])
+
+
+@router.get(
+    "/text-indexers/{user_id}/credentials", response_model=ServiceCredentialPage,
+    tags=["text indexers"], dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def list_text_indexer_credentials(
+    user_id: int,
+    history: str = Query(default="all", pattern="^(all|usable|history)$"),
+    limit: int = Query(default=5, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    _text_indexer_account(connection, user_id)
+    return _list_service_credentials_page(
+        connection, user_id, history=history, limit=limit, offset=offset,
+    )
+
+
+@router.post(
+    "/text-indexers/{user_id}/credentials", response_model=ServiceCredentialCreated,
+    status_code=201, tags=["text indexers"],
+    dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def create_text_indexer_credential(
+    request: Request, user_id: int, payload: ServiceCredentialCreate,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return _issue_service_credential(connection, request, user_id, payload)
+
+
+@router.post(
+    "/text-indexers/{user_id}/credentials/{credential_id}/rotate",
+    response_model=ServiceCredentialCreated, status_code=201, tags=["text indexers"],
+    dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def rotate_text_indexer_credential(
+    request: Request, user_id: int, credential_id: int, payload: ServiceCredentialRotate,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    _text_indexer_account(connection, user_id, active=True)
+    return _rotate_service_credential(connection, request, user_id, credential_id, payload)
+
+
+@router.post(
+    "/text-indexers/{user_id}/credentials/{credential_id}/revoke", status_code=204,
+    tags=["text indexers"], dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def revoke_text_indexer_credential(
+    request: Request, user_id: int, credential_id: int,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    _text_indexer_account(connection, user_id)
+    _revoke_service_credential(connection, request, user_id, credential_id)
+    return Response(status_code=204)
+
+
+@router.post(
+    "/text-indexers/{user_id}/{action}", response_model=TextIndexerRead,
+    tags=["text indexers"], dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def change_text_indexer_status(
+    request: Request, user_id: int, action: str,
+    version: int = Depends(expected_version),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    _text_indexer_account(connection, user_id)
+    if action not in {"activate", "suspend", "unsuspend"}:
+        raise HTTPException(status_code=404, detail="text-indexer action not found")
+    changed = _set_user_lifecycle(connection, request, user_id, version, action=action)
+    return _text_indexer_rows(connection, user_id=changed["id"])[0]
+
+
 @router.post("/users", response_model=UserRead, status_code=201, tags=["users"], dependencies=[Depends(require_identity_users_admin)])
 def create_user(payload: UserCreate, connection: Connection = Depends(get_connection, scope="function")):
     return create_row(connection, "users", payload.model_dump())
@@ -234,14 +619,59 @@ def list_users(
     )
 
 
-@router.post("/users/search", response_model=SearchResponse[UserRead], tags=["users"])
+@router.post("/users/search", response_model=None, tags=["users"])
 def search_users(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
-    return search_rows(connection, "users", payload)
+    return search_rows(connection, "users", payload, endpoint="/api/v1/users/search")
 
 
 @router.get("/users/{user_id}", response_model=UserRead, tags=["users"])
 def get_user(user_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "users", user_id)
+
+
+@router.get(
+    "/users/{user_id}/api-credentials", response_model=list[ServiceCredentialRead],
+    tags=["users"], dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def list_service_credentials(user_id: int, connection: Connection = Depends(get_connection, scope="function")):
+    _text_indexer_account(connection, user_id)
+    return _list_service_credentials(connection, user_id)
+
+
+@router.post(
+    "/users/{user_id}/api-credentials", response_model=ServiceCredentialCreated,
+    status_code=201, tags=["users"], dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def create_service_credential(
+    request: Request, user_id: int, payload: ServiceCredentialCreate,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return _issue_service_credential(connection, request, user_id, payload)
+
+
+@router.post(
+    "/users/{user_id}/api-credentials/{credential_id}/rotate",
+    response_model=ServiceCredentialCreated, status_code=201, tags=["users"],
+    dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def rotate_service_credential(
+    request: Request, user_id: int, credential_id: int, payload: ServiceCredentialRotate,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return _rotate_service_credential(connection, request, user_id, credential_id, payload)
+
+
+@router.post(
+    "/users/{user_id}/api-credentials/{credential_id}/revoke", status_code=204,
+    tags=["users"], dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def revoke_service_credential(
+    request: Request, user_id: int, credential_id: int,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    _text_indexer_account(connection, user_id)
+    _revoke_service_credential(connection, request, user_id, credential_id)
+    return Response(status_code=204)
 
 
 @router.get("/users/{user_id}/deletion-preflight", response_model=DeletionPreflightRead, tags=["users"], dependencies=[Depends(require_identity_users_admin)])
@@ -252,6 +682,7 @@ def preflight_user_deletion(request: Request, user_id: int, connection: Connecti
 
 @router.delete("/users/{user_id}", status_code=204, tags=["users"], dependencies=[Depends(require_identity_users_admin)])
 def permanently_delete_user(request: Request, user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    _reject_text_indexer_account(connection, user_id)
     permanently_delete(connection, request, "user", user_id, version)
     return Response(status_code=204)
 
@@ -263,6 +694,7 @@ def update_user(
     version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    _reject_text_indexer_account(connection, user_id)
     acquire_continuity_lock(connection)
     snapshot = _continuity_snapshot(connection)
     changed = update_row(connection, "users", user_id, payload.model_dump(exclude_unset=True), version)
@@ -322,21 +754,25 @@ def _set_user_lifecycle(
 
 @router.post("/users/{user_id}/deactivate", response_model=UserRead, tags=["users"], dependencies=[Depends(require_identity_users_admin)])
 def explicitly_deactivate_user(request: Request, user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    _reject_text_indexer_account(connection, user_id)
     return _set_user_lifecycle(connection, request, user_id, version, action="deactivate")
 
 
 @router.post("/users/{user_id}/activate", response_model=UserRead, tags=["users"], dependencies=[Depends(require_identity_users_admin)])
 def activate_user(request: Request, user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    _reject_text_indexer_account(connection, user_id)
     return _set_user_lifecycle(connection, request, user_id, version, action="activate")
 
 
 @router.post("/users/{user_id}/suspend", response_model=UserRead, tags=["users"], dependencies=[Depends(require_identity_users_admin)])
 def suspend_user(request: Request, user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    _reject_text_indexer_account(connection, user_id)
     return _set_user_lifecycle(connection, request, user_id, version, action="suspend")
 
 
 @router.post("/users/{user_id}/unsuspend", response_model=UserRead, tags=["users"], dependencies=[Depends(require_identity_users_admin)])
 def unsuspend_user(request: Request, user_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    _reject_text_indexer_account(connection, user_id)
     return _set_user_lifecycle(connection, request, user_id, version, action="unsuspend")
 
 
@@ -362,24 +798,28 @@ def list_roles(
     role_status: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    include_system: bool = False,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    filters = {
+        "org_unit_id": org_unit_id,
+        "supervisor_role_id": supervisor_role_id,
+        "status": role_status,
+    }
+    if not include_system:
+        filters["is_system"] = False
     return list_rows(
         connection,
         "roles",
         limit=limit,
         offset=offset,
-        filters={
-            "org_unit_id": org_unit_id,
-            "supervisor_role_id": supervisor_role_id,
-            "status": role_status,
-        },
+        filters=filters,
     )
 
 
-@router.post("/roles/search", response_model=SearchResponse[RoleRead], tags=["roles"])
+@router.post("/roles/search", response_model=None, tags=["roles"])
 def search_roles(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
-    return search_rows(connection, "roles", payload)
+    return search_rows(connection, "roles", payload, endpoint="/api/v1/roles/search")
 
 
 @router.get("/roles/{role_id}", response_model=RoleRead, tags=["roles"])
@@ -389,12 +829,18 @@ def get_role(role_id: int, connection: Connection = Depends(get_connection, scop
 
 @router.get("/roles/{role_id}/deletion-preflight", response_model=DeletionPreflightRead, tags=["roles"], dependencies=[Depends(require_organization_admin)])
 def preflight_role_deletion(request: Request, role_id: int, connection: Connection = Depends(get_connection, scope="function")):
+    role = get_or_404(connection, "roles", role_id)
+    if role["is_system"]:
+        raise HTTPException(status_code=409, detail="built-in roles are read-only")
     principal = getattr(request.state, "principal", None)
     return analyze_deletion(connection, "role", role_id, actor_user_id=principal.user_id if principal else None)
 
 
 @router.delete("/roles/{role_id}", status_code=204, tags=["roles"], dependencies=[Depends(require_organization_admin)])
 def permanently_delete_role(request: Request, role_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    role = get_or_404(connection, "roles", role_id)
+    if role["is_system"]:
+        raise HTTPException(status_code=409, detail="built-in roles are read-only")
     permanently_delete(connection, request, "role", role_id, version)
     return Response(status_code=204)
 
@@ -409,6 +855,8 @@ def update_role(
 ):
     acquire_continuity_lock(connection)
     existing = get_or_404(connection, "roles", role_id)
+    if existing["is_system"]:
+        raise HTTPException(status_code=409, detail="built-in roles are read-only")
     sensitive_authorization_change = (
         "profile_id" in payload.model_fields_set
         and payload.profile_id != existing["profile_id"]
@@ -458,6 +906,9 @@ def update_role(
 
 @router.post("/roles/{role_id}/deactivate", response_model=RoleRead, tags=["roles"], dependencies=[Depends(require_organization_admin)])
 def explicitly_deactivate_role(role_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    role = get_or_404(connection, "roles", role_id)
+    if role["is_system"]:
+        raise HTTPException(status_code=409, detail="built-in roles are read-only")
     acquire_continuity_lock(connection)
     snapshot = _continuity_snapshot(connection)
     changed = _change_lifecycle(connection, "roles", role_id, version, active=False)
@@ -467,6 +918,9 @@ def explicitly_deactivate_role(role_id: int, version: int = Depends(expected_ver
 
 @router.post("/roles/{role_id}/activate", response_model=RoleRead, tags=["roles"], dependencies=[Depends(require_organization_admin)])
 def activate_role(role_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    role = get_or_404(connection, "roles", role_id)
+    if role["is_system"]:
+        raise HTTPException(status_code=409, detail="built-in roles are read-only")
     return _change_lifecycle(connection, "roles", role_id, version, active=True)
 
 
@@ -491,6 +945,12 @@ def create_assignment(
     payload: UserRoleAssignmentCreate,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    role = get_or_404(connection, "roles", payload.role_id)
+    if role["is_system"]:
+        raise HTTPException(
+            status_code=409,
+            detail="built-in roles cannot be assigned through the ordinary role workflow",
+        )
     return create_row(connection, "user_role_assignments", payload.model_dump())
 
 
@@ -518,7 +978,7 @@ def list_assignments(
 
 @router.post(
     "/user-role-assignments/search",
-    response_model=SearchResponse[UserRoleAssignmentRead],
+    response_model=None,
     tags=["user role assignments"],
     dependencies=[Depends(require_organization_admin)],
 )
@@ -526,7 +986,7 @@ def search_assignments(
     payload: SearchRequest,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return search_rows(connection, "user_role_assignments", payload)
+    return search_rows(connection, "user_role_assignments", payload, endpoint="/api/v1/user-role-assignments/search")
 
 
 @router.get(
@@ -551,6 +1011,7 @@ def update_assignment(
     version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    _reject_text_indexer_assignment(connection, assignment_id)
     acquire_continuity_lock(connection)
     snapshot = _continuity_snapshot(connection)
     changed = update_row(
@@ -571,6 +1032,7 @@ def update_assignment(
     dependencies=[Depends(require_organization_admin)],
 )
 def delete_assignment(assignment_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+    _reject_text_indexer_assignment(connection, assignment_id)
     acquire_continuity_lock(connection)
     snapshot = _continuity_snapshot(connection)
     delete_row(connection, "user_role_assignments", assignment_id, version)

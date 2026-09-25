@@ -6,6 +6,8 @@ __pycache__/
 
 # Virtual environments
 .venv/
+.venv-text-indexer/
+vendor/tika/
 venv/
 env/
 ENV/
@@ -63,9 +65,12 @@ nicegui_storage/
 .env
 .env.*
 !.env.example
+!.env.example.api
+!.env.example.text_indexer
 !.env.template
 *.pem
 *.key
+.secrets/
 
 # Editor and IDE settings
 .idea/

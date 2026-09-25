@@ -28,7 +28,11 @@ def test_real_environment_overrides_dotenv(monkeypatch, tmp_path):
 def test_health(client: TestClient):
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {
+        "status": "ok",
+        "full_text_search_enabled": True,
+        "content_indexing_scheduling_enabled": True,
+    }
 
 
 def test_event_history_operations_are_discovered_from_audit_data(client: TestClient):

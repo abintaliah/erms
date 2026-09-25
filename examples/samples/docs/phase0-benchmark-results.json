@@ -1,0 +1,2545 @@
+{
+  "environment": {
+    "platform": "macOS-15.6.1-arm64-arm-64bit",
+    "python": "3.12.14",
+    "tika": "Apache Tika 4.0.0",
+    "tesseract": "tesseract 5.5.1",
+    "languages": [
+      "afr",
+      "amh",
+      "ara",
+      "asm",
+      "aze",
+      "aze_cyrl",
+      "bel",
+      "ben",
+      "bod",
+      "bos",
+      "bre",
+      "bul",
+      "cat",
+      "ceb",
+      "ces",
+      "chi_sim",
+      "chi_sim_vert",
+      "chi_tra",
+      "chi_tra_vert",
+      "chr",
+      "cos",
+      "cym",
+      "dan",
+      "deu",
+      "div",
+      "dzo",
+      "ell",
+      "eng",
+      "enm",
+      "epo",
+      "equ",
+      "est",
+      "eus",
+      "fao",
+      "fas",
+      "fil",
+      "fin",
+      "fra",
+      "frk",
+      "frm",
+      "fry",
+      "gla",
+      "gle",
+      "glg",
+      "grc",
+      "guj",
+      "hat",
+      "heb",
+      "hin",
+      "hrv",
+      "hun",
+      "hye",
+      "iku",
+      "ind",
+      "isl",
+      "ita",
+      "ita_old",
+      "jav",
+      "jpn",
+      "jpn_vert",
+      "kan",
+      "kat",
+      "kat_old",
+      "kaz",
+      "khm",
+      "kir",
+      "kmr",
+      "kor",
+      "kor_vert",
+      "lao",
+      "lat",
+      "lav",
+      "lit",
+      "ltz",
+      "mal",
+      "mar",
+      "mkd",
+      "mlt",
+      "mon",
+      "mri",
+      "msa",
+      "mya",
+      "nep",
+      "nld",
+      "nor",
+      "oci",
+      "ori",
+      "osd",
+      "pan",
+      "pol",
+      "por",
+      "pus",
+      "que",
+      "ron",
+      "rus",
+      "san",
+      "script/Arabic",
+      "script/Armenian",
+      "script/Bengali",
+      "script/Canadian_Aboriginal",
+      "script/Cherokee",
+      "script/Cyrillic",
+      "script/Devanagari",
+      "script/Ethiopic",
+      "script/Fraktur",
+      "script/Georgian",
+      "script/Greek",
+      "script/Gujarati",
+      "script/Gurmukhi",
+      "script/HanS",
+      "script/HanS_vert",
+      "script/HanT",
+      "script/HanT_vert",
+      "script/Hangul",
+      "script/Hangul_vert",
+      "script/Hebrew",
+      "script/Japanese",
+      "script/Japanese_vert",
+      "script/Kannada",
+      "script/Khmer",
+      "script/Lao",
+      "script/Latin",
+      "script/Malayalam",
+      "script/Myanmar",
+      "script/Oriya",
+      "script/Sinhala",
+      "script/Syriac",
+      "script/Tamil",
+      "script/Telugu",
+      "script/Thaana",
+      "script/Thai",
+      "script/Tibetan",
+      "script/Vietnamese",
+      "sin",
+      "slk",
+      "slv",
+      "snd",
+      "snum",
+      "spa",
+      "spa_old",
+      "sqi",
+      "srp",
+      "srp_latn",
+      "sun",
+      "swa",
+      "swe",
+      "syr",
+      "tam",
+      "tat",
+      "tel",
+      "tgk",
+      "tha",
+      "tir",
+      "ton",
+      "tur",
+      "uig",
+      "ukr",
+      "urd",
+      "uzb",
+      "uzb_cyrl",
+      "vie",
+      "yid",
+      "yor"
+    ],
+    "language_detector": "lingua-language-detector 2.1.1; models restricted to English and Arabic"
+  },
+  "tika_native_extraction": {
+    "cases": [
+      {
+        "path": "docx/sample-0001-finance-english.docx",
+        "format": "docx",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 3.172,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 161841152
+      },
+      {
+        "path": "docx/sample-0002-human-resources-arabic.docx",
+        "format": "docx",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 2.939,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 1163264
+      },
+      {
+        "path": "docx/sample-0003-general-administration-mixed.docx",
+        "format": "docx",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 2.959,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "xlsx/sample-0146-human-resources-english.xlsx",
+        "format": "xlsx",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 2.825,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "xlsx/sample-0144-procurement-arabic.xlsx",
+        "format": "xlsx",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 2.794,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "xlsx/sample-0145-finance-mixed.xlsx",
+        "format": "xlsx",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 2.812,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "txt/sample-0288-procurement-english.txt",
+        "format": "txt",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 2.969,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "txt/sample-0289-finance-arabic.txt",
+        "format": "txt",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 2.98,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 16580608
+      },
+      {
+        "path": "txt/sample-0287-information-technology-mixed.txt",
+        "format": "txt",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 2.932,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "pdf/sample-0430-project-management-english.pdf",
+        "format": "pdf",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 2.965,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 11812864
+      },
+      {
+        "path": "pdf/sample-0431-information-technology-arabic.pdf",
+        "format": "pdf",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 3.051,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "pdf/sample-0432-procurement-mixed.pdf",
+        "format": "pdf",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 2.903,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 3670016
+      },
+      {
+        "path": "html/sample-0859-general-administration-english.html",
+        "format": "html",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 2.975,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "html/sample-0860-asset-management-arabic.html",
+        "format": "html",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 2.816,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "html/sample-0861-records-management-mixed.html",
+        "format": "html",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 2.842,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "eml/sample-1001-finance-english.eml",
+        "format": "eml",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 2.922,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "eml/sample-1002-human-resources-arabic.eml",
+        "format": "eml",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 2.96,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "eml/sample-1003-general-administration-mixed.eml",
+        "format": "eml",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 2.922,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "msg/sample-1043-general-administration-english.msg",
+        "format": "msg",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 3.018,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "msg/sample-1041-finance-arabic.msg",
+        "format": "msg",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 2.976,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "msg/sample-1042-human-resources-mixed.msg",
+        "format": "msg",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 2.959,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "xml/sample-1082-human-resources-english.xml",
+        "format": "xml",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 2.767,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "xml/sample-1083-general-administration-arabic.xml",
+        "format": "xml",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 2.768,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "xml/sample-1081-finance-mixed.xml",
+        "format": "xml",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 2.755,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "pptx/sample-1121-finance-english.pptx",
+        "format": "pptx",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 2.832,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "pptx/sample-1122-human-resources-arabic.pptx",
+        "format": "pptx",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 2.857,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "pptx/sample-1123-general-administration-mixed.pptx",
+        "format": "pptx",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 2.802,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "md/sample-1163-general-administration-english.md",
+        "format": "md",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 2.96,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "md/sample-1161-finance-arabic.md",
+        "format": "md",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 2.934,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "md/sample-1162-human-resources-mixed.md",
+        "format": "md",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 2.967,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      }
+    ],
+    "summary": {
+      "case_count": 30,
+      "successful": 30,
+      "marker_recall": 1.0,
+      "english_word_recall": 1.0,
+      "arabic_word_recall": 1.0,
+      "median_elapsed_seconds": 2.934,
+      "max_elapsed_seconds": 3.172
+    }
+  },
+  "tesseract_ocr": {
+    "cases": [
+      {
+        "path": "png/sample-0573-records-management-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.229,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9638,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0574-project-management-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.381,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9659,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0575-information-technology-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 1.12,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9487,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0576-procurement-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.568,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9658,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0577-finance-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.586,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9899,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0578-human-resources-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 1.253,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9459,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0579-general-administration-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.517,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9632,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0580-asset-management-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.424,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.977,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0581-records-management-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 1.104,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9744,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0582-project-management-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.256,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9866,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0583-information-technology-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.509,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9574,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0584-procurement-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 1.279,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9787,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0585-finance-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.31,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9867,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0586-human-resources-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.468,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9762,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0587-general-administration-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 1.077,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9714,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0588-asset-management-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.324,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9774,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0589-records-management-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.396,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9394,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0590-project-management-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 1.054,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0591-information-technology-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.35,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9931,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0592-procurement-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.433,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9651,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0593-finance-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 1.106,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0594-human-resources-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.349,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9706,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0595-general-administration-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.517,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9773,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0596-asset-management-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 0.972,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0597-records-management-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.303,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9474,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0598-project-management-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.379,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9659,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0599-information-technology-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 1.299,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9623,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0600-procurement-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.421,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9744,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0601-finance-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.586,
+        "english_word_recall": 0.9903,
+        "arabic_word_recall": 0.9899,
+        "marker_found": false,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0602-human-resources-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 1.122,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 1.0,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0603-general-administration-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.522,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9779,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0604-asset-management-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.426,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.977,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0605-records-management-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 1.117,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9744,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0606-project-management-arabic.png",
+        "language_mode": "arabic",
+        "returncode": 0,
+        "elapsed_seconds": 1.215,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9744,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0607-information-technology-mixed.png",
+        "language_mode": "mixed",
+        "returncode": 0,
+        "elapsed_seconds": 1.531,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9574,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "png/sample-0608-procurement-english.png",
+        "language_mode": "english",
+        "returncode": 0,
+        "elapsed_seconds": 1.248,
+        "english_word_recall": 1.0,
+        "arabic_word_recall": 0.9787,
+        "marker_found": true,
+        "rss_delta_platform_units": 0
+      }
+    ],
+    "summary": {
+      "case_count": 36,
+      "successful": 36,
+      "english_word_recall": 1.0,
+      "arabic_word_recall": 0.9734,
+      "marker_recall": 0.9722,
+      "median_elapsed_seconds": 1.349,
+      "max_elapsed_seconds": 1.586
+    }
+  },
+  "language_detection": {
+    "cases": [
+      {
+        "path": "docx/sample-0001-finance-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0002-human-resources-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0003-general-administration-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0004-asset-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0005-records-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0006-project-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0007-information-technology-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0008-procurement-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0009-finance-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0010-human-resources-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0011-general-administration-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0012-asset-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0013-records-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0014-project-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0015-information-technology-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0016-procurement-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0017-finance-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0018-human-resources-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0019-general-administration-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0020-asset-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0021-records-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0022-project-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0023-information-technology-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0024-procurement-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0025-finance-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0026-human-resources-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0027-general-administration-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0028-asset-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0029-records-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0030-project-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0031-information-technology-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0032-procurement-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0033-finance-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0034-human-resources-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0035-general-administration-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0036-asset-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0037-records-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0038-project-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0039-information-technology-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0040-procurement-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0041-finance-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0042-human-resources-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0043-general-administration-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0044-asset-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0045-records-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0046-project-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0047-information-technology-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0048-procurement-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0049-finance-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0050-human-resources-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0051-general-administration-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0052-asset-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0053-records-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0054-project-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0055-information-technology-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0056-procurement-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0057-finance-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0058-human-resources-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0059-general-administration-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0060-asset-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0061-records-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0062-project-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0063-information-technology-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0064-procurement-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0065-finance-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0066-human-resources-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0067-general-administration-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0068-asset-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0069-records-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0070-project-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0071-information-technology-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0072-procurement-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0073-finance-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0074-human-resources-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0075-general-administration-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0076-asset-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0077-records-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0078-project-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0079-information-technology-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0080-procurement-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0081-finance-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0082-human-resources-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0083-general-administration-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0084-asset-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0085-records-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0086-project-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0087-information-technology-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0088-procurement-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0089-finance-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0090-human-resources-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0091-general-administration-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0092-asset-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0093-records-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0094-project-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0095-information-technology-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0096-procurement-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0097-finance-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0098-human-resources-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0099-general-administration-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0100-asset-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0101-records-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0102-project-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0103-information-technology-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0104-procurement-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0105-finance-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0106-human-resources-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0107-general-administration-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0108-asset-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0109-records-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0110-project-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0111-information-technology-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0112-procurement-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0113-finance-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0114-human-resources-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0115-general-administration-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0116-asset-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0117-records-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0118-project-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0119-information-technology-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0120-procurement-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0121-finance-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0122-human-resources-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0123-general-administration-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0124-asset-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0125-records-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0126-project-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0127-information-technology-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0128-procurement-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0129-finance-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0130-human-resources-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0131-general-administration-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0132-asset-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0133-records-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0134-project-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0135-information-technology-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0136-procurement-english.docx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "docx/sample-0137-finance-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0138-human-resources-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0139-general-administration-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0140-asset-management-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "docx/sample-0141-records-management-mixed.docx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "docx/sample-0142-project-management-english.docx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "docx/sample-0143-information-technology-arabic.docx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0144-procurement-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0145-finance-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0146-human-resources-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0147-general-administration-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0148-asset-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0149-records-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0150-project-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0151-information-technology-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0152-procurement-english.xlsx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "xlsx/sample-0153-finance-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0154-human-resources-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0155-general-administration-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0156-asset-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0157-records-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0158-project-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0159-information-technology-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0160-procurement-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0161-finance-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0162-human-resources-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0163-general-administration-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0164-asset-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0165-records-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0166-project-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0167-information-technology-english.xlsx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "xlsx/sample-0168-procurement-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0169-finance-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0170-human-resources-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0171-general-administration-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0172-asset-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0173-records-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0174-project-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0175-information-technology-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0176-procurement-english.xlsx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "xlsx/sample-0177-finance-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0178-human-resources-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0179-general-administration-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0180-asset-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0181-records-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0182-project-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0183-information-technology-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0184-procurement-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0185-finance-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0186-human-resources-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0187-general-administration-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0188-asset-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0189-records-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0190-project-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0191-information-technology-english.xlsx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "xlsx/sample-0192-procurement-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0193-finance-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0194-human-resources-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0195-general-administration-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0196-asset-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0197-records-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0198-project-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0199-information-technology-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0200-procurement-english.xlsx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "xlsx/sample-0201-finance-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0202-human-resources-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0203-general-administration-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0204-asset-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0205-records-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0206-project-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0207-information-technology-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0208-procurement-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0209-finance-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0210-human-resources-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0211-general-administration-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0212-asset-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0213-records-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0214-project-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0215-information-technology-english.xlsx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "xlsx/sample-0216-procurement-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0217-finance-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0218-human-resources-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0219-general-administration-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0220-asset-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0221-records-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0222-project-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0223-information-technology-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0224-procurement-english.xlsx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "xlsx/sample-0225-finance-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0226-human-resources-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0227-general-administration-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0228-asset-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0229-records-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0230-project-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0231-information-technology-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0232-procurement-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0233-finance-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0234-human-resources-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0235-general-administration-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0236-asset-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0237-records-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0238-project-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0239-information-technology-english.xlsx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "xlsx/sample-0240-procurement-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0241-finance-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0242-human-resources-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0243-general-administration-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0244-asset-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0245-records-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0246-project-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0247-information-technology-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0248-procurement-english.xlsx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "xlsx/sample-0249-finance-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0250-human-resources-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0251-general-administration-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0252-asset-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0253-records-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0254-project-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0255-information-technology-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0256-procurement-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0257-finance-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0258-human-resources-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0259-general-administration-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0260-asset-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0261-records-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0262-project-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0263-information-technology-english.xlsx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "xlsx/sample-0264-procurement-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0265-finance-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0266-human-resources-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0267-general-administration-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0268-asset-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0269-records-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0270-project-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0271-information-technology-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0272-procurement-english.xlsx",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "xlsx/sample-0273-finance-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0274-human-resources-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0275-general-administration-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0276-asset-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0277-records-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0278-project-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0279-information-technology-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0280-procurement-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0281-finance-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0282-human-resources-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0283-general-administration-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "xlsx/sample-0284-asset-management-english.xlsx",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "xlsx/sample-0285-records-management-arabic.xlsx",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "xlsx/sample-0286-project-management-mixed.xlsx",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "txt/sample-0287-information-technology-mixed.txt",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "txt/sample-0288-procurement-english.txt",
+        "expected": "english",
+        "actual": "simple"
+      },
+      {
+        "path": "txt/sample-0289-finance-arabic.txt",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "txt/sample-0290-human-resources-mixed.txt",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "txt/sample-0291-general-administration-english.txt",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "txt/sample-0292-asset-management-arabic.txt",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "txt/sample-0293-records-management-mixed.txt",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "txt/sample-0294-project-management-english.txt",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "txt/sample-0295-information-technology-arabic.txt",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "txt/sample-0296-procurement-mixed.txt",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "txt/sample-0297-finance-english.txt",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "txt/sample-0298-human-resources-arabic.txt",
+        "expected": "arabic",
+        "actual": "arabic"
+      },
+      {
+        "path": "txt/sample-0299-general-administration-mixed.txt",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "txt/sample-0300-asset-management-english.txt",
+        "expected": "english",
+        "actual": "english"
+      },
+      {
+        "path": "phase0-language-edge/english-short.txt",
+        "expected": "simple",
+        "actual": "simple"
+      },
+      {
+        "path": "phase0-language-edge/arabic-short.txt",
+        "expected": "simple",
+        "actual": "simple"
+      },
+      {
+        "path": "phase0-language-edge/balanced-mixed.txt",
+        "expected": "mixed",
+        "actual": "mixed"
+      },
+      {
+        "path": "phase0-language-edge/numeric-only.txt",
+        "expected": "simple",
+        "actual": "simple"
+      },
+      {
+        "path": "phase0-language-edge/code-like.txt",
+        "expected": "simple",
+        "actual": "simple"
+      },
+      {
+        "path": "phase0-language-edge/unknown-language.txt",
+        "expected": "simple",
+        "actual": "simple"
+      },
+      {
+        "path": "phase0-language-edge/symbols-only.txt",
+        "expected": "simple",
+        "actual": "simple"
+      }
+    ],
+    "summary": {
+      "case_count": 307,
+      "correct": 281,
+      "accuracy": 0.9153
+    }
+  },
+  "robustness": {
+    "cases": [
+      {
+        "path": "phase0-corrupt/invalid.docx",
+        "bounded": true,
+        "elapsed_seconds": 3.012,
+        "returncode": 1,
+        "output_characters": 0,
+        "rss_delta_platform_units": 221495296
+      },
+      {
+        "path": "phase0-corrupt/invalid.png",
+        "bounded": true,
+        "elapsed_seconds": 2.892,
+        "returncode": 1,
+        "output_characters": 0,
+        "rss_delta_platform_units": 29360128
+      },
+      {
+        "path": "phase0-corrupt/invalid.xlsx",
+        "bounded": true,
+        "elapsed_seconds": 2.744,
+        "returncode": 1,
+        "output_characters": 0,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "phase0-corrupt/truncated.pdf",
+        "bounded": true,
+        "elapsed_seconds": 2.762,
+        "returncode": 1,
+        "output_characters": 0,
+        "rss_delta_platform_units": 0
+      },
+      {
+        "path": "phase0-protected/password-protected.pdf",
+        "bounded": true,
+        "elapsed_seconds": 2.793,
+        "returncode": 1,
+        "output_characters": 0,
+        "rss_delta_platform_units": 14696448
+      }
+    ],
+    "summary": {
+      "case_count": 5,
+      "bounded": 5
+    }
+  },
+  "supplementary_formats": {
+    "cases": [
+      {
+        "path": "phase0-formats/sample-0001-finance-english.doc",
+        "returncode": 0,
+        "elapsed_seconds": 3.123,
+        "marker_found": true
+      },
+      {
+        "path": "phase0-formats/sample-0001-finance-english.odt",
+        "returncode": 0,
+        "elapsed_seconds": 3.316,
+        "marker_found": true
+      },
+      {
+        "path": "phase0-formats/sample-0146-human-resources-english.xls",
+        "returncode": 0,
+        "elapsed_seconds": 2.878,
+        "marker_found": true
+      },
+      {
+        "path": "phase0-formats/sample-0146-human-resources-english.ods",
+        "returncode": 0,
+        "elapsed_seconds": 3.358,
+        "marker_found": true
+      },
+      {
+        "path": "phase0-formats/sample-1121-finance-english.ppt",
+        "returncode": 0,
+        "elapsed_seconds": 2.852,
+        "marker_found": true
+      },
+      {
+        "path": "phase0-formats/sample-1121-finance-english.odp",
+        "returncode": 0,
+        "elapsed_seconds": 3.047,
+        "marker_found": true
+      },
+      {
+        "path": "phase0-formats/sample-0288-procurement-english.rtf",
+        "returncode": 0,
+        "elapsed_seconds": 2.877,
+        "marker_found": true
+      },
+      {
+        "path": "phase0-formats/sample-english.csv",
+        "returncode": 0,
+        "elapsed_seconds": 2.986,
+        "marker_found": true
+      },
+      {
+        "path": "phase0-formats/sample-arabic.tiff",
+        "returncode": 0,
+        "elapsed_seconds": 3.762,
+        "marker_found": true
+      }
+    ],
+    "summary": {
+      "case_count": 9,
+      "successful": 9,
+      "marker_recall": 1.0
+    }
+  }
+}

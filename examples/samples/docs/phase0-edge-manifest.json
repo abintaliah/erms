@@ -1,0 +1,154 @@
+{
+  "files": [
+    {
+      "path": "phase0-adversarial/active-external-content.html",
+      "size_bytes": 160,
+      "sha256": "f20d2ca27110f9cc2b22fc7464535a2e5d13072d0e58a9059ada22930e6dd452"
+    },
+    {
+      "path": "phase0-adversarial/external-entity.xml",
+      "size_bytes": 103,
+      "sha256": "e0a9e8661a79762b9fb2852210305028c3edd0e5c53fdc33e57db54f4e426357"
+    },
+    {
+      "path": "phase0-adversarial/high-compression.zip",
+      "size_bytes": 106891,
+      "sha256": "1773477aa53e1e7e230bf7de832976655cbc64b8122307f85502fa0da778b2a0"
+    },
+    {
+      "path": "phase0-adversarial/nested-archives.zip",
+      "size_bytes": 744,
+      "sha256": "2539da17474051f7c8c61af6924b3abd07f7e05e892516aee3ae491560b0596a"
+    },
+    {
+      "path": "phase0-adversarial/pathological-whitespace.txt",
+      "size_bytes": 1000022,
+      "sha256": "c0216a6e075d5b2e2515e33e4eaa9924cb92093095a2d4fdb40d2fc8387fcecb"
+    },
+    {
+      "path": "phase0-corrupt/invalid.docx",
+      "size_bytes": 23,
+      "sha256": "0975a4ca6cf05050124d3a65e4ea706ba005eaa081644cd79f32a32971b0de58"
+    },
+    {
+      "path": "phase0-corrupt/invalid.png",
+      "size_bytes": 26,
+      "sha256": "1debd491e3b35850b46b5cd185cf43850f8fdfdea0be262a0ce66c9a22784ed5"
+    },
+    {
+      "path": "phase0-corrupt/invalid.xlsx",
+      "size_bytes": 23,
+      "sha256": "e91a953f9b8a13e0b2acd9b5020e076ae7f99c7b875d82e47fc0d1524947437f"
+    },
+    {
+      "path": "phase0-corrupt/truncated.pdf",
+      "size_bytes": 58,
+      "sha256": "42beb6c1a05d86d633aeab8acaef2960db65e026a61e1adccf7efbe8cddf2f7e"
+    },
+    {
+      "path": "phase0-formats/sample-0001-finance-english.doc",
+      "size_bytes": 22016,
+      "sha256": "abc3e51c8a2280a6f9d6a2415b6dca6ec5472f4f636a24938ef58170ea2e036c"
+    },
+    {
+      "path": "phase0-formats/sample-0001-finance-english.odt",
+      "size_bytes": 30256,
+      "sha256": "282e2200e50a3eba58c911f2e11eac709172fc6591ab1e76d42b308b71e322b9"
+    },
+    {
+      "path": "phase0-formats/sample-0146-human-resources-english.ods",
+      "size_bytes": 39796,
+      "sha256": "3064455df9675a8c3613f04fa1fa9ab7561b0e0c922733e72af271b3726d0150"
+    },
+    {
+      "path": "phase0-formats/sample-0146-human-resources-english.xls",
+      "size_bytes": 8704,
+      "sha256": "5abe24d78d5c9913a2994c180786026540ba672127f36e7f5f93a53a51db064d"
+    },
+    {
+      "path": "phase0-formats/sample-0288-procurement-english.rtf",
+      "size_bytes": 8179,
+      "sha256": "1d6357bf78ab022b31c62bba89466c9c0ff60cb4d9eacee0881d742036faf869"
+    },
+    {
+      "path": "phase0-formats/sample-1121-finance-english.odp",
+      "size_bytes": 22691,
+      "sha256": "0110bee7395d4dd86139c717fcb419b3c73e0e09a0454453d781757ac00c7837"
+    },
+    {
+      "path": "phase0-formats/sample-1121-finance-english.ppt",
+      "size_bytes": 472064,
+      "sha256": "66e905e55773d903cd60965fb580bb46c59a184e22e43dff314fe61b1e0d6ddc"
+    },
+    {
+      "path": "phase0-formats/sample-arabic.tiff",
+      "size_bytes": 152714,
+      "sha256": "39fea6dc65b6cbd858110583c85db9b40d07a1997107f837ab05d583b2b3ea5b"
+    },
+    {
+      "path": "phase0-formats/sample-english.csv",
+      "size_bytes": 2010,
+      "sha256": "4a78f0110ad06b3677bd670e2939f2d5324ab7e9750813acfb88074a773d33d6"
+    },
+    {
+      "path": "phase0-language-edge/arabic-short.txt",
+      "size_bytes": 37,
+      "sha256": "858308f8b8787200caf228cb229a66c7770e65d56827780b9a2f1076f5ce5e94"
+    },
+    {
+      "path": "phase0-language-edge/balanced-mixed.txt",
+      "size_bytes": 204,
+      "sha256": "9dc64b32ec4cd3647e02eb1c7985c466d702e96eb2a7cb10de1a07dee2bb2dd9"
+    },
+    {
+      "path": "phase0-language-edge/code-like.txt",
+      "size_bytes": 71,
+      "sha256": "8bcfd179b1e0b1264534eb5149f5a1c6e64132537ee4ea3d00da87fc39b512f2"
+    },
+    {
+      "path": "phase0-language-edge/english-short.txt",
+      "size_bytes": 17,
+      "sha256": "26549c2985c6cfe9ccca0b630d2fa2568cdc8c48b45cd81f7b250c41dcace43f"
+    },
+    {
+      "path": "phase0-language-edge/numeric-only.txt",
+      "size_bytes": 28,
+      "sha256": "a9e1a555a62927bd7b4826ce7d1e82e7cc1bc7872947ea737dbcd1aa29d5d7ce"
+    },
+    {
+      "path": "phase0-language-edge/symbols-only.txt",
+      "size_bytes": 25,
+      "sha256": "645e4e26a40442154f7ce03cbaae244073f02e391dcaf408a700d4a58c2a1d7c"
+    },
+    {
+      "path": "phase0-language-edge/unknown-language.txt",
+      "size_bytes": 40,
+      "sha256": "d4b88fdd05c7d2e38014bea061cf9256b58bcc80334b7e7405f7b22c7930b135"
+    },
+    {
+      "path": "phase0-oversized/oversized-52mib.txt",
+      "size_bytes": 54525952,
+      "sha256": "aab61d7807d678d11fcc977638e293b784119c7de5e3509289cb90d583f50dc3"
+    },
+    {
+      "path": "phase0-protected/password-protected.pdf",
+      "size_bytes": 37545,
+      "sha256": "29fe071fa6c9fe7a23271e1a5aaf19a93b1dd8029ec08f6eee3858b1533999c6"
+    },
+    {
+      "path": "phase0-scanned-pdf/scanned-arabic.pdf",
+      "size_bytes": 139167,
+      "sha256": "d58717a471dcba30000782eb4c5fe9b921f875cd7ec808e7d9d387e4b460a765"
+    },
+    {
+      "path": "phase0-scanned-pdf/scanned-english.pdf",
+      "size_bytes": 154864,
+      "sha256": "2a8958b73a69378f8163909bd7b0ef1b7fee011300f734aeeea8f6a75da04a62"
+    },
+    {
+      "path": "phase0-scanned-pdf/scanned-mixed.pdf",
+      "size_bytes": 141593,
+      "sha256": "19a08f6cdb12687d7c346245e9121c68ee1a7020929e4e2527a470b047e117c3"
+    }
+  ]
+}

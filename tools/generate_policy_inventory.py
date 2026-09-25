@@ -41,10 +41,22 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
     """
     if path == "/health" or (method == "POST" and path == "/api/v1/auth/login"):
         return "public", None, None
+    if path.startswith("/api/v1/internal/text-indexing/"):
+        return "service_lease_scoped", "content.index.execute", None
+    if path == "/api/v1/full-text-search":
+        return "resource_scoped", "record.view", "record.view"
+    if path.startswith("/api/v1/content-indexing/"):
+        return "resource_scoped", "record.component.view", "record.component.view"
+    if path.endswith("/reindex"):
+        return "resource_scoped", "record.component.reindex", "record.component.view"
+    if path.endswith("/indexing-status"):
+        return "resource_scoped", "record.component.view", "record.component.view"
     if path.startswith("/api/v1/auth/"):
         if "/users/" in path or path in {"/api/v1/auth/sessions", "/api/v1/auth/sessions/page"}:
             return "globally_privileged", "identity.sessions.administer", None
         return "authenticated_only", None, None
+    if path.startswith("/api/v1/text-indexers"):
+        return "globally_privileged", "identity.text_indexers.administer", None
     if path.startswith("/api/v1/holds"):
         if method in {"POST", "PATCH", "DELETE", "PUT"} and not "/held-items" in path:
             return "globally_privileged", "holds.administer", None
@@ -94,6 +106,8 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
     if (method, path) in authenticated_operations:
         return "authenticated_only", None, None
     if path.startswith("/api/v1/users"):
+        if "/api-credentials" in path:
+            return "globally_privileged", "identity.text_indexers.administer", None
         return "globally_privileged", "identity.users.administer", None
     if path == "/api/v1/authorization/explain":
         return "resource_scoped", "authorization.explain", None

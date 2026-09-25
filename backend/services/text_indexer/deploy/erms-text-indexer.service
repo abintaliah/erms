@@ -1,0 +1,36 @@
+[Unit]
+Description=Wathiq full-text indexer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=erms-indexer
+Group=erms-indexer
+WorkingDirectory=/opt/erms
+EnvironmentFile=/etc/erms/text-indexer.env
+ExecStart=/opt/erms/run-text-indexer.sh
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/erms/text-indexer
+RuntimeDirectory=erms-text-indexer
+RuntimeDirectoryMode=0700
+UMask=0077
+MemoryMax=2G
+CPUQuota=400%
+TasksMax=256
+LimitNOFILE=1024
+
+[Install]
+WantedBy=multi-user.target
