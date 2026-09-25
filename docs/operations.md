@@ -283,6 +283,45 @@ examined components but Drifted does not decrease after **Refresh**, treat that
 as a reconciliation persistence fault and investigate rather than repeatedly
 queuing more batches.
 
+#### Investigating failed documents and unsupported formats
+
+Open **Administration → Text Indexers → Health → Failure diagnostics** before
+retrying failed documents. The diagnostic groups show the current failure
+population by safe error code and detected-or-declared MIME type. The entries
+below them show the latest bounded error summary, attempt time, worker and
+attempt number. This population matches the current **Failed documents**
+indicator; it does not include retained historical failures that later
+succeeded.
+
+Use **Record** to open the governed record or **Component** to open its Digital
+components view with the affected component highlighted. These links and their
+record/component names appear only when the administrator also has ordinary
+permission to view that record and its components. Text-indexer administration
+does not bypass records authorization.
+
+The **Unsupported formats currently encountered** list groups current
+unsupported search-document states by MIME type. It is not a list of every
+unsupported attempt ever retained, and its counts must not be added to the
+failed-document count. Unexpected or rapidly growing formats can indicate bad
+upload metadata, a classification problem, or a legitimate format that needs a
+separately approved extraction policy change.
+
+For failures, investigate the largest error-code/MIME group first, correct its
+shared dependency, content or capacity cause, then use a small bounded **Retry
+failed** batch. Confirm successful indexing before increasing the retry batch.
+Do not repeatedly retry `password_protected`, `corrupt`, or `limit_exceeded`
+documents without changing the content or the approved policy that caused the
+failure.
+
+`corrupt` means the extractor produced affirmative evidence that the input
+document itself is malformed. It must not be inferred merely from a non-zero
+process exit. Tika/JVM startup, missing-runtime, fork-parser initialization,
+operating-system resource and local fork-communication failures are reported
+as retryable `extractor_unavailable` outcomes. Content download or storage
+communication failures are `transient_io`, and extraction deadline exhaustion
+is `timeout`. Correct the shared runtime or communication problem before using
+**Retry failed** for those groups.
+
 Amber card highlighting draws attention to a current actionable condition:
 zero active workers, a non-empty waiting queue, current failed documents, drifted or stale
 documents, current expired leases, or blocking jobs. Processing alone is not

@@ -195,6 +195,102 @@ def current_failed_document_count(connection: Connection) -> int:
     ).fetchone()["count"]
 
 
+def failure_diagnostics(connection: Connection, limit: int, offset: int) -> dict:
+    """Return current, safe indexing failures separately from retained attempt history."""
+    current_document = """
+        FROM digital_component_search_documents document
+        JOIN digital_components component
+          ON component.id=document.digital_component_id
+        JOIN digital_component_content_sets content_set
+          ON content_set.id=component.active_content_set_id
+       WHERE component.content_status='available'
+         AND content_set.status='active'
+         AND document.content_set_id=content_set.id
+         AND document.extraction_config_version=%s
+         AND document.index_config_version=%s
+    """
+    failure_groups = connection.execute(
+        """SELECT coalesce(document.last_error_code,'unknown') AS error_code,
+                  coalesce(document.detected_mime_type,component.mime_type,'unknown') AS mime_type,
+                  count(*)::integer AS count,
+                  min(document.last_attempt_at) AS oldest_failure_at,
+                  max(document.last_attempt_at) AS newest_failure_at
+           """ + current_document + """
+             AND document.status='failed'
+          GROUP BY coalesce(document.last_error_code,'unknown'),
+                   coalesce(document.detected_mime_type,component.mime_type,'unknown')
+          ORDER BY count DESC,error_code,mime_type""",
+        (EXTRACTION_CONFIG, INDEX_CONFIG),
+    ).fetchall()
+    total = connection.execute(
+        "SELECT count(*) AS count " + current_document + " AND document.status='failed'",
+        (EXTRACTION_CONFIG, INDEX_CONFIG),
+    ).fetchone()["count"]
+    failures = connection.execute(
+        """SELECT document.digital_component_id,document.record_id,
+                  coalesce(document.detected_mime_type,component.mime_type,'unknown') AS mime_type,
+                  coalesce(document.last_error_code,'unknown') AS error_code,
+                  document.last_error_summary,document.last_attempt_at,
+                  attempt.worker_id,attempt.attempt_no,
+                  current_user_can_view_record(document.record_id)
+                    AND current_user_can_record_component_operation(
+                        document.record_id,'record.component.view','record.component.view'
+                    ) AS can_open,
+                  CASE WHEN current_user_can_view_record(document.record_id)
+                    AND current_user_can_record_component_operation(
+                        document.record_id,'record.component.view','record.component.view'
+                    ) THEN record.record_number END AS record_number,
+                  CASE WHEN current_user_can_view_record(document.record_id)
+                    AND current_user_can_record_component_operation(
+                        document.record_id,'record.component.view','record.component.view'
+                    ) THEN record.title END AS record_title,
+                  CASE WHEN current_user_can_view_record(document.record_id)
+                    AND current_user_can_record_component_operation(
+                        document.record_id,'record.component.view','record.component.view'
+                    ) THEN component.file_name END AS component_name
+             FROM digital_component_search_documents document
+             JOIN digital_components component
+               ON component.id=document.digital_component_id
+             JOIN digital_component_content_sets content_set
+               ON content_set.id=component.active_content_set_id
+             JOIN records record ON record.id=document.record_id
+          LEFT JOIN LATERAL (
+              SELECT worker_id,attempt_no
+                FROM content_indexing_attempts
+               WHERE digital_component_id=document.digital_component_id
+                 AND content_set_id=document.content_set_id
+               ORDER BY id DESC LIMIT 1
+          ) attempt ON true
+            WHERE component.content_status='available'
+              AND content_set.status='active'
+              AND document.content_set_id=content_set.id
+              AND document.extraction_config_version=%s
+              AND document.index_config_version=%s
+              AND document.status='failed'
+          ORDER BY document.last_attempt_at DESC NULLS LAST,document.digital_component_id
+          LIMIT %s OFFSET %s""",
+        (EXTRACTION_CONFIG, INDEX_CONFIG, limit, offset),
+    ).fetchall()
+    unsupported_formats = connection.execute(
+        """SELECT coalesce(document.detected_mime_type,component.mime_type,'unknown') AS mime_type,
+                  count(*)::integer AS count,
+                  max(document.last_attempt_at) AS most_recent_at
+           """ + current_document + """
+             AND document.status='unsupported'
+          GROUP BY coalesce(document.detected_mime_type,component.mime_type,'unknown')
+          ORDER BY count DESC,mime_type""",
+        (EXTRACTION_CONFIG, INDEX_CONFIG),
+    ).fetchall()
+    return {
+        "failure_groups": [dict(row) for row in failure_groups],
+        "failures": {
+            "items": [dict(row) for row in failures],
+            "total": total, "limit": limit, "offset": offset,
+        },
+        "unsupported_formats": [dict(row) for row in unsupported_formats],
+    }
+
+
 def retry_failed(connection: Connection, batch_size: int, dry_run: bool) -> dict[str, int]:
     rows = connection.execute(
         """SELECT component.id AS component_id,component.record_id,component.mime_type,

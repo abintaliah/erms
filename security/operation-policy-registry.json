@@ -3754,6 +3754,23 @@
       "phase_12_enforced": false
     },
     {
+      "id": "GET:/api/v1/text-indexers/diagnostics",
+      "method": "GET",
+      "path": "/api/v1/text-indexers/diagnostics",
+      "current_access_class": "globally_privileged",
+      "target_policy_class": "globally_privileged",
+      "global_privilege": "identity.text_indexers.administer",
+      "resource_permission": null,
+      "phase_0_enforced": false,
+      "phase_4_enforced": true,
+      "phase_5_enforced": false,
+      "phase_7_enforced": false,
+      "phase_8_enforced": false,
+      "phase_9_enforced": false,
+      "phase_11_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
       "id": "GET:/api/v1/text-indexers/health",
       "method": "GET",
       "path": "/api/v1/text-indexers/health",

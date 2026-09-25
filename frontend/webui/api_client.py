@@ -184,6 +184,14 @@ class ErmsApiClient:
     async def text_indexers_health(self) -> dict[str, Any]:
         return await self.request("GET", "/api/v1/text-indexers/health")
 
+    async def text_indexer_diagnostics(
+        self, *, limit: int = 10, offset: int = 0,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "GET", "/api/v1/text-indexers/diagnostics",
+            params={"limit": limit, "offset": offset},
+        )
+
     async def queue_text_indexers_backfill(self, batch_size: int) -> dict[str, Any]:
         return await self.request(
             "POST", "/api/v1/text-indexers/backfill", json={"batch_size": batch_size},

@@ -65,6 +65,14 @@ def test_text_indexer_health_and_bounded_backfill_are_administered_in_the_ui():
     assert '"Failed documents", health.get("failed_documents", 0)' in source
     assert 'async def retry_failed_text_indexer_documents(' in client
     assert '"/api/v1/text-indexers/retry-failed"' in client
+    assert 'ui.label("Failure diagnostics")' in source
+    assert '"Current failures by cause and format"' in source
+    assert '"Unsupported formats currently encountered"' in source
+    assert 'open_diagnostic_component' in source
+    assert 'select_record_details(record_id)' in source
+    assert 'focused_component_id=component_id' in source
+    assert 'async def text_indexer_diagnostics(' in client
+    assert '"/api/v1/text-indexers/diagnostics"' in client
 
 
 def test_local_stack_uses_a_unique_default_worker_identity_per_invocation():

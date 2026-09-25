@@ -363,6 +363,7 @@ def render_component_cards(
     rows: list[dict[str, Any]], on_move, on_remove, on_history=None,
     on_view=None, on_download=None, on_reindex=None, *, readonly: bool = False,
     capabilities: dict[str, bool] | None = None,
+    focused_component_id: int | None = None,
 ) -> None:
     for index, component in enumerate(rows):
         status = component.get("content_status", "pending")
@@ -372,7 +373,11 @@ def render_component_cards(
         }.get(status, "grey")
         checksum = component.get("checksum_value") or "—"
         checksum_short = checksum if len(checksum) <= 18 else f"{checksum[:10]}…{checksum[-6:]}"
-        with ui.card().classes("component-card w-full p-4 gap-3"):
+        focused = component.get("id") == focused_component_id
+        with ui.card().classes(
+            "component-card w-full p-4 gap-3"
+            + (" ring-2 ring-primary bg-blue-50" if focused else "")
+        ).props(f'id="digital-component-{component.get("id")}"'):
             with ui.row().classes("w-full items-start no-wrap gap-3"):
                 ui.avatar(icon=component_file_icon(component.get("mime_type")), color="blue-1", text_color="primary").props("rounded")
                 with ui.column().classes("gap-1 grow min-w-0"):
@@ -2858,7 +2863,10 @@ def index(q: str = "") -> None:
             render_event_timeline(history, timeline)
         dialog.open()
 
-    async def show_components(record: dict[str, Any], *, container: Any | None = None) -> None:
+    async def show_components(
+        record: dict[str, Any], *, container: Any | None = None,
+        focused_component_id: int | None = None,
+    ) -> None:
         try:
             aggregations, component_capabilities = await asyncio.gather(
                 api.list("aggregations"), api.resource_capabilities("records", record["id"]),
@@ -3037,6 +3045,7 @@ def index(q: str = "") -> None:
                         lambda item: show_entity_history("digital-components", item),
                         view_component, download_component, reindex_component, readonly=readonly,
                         capabilities=component_capabilities,
+                        focused_component_id=focused_component_id,
                     )
 
         async def refresh_components() -> None:
@@ -3126,6 +3135,12 @@ def index(q: str = "") -> None:
                 with ui.row().classes("w-full justify-end"):
                     ui.button("Close", on_click=dialog.close).props("flat")
             await refresh_components()
+            if focused_component_id is not None:
+                await ui.run_javascript(
+                    "document.getElementById(" + json.dumps(
+                        f"digital-component-{focused_component_id}"
+                    ) + ")?.scrollIntoView({behavior:'smooth',block:'center'})"
+                )
 
         if container is None:
             dialog = ui.dialog()
@@ -10491,8 +10506,9 @@ def index(q: str = "") -> None:
         subtitle.text = "Non-interactive indexing identities and API credentials"
         table_container.clear()
         try:
-            indexers, health = await asyncio.gather(
+            indexers, health, diagnostics = await asyncio.gather(
                 api.text_indexers(), api.text_indexers_health(),
+                api.text_indexer_diagnostics(limit=10, offset=0),
             )
         except ApiError as error:
             with table_container, ui.column().classes("w-full p-5"):
@@ -10629,6 +10645,13 @@ def index(q: str = "") -> None:
                     ).props("unelevated no-caps")
             dialog.open()
 
+        async def open_diagnostic_component(record_id: int, component_id: int) -> None:
+            try:
+                record = await api.get("records", record_id)
+                await show_components(record, focused_component_id=component_id)
+            except ApiError as error:
+                show_api_error(error)
+
         with table_container, ui.column().classes("w-full p-5 gap-4"):
             metrics = health["metrics"]
             queue = metrics.get("queue", {})
@@ -10737,6 +10760,195 @@ def index(q: str = "") -> None:
                                 ui.label(str(value)).classes("text-2xl font-semibold tabular-nums")
                             ui.label(label).classes("text-sm font-semibold")
                             ui.label(note).classes("text-xs text-slate-500")
+
+            diagnostics_host = ui.element("div").classes("w-full")
+            diagnostics_page = {"offset": 0}
+            diagnostics_page_size = 10
+
+            def render_failure_diagnostics() -> None:
+                diagnostics_host.clear()
+                failure_page = diagnostics.get("failures", {})
+                failure_items = failure_page.get("items", [])
+                total_failures = int(failure_page.get("total", 0))
+                groups = diagnostics.get("failure_groups", [])
+                unsupported_formats = diagnostics.get("unsupported_formats", [])
+                with diagnostics_host, ui.card().classes(
+                    "detail-surface shadow-none p-5 w-full gap-4"
+                ):
+                    with ui.row().classes("w-full items-start gap-3"):
+                        with ui.element("div").classes("governance-card-icon"):
+                            ui.icon("troubleshoot", size="22px")
+                        with ui.column().classes("gap-0 grow min-w-0"):
+                            ui.label("Failure diagnostics").classes("text-lg font-semibold")
+                            ui.label(
+                                "Current indexing failures and unsupported formats; retained "
+                                "historical attempts are not included"
+                            ).classes("text-sm text-slate-500")
+                        ui.button(
+                            "Refresh diagnostics", icon="refresh",
+                            on_click=lambda: load_failure_diagnostics(
+                                diagnostics_page["offset"]
+                            ),
+                        ).props("outline dense no-caps")
+
+                    ui.label("Current failures by cause and format").classes(
+                        "text-sm font-semibold"
+                    )
+                    if groups:
+                        with ui.element("div").classes(
+                            "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 w-full"
+                        ):
+                            for group in groups:
+                                with ui.card().classes(
+                                    "shadow-none border border-slate-200 p-3 gap-1"
+                                ):
+                                    with ui.row().classes("w-full items-center gap-2"):
+                                        ui.badge(str(group["count"]), color="negative").props(
+                                            "outline"
+                                        )
+                                        ui.label(
+                                            str(group.get("error_code") or "unknown")
+                                        ).classes("text-sm font-semibold break-all")
+                                    ui.label(group.get("mime_type") or "unknown").classes(
+                                        "text-xs font-mono text-slate-600 break-all"
+                                    )
+                                    ui.label(
+                                        "Latest " + format_timestamp(
+                                            group.get("newest_failure_at")
+                                        )
+                                    ).classes("text-xs text-slate-500")
+                    else:
+                        ui.label("No documents are currently failed.").classes(
+                            "text-sm text-slate-500"
+                        )
+
+                    if failure_items:
+                        ui.separator()
+                        with ui.element("div").classes("governance-card-list w-full"):
+                            for failure in failure_items:
+                                with ui.card().classes(
+                                    "shadow-none border border-slate-200 p-4 w-full gap-2"
+                                ):
+                                    with ui.row().classes("w-full items-start gap-3"):
+                                        ui.icon("error_outline", color="negative")
+                                        with ui.column().classes("gap-0 grow min-w-0"):
+                                            ui.label(
+                                                failure.get("component_name")
+                                                or f"Digital component #{failure['digital_component_id']}"
+                                            ).classes("text-sm font-semibold break-words")
+                                            ui.label(
+                                                f"{failure.get('error_code') or 'unknown'} · "
+                                                f"{failure.get('mime_type') or 'unknown'}"
+                                            ).classes("text-xs font-mono text-slate-600 break-all")
+                                        ui.label(
+                                            format_timestamp(failure.get("last_attempt_at"))
+                                        ).classes("text-xs text-slate-500")
+                                    if failure.get("last_error_summary"):
+                                        ui.label(failure["last_error_summary"]).classes(
+                                            "text-sm text-slate-700 break-words"
+                                        )
+                                    with ui.row().classes(
+                                        "w-full items-center gap-2 flex-wrap"
+                                    ):
+                                        if failure.get("worker_id"):
+                                            ui.badge(
+                                                f"Worker {failure['worker_id']}"
+                                            ).props("outline color=blue-grey")
+                                        if failure.get("attempt_no"):
+                                            ui.badge(
+                                                f"Attempt {failure['attempt_no']}"
+                                            ).props("outline color=blue-grey")
+                                        if failure.get("can_open"):
+                                            ui.button(
+                                                failure.get("record_number")
+                                                or f"Record #{failure['record_id']}",
+                                                icon="description",
+                                                on_click=lambda _, record_id=failure["record_id"]:
+                                                    select_record_details(record_id),
+                                            ).props("flat dense no-caps color=primary").tooltip(
+                                                failure.get("record_title") or "Open record"
+                                            )
+                                            ui.button(
+                                                f"Component #{failure['digital_component_id']}",
+                                                icon="attachment",
+                                                on_click=lambda _, record_id=failure["record_id"],
+                                                                    component_id=failure["digital_component_id"]:
+                                                    open_diagnostic_component(
+                                                        record_id, component_id
+                                                    ),
+                                            ).props("flat dense no-caps color=primary")
+                                        else:
+                                            ui.label(
+                                                "Record/component links require record and "
+                                                "component-view access."
+                                            ).classes("text-xs text-slate-500")
+
+                        start = diagnostics_page["offset"] + 1
+                        end = min(diagnostics_page["offset"] + len(failure_items), total_failures)
+                        with ui.row().classes("w-full justify-end items-center gap-2"):
+                            ui.label(
+                                f"Showing {start}–{end} of {total_failures} current failures"
+                            ).classes("text-sm text-slate-500")
+                            ui.button(
+                                "Previous", icon="chevron_left",
+                                on_click=lambda: load_failure_diagnostics(
+                                    max(0, diagnostics_page["offset"] - diagnostics_page_size)
+                                ),
+                            ).props("flat dense no-caps").set_enabled(
+                                diagnostics_page["offset"] > 0
+                            )
+                            ui.button(
+                                "Next", icon="chevron_right",
+                                on_click=lambda: load_failure_diagnostics(
+                                    diagnostics_page["offset"] + diagnostics_page_size
+                                ),
+                            ).props("flat dense no-caps").set_enabled(
+                                diagnostics_page["offset"] + diagnostics_page_size
+                                < total_failures
+                            )
+
+                    ui.separator()
+                    ui.label("Unsupported formats currently encountered").classes(
+                        "text-sm font-semibold"
+                    )
+                    ui.label(
+                        "These documents were safely classified as unsupported and are not "
+                        "included in the failed-document count."
+                    ).classes("text-xs text-slate-500")
+                    if unsupported_formats:
+                        with ui.element("div").classes(
+                            "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 w-full"
+                        ):
+                            for item in unsupported_formats:
+                                with ui.row().classes(
+                                    "items-center gap-2 border border-slate-200 rounded-lg p-3"
+                                ):
+                                    ui.badge(str(item["count"]), color="orange").props("outline")
+                                    with ui.column().classes("gap-0 min-w-0"):
+                                        ui.label(item.get("mime_type") or "unknown").classes(
+                                            "text-xs font-mono break-all"
+                                        )
+                                        ui.label(
+                                            "Latest " + format_timestamp(item.get("most_recent_at"))
+                                        ).classes("text-xs text-slate-500")
+                    else:
+                        ui.label("No unsupported formats are currently recorded.").classes(
+                            "text-sm text-slate-500"
+                        )
+
+            async def load_failure_diagnostics(offset: int = 0) -> None:
+                nonlocal diagnostics
+                try:
+                    diagnostics = await api.text_indexer_diagnostics(
+                        limit=diagnostics_page_size, offset=offset,
+                    )
+                except ApiError as error:
+                    show_api_error(error)
+                    return
+                diagnostics_page["offset"] = offset
+                render_failure_diagnostics()
+
+            render_failure_diagnostics()
 
             with ui.row().classes("w-full items-center gap-3"):
                 query = ui.input("Filter by name or external ID").props(
