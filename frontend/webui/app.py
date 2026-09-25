@@ -229,6 +229,14 @@ def medium_label(value: Any) -> str:
     }.get(str(value or "").lower(), "—")
 
 
+def direct_classification_label(classification_path: list[dict[str, Any]]) -> str:
+    """Format only the classification directly assigned to the aggregation."""
+    if not classification_path:
+        return "Unclassified"
+    classification = classification_path[-1]
+    return f"{classification['code']} — {classification['title']}"
+
+
 def review_state(value: Any) -> str | None:
     if not value:
         return None
@@ -6642,9 +6650,7 @@ def index(q: str = "") -> None:
                                 ])
                             aggregation_metadata.extend([
                                 ("Review", review_display(current.get("date_of_next_review"))),
-                                ("Classification", " › ".join(
-                                    f"{item['code']} — {item['title']}" for item in classification_path
-                                ) if classification_path else "Unclassified"),
+                                ("Classification", direct_classification_label(classification_path)),
                                 ("Contains", f"{len(children)} child aggregations · {len(records)} records"),
                             ])
                             for label, value in aggregation_metadata:

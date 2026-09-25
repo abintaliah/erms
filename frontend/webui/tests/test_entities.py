@@ -28,6 +28,7 @@ from frontend.webui.app import (
     decorate_relationship_rows,
     deletion_blocked_report,
     deletion_identity,
+    direct_classification_label,
     display_value,
     error_message,
     show_api_error,
@@ -60,6 +61,17 @@ from frontend.webui.config import (
 from frontend.webui.app import favourite_preview, personal_dialog_list_height
 
 APP_SOURCE = inspect.getsource(index)
+
+
+def test_direct_classification_label_uses_only_leaf_classification():
+    path = [
+        {"code": "1000", "title": "Corporate functions"},
+        {"code": "1100", "title": "Leadership affairs"},
+        {"code": "1111", "title": "Meeting agendas"},
+    ]
+
+    assert direct_classification_label(path) == "1111 — Meeting agendas"
+    assert direct_classification_label([]) == "Unclassified"
 
 
 def test_record_draft_component_context_requires_and_normalizes_visible_form_values():
