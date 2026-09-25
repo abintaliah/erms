@@ -56,8 +56,10 @@ from .authorization_policy import (
 from .permanent_deletion import analyze_deletion, permanently_delete
 from .continuity_lock import acquire_continuity_lock
 from .text_indexing_maintenance import (
+    failure_diagnostics as text_indexing_failure_diagnostics,
     readiness as text_indexing_readiness,
     reconcile as reconcile_text_indexing,
+    retry_failed as retry_failed_text_indexing,
 )
 
 
@@ -504,6 +506,18 @@ def get_text_indexers_health(
     }
 
 
+@router.get(
+    "/text-indexers/diagnostics", response_model=None, tags=["text indexers"],
+    dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def get_text_indexer_diagnostics(
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return text_indexing_failure_diagnostics(connection, limit, offset)
+
+
 @router.post(
     "/text-indexers/backfill", response_model=None, tags=["text indexers"],
     dependencies=[Depends(require_identity_text_indexers_admin)],
@@ -513,6 +527,18 @@ def queue_text_indexers_backfill(
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     result = reconcile_text_indexing(connection, payload.batch_size, False)
+    return {"batch_size": payload.batch_size, **result}
+
+
+@router.post(
+    "/text-indexers/retry-failed", response_model=None, tags=["text indexers"],
+    dependencies=[Depends(require_identity_text_indexers_admin)],
+)
+def retry_failed_text_indexer_documents(
+    payload: TextIndexerBackfillRequest,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    result = retry_failed_text_indexing(connection, payload.batch_size, False)
     return {"batch_size": payload.batch_size, **result}
 
 

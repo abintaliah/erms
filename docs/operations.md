@@ -1,7 +1,7 @@
 # ERMS Operational Tools Catalogue
 
 **Audience:** DevOps engineers, system administrators, and release engineers  
-**Last reviewed:** 24 September 2026
+**Last reviewed:** 25 September 2026
 
 ## 1. Purpose
 
@@ -201,7 +201,7 @@ Ready for search =
     drifted documents = 0
 AND blocking jobs = 0
 AND stale documents = 0
-AND failed jobs = 0
+AND current failed documents = 0
 ```
 
 If any condition in that formula is false, the headline is **Attention
@@ -217,7 +217,8 @@ will not remain current when new work arrives unless a worker is restored.
 | **Stale registrations** | Persisted worker registrations whose activity window has expired, usually after a service restart, replaced child process, or lost worker. They are not active and do not process jobs. This is not a count of stale documents. |
 | **Waiting** | Jobs in `queued` state that have not been leased to a worker. **Oldest** is the approximate age of the oldest queued job. A rising oldest age indicates that extraction capacity is not keeping up, workers are unavailable, or work is repeatedly deferred. |
 | **Processing** | Jobs in `leased` state. A worker has exclusive time-bounded authority to process each one. With `TEXT_INDEXER_CLAIM_BATCH_SIZE=1`, this should normally be no greater than the active child-worker count; temporary differences can appear during restarts, lease recovery, or while older prefetched work drains. |
-| **Failed** | Terminal jobs whose extraction or publication did not succeed and was not scheduled for another automatic retry. These block Ready for search and require investigation or an explicit retry/reindex after the cause is corrected. |
+| **Failed documents** | Current eligible search documents whose latest derived-index state is `failed` for the active content/configuration identity. These block Ready for search and require investigation followed by a bounded retry after the cause is corrected. |
+| **Historical failed jobs** | Retained terminal job history. It supports diagnosis and trends but does not block readiness: a later successful retry clears the current failed-document state without deleting the earlier failed job or attempt. |
 | **Unsupported** | Terminal jobs whose detected format is outside the approved extraction support policy. They are reported beside failures but do not currently block the readiness formula. Review unexpected growth because it may indicate incorrectly classified or newly encountered formats. |
 | **Drifted documents** | Eligible digital components whose required current derived search document is missing, points at a different active content set, or uses an obsolete extraction/index configuration. Use bounded reconciliation/backfill to schedule them. |
 | **Stale documents** | Previously published search documents explicitly marked no longer current. These block readiness until current content is successfully indexed. This is distinct from drift and from stale worker registrations. |
@@ -282,12 +283,62 @@ examined components but Drifted does not decrease after **Refresh**, treat that
 as a reconciliation persistence fault and investigate rather than repeatedly
 queuing more batches.
 
+#### Investigating failed documents and unsupported formats
+
+Open **Administration → Text Indexers → Health → Failure diagnostics** before
+retrying failed documents. The diagnostic groups show the current failure
+population by safe error code and detected-or-declared MIME type. The entries
+below them show the latest bounded error summary, attempt time, worker and
+attempt number. This population matches the current **Failed documents**
+indicator; it does not include retained historical failures that later
+succeeded.
+
+Use **Record** to open the governed record or **Component** to open its Digital
+components view with the affected component highlighted. These links and their
+record/component names appear only when the administrator also has ordinary
+permission to view that record and its components. Text-indexer administration
+does not bypass records authorization.
+
+The **Unsupported formats currently encountered** list groups current
+unsupported search-document states by MIME type. It is not a list of every
+unsupported attempt ever retained, and its counts must not be added to the
+failed-document count. Unexpected or rapidly growing formats can indicate bad
+upload metadata, a classification problem, or a legitimate format that needs a
+separately approved extraction policy change.
+
+For failures, investigate the largest error-code/MIME group first, correct its
+shared dependency, content or capacity cause, then use a small bounded **Retry
+failed** batch. Confirm successful indexing before increasing the retry batch.
+Do not repeatedly retry `password_protected`, `corrupt`, or `limit_exceeded`
+documents without changing the content or the approved policy that caused the
+failure.
+
+`corrupt` means the extractor produced affirmative evidence that the input
+document itself is malformed. It must not be inferred merely from a non-zero
+process exit. Tika/JVM startup, missing-runtime, fork-parser initialization,
+operating-system resource and local fork-communication failures are reported
+as retryable `extractor_unavailable` outcomes. Content download or storage
+communication failures are `transient_io`, and extraction deadline exhaustion
+is `timeout`. Correct the shared runtime or communication problem before using
+**Retry failed** for those groups.
+
 Amber card highlighting draws attention to a current actionable condition:
-zero active workers, a non-empty waiting queue, failed jobs, drifted or stale
+zero active workers, a non-empty waiting queue, current failed documents, drifted or stale
 documents, current expired leases, or blocking jobs. Processing alone is not
 amber because active processing is expected. Historical lease-loss attempts
 and unsupported counts are displayed as supporting context but do not turn
 their cards amber unless the card's current primary condition is also present.
+
+For failures, first identify and correct the dominant extraction, dependency,
+content, or capacity cause. Then use **Retry failed documents**, choosing a
+batch from 1 through 500. The action selects only current eligible failed
+documents that do not already have queued/leased work, preserves their failed
+job/attempt history, queues `retry` work, and changes successfully queued
+documents to `pending`. Start with one representative document, verify success,
+then increase bounded batches while observing worker capacity and queue age.
+Do not delete history to make the Health count fall, and do not use **Queue
+backfill batch** as a substitute: backfill targets missing or obsolete identity,
+whereas retry targets current documents in failed state.
 
 **Refresh** retrieves a new snapshot; it does not change queue state. **Queue
 backfill batch** scans at most the selected 1–500 eligible components and
@@ -448,3 +499,75 @@ For each deployed logical database:
 - test dry-run and one committed batch after deployment;
 - verify that cleanup metrics advance and active rows are not selected; and
 - update this catalogue whenever a tool, setting, schedule, or runbook changes.
+
+## 13. Database growth and partitioning guidance
+
+Partitioning is a capacity and query-planning decision, not routine preventive
+maintenance. Do not partition a table merely because it is expected to grow.
+A useful partition key must appear in the table's dominant predicates so
+PostgreSQL can prune partitions; otherwise each query may open more indexes and
+scan more child relations than the equivalent unpartitioned table. PostgreSQL
+18 permits an unlimited aggregate database size but limits an individual
+relation to 32 TB with the standard 8 KB block size. Practical performance,
+backup, restore and maintenance limits normally arrive earlier. See the
+[PostgreSQL limits](https://www.postgresql.org/docs/18/limits.html) and
+[partitioning guidance](https://www.postgresql.org/docs/18/ddl-partitioning.html).
+
+No ERMS table is partitioned by default. Introduce partitioning only through an
+approved, tested schema migration after production measurements demonstrate a
+specific need. The migration must preserve foreign keys, uniqueness, triggers,
+authorization predicates, audit behavior, backup/restore procedures and query
+plans. PostgreSQL requires a partitioned table's primary-key or unique
+constraint to include every partition-key column; existing identifiers and
+foreign keys therefore cannot be assumed to migrate unchanged.
+
+### 13.1 Durable tables that may benefit
+
+| Table | When to consider it | Recommended strategy and key | Operational reason |
+| --- | --- | --- | --- |
+| `event_history` | Audit history reaches tens of millions of rows, time-bounded audit queries or index maintenance degrade, or older history must move to a different storage tier | `RANGE (occurred_at)`, normally monthly or quarterly partitions; retain the existing entity, actor, request, correlation and security-operation indexes on each partition | Events are immutable, append-heavy and naturally time ordered. Time ranges support pruning, bounded maintenance and tablespace-based archival without deleting governed history. Use partitions coarse enough that complete per-entity history does not fan out across hundreds of partitions. |
+| `digital_component_blobs` | The PostgreSQL blob backend remains in use and one blob relation is forecast to approach operational or relation-size limits | `HASH (content_set_id)` with a fixed, benchmarked modulus; place partitions on independently managed tablespaces when needed | Reads and deletes identify a content set, so the key permits pruning and keeps every content set's ordered segments together. Hashing distributes large TOAST values and avoids time hotspots. The migration must replace the current `id`-only primary key with partition-compatible keys and revalidate content-set cascades. |
+
+Partitioning `digital_component_blobs` distributes storage; it does not reduce
+the bytes retained. The preferred long-term answer for a very large repository
+is the existing storage-provider boundary: keep governed metadata, checksums and
+lifecycle state in PostgreSQL while placing authoritative bytes in an approved
+object-storage backend. Before partitioning blobs, also evaluate dedicated
+tablespaces, storage compression, backup throughput, restore time and whether
+the PostgreSQL server should carry the binary I/O workload at all.
+
+### 13.2 Cleanup-bounded tables should remain unpartitioned
+
+Do not partition the following merely to make deletion faster:
+
+- `content_upload_sessions`, staged draft content and superseded/failed content
+  sets governed by `backend.services.api.content_cleanup`;
+- `login_sessions` governed by `backend.services.api.session_cleanup`;
+- `content_indexing_jobs`, `content_indexing_attempts`,
+  `content_indexing_operations` and `content_indexing_result_chunks` governed by
+  `backend.services.api.text_indexing_maintenance`; and
+- revoked or expired `service_account_credentials` governed by the same
+  API-owned maintenance process.
+
+These are transient or retention-bounded operational tables. First correct
+cleanup scheduling, throughput, failed batches, autovacuum or retention
+configuration if their live size grows without bound. Partitioning would add
+foreign-key, active-queue uniqueness and lease-state complexity while masking
+an operational cleanup failure. Reconsider only if a legitimate retained
+window itself contains enough rows to create measured maintenance problems.
+
+### 13.3 Tables that should not be partitioned by the current model
+
+| Tables | Why partitioning is normally harmful | If an individual relation approaches 32 TB |
+| --- | --- | --- |
+| `digital_component_search_chunks`, `digital_component_search_documents`, `record_search_documents`, `aggregation_search_documents` | Global full-text searches are not constrained by component ID or creation time. Time or hash partitioning would usually require searching every partition and every partition-local GIN index. These are current derived indexes, not archival history. | Rebuildable derived data may move to a separately scaled search tier after an approved architecture change. Hash partitioning by `digital_component_id` is acceptable only if production benchmarks prove that many smaller GIN indexes outperform the single index for global queries. Do not use time partitions for current search state. |
+| `aggregations`, `records`, `digital_components`, `digital_component_content_sets` | They form the authoritative hierarchy with cascading and deferred foreign keys, globally meaningful identifiers, record-number uniqueness, ACLs and cross-hierarchy browsing/search. Ordinary queries have no universal time or hash predicate that would reliably prune partitions. | Archive closed repositories through a governed archival design, separate binary storage from metadata, or shard complete repositories/tenants into separate logical databases using a new explicit repository key. Do not partition independently related tables without a co-partitioned data model. |
+| ACL/default-grant, hold, identity, role, profile and catalogue tables | Authorization and governance checks join these tables across the complete repository; they are narrow relational data and normally grow much more slowly than content or audit history. Partitioning increases authorization-plan and referential-integrity complexity without useful pruning. | Review abnormal row growth and data modelling first. At extraordinary multi-repository scale, shard complete security domains rather than partitioning individual authorization tables. |
+
+Do not create a partitioning migration solely because a table crosses an
+arbitrary byte threshold. Before approval, capture row growth, total/heap/TOAST
+and index sizes, representative `EXPLAIN (ANALYZE, BUFFERS)` plans, autovacuum
+duration, backup/restore measurements and the expected partition-pruning
+predicate. Test creation of future partitions, default-partition monitoring,
+constraint enforcement, cross-partition cascades and disaster recovery on a
+production-scale disposable database.

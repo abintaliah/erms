@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from backend.services.text_indexer.config import Settings
 from backend.services.text_indexer.text import chunks, classify, normalize
-from backend.services.text_indexer.tika import ExtractionError, extract_pdf, pdf_page_count
+from backend.services.text_indexer.tika import ExtractionError, extract, extract_pdf, pdf_page_count
 from backend.services.text_indexer.worker import Worker
 
 
@@ -37,6 +37,38 @@ class TextPolicyTests(unittest.TestCase):
             with self.assertRaisesRegex(ExtractionError,"page limit"):
                 extract_pdf(Path("/tika"),Path("/tmp/document.pdf"),120,1000,1024)
             tika_extract.assert_not_called()
+
+    def test_tika_fork_failure_is_retryable_extractor_unavailable(self):
+        completed = __import__('subprocess').CompletedProcess(
+            ["java"], 1, "", "ServerInitializationException: couldn't connect to server",
+        )
+        with patch("backend.services.text_indexer.tika.app_jar", return_value=Path("tika.jar")), \
+             patch("backend.services.text_indexer.tika.subprocess.run", return_value=completed):
+            with self.assertRaises(ExtractionError) as raised:
+                extract(Path("/tika"), Path("/tmp/document.txt"), 120)
+        self.assertEqual(raised.exception.code, "extractor_unavailable")
+        self.assertEqual(raised.exception.summary, "Tika fork parser failed to initialize")
+        self.assertTrue(raised.exception.retryable)
+
+    def test_tika_unknown_process_failure_does_not_claim_content_is_corrupt(self):
+        completed = __import__('subprocess').CompletedProcess(["java"], 1, "", "exit 1")
+        with patch("backend.services.text_indexer.tika.app_jar", return_value=Path("tika.jar")), \
+             patch("backend.services.text_indexer.tika.subprocess.run", return_value=completed):
+            with self.assertRaises(ExtractionError) as raised:
+                extract(Path("/tika"), Path("/tmp/document.txt"), 120)
+        self.assertEqual(raised.exception.code, "extractor_unavailable")
+        self.assertTrue(raised.exception.retryable)
+
+    def test_tika_reports_corrupt_only_with_malformed_content_evidence(self):
+        completed = __import__('subprocess').CompletedProcess(
+            ["java"], 1, "", "TikaException: malformed document structure",
+        )
+        with patch("backend.services.text_indexer.tika.app_jar", return_value=Path("tika.jar")), \
+             patch("backend.services.text_indexer.tika.subprocess.run", return_value=completed):
+            with self.assertRaises(ExtractionError) as raised:
+                extract(Path("/tika"), Path("/tmp/document.bin"), 120)
+        self.assertEqual(raised.exception.code, "corrupt")
+        self.assertFalse(raised.exception.retryable)
 
     def test_startup_recovery_removes_only_old_owned_entries(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -220,8 +220,12 @@ def test_dedicated_routes_reject_user_without_dedicated_privilege(client: TestCl
         )
     assert client.get("/api/v1/text-indexers").status_code == 403
     assert client.get("/api/v1/text-indexers/health").status_code == 403
+    assert client.get("/api/v1/text-indexers/diagnostics").status_code == 403
     assert client.post(
         "/api/v1/text-indexers/backfill", json={"batch_size": 1},
+    ).status_code == 403
+    assert client.post(
+        "/api/v1/text-indexers/retry-failed", json={"batch_size": 1},
     ).status_code == 403
     assert client.post("/api/v1/text-indexers", json=_payload()).status_code == 403
 
@@ -253,8 +257,8 @@ def test_health_is_privacy_safe_and_backfill_is_bounded_and_idempotent(
     assert snapshot["drifted_documents"] == 1
     assert set(snapshot) == {
         "status", "observed_at", "ready_for_search", "drifted_documents",
-        "blocking_jobs", "failed_jobs", "stale_documents", "active_workers",
-        "metrics",
+        "blocking_jobs", "failed_documents", "historical_failed_jobs",
+        "stale_documents", "active_workers", "metrics",
     }
     assert "secret" not in health.text.lower()
     assert "extracted_text" not in health.text
@@ -275,3 +279,95 @@ def test_health_is_privacy_safe_and_backfill_is_bounded_and_idempotent(
     )
     assert second.status_code == 200, second.text
     assert second.json() == {"batch_size": 1, "drifted": 0, "queued": 0}
+
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        connection.execute(
+            """UPDATE content_indexing_jobs
+                  SET status='failed',completed_at=CURRENT_TIMESTAMP
+                WHERE digital_component_id=%s AND status='queued'""",
+            (component_id,),
+        )
+        connection.execute(
+            """UPDATE digital_component_search_documents
+                  SET status='failed',last_error_code='extractor_unavailable',
+                      last_error_summary='test failure'
+                WHERE digital_component_id=%s""",
+            (component_id,),
+        )
+
+    failed_health = client.get("/api/v1/text-indexers/health").json()
+    assert failed_health["failed_documents"] == 1
+    assert failed_health["historical_failed_jobs"] == 1
+    assert failed_health["ready_for_search"] is False
+    diagnostics = client.get(
+        "/api/v1/text-indexers/diagnostics", params={"limit": 10, "offset": 0},
+    )
+    assert diagnostics.status_code == 200, diagnostics.text
+    diagnostic = diagnostics.json()
+    assert diagnostic["failure_groups"] == [{
+        "error_code": "extractor_unavailable", "mime_type": "text/plain", "count": 1,
+        "oldest_failure_at": None, "newest_failure_at": None,
+    }]
+    assert diagnostic["failures"]["total"] == 1
+    assert diagnostic["failures"]["limit"] == 10
+    assert diagnostic["failures"]["offset"] == 0
+    failed_item = diagnostic["failures"]["items"][0]
+    assert failed_item["digital_component_id"] == component_id
+    assert failed_item["record_id"] == record["id"]
+    assert failed_item["component_name"] == "legacy.txt"
+    assert failed_item["error_code"] == "extractor_unavailable"
+    assert failed_item["last_error_summary"] == "test failure"
+    assert failed_item["can_open"] is True
+    assert diagnostic["unsupported_formats"] == []
+    assert "extracted_text" not in diagnostics.text
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        restricted_profile = connection.execute(
+            """INSERT INTO profiles(code,name)
+               VALUES ('TEXT_INDEXER_ADMIN_ONLY','Text indexer administrator only')
+               RETURNING id"""
+        ).fetchone()[0]
+        connection.execute(
+            """INSERT INTO profile_privileges(profile_id,privilege_id)
+               SELECT %s,id FROM privileges
+                WHERE code='identity.text_indexers.administer'""",
+            (restricted_profile,),
+        )
+        connection.execute(
+            "UPDATE roles SET profile_id=%s WHERE code='system-administrator'",
+            (restricted_profile,),
+        )
+    restricted = client.get("/api/v1/text-indexers/diagnostics").json()
+    restricted_item = restricted["failures"]["items"][0]
+    assert restricted_item["can_open"] is False
+    assert restricted_item["record_number"] is None
+    assert restricted_item["record_title"] is None
+    assert restricted_item["component_name"] is None
+    assert client.post(
+        "/api/v1/text-indexers/retry-failed", json={"batch_size": 0},
+    ).status_code == 422
+    assert client.post(
+        "/api/v1/text-indexers/retry-failed", json={"batch_size": 501},
+    ).status_code == 422
+    retry = client.post(
+        "/api/v1/text-indexers/retry-failed", json={"batch_size": 1},
+    )
+    assert retry.status_code == 200, retry.text
+    assert retry.json() == {"batch_size": 1, "examined": 1, "queued": 1}
+    assert client.post(
+        "/api/v1/text-indexers/retry-failed", json={"batch_size": 1},
+    ).json() == {"batch_size": 1, "examined": 0, "queued": 0}
+    recovered_health = client.get("/api/v1/text-indexers/health").json()
+    assert recovered_health["failed_documents"] == 0
+    assert recovered_health["historical_failed_jobs"] == 1
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        connection.execute(
+            """UPDATE digital_component_search_documents
+                  SET status='unsupported',detected_mime_type='application/x-legacy'
+                WHERE digital_component_id=%s""",
+            (component_id,),
+        )
+    unsupported = client.get("/api/v1/text-indexers/diagnostics").json()
+    assert unsupported["failures"]["total"] == 0
+    assert unsupported["unsupported_formats"] == [{
+        "mime_type": "application/x-legacy", "count": 1, "most_recent_at": None,
+    }]

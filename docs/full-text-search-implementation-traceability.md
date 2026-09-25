@@ -41,7 +41,7 @@ from disappearing during phased delivery.
 | 13 | Required domain events, safe operational history, metrics and health semantics | 1–3 | verified |
 | 14 | Parser isolation, credential/lease secrecy, dependency/resource defenses, safe SQL/rendering/backups | 1–5 | verified |
 | 15 | Execute Phases 0–5 with entry inventories and exit reconciliation | 0–5 | verified |
-| 16 | Satisfy FTS-01 through FTS-61 with cited evidence | 0–5 | verified |
+| 16 | Satisfy FTS-01 through FTS-63 with cited evidence | 0–5 | verified |
 
 ## 2. Phase 0 detailed matrix
 
@@ -77,7 +77,7 @@ and later rollout/final reconciliation may also apply.
 | FTS-08 | 3–4 | verified | Bounded attribution plus element-only marker rendering; no snippet HTML interpretation |
 | FTS-09 | 3–4 | verified | SQL authorization/SYS_ADMIN non-bypass and governed canonical result navigation |
 | FTS-10 | 0, 2 | verified | Production-path 18-case run: English 99.69%, Arabic 97.74% |
-| FTS-11 | 2 | verified | Bounded worker corpus, page-limit and explicit OCR tests |
+| FTS-11 | 2 | verified | Bounded worker corpus, page-limit and explicit OCR tests; affirmative-corruption versus retryable Tika process/fork-runtime classification regression tests |
 | FTS-12 | 2 | verified | Expired-lease reclaim, generation fencing and lease-loss history test |
 | FTS-13 | 2 | verified | Publication identity and content deletion cascade tests |
 | FTS-14 | 1 | verified | Stored regconfig, explicit construction and both GIN EXPLAIN plans |
@@ -128,6 +128,8 @@ and later rollout/final reconciliation may also apply.
 | FTS-59 | 5 | verified | Dedicated health/backfill endpoints and Wathiq Health section; authorization, privacy-safe serializer, bounded idempotency, refresh and live-browser verification |
 | FTS-60 | 2, 5 | verified | Runtime/default environments set claim size one and process count two; supervisor-owned child pool; generated per-run/per-slot IDs; worker and deployment guidance |
 | FTS-61 | 5 | verified | Built-in role opt-in listing, read-only API guards, Wathiq Built-in presentation and Text Indexers link; disposable PostgreSQL and live-browser evidence |
+| FTS-62 | 5 | pending | Current-failed-document readiness metric, separate historical count, bounded idempotent retry API/UI and preserved history; disposable PostgreSQL and live-browser evidence required |
+| FTS-63 | 5 | verified | Privilege-gated current-failure groups/page, negative metadata/link authorization, current unsupported-format aggregation, and live-browser record/component navigation with highlighted component |
 
 ## 4. Approved deferrals and departures
 

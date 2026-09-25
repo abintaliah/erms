@@ -177,17 +177,187 @@ def drifted_document_count(connection: Connection) -> int:
     ).fetchone()["count"]
 
 
+def current_failed_document_count(connection: Connection) -> int:
+    return connection.execute(
+        """SELECT count(*) AS count
+             FROM digital_component_search_documents document
+             JOIN digital_components component
+               ON component.id=document.digital_component_id
+             JOIN digital_component_content_sets content_set
+               ON content_set.id=component.active_content_set_id
+            WHERE document.status='failed'
+              AND component.content_status='available'
+              AND content_set.status='active'
+              AND document.content_set_id=content_set.id
+              AND document.extraction_config_version=%s
+              AND document.index_config_version=%s""",
+        (EXTRACTION_CONFIG, INDEX_CONFIG),
+    ).fetchone()["count"]
+
+
+def failure_diagnostics(connection: Connection, limit: int, offset: int) -> dict:
+    """Return current, safe indexing failures separately from retained attempt history."""
+    current_document = """
+        FROM digital_component_search_documents document
+        JOIN digital_components component
+          ON component.id=document.digital_component_id
+        JOIN digital_component_content_sets content_set
+          ON content_set.id=component.active_content_set_id
+       WHERE component.content_status='available'
+         AND content_set.status='active'
+         AND document.content_set_id=content_set.id
+         AND document.extraction_config_version=%s
+         AND document.index_config_version=%s
+    """
+    failure_groups = connection.execute(
+        """SELECT coalesce(document.last_error_code,'unknown') AS error_code,
+                  coalesce(document.detected_mime_type,component.mime_type,'unknown') AS mime_type,
+                  count(*)::integer AS count,
+                  min(document.last_attempt_at) AS oldest_failure_at,
+                  max(document.last_attempt_at) AS newest_failure_at
+           """ + current_document + """
+             AND document.status='failed'
+          GROUP BY coalesce(document.last_error_code,'unknown'),
+                   coalesce(document.detected_mime_type,component.mime_type,'unknown')
+          ORDER BY count DESC,error_code,mime_type""",
+        (EXTRACTION_CONFIG, INDEX_CONFIG),
+    ).fetchall()
+    total = connection.execute(
+        "SELECT count(*) AS count " + current_document + " AND document.status='failed'",
+        (EXTRACTION_CONFIG, INDEX_CONFIG),
+    ).fetchone()["count"]
+    failures = connection.execute(
+        """SELECT document.digital_component_id,document.record_id,
+                  coalesce(document.detected_mime_type,component.mime_type,'unknown') AS mime_type,
+                  coalesce(document.last_error_code,'unknown') AS error_code,
+                  document.last_error_summary,document.last_attempt_at,
+                  attempt.worker_id,attempt.attempt_no,
+                  current_user_can_view_record(document.record_id)
+                    AND current_user_can_record_component_operation(
+                        document.record_id,'record.component.view','record.component.view'
+                    ) AS can_open,
+                  CASE WHEN current_user_can_view_record(document.record_id)
+                    AND current_user_can_record_component_operation(
+                        document.record_id,'record.component.view','record.component.view'
+                    ) THEN record.record_number END AS record_number,
+                  CASE WHEN current_user_can_view_record(document.record_id)
+                    AND current_user_can_record_component_operation(
+                        document.record_id,'record.component.view','record.component.view'
+                    ) THEN record.title END AS record_title,
+                  CASE WHEN current_user_can_view_record(document.record_id)
+                    AND current_user_can_record_component_operation(
+                        document.record_id,'record.component.view','record.component.view'
+                    ) THEN component.file_name END AS component_name
+             FROM digital_component_search_documents document
+             JOIN digital_components component
+               ON component.id=document.digital_component_id
+             JOIN digital_component_content_sets content_set
+               ON content_set.id=component.active_content_set_id
+             JOIN records record ON record.id=document.record_id
+          LEFT JOIN LATERAL (
+              SELECT worker_id,attempt_no
+                FROM content_indexing_attempts
+               WHERE digital_component_id=document.digital_component_id
+                 AND content_set_id=document.content_set_id
+               ORDER BY id DESC LIMIT 1
+          ) attempt ON true
+            WHERE component.content_status='available'
+              AND content_set.status='active'
+              AND document.content_set_id=content_set.id
+              AND document.extraction_config_version=%s
+              AND document.index_config_version=%s
+              AND document.status='failed'
+          ORDER BY document.last_attempt_at DESC NULLS LAST,document.digital_component_id
+          LIMIT %s OFFSET %s""",
+        (EXTRACTION_CONFIG, INDEX_CONFIG, limit, offset),
+    ).fetchall()
+    unsupported_formats = connection.execute(
+        """SELECT coalesce(document.detected_mime_type,component.mime_type,'unknown') AS mime_type,
+                  count(*)::integer AS count,
+                  max(document.last_attempt_at) AS most_recent_at
+           """ + current_document + """
+             AND document.status='unsupported'
+          GROUP BY coalesce(document.detected_mime_type,component.mime_type,'unknown')
+          ORDER BY count DESC,mime_type""",
+        (EXTRACTION_CONFIG, INDEX_CONFIG),
+    ).fetchall()
+    return {
+        "failure_groups": [dict(row) for row in failure_groups],
+        "failures": {
+            "items": [dict(row) for row in failures],
+            "total": total, "limit": limit, "offset": offset,
+        },
+        "unsupported_formats": [dict(row) for row in unsupported_formats],
+    }
+
+
+def retry_failed(connection: Connection, batch_size: int, dry_run: bool) -> dict[str, int]:
+    rows = connection.execute(
+        """SELECT component.id AS component_id,component.record_id,component.mime_type,
+                  content_set.id AS content_set_id,content_set.checksum_algo,content_set.checksum_value
+             FROM digital_component_search_documents document
+             JOIN digital_components component ON component.id=document.digital_component_id
+             JOIN digital_component_content_sets content_set
+               ON content_set.id=component.active_content_set_id
+            WHERE document.status='failed'
+              AND component.content_status='available' AND content_set.status='active'
+              AND document.content_set_id=content_set.id
+              AND document.extraction_config_version=%s
+              AND document.index_config_version=%s
+              AND NOT EXISTS (
+                    SELECT 1 FROM content_indexing_jobs active_job
+                     WHERE active_job.digital_component_id=component.id
+                       AND active_job.content_set_id=content_set.id
+                       AND active_job.extraction_config_version=%s
+                       AND active_job.index_config_version=%s
+                       AND active_job.extractor_version=%s
+                       AND active_job.status IN ('queued','leased')
+              )
+            ORDER BY component.id LIMIT %s FOR UPDATE OF component SKIP LOCKED""",
+        (EXTRACTION_CONFIG, INDEX_CONFIG, EXTRACTION_CONFIG, INDEX_CONFIG,
+         EXTRACTOR_VERSION, batch_size),
+    ).fetchall()
+    if dry_run:
+        return {"examined": len(rows), "queued": 0}
+    queued = 0
+    for row in rows:
+        result = connection.execute(
+            """INSERT INTO content_indexing_jobs(
+                   digital_component_id,record_id,content_set_id,content_checksum_algo,content_checksum_value,
+                   trigger,priority,extraction_config_version,index_config_version,extractor_version,required_capabilities)
+               VALUES (%s,%s,%s,%s,%s,'retry',0,%s,%s,%s,
+                       jsonb_build_object('mime_type',%s::text,'max_input_bytes',52428800))
+               ON CONFLICT(digital_component_id,content_set_id,extraction_config_version,index_config_version,extractor_version)
+                   WHERE status IN ('queued','leased') DO NOTHING RETURNING id""",
+            (row["component_id"],row["record_id"],row["content_set_id"],row["checksum_algo"],
+             row["checksum_value"],EXTRACTION_CONFIG,INDEX_CONFIG,EXTRACTOR_VERSION,row["mime_type"]),
+        ).fetchone()
+        if result is None:
+            continue
+        connection.execute(
+            """UPDATE digital_component_search_documents
+                  SET status='pending',date_updated=CURRENT_TIMESTAMP
+                WHERE digital_component_id=%s AND status='failed'
+                  AND content_set_id=%s""",
+            (row["component_id"], row["content_set_id"]),
+        )
+        queued += 1
+    return {"examined": len(rows), "queued": queued}
+
+
 def readiness(connection: Connection) -> dict:
     state = metrics(connection)
     drift = drifted_document_count(connection)
     blocking_jobs = sum(state["queue"].get(name, 0) for name in ("queued", "leased"))
-    failed = state["queue"].get("failed", 0)
+    failed = current_failed_document_count(connection)
+    historical_failed = state["queue"].get("failed", 0)
     ready = drift == 0 and blocking_jobs == 0 and state["stale_documents"] == 0 and failed == 0
     return {
         "ready_for_search": ready,
         "drifted_documents": drift,
         "blocking_jobs": blocking_jobs,
-        "failed_jobs": failed,
+        "failed_documents": failed,
+        "historical_failed_jobs": historical_failed,
         "stale_documents": state["stale_documents"],
         "active_workers": state["workers"]["active"],
         "metrics": state,

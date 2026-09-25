@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import os
 import hashlib
+import logging
 import resource
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+
+logger = logging.getLogger(__name__)
 
 
 class ExtractionError(RuntimeError):
@@ -59,6 +63,52 @@ def _limits() -> None:
         resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
 
 
+def _tika_failure(stderr: str) -> tuple[str, str, bool]:
+    """Map Tika failures without blaming content for runtime failures."""
+    detail = stderr.casefold()
+    if "password" in detail or "encrypteddocumentexception" in detail:
+        return "password_protected", "document requires a password", False
+    infrastructure = (
+        (
+            (
+                "failed to initialize parser", "server initialization failed",
+                "serverinitializationexception",
+            ),
+            "Tika fork parser failed to initialize",
+        ),
+        (
+            ("couldn't connect to server", "couldn't reconnect", "socketexception"),
+            "Tika fork parser communication failed",
+        ),
+        (
+            ("could not create the java virtual machine", "outofmemoryerror"),
+            "Tika JVM failed to start",
+        ),
+        (
+            ("noclassdeffounderror", "classnotfoundexception", "unable to access jarfile"),
+            "Tika runtime dependency is unavailable",
+        ),
+        (
+            ("operation not permitted", "permission denied"),
+            "Tika process was denied an operating-system resource",
+        ),
+    )
+    for markers, summary in infrastructure:
+        if any(marker in detail for marker in markers):
+            return "extractor_unavailable", summary, True
+    corrupt_markers = (
+        "corrupt", "malformed", "invalid document", "invalid file",
+        "unexpected end of file", "unexpected end-of-file", "error parsing",
+        "cannot parse", "can't parse",
+    )
+    if any(marker in detail for marker in corrupt_markers):
+        return "corrupt", "extractor rejected malformed content", False
+    # A non-zero process exit without affirmative content evidence is an
+    # extractor failure. Treating the unknown as corrupt is misleading and
+    # prevents safe automatic retry after an infrastructure incident.
+    return "extractor_unavailable", "Tika extraction process failed", True
+
+
 def extract(home: Path, source: Path, timeout: int) -> str:
     jar = app_jar(home)
     config = Path(__file__).with_name("tika-config.json")
@@ -78,10 +128,18 @@ def extract(home: Path, source: Path, timeout: int) -> str:
         )
     except subprocess.TimeoutExpired as exc:
         raise ExtractionError("timeout", "extractor exceeded wall-clock limit", True) from exc
+    except OSError as exc:
+        logger.warning("Tika process could not be started: %s", type(exc).__name__)
+        raise ExtractionError(
+            "extractor_unavailable", "Tika process could not be started", True,
+        ) from exc
     if result.returncode:
-        detail = (result.stderr or "extractor rejected content").casefold()
-        code = "password_protected" if "password" in detail else "corrupt"
-        raise ExtractionError(code, "extractor rejected content")
+        code, summary, retryable = _tika_failure(result.stderr or "")
+        logger.warning(
+            "Tika extraction failed: exit_code=%s classification=%s",
+            result.returncode, code,
+        )
+        raise ExtractionError(code, summary, retryable)
     return result.stdout
 
 
