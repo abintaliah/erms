@@ -155,10 +155,11 @@ def test_aggregation_command_centre_matches_the_approved_two_column_layout():
     assert '"aggregation-retention-footer w-full"' in source
     assert 'grid-column: 1 / -1; grid-row: 2' in source
     assert '"w-full text-sm font-semibold text-slate-800"' in source
-    assert '("Permanent Transfer", "External archive")' in source
-    assert '("Selective Transfer", "Appraise and transfer")' in source
-    assert '("Destruction", "Destroy after retention")' in source
+    assert "localized_disposition_value(final_disposition)" in source
     assert '.aggregation-retention-stage:not(:last-child)::after' in source
+    assert 'padding-inline-start: 30px' in source
+    assert 'html[dir="rtl"] .aggregation-retention-stage:not(:last-child)::after' in source
+    assert 'content: "←"' in source
     assert '.aggregation-overview-actions .q-btn' in source
 
 

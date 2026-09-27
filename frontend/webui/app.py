@@ -2721,7 +2721,8 @@ def index(q: str = "") -> None:
         .aggregation-child-preview:hover { border-color: #93b4e8; background: #f8fcff; }
         .aggregation-retention-stages { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 18px; }
         .aggregation-retention-stage {
-            position: relative; min-width: 0; padding: 8px 10px 8px 30px;
+            position: relative; min-width: 0; padding: 8px 10px;
+            padding-inline-start: 30px;
             border-radius: 9px; background: rgba(255,255,255,.68);
         }
         .aggregation-retention-stage::before {
@@ -2732,6 +2733,11 @@ def index(q: str = "") -> None:
             content: "→"; position: absolute; inset-inline-end: -15px; top: 12px;
             color: #6f98b4; font-weight: 800;
         }
+        html[dir="rtl"] .aggregation-retention-stage:not(:last-child)::after {
+            content: "←";
+        }
+        html[dir="rtl"] .aggregation-retention-stage,
+        html[dir="rtl"] .aggregation-retention-chip { text-align: right; }
         .aggregation-retention-footer {
             display: flex; align-items: center; gap: 8px; min-width: 0;
             padding-top: 9px; border-top: 1px solid #d5eaf8;
@@ -12729,7 +12735,7 @@ def index(q: str = "") -> None:
                             ui.label(render_message("webui.render_detail_content.label.current_current_period_years_years_cfce25a3", current_period_years=retention['current_period_years']))
                             ui.label(render_message("webui.render_detail_content.label.intermediate_intermediate_period_years_yea_9677da95", intermediate_period_years=retention['intermediate_period_years']))
                         ui.badge(
-                            retention["final_disposition"].replace("_", " ").title(),
+                            localized_disposition_value(retention["final_disposition"]),
                             color="indigo",
                         ).props("outline")
                     else:
@@ -20530,9 +20536,12 @@ def index(q: str = "") -> None:
         return True
 
     async def load_login_animation() -> None:
-        """Load and start the decorative sign-in animation off the critical path."""
+        """Load and start the shared login/header animation off the critical path."""
         try:
-            await ui.run_javascript(
+            # This coroutine is deliberately scheduled as a background task, so
+            # it must use the page's captured client instead of relying on
+            # NiceGUI's ambient slot/client context.
+            await page_client.run_javascript(
                 "new Promise((resolve, reject) => {"
                 "if (window.startWathiqLoginNetwork) { resolve(true); return; }"
                 "const script = document.createElement('script');"
@@ -20543,13 +20552,17 @@ def index(q: str = "") -> None:
                 "})",
                 timeout=15,
             )
-            await ui.run_javascript(
+            await page_client.run_javascript(
                 "window.startWathiqLoginNetwork?.(); true", timeout=5,
             )
         except Exception:
             return
 
     async def initialize_authenticated_ui() -> None:
+        # The same asset drives both the sign-in background and the authenticated
+        # header. Load it for every session, including restored sessions which
+        # never display the sign-in dialog.
+        background_tasks.create(load_login_animation())
         token = app.storage.user.get("session_token")
         if token:
             api.set_session_token(token)
@@ -20583,7 +20596,6 @@ def index(q: str = "") -> None:
         set_connection_status(True)
         drawer.hide()
         login_dialog.open()
-        background_tasks.create(load_login_animation())
 
     ui.timer(0.05, initialize_authenticated_ui, once=True)
 

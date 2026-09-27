@@ -946,6 +946,7 @@ def test_detail_pages_use_light_blue_metadata_and_retention_visual_system():
     assert 'entity_metadata_label("Current retention (years)")' in source
     assert 'f"{effective_rule[\\"current_period_years\\"]} years"' in source
     assert 'localized_disposition_value(final_disposition)' in source
+    assert 'localized_disposition_value(retention["final_disposition"])' in source
     assert 'entity_metadata_label("Intermediate retention (years)")' in source
     assert 'entity_metadata_label("Final disposition")' in source
     assert 'ui.label(str(len(children))).classes("text-2xl font-bold text-primary")' not in source
@@ -1379,7 +1380,7 @@ def test_forced_password_change_precedes_authenticated_data_loading():
 
     restored_flow = source[
         source.index("async def initialize_authenticated_ui()"):
-        source.index("background_tasks.create(load_login_animation())")
+        source.index("ui.timer(0.05, initialize_authenticated_ui")
     ]
     restored_gate = restored_flow.index('if principal["must_change_password"]:')
     assert restored_gate < restored_flow.index(
@@ -1410,6 +1411,24 @@ def test_forced_password_change_precedes_authenticated_data_loading():
     assert '"Set new password" if forced_change else "Change password"' in source
     assert '"Back to sign in", icon="arrow_back"' in source
     assert "dialog.close()\n                await sign_out()" in source
+
+
+def test_network_animation_loads_for_login_and_restored_sessions():
+    source = with_english_messages(inspect.getsource(index))
+    animation_loader = source[
+        source.index("async def load_login_animation()"):
+        source.index("async def initialize_authenticated_ui()")
+    ]
+    assert "page_client.run_javascript(" in animation_loader
+    assert "ui.run_javascript(" not in animation_loader
+
+    initialization = source[
+        source.index("async def initialize_authenticated_ui()"):
+        source.index("ui.timer(0.05, initialize_authenticated_ui")
+    ]
+    assert initialization.index(
+        "background_tasks.create(load_login_animation())"
+    ) < initialization.index('token = app.storage.user.get("session_token")')
 
 
 def test_structured_api_errors_prefer_the_accessible_message():
