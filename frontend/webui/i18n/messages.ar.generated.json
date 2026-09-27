@@ -4,10 +4,10 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "2c0eaebae8824199ffb0bf1fd74949bea21b2eb0a884a702360fee194cc812aa",
-  "catalogue_sha256": "b6e161f44a40eabb30acc000baa6c3530651b90c02a986e458f19f2753b2ee58",
+  "catalogue_sha256": "c56ec8a2e4e7455eca8f59c62b7100be798e32994643c70a0d841354e19dc3ca",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
-  "batch_id": "admin-export-ar-20260927103134",
-  "generated_at": "2026-09-27T10:31:34.150177+04:00",
+  "batch_id": "admin-export-ar-20260927160208",
+  "generated_at": "2026-09-27T16:02:08.394496+04:00",
   "artifact_type": "wathiq_translation_administration_export",
   "language_tag": "ar",
   "language_metadata": {
@@ -18,7 +18,7 @@
       "locale": "ar"
     }
   },
-  "catalogue_revision": 37,
+  "catalogue_revision": 45,
   "includes_reviewed_drafts": false,
   "superseded_translations": {
     "localization.bulk.action.review_publish_all": [
@@ -82,6 +82,12 @@
     ],
     "navigation.item.records": [
       "السجلات"
+    ],
+    "webui.open_aggregation.label.protected_by_hold_count_effective_value_065566e7": [
+      "محمي بموجب {hold_count} من التعليقات السارية {value}"
+    ],
+    "webui.select_record_details.label.protected_by_hold_count_effective_value_fdfb1fe2": [
+      "محمي بواسطة {hold_count} من {value} الفعلية"
     ],
     "webui.select_governance_custody.label.custodian_count_active_value_currently_qua_5dd0d9d6": [
       "يتأهل حالياً {custodian_count} من {value} النشطين عبر {qualifying_role_count} من {value_2} الحوكمة و{qualifying_assignment_count} من {value_3} الحالية."
@@ -4298,6 +4304,1542 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
         "date_published": "2026-09-26T13:44:17.672002+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.acl.manage.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إدارة قائمة التحكم في وصول الملفات وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.acl.manage.name",
+      "translated_text": "إدارة قائمة التحكم في وصول الملفات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.close.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إغلاق ملف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.close.name",
+      "translated_text": "إغلاق ملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.create_child.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إنشاء ملف فرعي وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.create_child.name",
+      "translated_text": "إنشاء ملف فرعي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.create_root.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إنشاء ملف رئيسي وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.create_root.name",
+      "translated_text": "إنشاء ملف رئيسي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.delete.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم حذف ملف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.delete.name",
+      "translated_text": "حذف ملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.location.change.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تغيير موقع ملف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.location.change.name",
+      "translated_text": "تغيير موقع ملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.modify.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تعديل ملف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.modify.name",
+      "translated_text": "تعديل ملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.move.description",
+      "translated_text": "تتيح نقل ملف إلى الملف الحاوي الآخر المسموح به.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.move.name",
+      "translated_text": "نقل ملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.reclassify.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إعادة تصنيف ملف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.reclassify.name",
+      "translated_text": "إعادة تصنيف ملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.reopen.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إعادة فتح ملف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.reopen.name",
+      "translated_text": "إعادة فتح ملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.review_date.change.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تغيير تاريخ مراجعة ملف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.review_date.change.name",
+      "translated_text": "تغيير تاريخ مراجعة ملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.security_level.change.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تغيير درجة سرية ملف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.security_level.change.name",
+      "translated_text": "تغيير درجة سرية ملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.view.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم عرض ملف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.view.name",
+      "translated_text": "عرض ملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.vital_status.change.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تغيير الحالة الحيوية لملف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.aggregation.vital_status.change.name",
+      "translated_text": "تغيير الحالة الحيوية لملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.audit.view.description",
+      "translated_text": "تتيح عرض مسار التتبع للنظام وأحداث الأمن والأعمال المسجّلة فيه.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.audit.view.name",
+      "translated_text": "عرض سجل التدقيق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.authorization.administer.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إدارة التفويض وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.authorization.administer.name",
+      "translated_text": "إدارة التفويض",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.authorization.explain.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تفسير قرارات التفويض وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.authorization.explain.name",
+      "translated_text": "تفسير قرارات التفويض",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.authorization.recovery.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم استعادة صلاحيات التفويض وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.authorization.recovery.name",
+      "translated_text": "استعادة صلاحيات التفويض",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.category.administration",
+      "translated_text": "إدارة النظام",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.category.aggregation",
+      "translated_text": "الملفات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.category.component",
+      "translated_text": "المكونات الرقمية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.category.exceptional",
+      "translated_text": "العمليات الاستثنائية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.category.other",
+      "translated_text": "صلاحيات أخرى",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.category.record",
+      "translated_text": "الوثائق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.classification.modify_metadata.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تعديل البيانات الوصفية للتصنيف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.classification.modify_metadata.name",
+      "translated_text": "تعديل البيانات الوصفية للتصنيف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.classification_scheme.modify_metadata.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تعديل البيانات الوصفية لنظام التصنيف وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.classification_scheme.modify_metadata.name",
+      "translated_text": "تعديل البيانات الوصفية لنظام التصنيف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.classifications.administer.description",
+      "translated_text": "تتيح إنشاء نظم التصنيف والتصنيفات ونشرها وتحديثها وتعطيلها وإدارتها.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.classifications.administer.name",
+      "translated_text": "إدارة التصنيفات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.closure.correct_record_placement.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تصحيح موضع وثيقة داخل ملف مغلق وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.closure.correct_record_placement.name",
+      "translated_text": "تصحيح موضع وثيقة داخل ملف مغلق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.content.index.execute.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تنفيذ فهرسة المحتوى وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.content.index.execute.name",
+      "translated_text": "تنفيذ فهرسة المحتوى",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.holds.administer.description",
+      "translated_text": "تتيح إنشاء حالات تعليق قنوني وتحديثها وحذفها وإدارة مالكيها والمساهمين فيها.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.holds.administer.name",
+      "translated_text": "إدارة تعليق قنوني",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.holds.held_items.manage_all.description",
+      "translated_text": "تتيح إضافة العناصر إلى أي تعليق قنوني أو إزالتها منه.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.holds.held_items.manage_all.name",
+      "translated_text": "إدارة جميع عناصر تعليق قنوني",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.identity.sessions.administer.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إدارة جلسات تسجيل الدخول وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.identity.sessions.administer.name",
+      "translated_text": "إدارة جلسات تسجيل الدخول",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.identity.text_indexers.administer.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إدارة مفهرسات النصوص وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.identity.text_indexers.administer.name",
+      "translated_text": "إدارة مفهرسات النصوص",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.identity.users.administer.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إدارة المستخدمين وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.identity.users.administer.name",
+      "translated_text": "إدارة المستخدمين",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.localization.administer.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إدارة اللغات والترجمات وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.localization.administer.name",
+      "translated_text": "إدارة اللغات والترجمات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.org_unit.modify_metadata.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تعديل البيانات الوصفية للوحدة التنظيمية وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.org_unit.modify_metadata.name",
+      "translated_text": "تعديل البيانات الوصفية للوحدة التنظيمية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.organization.administer.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إدارة الهيكل التنظيمي وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.organization.administer.name",
+      "translated_text": "إدارة الهيكل التنظيمي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.organization.browse.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم استعراض الهيكل التنظيمي وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.organization.browse.name",
+      "translated_text": "استعراض الهيكل التنظيمي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.organization.ownership.correct.description",
+      "translated_text": "تتيح تصحيح مالك ملف رئيسي أُسند بالخطأ وتطبيق التصحيح على محتوياته.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.organization.ownership.correct.name",
+      "translated_text": "تصحيح الملكية التنظيمية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.profile.modify_metadata.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تعديل البيانات الوصفية لملف الصلاحيات وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.profile.modify_metadata.name",
+      "translated_text": "تعديل البيانات الوصفية لملف الصلاحيات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.acl.manage.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إدارة قائمة التحكم في وصول الوثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.acl.manage.name",
+      "translated_text": "إدارة قائمة التحكم في وصول الوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.add.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إضافة مكون رقمي إلى وثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.add.name",
+      "translated_text": "إضافة مكون رقمي إلى وثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.download.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تنزيل مكون رقمي لوثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.download.name",
+      "translated_text": "تنزيل مكون رقمي لوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.print.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم طباعة مكون رقمي لوثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.print.name",
+      "translated_text": "طباعة مكون رقمي لوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.reindex.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إعادة فهرسة مكون رقمي لوثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.reindex.name",
+      "translated_text": "إعادة فهرسة مكون رقمي لوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.remove.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إزالة مكون رقمي من وثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.remove.name",
+      "translated_text": "إزالة مكون رقمي من وثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.reorder.description",
+      "translated_text": "تتيح تغيير ترتيب عرض المكوّنات الرقمية المرفقة بوثيقة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.reorder.name",
+      "translated_text": "إعادة ترتيب مكونات الوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.replace.description",
+      "translated_text": "تتيح استبدال المكوّن الرقمي مع حفظ العملية في مسار التتبع.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.replace.name",
+      "translated_text": "استبدال مكون رقمي لوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.share.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم مشاركة مكون رقمي لوثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.share.name",
+      "translated_text": "مشاركة مكون رقمي لوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.view.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم عرض مكون رقمي لوثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.component.view.name",
+      "translated_text": "عرض مكون رقمي لوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.create.description",
+      "translated_text": "تتيح إنشاء وثيقة داخل ملف تسمح قائمة التحكم في الوصول الخاصة به بذلك.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.create.name",
+      "translated_text": "إنشاء وثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.delete.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم حذف وثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.delete.name",
+      "translated_text": "حذف وثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.modify.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تعديل وثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.modify.name",
+      "translated_text": "تعديل وثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.move.description",
+      "translated_text": "تتيح نقل وثيقة إلى ملف آخر مسموح به.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.move.name",
+      "translated_text": "نقل وثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.review_date.change.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تغيير تاريخ مراجعة وثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.review_date.change.name",
+      "translated_text": "تغيير تاريخ مراجعة وثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.security_level.change.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تغيير درجة سرية وثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.security_level.change.name",
+      "translated_text": "تغيير درجة سرية وثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.view.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم عرض وثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.view.name",
+      "translated_text": "عرض وثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.vital_status.change.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تغيير الحالة الحيوية لوثيقة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.record.vital_status.change.name",
+      "translated_text": "تغيير الحالة الحيوية لوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.role.modify_metadata.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تعديل البيانات الوصفية للدور وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.role.modify_metadata.name",
+      "translated_text": "تعديل البيانات الوصفية للدور",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.search.query.debug.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تشخيص استعلام البحث وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.search.query.debug.name",
+      "translated_text": "تشخيص استعلام البحث",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.search.saved_search.administrator.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم إدارة عمليات البحث المحفوظة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.search.saved_search.administrator.name",
+      "translated_text": "إدارة عمليات البحث المحفوظة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.search.saved_search.delete.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم حذف عمليات البحث المحفوظة وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.search.saved_search.delete.name",
+      "translated_text": "حذف عمليات البحث المحفوظة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.search.saved_search.save.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم حفظ عمليات البحث وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.search.saved_search.save.name",
+      "translated_text": "حفظ عمليات البحث",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.security.resource.downgrade.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم خفض درجة سرية المورد وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.security.resource.downgrade.name",
+      "translated_text": "خفض درجة سرية المورد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.security_level.modify_metadata.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تعديل البيانات الوصفية لدرجة السرية وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.security_level.modify_metadata.name",
+      "translated_text": "تعديل البيانات الوصفية لدرجة السرية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.security_levels.administer.description",
+      "translated_text": "تتيح إنشاء درجات السرية المستخدمة للأدوار والملفات والوثائق وصيانتها.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.security_levels.administer.name",
+      "translated_text": "إدارة درجات السرية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.user.modify_metadata.description",
+      "translated_text": "تتيح هذه الصلاحية للمستخدم تعديل البيانات الوصفية للمستخدم وفق ضوابط التفويض والسياسات المعتمدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
+      }
+    },
+    {
+      "message_key": "privilege.user.modify_metadata.name",
+      "translated_text": "تعديل البيانات الوصفية للمستخدم",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:04:19.834791+00:00",
+        "date_published": "2026-09-27T08:04:19.834791+00:00"
       }
     },
     {
@@ -8957,18 +10499,6 @@
       }
     },
     {
-      "message_key": "webui.load_people_page.text.start_end_total_63345877",
-      "translated_text": "{start}–{end} / {total}",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-27T05:36:02.357506+00:00",
-        "date_published": "2026-09-27T05:36:02.357506+00:00"
-      }
-    },
-    {
       "message_key": "webui.load_saved_page.badge.mine_47cb9b71",
       "translated_text": "خاصتي",
       "quality_flags": [],
@@ -10554,14 +12084,14 @@
     },
     {
       "message_key": "webui.open_aggregation.label.protected_by_hold_count_effective_value_065566e7",
-      "translated_text": "محمي بموجب {hold_count} من التعليقات السارية {value}",
+      "translated_text": "محمي بموجب تعليقات سارية ({hold_count})",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",
-        "source_origin": "generated",
+        "source_origin": "imported",
         "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
+        "date_reviewed": "2026-09-27T09:48:46.518516+00:00",
+        "date_published": "2026-09-27T09:48:46.518516+00:00"
       }
     },
     {
@@ -10694,6 +12224,18 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
         "date_published": "2026-09-26T16:20:14.562571+00:00"
+      }
+    },
+    {
+      "message_key": "webui.open_aggregation.text.governed_by_root_aggregation",
+      "translated_text": "{source} · يحكمه الملف الجذري {root_reference}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-27T08:32:00.340802+00:00",
+        "date_published": "2026-09-27T08:32:00.340802+00:00"
       }
     },
     {
@@ -12019,18 +13561,6 @@
     {
       "message_key": "webui.persist_saved_search.notify.saved_search_updated_7bd649da",
       "translated_text": "تم تحديث البحث المحفوظ",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.persist_saved_search.text.a_reason_is_required_when_updating_a_saved_6b76ee63",
-      "translated_text": "يلزم إدخال سبب عند تحديث بحث محفوظ.",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",
@@ -16865,18 +18395,6 @@
       }
     },
     {
-      "message_key": "webui.render_summary.text.open_replace_88c69185",
-      "translated_text": "فتح {replace}",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
       "message_key": "webui.render_summary.text.set_directly_on_this_item_without_consider_076d5cd7",
       "translated_text": "محدّد مباشرةً على هذا العنصر من دون مراعاة العناصر السابقة له في التسلسل.",
       "quality_flags": [],
@@ -18943,18 +20461,6 @@
     {
       "message_key": "webui.save_search.textarea.description_491f6450",
       "translated_text": "الوصف",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.save_search.textarea.reason_for_change_1456875c",
-      "translated_text": "سبب التغيير",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",
@@ -22302,14 +23808,14 @@
     },
     {
       "message_key": "webui.select_record_details.label.protected_by_hold_count_effective_value_fdfb1fe2",
-      "translated_text": "محمي بواسطة {hold_count} من {value} الفعلية",
+      "translated_text": "محمي بموجب تعليقات سارية ({hold_count})",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",
-        "source_origin": "generated",
+        "source_origin": "imported",
         "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
+        "date_reviewed": "2026-09-27T09:48:46.518516+00:00",
+        "date_published": "2026-09-27T09:48:46.518516+00:00"
       }
     },
     {

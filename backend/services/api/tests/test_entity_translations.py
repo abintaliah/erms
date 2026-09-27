@@ -1,6 +1,7 @@
 import os
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 
 def test_entity_translation_patch_merges_locales_and_uses_entity_version(client):
@@ -269,3 +270,64 @@ def test_paginated_administration_searches_return_preferred_language_projection(
             if row["id"] == identifiers[resource]
         )
         assert item["localized"][field] == translated_value
+
+
+def test_paginated_identity_searches_sort_by_displayed_preferred_language_name(client):
+    preference = client.get("/api/v1/preferences").json()
+    selected = client.put(
+        "/api/v1/preferences",
+        headers={"If-Match": str(preference["version"])},
+        json={"language_tag": "ar", "working_timezone": "Asia/Dubai"},
+    )
+    assert selected.status_code == 200, selected.text
+
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        root_id = connection.execute(
+            "SELECT id FROM org_units ORDER BY id LIMIT 1"
+        ).fetchone()[0]
+        rows = {
+            "org-units": (
+                connection.execute(
+                    """INSERT INTO org_units(code,name,translations)
+                       VALUES ('alpha-unit','Alpha Unit',%s),('zulu-unit','Zulu Unit',%s)
+                       RETURNING id,name""",
+                    (Jsonb({"ar": {"name": "وحدة الياء"}}), Jsonb({"ar": {"name": "الوحدة الأولى"}})),
+                ).fetchall()
+            ),
+            "users": (
+                connection.execute(
+                    """INSERT INTO users(name,email,translations)
+                       VALUES ('Alpha User','alpha-sort@test.invalid',%s),
+                              ('Zulu User','zulu-sort@test.invalid',%s)
+                       RETURNING id,name""",
+                    (Jsonb({"ar": {"name": "مستخدم الياء"}}), Jsonb({"ar": {"name": "المستخدم الأول"}})),
+                ).fetchall()
+            ),
+            "roles": (
+                connection.execute(
+                    """INSERT INTO roles(org_unit_id,code,name,translations)
+                       VALUES (%s,'alpha-role','Alpha Role',%s),
+                              (%s,'zulu-role','Zulu Role',%s)
+                       RETURNING id,name""",
+                    (root_id, Jsonb({"ar": {"name": "دور الياء"}}), root_id, Jsonb({"ar": {"name": "الدور الأول"}})),
+                ).fetchall()
+            ),
+        }
+
+    for resource, inserted in rows.items():
+        response = client.post(
+            f"/api/v1/{resource}/search",
+            params={"include_system": "true"} if resource == "roles" else None,
+            json={
+                "where": {
+                    "field": "id", "operator": "in",
+                    "value": [row[0] for row in inserted],
+                },
+                "sort": [{"field": "name", "direction": "asc"}],
+                "limit": 1, "offset": 0,
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["total"] == 2
+        assert response.json()["items"][0]["name"].startswith("Zulu")
+        assert response.json()["items"][0]["localized"]["name"].startswith("ال")

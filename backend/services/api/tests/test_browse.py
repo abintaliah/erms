@@ -222,6 +222,78 @@ def test_organization_browser_is_lazy_bounded_and_reports_assignment_context(cli
     assert hidden.json() == []
 
 
+def test_organization_browser_uses_preferred_language_for_tree_and_search(client: TestClient):
+    root = client.post(
+        "/api/v1/org-units", json={"code": "LOCAL-ROOT", "name": "Localized Root"},
+    ).json()
+    child = client.post("/api/v1/org-units", json={
+        "parent_org_unit_id": root["id"], "code": "LOCAL-CHILD", "name": "Localized Child",
+    }).json()
+    role = client.post("/api/v1/roles", json={
+        "org_unit_id": child["id"], "code": "LOCAL-ROLE", "name": "Localized Role",
+    }).json()
+    profile = client.get(f"/api/v1/profiles/{role['profile_id']}").json()
+    person = client.post("/api/v1/users", json={
+        "name": "Localized Person", "email": "localized.person@example.test",
+        "account_type": "person",
+    }).json()
+    client.post("/api/v1/user-role-assignments", json={
+        "user_id": person["id"], "role_id": role["id"],
+    })
+
+    for resource, entity, name in (
+        ("org-units", root, "الجذر المترجم"),
+        ("org-units", child, "الوحدة المترجمة"),
+        ("roles", role, "الدور المترجم"),
+        ("profiles", profile, "ملف الصلاحيات المترجم"),
+        ("users", person, "المستخدم المترجم"),
+    ):
+        translated = client.patch(
+            f"/api/v1/entity-translations/{resource}/{entity['id']}/ar",
+            json={"name": name},
+            headers={
+                "If-Match": str(entity["version"]),
+                "X-Change-Reason": "Verify localized organization browser",
+            },
+        )
+        assert translated.status_code == 200, translated.text
+
+    preference = client.get("/api/v1/preferences").json()
+    changed = client.put(
+        "/api/v1/preferences",
+        headers={"If-Match": str(preference["version"])},
+        json={"language_tag": "ar", "working_timezone": "Asia/Dubai"},
+    )
+    assert changed.status_code == 200, changed.text
+
+    roots = client.get("/api/v1/browse/organization/roots").json()
+    assert next(item for item in roots if item["id"] == root["id"])["name"] == "الجذر المترجم"
+    children = client.get(
+        f"/api/v1/browse/organization/org-units/{root['id']}/children"
+    ).json()
+    assert children["org_units"][0]["name"] == "الوحدة المترجمة"
+    role_nodes = client.get(
+        f"/api/v1/browse/organization/org-units/{child['id']}/children"
+    ).json()["roles"]
+    assert role_nodes[0]["name"] == "الدور المترجم"
+    users = client.get(f"/api/v1/browse/organization/roles/{role['id']}/users").json()
+    assert users[0]["name"] == "المستخدم المترجم"
+    assert users[0]["role_name"] == "الدور المترجم"
+    role_summary = client.get(
+        f"/api/v1/browse/organization/roles/{role['id']}/summary"
+    ).json()
+    assert role_summary["profile_name"] == "ملف الصلاحيات المترجم"
+
+    results = client.get(
+        "/api/v1/browse/organization/search",
+        params={"query": "المترجم", "entity_type": "all"},
+    )
+    assert results.status_code == 200, results.text
+    assert {item["name"] for item in results.json()} >= {
+        "الجذر المترجم", "الوحدة المترجمة", "الدور المترجم", "المستخدم المترجم",
+    }
+
+
 def test_organization_unit_selector_mode_can_omit_roles(client: TestClient):
     unit = client.post("/api/v1/org-units", json={"code": "SEL", "name": "Selector Unit"}).json()
     client.post("/api/v1/roles", json={

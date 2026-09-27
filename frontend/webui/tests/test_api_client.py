@@ -290,6 +290,27 @@ def test_saved_search_update_sends_version_and_reason_headers():
     }
 
 
+def test_saved_search_update_does_not_require_a_user_reason():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(
+            version=request.headers.get("if-match"),
+            reason=request.headers.get("x-change-reason"),
+        )
+        return httpx.Response(200, json={"id": 8, "version": 4})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.update_saved_search(8, 3, {"name": "Quarterly"})
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured == {"version": "3", "reason": None}
+
+
 def test_entity_translation_update_is_locale_scoped_and_versioned():
     captured = {}
 
@@ -643,7 +664,7 @@ def test_membership_navigation_and_delete_use_expected_routes():
         requests.append((request.method, request.url.path, request.headers.get("if-match")))
         if request.method == "DELETE":
             return httpx.Response(204)
-        return httpx.Response(200, json=[])
+        return httpx.Response(200, json={"items": [], "total": 0, "limit": 25, "offset": 0})
 
     async def exercise():
         client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
@@ -660,6 +681,30 @@ def test_membership_navigation_and_delete_use_expected_routes():
         ("GET", "/api/v1/roles/8/users", None),
         ("DELETE", "/api/v1/user-role-assignments/12", "3"),
     ]
+
+
+def test_saved_search_audience_lookup_is_scoped_and_bounded():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"items": [], "total": 0, "limit": 25, "offset": 0})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.saved_search_audience_options(
+                "roles", query="aud", ids=[2, 7], limit=25, offset=0,
+            )
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured == {
+        "path": "/api/v1/saved-searches/audience-options/roles",
+        "params": {"q": "aud", "limit": "25", "offset": "0", "ids": "2,7"},
+    }
 
 
 def test_recently_created_uses_date_sort():

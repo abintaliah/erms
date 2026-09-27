@@ -6,6 +6,7 @@ import copy
 import inspect
 import json
 from datetime import datetime, timedelta, timezone
+from html import escape as html_escape
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import available_timezones
@@ -214,9 +215,35 @@ def localized_lifecycle_value(value: Any) -> str:
         "active": render_message("webui.render_table.text.active_3a692d6a"),
         "inactive": render_message("webui.render_table.text.inactive_ffa76f23"),
         "suspended": render_message("webui.show_organization_structure.select.suspended_e5b9d9f5"),
+        "current": render_message("webui.show_organization_structure.select.current_8d79efc1"),
+        "future": render_message("webui.show_organization_structure.select.future_875190f7"),
         "expired": render_message("webui.select_login_sessions.select.expired_4f6360cb"),
         "revoked": render_message("webui.select_login_sessions.select.revoked_c6e031f9"),
     }.get(str(value or "").lower(), str(value or "—"))
+
+
+def localized_privilege_name(privilege: dict[str, Any]) -> str:
+    message_key = f"privilege.{privilege['code']}.name"
+    return render_message(message_key)
+
+
+def localized_privilege_description(privilege: dict[str, Any]) -> str:
+    message_key = f"privilege.{privilege['code']}.description"
+    return render_message(message_key)
+
+
+def localized_privilege_category(category: str) -> str:
+    message_key = f"privilege.category.{category}"
+    return render_message(message_key)
+
+
+def localized_privilege_matches_search(privilege: dict[str, Any], query: str) -> bool:
+    localized = {
+        **privilege,
+        "name": localized_privilege_name(privilege),
+        "description": localized_privilege_description(privilege),
+    }
+    return privilege_matches_search(localized, query)
 
 
 def localized_account_type(value: Any) -> str:
@@ -564,16 +591,16 @@ def display_value(value: Any) -> str:
 
 def medium_label(value: Any) -> str:
     return {
-        "digital": "Digital",
-        "physical": "Physical",
-        "mixed": "Mixed",
+        "digital": render_message("advanced_search.value.digital"),
+        "physical": render_message("advanced_search.value.physical"),
+        "mixed": render_message("advanced_search.value.mixed"),
     }.get(str(value or "").lower(), "—")
 
 
 def direct_classification_label(classification_path: list[dict[str, Any]]) -> str:
     """Format only the classification directly assigned to the aggregation."""
     if not classification_path:
-        return "Unclassified"
+        return "—"
     classification = classification_path[-1]
     return f"{classification['code']} — {classification['title']}"
 
@@ -588,7 +615,38 @@ def review_state(value: Any) -> str | None:
 
 def review_display(value: Any) -> str:
     state = review_state(value)
-    return f"{state} · {format_timestamp(value)}" if state else "Not scheduled"
+    if not state:
+        return "—"
+    localized_state = render_message(
+        "dashboard.review.overdue"
+        if state == "Overdue" else "dashboard.review.upcoming"
+    )
+    return f"{localized_state} · {format_timestamp(value)}"
+
+
+def localized_component_status(value: Any) -> str:
+    return render_message({
+        "available": "advanced_search.value.available",
+        "staged": "advanced_search.value.pending",
+        "pending": "advanced_search.value.pending",
+        "failed": "advanced_search.value.failed",
+        "quarantined": "advanced_search.value.quarantined",
+        "deleted": "advanced_search.value.deleted",
+    }.get(str(value or "").lower(), "common.status.loading"))
+
+
+def localized_indexing_status(value: Any) -> str:
+    return render_message({
+        "indexed": "advanced_search.value.available",
+        "succeeded": "advanced_search.value.available",
+        "failed": "advanced_search.value.failed",
+        "unsupported": "translation_inspector.value.no",
+        "processing": "webui.select_text_indexers.text.processing_c1ea7da0",
+        "leased": "webui.select_text_indexers.text.processing_c1ea7da0",
+        "queued": "advanced_search.value.pending",
+        "pending": "advanced_search.value.pending",
+        "stale": "advanced_search.value.pending",
+    }.get(str(value or "").lower(), "common.status.loading"))
 
 
 def record_draft_component_context(
@@ -640,6 +698,32 @@ def format_file_size(value: Any) -> str:
             return f"{int(amount)} {unit}" if unit == "B" else f"{amount:.1f} {unit}"
         amount /= 1024
     return f"{size} B"
+
+
+def review_datetime_input_value(value: Any) -> str:
+    """Render a stored UTC instant for a browser ``datetime-local`` control."""
+    if not value:
+        return ""
+    _, timezone_name = current_locale_context()
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return utc_instant_to_working(parsed, timezone_name).strftime("%Y-%m-%dT%H:%M")
+
+
+def review_datetime_input_minimum() -> str:
+    _, timezone_name = current_locale_context()
+    return datetime.now(timezone.utc).astimezone(
+        working_zone(timezone_name)
+    ).strftime("%Y-%m-%dT%H:%M")
+
+
+def review_datetime_payload(value: str | None) -> str | None:
+    """Convert working-timezone ``datetime-local`` input into a UTC instant."""
+    if not value:
+        return None
+    _, timezone_name = current_locale_context()
+    return working_datetime_to_utc(
+        datetime.fromisoformat(value), timezone_name,
+    ).isoformat().replace("+00:00", "Z")
 
 
 def validation_error_message(error: ValueError) -> str:
@@ -800,11 +884,11 @@ def render_component_cards(
                 if on_history is not None:
                     ui.button(icon="history", color="blue-grey", on_click=lambda _, item=component: on_history(item)).props("flat round dense").tooltip(render_message("webui.render_component_cards.tooltip.event_history_bbccf5f1"))
             with ui.row().classes("w-full items-center gap-2 flex-wrap"):
-                ui.badge(status.replace("_", " ").title(), color=status_color).props("rounded")
+                ui.badge(localized_component_status(status), color=status_color).props("rounded")
                 indexing = component.get("_indexing")
                 if indexing:
                     index_status = indexing.get("status", "pending")
-                    ui.badge(render_message("webui.render_component_cards.badge.index_title_c266923f", title=index_status.replace('_', ' ').title()), color={
+                    ui.badge(render_message("webui.render_component_cards.badge.index_title_c266923f", title=localized_indexing_status(index_status)), color={
                         "indexed":"positive","succeeded":"positive","failed":"negative",
                         "unsupported":"orange","processing":"primary","leased":"primary",
                         "queued":"warning","pending":"warning","stale":"warning",
@@ -815,10 +899,10 @@ def render_component_cards(
             ui.separator()
             with ui.grid(columns=2).classes("w-full gap-x-6 gap-y-3"):
                 for label, value in (
-                    ("Originated", format_timestamp(component.get("date_originated"))),
-                    ("Uploaded", format_timestamp(component.get("date_created"))),
-                    ("Storage", str(component.get("storage_backend") or "—").title()),
-                    (component.get("checksum_algo") or "Checksum", checksum_short),
+                    (render_message("entity_metadata.field.date_originated"), format_timestamp(component.get("date_originated"))),
+                    (render_message("advanced_search.field.date_created"), format_timestamp(component.get("date_created"))),
+                    (render_message("webui.load_dashboard.label.digital_storage_by_organizational_unit_e4533a05"), str(component.get("storage_backend") or "—")),
+                    (component.get("checksum_algo") or render_message("advanced_search.field.checksum_value"), checksum_short),
                 ):
                     with ui.column().classes("gap-0 min-w-0"):
                         ui.label(label).classes("component-meta-label")
@@ -827,28 +911,32 @@ def render_component_cards(
                             value_label.tooltip(checksum)
 
 
-def component_uploader(on_multi_upload, *, label: str = "Add digital components"):
+def component_uploader(on_multi_upload, *, label: str | None = None):
+    component_label = label or render_message("webui.open_record_draft_editor.label.digital_components_21c9474b")
+    component_guidance = render_message("webui.select_record_details.label.files_belonging_to_this_record_can_be_mana_7c78350c")
+    browse_label = render_message("navigation.item.organization_browser")
+    empty_label = render_message("webui.render_current_components.label.no_digital_components_have_been_uploaded_y_3f61a29a")
     uploader = ui.upload(
         on_multi_upload=on_multi_upload,
-        label=label,
+        label=component_label,
         auto_upload=True,
         multiple=True,
     ).props("accept=*").classes("record-uploader w-full")
-    uploader.add_slot("header", """
+    uploader.add_slot("header", f"""
         <div class="row items-center no-wrap full-width q-pa-md q-gutter-md upload-header">
           <q-avatar icon="cloud_upload" color="blue-1" text-color="primary" size="42px" />
           <div class="column col">
-            <span class="text-weight-medium text-slate-800">Add digital components</span>
-            <span class="text-caption text-slate-500">Drag and drop files here, or choose them from your device</span>
+            <span class="text-weight-medium text-slate-800">{html_escape(component_label)}</span>
+            <span class="text-caption text-slate-500">{html_escape(component_guidance)}</span>
           </div>
-          <q-btn outline no-caps color="primary" icon="folder_open" label="Browse files">
+          <q-btn outline no-caps color="primary" icon="folder_open" label="{html_escape(browse_label)}">
             <q-uploader-add-trigger />
           </q-btn>
         </div>
     """)
-    uploader.add_slot("list", """
+    uploader.add_slot("list", f"""
         <div v-if="props.files.length === 0" class="upload-empty">
-          Files can be dropped anywhere in this panel
+          {html_escape(empty_label)}
         </div>
         <q-list v-else separator class="upload-queue">
           <q-item v-for="file in props.files" :key="file.__key" dense class="q-px-md q-py-sm">
@@ -856,8 +944,8 @@ def component_uploader(on_multi_upload, *, label: str = "Add digital components"
               <q-icon name="description" color="blue-grey-5" size="22px" />
             </q-item-section>
             <q-item-section class="min-width-0">
-              <q-item-label class="text-weight-medium ellipsis">{{ file.name }}</q-item-label>
-              <q-item-label caption>{{ file.__sizeLabel }} · {{ file.__progressLabel }}</q-item-label>
+              <q-item-label class="text-weight-medium ellipsis">{{{{ file.name }}}}</q-item-label>
+              <q-item-label caption>{{{{ file.__sizeLabel }}}} · {{{{ file.__progressLabel }}}}</q-item-label>
             </q-item-section>
             <q-item-section side>
               <q-spinner v-if="file.__status === 'uploading'" color="primary" size="22px" />
@@ -994,7 +1082,9 @@ def deletion_blocked_report(error: ApiError) -> dict[str, Any] | None:
 
 
 def relationship_options(
-    rows: list[dict[str, Any]], label_fields: tuple[str, ...]
+    rows: list[dict[str, Any]], label_fields: tuple[str, ...], *,
+    include_level_number: bool = False,
+    level_label: str | None = None,
 ) -> dict[int, str]:
     options: dict[int, str] = {}
     for item in rows:
@@ -1006,10 +1096,17 @@ def relationship_options(
         values = [value for value in values if value]
         code = values[0] if len(values) > 1 else ""
         name = values[-1] if values else render_message("webui.relationship_options.text.item_id_0e84a7f9", id=item['id'])
-        options[item["id"]] = (
+        label = (
             f"{code} · {name}"
             if code else name
         )
+        if include_level_number and item.get("level_number") is not None:
+            label = (
+                f"{label} · "
+                f"{level_label or render_message('webui.render_table.text.level_167db239')} "
+                f"{item['level_number']}"
+            )
+        options[item["id"]] = label
     return options
 
 
@@ -1311,12 +1408,13 @@ def index(q: str = "") -> None:
         set_active_messages(cached_messages, cached_fallback_keys)
     initial_language = str(cached_localization.get("effective_language") or "en")
     initial_direction = normalize_direction(cached_localization.get("direction"))
+    current_direction = {"value": initial_direction}
 
     def tree_expander_icon(expanded: bool) -> str:
         """Return a disclosure icon pointing into the hierarchy's reading direction."""
         if expanded:
             return "expand_more"
-        return "chevron_left" if initial_direction == "rtl" else "chevron_right"
+        return "chevron_left" if current_direction["value"] == "rtl" else "chevron_right"
 
     set_locale_context(
         initial_language,
@@ -1326,6 +1424,7 @@ def index(q: str = "") -> None:
 
     async def apply_document_direction(language: str, direction: str) -> None:
         normalized = normalize_direction(direction)
+        current_direction["value"] = normalized
         ui.query("html").props(remove="lang dir").props(
             add=f"lang={language} dir={normalized}"
         )
@@ -1426,9 +1525,62 @@ def index(q: str = "") -> None:
         filters: dict[str, Any] | None = None,
         exclude_id: int | None = None,
         item_filter: Callable[[dict[str, Any]], bool] | None = None,
+        on_options_resolved: Callable[[dict[int, str]], None] | None = None,
     ) -> Callable[..., Any]:
         """Load a bounded relationship page as the user filters a selector."""
         request_state: dict[str, Any] = {"revision": 0, "task": None, "loaded": False}
+        # Capture localized static labels while rendering the page. The remote
+        # typeahead later runs in a background task, where falling back to the
+        # process-level English catalogue would leak English into an RTL menu.
+        security_level_label = render_message(
+            "webui.render_table.text.level_167db239"
+        )
+
+        def make_options(rows: list[dict[str, Any]]) -> dict[int, str]:
+            return relationship_options(
+                rows, label_fields,
+                include_level_number=resource == "security-levels",
+                level_label=security_level_label,
+            )
+
+        async def resolve_selected_options() -> None:
+            """Replace restored foreign-key placeholders with localized labels."""
+            selected_values = (
+                list(control.value or []) if control.multiple
+                else ([control.value] if control.value is not None else [])
+            )
+            if not selected_values:
+                return
+            try:
+                rows = await asyncio.gather(*(
+                    api.get(resource, int(value)) for value in selected_values
+                ))
+            except (ApiError, TypeError, ValueError):
+                # A deleted or inaccessible reference remains visible as an unresolved
+                # value; server-side search validation will reject it when appropriate.
+                return
+            resolved = make_options(list(rows))
+            raw_current_values = (
+                set(control.value or []) if control.multiple
+                else ({control.value} if control.value is not None else set())
+            )
+            current_values = {
+                int(value) if str(value).isdigit() else value
+                for value in raw_current_values
+            }
+            control.options = {
+                **{
+                    key: value for key, value in dict(control.options or {}).items()
+                    if key in current_values
+                },
+                **{
+                    key: value for key, value in resolved.items()
+                    if key in current_values
+                },
+            }
+            control.update()
+            if on_options_resolved is not None:
+                on_options_resolved(resolved)
 
         async def load_options(query: str = "") -> None:
             request_state["revision"] += 1
@@ -1459,16 +1611,17 @@ def index(q: str = "") -> None:
                 key: value for key, value in dict(control.options).items()
                 if key in selected_values
             }
-            page_options = relationship_options(
+            page_options = make_options(
                 [
                     item for item in result.get("items", [])
                     if exclude_id is None or int(item["id"]) != int(exclude_id)
                     if item_filter is None or item_filter(item)
                 ],
-                label_fields,
             )
             control.options = {**selected_options, **page_options}
             control.update()
+            if on_options_resolved is not None:
+                on_options_resolved(page_options)
             request_state["loaded"] = True
 
         def schedule_filter(event: Any) -> None:
@@ -1489,6 +1642,138 @@ def index(q: str = "") -> None:
 
         control.on("input-value", schedule_filter)
         control.on("popup-show", ensure_loaded)
+        if control.value is not None:
+            background_tasks.create(resolve_selected_options())
+        return load_options
+
+    def bind_remote_saved_audience_select(
+        control: Any, audience_kind: str,
+    ) -> tuple[Callable[..., Any], Callable[..., Any]]:
+        """Attach a bounded typeahead to a saved-search role or unit selector."""
+        request_state: dict[str, Any] = {"revision": 0, "task": None}
+
+        def option_label(item: dict[str, Any]) -> str:
+            name = (item.get("localized") or {}).get("name") or item.get("name") or item["id"]
+            return f"{name} ({item['code']})" if item.get("code") else str(name)
+
+        async def load_options(query: str = "") -> None:
+            request_state["revision"] += 1
+            revision = request_state["revision"]
+            selected = set(control.value or [])
+            retained = {key: value for key, value in dict(control.options).items() if key in selected}
+            term = query.strip()
+            if len(term) < 2:
+                control.options = retained
+                control.update()
+                return
+            try:
+                page = await api.saved_search_audience_options(
+                    audience_kind, query=term, limit=25, offset=0,
+                )
+            except asyncio.CancelledError:
+                return
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+                return
+            if revision != request_state["revision"]:
+                return
+            control.options = {
+                **retained,
+                **{int(item["id"]): option_label(item) for item in page.get("items", [])},
+            }
+            control.update()
+
+        async def load_selected(ids: list[int]) -> None:
+            if not ids:
+                return
+            try:
+                pages = await asyncio.gather(*(
+                    api.saved_search_audience_options(
+                        audience_kind, ids=ids[index:index + 50],
+                        limit=min(50, len(ids[index:index + 50])), offset=0,
+                    )
+                    for index in range(0, len(ids), 50)
+                ))
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+                return
+            items = [item for page in pages for item in page.get("items", [])]
+            control.options = {
+                **dict(control.options),
+                **{int(item["id"]): option_label(item) for item in items},
+            }
+            control.value = [value for value in ids if value in control.options]
+            control.update()
+
+        def schedule(event: Any) -> None:
+            previous = request_state.get("task")
+            if previous is not None and not previous.done():
+                previous.cancel()
+            async def delayed() -> None:
+                await asyncio.sleep(0.2)
+                await load_options(str(event.args or ""))
+            request_state["task"] = asyncio.create_task(delayed())
+
+        control.on("input-value", schedule)
+        return load_options, load_selected
+
+    def bind_remote_people_select(
+        control: Any,
+        *,
+        excluded_ids: Callable[[], set[int]] | None = None,
+    ) -> Callable[..., Any]:
+        """Attach debounced active-person typeahead behavior to a user selector."""
+        request_state: dict[str, Any] = {"revision": 0, "task": None}
+
+        async def load_options(query: str = "") -> None:
+            request_state["revision"] += 1
+            revision = request_state["revision"]
+            selected_values = (
+                set(control.value or []) if control.multiple
+                else ({control.value} if control.value is not None else set())
+            )
+            selected_options = {
+                key: value for key, value in dict(control.options).items()
+                if key in selected_values
+            }
+            term = query.strip()
+            if len(term) < 2:
+                control.options = selected_options
+                control.update()
+                return
+            try:
+                result = await api.active_people(term, limit=25, offset=0)
+            except asyncio.CancelledError:
+                return
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+                return
+            if revision != request_state["revision"]:
+                return
+            excluded = excluded_ids() if excluded_ids else set()
+            page_options = {
+                int(person["id"]): (
+                    f"{(person.get('localized') or {}).get('name') or person['name']} — "
+                    f"{person.get('email') or render_message('webui.select_user_details.label.no_email_address_1d665180')}"
+                )
+                for person in result.get("items", [])
+                if int(person["id"]) not in excluded
+            }
+            control.options = {**selected_options, **page_options}
+            control.update()
+
+        def schedule_filter(event: Any) -> None:
+            previous = request_state.get("task")
+            if previous is not None and not previous.done():
+                previous.cancel()
+
+            async def delayed() -> None:
+                await asyncio.sleep(0.2)
+                await load_options(str(event.args or ""))
+
+            request_state["task"] = asyncio.create_task(delayed())
+
+        control.on("input-value", schedule_filter)
         return load_options
 
     def bind_remote_scheme_select(control: Any) -> None:
@@ -1603,6 +1888,59 @@ def index(q: str = "") -> None:
         html[dir="rtl"] .q-breadcrumbs__separator .q-icon { transform: scaleX(-1); }
         html[dir="rtl"] .q-notification__message,
         html[dir="rtl"] .q-tooltip { text-align: right; direction: rtl; }
+        html[dir="rtl"] .detail-status-notice {
+            direction: rtl;
+            flex-direction: row !important;
+            text-align: right;
+        }
+        html[dir="rtl"] .detail-status-notice-copy {
+            align-items: flex-start;
+            text-align: right;
+        }
+        html[dir="rtl"] .hold-people-row {
+            direction: rtl;
+            flex-direction: row !important;
+            justify-content: flex-start;
+        }
+        html[dir="rtl"] .hold-person-button .q-btn__content {
+            direction: rtl;
+            flex-direction: row !important;
+        }
+        .organization-browser-node-row {
+            display: grid !important;
+            grid-template-columns: 2rem 1.5rem minmax(0, 1fr) auto;
+            grid-template-areas: "expander icon content badge";
+            align-items: center;
+            column-gap: .25rem;
+        }
+        .organization-browser-expander { grid-area: expander; }
+        .organization-browser-icon { grid-area: icon; }
+        .organization-browser-content { grid-area: content; }
+        .organization-browser-badge { grid-area: badge; }
+        html[dir="rtl"] .organization-browser-node-row {
+            direction: rtl;
+            grid-template-columns: 2rem 1.5rem minmax(0, 1fr) auto;
+            grid-template-areas: "expander icon content badge";
+        }
+        html[dir="rtl"] .organization-browser-content {
+            direction: rtl; text-align: right; align-items: flex-start;
+        }
+        .organization-browser-summary-field {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            align-items: center;
+            column-gap: .75rem;
+        }
+        .organization-browser-summary-label { text-align: left; }
+        .organization-browser-summary-value { text-align: right; }
+        html[dir="rtl"] .organization-browser-summary-field { direction: rtl; }
+        html[dir="rtl"] .organization-browser-summary-label { text-align: right; }
+        html[dir="rtl"] .organization-browser-summary-value {
+            direction: rtl; text-align: left;
+        }
+        html[dir="rtl"] .organization-browser-disclosure {
+            transform: scaleX(-1);
+        }
         .translation-card-heading { order: 1; }
         .translation-card-actions { order: 2; }
         html[dir="rtl"] .translation-card-heading { order: 2; }
@@ -1631,6 +1969,40 @@ def index(q: str = "") -> None:
             grid-template-areas: "expander icon content badge";
         }
         html[dir="rtl"] .classification-tree-content { direction: rtl; text-align: right; }
+        .advanced-relationship-tree-node {
+            position: relative;
+            width: 100%;
+        }
+        .advanced-relationship-tree-row {
+            display: grid !important;
+            grid-template-columns: 2rem 1.5rem minmax(0, 1fr) auto;
+            grid-template-areas: "expander icon content action";
+            align-items: center;
+            column-gap: .35rem;
+        }
+        .advanced-relationship-tree-expander { grid-area: expander; }
+        .advanced-relationship-tree-icon { grid-area: icon; }
+        .advanced-relationship-tree-content {
+            grid-area: content;
+            align-items: flex-start;
+            text-align: start;
+        }
+        .advanced-relationship-tree-action { grid-area: action; }
+        .advanced-relationship-tree-children {
+            margin-inline-start: 1rem;
+            padding-inline-start: 1rem;
+            border-inline-start: 1px solid #cbd5e1;
+        }
+        html[dir="rtl"] .advanced-relationship-tree-row {
+            direction: rtl;
+            grid-template-columns: 2rem 1.5rem minmax(0, 1fr) auto;
+            grid-template-areas: "expander icon content action";
+        }
+        html[dir="rtl"] .advanced-relationship-tree-content {
+            direction: rtl;
+            align-items: flex-start;
+            text-align: right;
+        }
         .classification-scheme-selector-panel { border-inline-end: 1px solid #e2e8f0; }
         html[dir="rtl"] .classification-scheme-master-detail {
             direction: rtl; flex-direction: row !important;
@@ -1716,22 +2088,40 @@ def index(q: str = "") -> None:
         .compact-result-list { border: 1px solid var(--erms-border); border-radius: 12px; overflow: hidden; }
         .compact-result-item { width: 100%; border-bottom: 1px solid var(--erms-border); background: white; }
         .compact-result-item:last-child { border-bottom: 0; }
-        .compact-result-row { min-height: 68px; padding: 8px 12px; gap: 10px; }
+        .compact-result-row {
+            direction: ltr;
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-areas: "identity actions";
+            align-items: center;
+            min-height: 68px; padding: 8px 12px; gap: 10px;
+        }
+        .compact-result-identity {
+            direction: ltr;
+            grid-area: identity;
+            display: grid !important;
+            grid-template-columns: 30px minmax(0, max-content);
+            grid-template-areas: "type title";
+            justify-content: start;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
         .compact-result-type {
+            grid-area: type;
             width: 30px; height: 34px; flex: 0 0 30px; display: flex; align-items: center;
             justify-content: center; border-radius: 7px; color: var(--erms-blue); background: #eaf5fc;
         }
-        .compact-result-title { min-width: 0; line-height: 1.3; }
+        .compact-result-title { grid-area: title; min-width: 0; line-height: 1.3; }
         .compact-result-date {
             color: #718096; font-size: .75rem;
             flex: 0 0 92px; width: 92px;
             font-variant-numeric: tabular-nums;
             white-space: nowrap;
         }
-        .compact-result-parent { max-width: min(46vw, 560px); padding: 0 5px !important; min-height: 24px !important; }
         .compact-result-indicators { gap: 0; }
         .compact-result-indicator { width: 28px; height: 28px; min-width: 28px !important; padding: 0 !important; }
-        .compact-result-actions { flex-wrap: nowrap; gap: 0; }
+        .compact-result-actions { grid-area: actions; flex-wrap: nowrap; gap: 0; }
         .compact-result-actions .q-btn { width: 34px; height: 34px; min-width: 34px !important; padding: 0 !important; }
         .compact-result-component-badge {
             min-width: 18px; height: 18px; padding: 0 5px; margin-inline-start: -5px; margin-inline-end: 4px;
@@ -1751,16 +2141,45 @@ def index(q: str = "") -> None:
         .compact-result-snippet > .q-row { flex-wrap: nowrap !important; overflow: hidden; white-space: nowrap; }
         .compact-result-snippet .q-label { white-space: pre !important; flex: 0 0 auto; }
         html[dir="rtl"] .compact-result-row {
-            direction: rtl; flex-direction: row !important;
+            direction: ltr;
+            grid-template-columns: auto minmax(0, 1fr);
+            grid-template-areas: "actions identity";
+        }
+        html[dir="rtl"] .compact-result-identity {
+            direction: ltr;
+            grid-template-columns: minmax(0, max-content) 30px;
+            grid-template-areas: "title type";
+            justify-content: end;
         }
         html[dir="rtl"] .compact-result-title {
             direction: rtl; text-align: right;
+            display: grid !important;
+            grid-template-columns: minmax(0, max-content);
+            justify-content: start;
+            justify-items: start;
+            align-items: flex-end !important;
         }
-        html[dir="rtl"] .compact-result-title > .q-row,
+        html[dir="rtl"] .compact-result-primary,
+        html[dir="rtl"] .compact-result-meta,
         html[dir="rtl"] .compact-result-indicators,
         html[dir="rtl"] .compact-result-actions,
         html[dir="rtl"] .compact-result-component {
             direction: rtl; flex-direction: row !important;
+        }
+        html[dir="rtl"] .compact-result-primary,
+        html[dir="rtl"] .compact-result-meta {
+            width: auto !important;
+            max-width: 100%;
+            justify-self: start !important;
+            align-self: end !important;
+            justify-content: flex-start !important;
+            text-align: right;
+        }
+        html[dir="rtl"] .compact-result-indicators { order: -1; }
+        html[dir="rtl"] .compact-result-date { order: 0; text-align: right; }
+        html[dir="rtl"] .compact-result-actions {
+            direction: rtl;
+            flex-direction: row !important;
         }
         html[dir="rtl"] .compact-result-title .q-label { text-align: right; }
         .global-search-highlight { background: #fff0a8; color: #573f00; border-radius: 3px;
@@ -1906,7 +2325,11 @@ def index(q: str = "") -> None:
             direction: inherit; text-align: start;
         }
         .wathiq-translation-inspector[hidden] { display: none !important; }
-        .wathiq-i18n-panel-header { display: flex; align-items: center; gap: 8px; }
+        .wathiq-i18n-panel-header {
+            display: flex; align-items: center; gap: 8px; cursor: grab;
+            touch-action: none; user-select: none;
+        }
+        .wathiq-i18n-panel-header.is-dragging { cursor: grabbing; }
         .wathiq-i18n-panel-title { font-size: .82rem; font-weight: 700; flex: 1; }
         .wathiq-i18n-panel-actions { display: flex; gap: 2px; }
         .wathiq-i18n-panel-actions button {
@@ -2120,6 +2543,8 @@ def index(q: str = "") -> None:
             width: 100%; min-width: 0;
             gap: 10px 18px; padding-top: 10px; border-top: 1px solid #e7ebef;
         }
+        .hold-list-card--effective { border-inline-start: 4px solid #fbbf24; }
+        .hold-list-facts { grid-template-columns: repeat(5, minmax(0, 1fr)); }
         .user-role-assignment-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .user-role-assignment-card {
             padding: 9px 11px; gap: 8px; cursor: pointer; transition: all .16s ease;
@@ -2144,16 +2569,27 @@ def index(q: str = "") -> None:
             border-radius: 9px; background: var(--erms-surface);
         }
         .role-privilege-group-header {
-            min-height: 42px; padding: 9px 11px; background: #eef7fd;
+            display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center; min-height: 42px; padding: 9px 11px; background: #eef7fd;
             border-bottom: 1px solid #dceaf3;
         }
+        .role-privilege-group-title { min-width: 0; text-align: start; }
+        .role-privilege-group-count { justify-self: end; }
         .role-privilege-list {
             display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 0 14px; padding: 4px 11px 8px;
         }
         .role-privilege-item {
-            min-width: 0; padding: 7px 2px; border-bottom: 1px solid #edf1f4;
+            display: grid; grid-template-columns: auto minmax(0, 1fr);
+            align-items: start; min-width: 0; padding: 7px 2px;
+            border-bottom: 1px solid #edf1f4;
         }
+        .role-privilege-copy { min-width: 0; text-align: start; }
+        html[dir="rtl"] .role-privilege-group-header,
+        html[dir="rtl"] .role-privilege-item { direction: rtl; }
+        html[dir="rtl"] .role-privilege-group-title,
+        html[dir="rtl"] .role-privilege-copy { text-align: right; }
+        html[dir="rtl"] .role-privilege-group-count { justify-self: left; }
         @media (max-width: 820px) {
             .role-privilege-groups { grid-template-columns: minmax(0, 1fr); }
         }
@@ -2308,6 +2744,12 @@ def index(q: str = "") -> None:
         .identity-command-metadata { grid-column: 1; grid-row: 1; min-width: 0; }
         .identity-command-actions { grid-column: 2; grid-row: 1; min-width: 0; width: 100%; }
         .identity-command-actions .q-btn { justify-content: flex-start; }
+        .identity-detail-fact { min-width: 0; text-align: start; align-items: flex-start; }
+        html[dir="rtl"] .identity-detail-facts { direction: rtl; }
+        html[dir="rtl"] .identity-detail-fact {
+            direction: rtl; text-align: right; align-items: flex-start;
+        }
+        html[dir="rtl"] .identity-detail-fact > * { width: 100%; text-align: right; }
         .hold-command-layout {
             display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .65fr);
             align-items: start; gap: 12px;
@@ -2471,6 +2913,14 @@ def index(q: str = "") -> None:
         .record-uploader:hover { border-color: #5b8ec9; background: #f7fbff; }
         .record-uploader .q-uploader__header { background: transparent; color: inherit; }
         .record-uploader .q-uploader__list { min-height: 58px; padding: 0; }
+        .record-uploader .upload-header {
+            direction: ltr;
+            flex-direction: row !important;
+        }
+        .record-uploader .upload-header > .column {
+            align-items: center;
+            text-align: center;
+        }
         .upload-empty { display: flex; align-items: center; justify-content: center; min-height: 58px; color: #94a3b8; font-size: .78rem; }
         .upload-queue { max-height: 144px; overflow-y: auto; background: #f8fafc; }
         .membership-dialog {
@@ -2704,6 +3154,13 @@ def index(q: str = "") -> None:
             border-radius: 999px; color: var(--erms-blue); background: #eaf6fd;
         }
         .org-unit-lineage-node.current { color: white; background: var(--erms-blue); }
+        .org-unit-lineage-copy {
+            display: flex; align-items: center; gap: 8px; min-width: 0;
+            justify-content: flex-start;
+        }
+        html[dir="rtl"] .org-unit-lineage-copy {
+            direction: rtl; flex-direction: row !important;
+        }
         .org-unit-lineage-link { cursor: pointer; color: var(--erms-blue); }
         .org-unit-lineage-link:hover { text-decoration: underline; }
         .org-unit-lineage-code {
@@ -2846,6 +3303,39 @@ def index(q: str = "") -> None:
             .dashboard-activity-badge { display: none; }
         }
         [dir="rtl"] .advanced-search-page { direction: rtl; text-align: right; }
+        [dir="rtl"] .advanced-search-target-row,
+        [dir="rtl"] .advanced-search-sort-row,
+        [dir="rtl"] .advanced-search-submit-row,
+        [dir="rtl"] .advanced-search-group-toolbar,
+        [dir="rtl"] .advanced-search-condition-row {
+            direction: ltr;
+            flex-direction: row-reverse !important;
+        }
+        [dir="rtl"] .advanced-search-target-row > *,
+        [dir="rtl"] .advanced-search-sort-row > *,
+        [dir="rtl"] .advanced-search-submit-row > *,
+        [dir="rtl"] .advanced-search-group-toolbar > *,
+        [dir="rtl"] .advanced-search-condition-row > * {
+            direction: rtl;
+            text-align: right;
+        }
+        [dir="rtl"] .advanced-search-group {
+            border-left-width: 1px !important;
+            border-right-width: 4px !important;
+            border-right-color: rgb(147 197 253) !important;
+        }
+        [dir="rtl"] .advanced-search-condition-actions {
+            direction: ltr;
+            flex-direction: row-reverse !important;
+            margin-inline-start: 0 !important;
+            margin-right: auto !important;
+        }
+        [dir="rtl"] .advanced-search-technical-value,
+        [dir="rtl"] .advanced-search-technical-value input {
+            direction: ltr !important;
+            text-align: left !important;
+        }
+        [dir="rtl"] .advanced-search-auto-value input { text-align: start !important; }
         [dir="rtl"] .advanced-search-group .pl-2 {
             padding-inline-start: 0 !important;
             padding-inline-end: .5rem !important;
@@ -3923,8 +4413,6 @@ def index(q: str = "") -> None:
         metadata_matched: bool = False,
         content_matched: bool = False,
         show_medium: bool = False,
-        parent_aggregation: dict[str, Any] | None = None,
-        on_open_parent: Any | None = None,
         can_favourite: bool = True,
         can_preview: bool = False,
         can_expand_components: bool = False,
@@ -3940,63 +4428,52 @@ def index(q: str = "") -> None:
         result_id = f"compact-result-{resource}-{int(item['id'])}"
         with ui.column().classes("compact-result-item gap-0").props(f"id={result_id}"):
             with ui.row().classes("compact-result-row w-full items-center no-wrap"):
-                with ui.element("div").classes("compact-result-type"):
-                    ui.icon("description" if is_record else "folder", size="20px").tooltip(
-                        render_message("webui.render_compact_resource_result.tooltip.record_1b123585") if is_record else render_message("webui.render_compact_resource_result.tooltip.aggregation_fbf8ea6e")
-                    )
-                with ui.column().classes("compact-result-title gap-0 grow"):
-                    with ui.row().classes("w-full items-center no-wrap gap-2 min-w-0"):
-                        ui.label(str(number)).classes("text-sm font-semibold text-slate-800 shrink-0")
-                        ui.label("·").classes("text-slate-300 shrink-0")
-                        ui.label(item.get("title") or render_message("webui.render_compact_resource_result.label.untitled_84d7d2e0")).classes(
-                            "text-sm font-semibold text-slate-800 truncate"
-                        ).tooltip(item.get("title") or render_message("webui.render_compact_resource_result.tooltip.untitled_72cde12a"))
-                    with ui.row().classes("w-full items-center no-wrap gap-1"):
-                        ui.label(format_date(date_value)).classes(
-                            "compact-result-date"
-                        ).tooltip(render_message("webui.render_compact_resource_result.tooltip.originated_d00c8b65") if is_record else render_message("webui.render_compact_resource_result.tooltip.opened_4b8fc56f"))
-                        with ui.row().classes("compact-result-indicators items-center no-wrap"):
-                            if item.get("is_vital"):
-                                ui.icon("emergency", color="red-8", size="18px").classes(
-                                    "compact-result-indicator"
-                                ).tooltip(render_message("webui.render_compact_resource_result.tooltip.vital_record_9db00737") if is_record else render_message("webui.render_compact_resource_result.tooltip.vital_aggregation_8c3d9591"))
-                            if item.get("on_effective_hold") or item.get("is_on_effective_hold"):
-                                ui.icon("gavel", color="warning", size="18px").classes(
-                                    "compact-result-indicator"
-                                ).tooltip(render_message("webui.render_compact_resource_result.tooltip.on_effective_legal_hold_07877134"))
-                            if metadata_matched:
-                                ui.icon("manage_search", color="blue-grey-7", size="18px").classes(
-                                    "compact-result-indicator"
-                                ).tooltip(render_message("webui.render_compact_resource_result.tooltip.record_metadata_matched_2ba2a770") if is_record else render_message("webui.render_compact_resource_result.tooltip.aggregation_metadata_matched_5dbe7774"))
-                            if content_matched:
-                                ui.icon("text_snippet", color="blue-grey-7", size="18px").classes(
-                                    "compact-result-indicator"
-                                ).tooltip(render_message("webui.render_compact_resource_result.tooltip.digital_component_content_matched_35625a16"))
-                            if show_medium and item.get("medium"):
-                                medium = str(item["medium"]).lower()
-                                medium_icon = {
-                                    "physical": "inventory_2", "digital": "computer", "mixed": "layers",
-                                }.get(medium, "category")
-                                ui.icon(medium_icon, color="blue-grey-7", size="18px").classes(
-                                    "compact-result-indicator"
-                                ).tooltip(render_message("webui.render_compact_resource_result.tooltip.medium_medium_label_f8be324f", medium_label=medium_label(medium)))
-                        if is_record and parent_aggregation and on_open_parent is not None:
-                            parent_number = parent_aggregation.get("code") or parent_aggregation.get("aggregation_number")
-                            parent_title = parent_aggregation.get("name") or parent_aggregation.get("title")
-                            parent_label = " — ".join(filter(None, (parent_number, parent_title)))
-                            ui.button(
-                                parent_label or render_message("webui.render_compact_resource_result.button.open_parent_aggregation_a38da378"),
-                                icon="folder", on_click=lambda _, parent=parent_aggregation: on_open_parent(parent),
-                            ).props(
-                                "flat dense no-caps color=primary aria-label='" + render_message("webui.render_compact_resource_result.accessible_name.open_parent_aggregation_42880433") + "'"
-                            ).classes("compact-result-parent text-xs min-w-0 truncate").tooltip(
-                                render_message("webui.render_compact_resource_result.tooltip.open_parent_aggregation_parent_label_2d8be084", parent_label=parent_label)
-                            )
+                with ui.element("div").classes("compact-result-identity"):
+                    with ui.element("div").classes("compact-result-type"):
+                        ui.icon("description" if is_record else "folder", size="20px").tooltip(
+                            render_message("webui.render_compact_resource_result.tooltip.record_1b123585") if is_record else render_message("webui.render_compact_resource_result.tooltip.aggregation_fbf8ea6e")
+                        )
+                    with ui.column().classes("compact-result-title gap-0"):
+                        with ui.row().classes("compact-result-primary w-full items-center no-wrap gap-2 min-w-0"):
+                            ui.label(str(number)).classes("text-sm font-semibold text-slate-800 shrink-0")
+                            ui.label("·").classes("text-slate-300 shrink-0")
+                            ui.label(item.get("title") or render_message("webui.render_compact_resource_result.label.untitled_84d7d2e0")).classes(
+                                "text-sm font-semibold text-slate-800 truncate"
+                            ).tooltip(item.get("title") or render_message("webui.render_compact_resource_result.tooltip.untitled_72cde12a"))
+                        with ui.row().classes("compact-result-meta w-full items-center no-wrap gap-1"):
+                            ui.label(format_date(date_value)).classes(
+                                "compact-result-date"
+                            ).tooltip(render_message("webui.render_compact_resource_result.tooltip.originated_d00c8b65") if is_record else render_message("webui.render_compact_resource_result.tooltip.opened_4b8fc56f"))
+                            with ui.row().classes("compact-result-indicators items-center no-wrap"):
+                                if item.get("is_vital"):
+                                    ui.icon("emergency", color="red-8", size="18px").classes(
+                                        "compact-result-indicator"
+                                    ).tooltip(render_message("webui.render_compact_resource_result.tooltip.vital_record_9db00737") if is_record else render_message("webui.render_compact_resource_result.tooltip.vital_aggregation_8c3d9591"))
+                                if item.get("on_effective_hold") or item.get("is_on_effective_hold"):
+                                    ui.icon("gavel", color="warning", size="18px").classes(
+                                        "compact-result-indicator"
+                                    ).tooltip(render_message("webui.render_compact_resource_result.tooltip.on_effective_legal_hold_07877134"))
+                                if metadata_matched:
+                                    ui.icon("manage_search", color="blue-grey-7", size="18px").classes(
+                                        "compact-result-indicator"
+                                    ).tooltip(render_message("webui.render_compact_resource_result.tooltip.record_metadata_matched_2ba2a770") if is_record else render_message("webui.render_compact_resource_result.tooltip.aggregation_metadata_matched_5dbe7774"))
+                                if content_matched:
+                                    ui.icon("text_snippet", color="blue-grey-7", size="18px").classes(
+                                        "compact-result-indicator"
+                                    ).tooltip(render_message("webui.render_compact_resource_result.tooltip.digital_component_content_matched_35625a16"))
+                                if show_medium and item.get("medium"):
+                                    medium = str(item["medium"]).lower()
+                                    medium_icon = {
+                                        "physical": "inventory_2", "digital": "computer", "mixed": "layers",
+                                    }.get(medium, "category")
+                                    ui.icon(medium_icon, color="blue-grey-7", size="18px").classes(
+                                        "compact-result-indicator"
+                                    ).tooltip(render_message("webui.render_compact_resource_result.tooltip.medium_medium_label_f8be324f", medium_label=medium_label(medium)))
                 with ui.row().classes("compact-result-actions items-center no-wrap"):
                     component_host = None
                     expand_button = None
                     if component_rows:
-                        expand_button = ui.button(icon="chevron_right").props(
+                        expand_button = ui.button(icon=tree_expander_icon(False)).props(
                             "flat round dense color=primary aria-label='" + render_message("webui.render_compact_resource_result.accessible_name.show_digital_components_08467816") + "'"
                         )
                         ui.badge(str(len(component_rows)), color="warning").props(
@@ -4052,7 +4529,7 @@ def index(q: str = "") -> None:
                     component_host.set_visibility(expanded["value"])
                     expand_button.props(remove="icon aria-label")
                     expand_button.props(
-                        f"icon={'expand_more' if expanded['value'] else 'chevron_right'} "
+                        f"icon={tree_expander_icon(expanded['value'])} "
                         f"aria-label='{'Hide' if expanded['value'] else 'Show'} digital components'"
                     )
                     expand_button.update()
@@ -5869,9 +6346,12 @@ def index(q: str = "") -> None:
         try:
             fetched = await api.get("records", record_id)
             record = (await decorate_for_spec(ENTITIES["records"], [fetched]))[0]
-            security_level = await api.get("security-levels", record["security_level_id"])
-            capabilities = await api.resource_capabilities("records", record_id)
-            effective_holds = await api.effective_holds("record", record_id)
+            security_level, owning_org_unit, capabilities, effective_holds = await asyncio.gather(
+                api.get("security-levels", record["security_level_id"]),
+                api.get("org-units", record["owning_org_unit_id"]),
+                api.resource_capabilities("records", record_id),
+                api.effective_holds("record", record_id),
+            )
             record_components = (
                 await api.components(record_id)
                 if capabilities.get("list_components") else []
@@ -6113,11 +6593,11 @@ def index(q: str = "") -> None:
                             with dialog, ui.card().classes("w-[520px] max-w-full"):
                                 ui.label(render_message("webui.change_record_review_date.label.schedule_next_review_ea5d874d")).classes("text-xl font-semibold")
                                 ui.label(render_message("webui.change_record_review_date.label.set_a_future_date_or_clear_it_when_no_revi_45f20a16")).classes("text-sm text-slate-500")
-                                review_date = ui.input(render_message("webui.change_record_review_date.input.date_of_next_review_2e08f279"), value=str(record.get("date_of_next_review") or "")[:16]).props(f"outlined clearable type=datetime-local min={datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M')}").classes("w-full")
+                                review_date = ui.input(render_message("webui.change_record_review_date.input.date_of_next_review_2e08f279"), value=review_datetime_input_value(record.get("date_of_next_review"))).props(f"outlined clearable type=datetime-local min={review_datetime_input_minimum()}").classes("w-full")
                                 reason = ui.textarea(render_message("webui.change_record_review_date.textarea.reason_f2cf789a")).props("outlined autogrow").classes("w-full")
                                 async def submit() -> None:
                                     if not (reason.value or "").strip(): ui.notify(render_message("webui.submit.notify.enter_a_reason_f7e81e79"), color="warning"); return
-                                    value = datetime.fromisoformat(review_date.value).isoformat() if review_date.value else None
+                                    value = review_datetime_payload(review_date.value)
                                     try:
                                         saved = await api.change_review_date("records", record["id"], record["version"], value, reason.value.strip())
                                         dialog.close(); await refresh_record_view(saved)
@@ -6141,34 +6621,28 @@ def index(q: str = "") -> None:
                 ui.separator()
                 with ui.column().classes("w-full px-5 py-4 gap-4"):
                     if record.get("_effectively_closed"):
-                        with ui.row().classes("w-full items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg"):
+                        with ui.row().classes("detail-status-notice w-full items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg"):
                             ui.icon("lock", color="amber-8")
                             ui.label(render_message("webui.select_record_details.label.this_record_is_read_only_because_its_aggre_39233ef1")).classes("text-sm text-amber-900")
                     if record.get("is_vital"):
                         with ui.row().classes(
-                            "w-full items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg"
+                            "detail-status-notice w-full items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg"
                         ):
                             ui.icon("emergency", color="red-8")
-                            with ui.column().classes("gap-0"):
+                            with ui.column().classes("detail-status-notice-copy gap-0"):
                                 ui.label(render_message("webui.select_record_details.label.vital_record_26408a5c")).classes("text-sm font-semibold text-red-900")
                                 ui.label(
                                     render_message("webui.select_record_details.label.this_record_is_protected_from_deletion_whi_70e8fed6")
                                 ).classes("text-xs text-red-800")
-                    if record.get("description"):
-                        with ui.column().classes("w-full gap-1 rounded-xl bg-slate-50 px-4 py-3"):
-                            ui.label(render_message("webui.select_record_details.label.description_918dd932")).classes("detail-field-label")
-                            ui.label(record["description"]).classes(
-                                "w-full text-sm leading-6 text-slate-600 whitespace-pre-wrap"
-                            )
                     if effective_holds:
                         with ui.row().classes(
-                            "w-fit max-w-full items-center gap-2 flex-wrap rounded-xl "
+                            "detail-status-notice w-fit max-w-full items-center gap-2 flex-wrap rounded-xl "
                             "border border-amber-200 bg-amber-50 px-3 py-2"
                         ):
                             ui.icon("gavel", color="warning").classes("shrink-0")
                             hold_count = len(effective_holds)
                             ui.label(
-                                render_message("webui.select_record_details.label.protected_by_hold_count_effective_value_fdfb1fe2", hold_count=hold_count, value='hold' if hold_count == 1 else 'holds')
+                                render_message("webui.select_record_details.label.protected_by_hold_count_effective_value_fdfb1fe2", hold_count=hold_count)
                             ).classes("text-sm font-semibold text-amber-900")
                             ui.button(
                                 render_message("webui.select_record_details.button.view_holds_73f90e5b"), icon="visibility",
@@ -6179,37 +6653,56 @@ def index(q: str = "") -> None:
                             ).props("flat dense no-caps color=warning")
                     with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
                         record_metadata = [
-                            ("Security level", f"{security_level['code']} — {security_level['name']}"),
                             (
-                                "Owning organizational unit",
-                                f"{record['owning_org_unit_code']} — {record['owning_org_unit_name']}",
+                                "security_level", render_message("entity_metadata.field.security_level"),
+                                f"{security_level['code']} — {(security_level.get('localized') or {}).get('name') or security_level['name']}",
                             ),
-                            ("Medium", medium_label(record.get("medium"))),
-                            ("Vital status", "Vital" if record.get("is_vital") else "Not vital"),
-                            ("Originated", format_timestamp(record.get("date_originated"))),
-                            ("Created", format_timestamp(record.get("date_created"))),
+                            (
+                                "owning_org_unit",
+                                render_message("advanced_search.field.owning_org_unit"),
+                                f"{owning_org_unit['code']} — {(owning_org_unit.get('localized') or {}).get('name') or owning_org_unit['name']}",
+                            ),
+                            ("medium", render_message("entity_metadata.field.medium"), medium_label(record.get("medium"))),
+                            (
+                                "vital_status",
+                                render_message("webui.select_record_details.button.vital_status_e3b08bfe"),
+                                render_message("translation_inspector.value.yes")
+                                if record.get("is_vital") else
+                                render_message("translation_inspector.value.no"),
+                            ),
+                            ("originated", render_message("entity_metadata.field.date_originated"), format_timestamp(record.get("date_originated"))),
+                            ("created", render_message("advanced_search.field.date_created"), format_timestamp(record.get("date_created"))),
                         ]
                         if record.get("medium") != "digital":
                             record_metadata.extend([
-                                ("Inherited assigned location", record.get("effective_assigned_location") or "Unknown"),
-                                ("Inherited current location", record.get("effective_current_location") or "Unknown"),
+                                (
+                                    "inherited_assigned_location",
+                                    f'{render_message("entity_metadata.field.assigned_location")} · {render_message("entity_metadata.field.inherited_location")}',
+                                    record.get("effective_assigned_location") or render_message("webui.render_detail_content.text.unknown_d3c1ce73"),
+                                ),
+                                (
+                                    "inherited_current_location",
+                                    f'{render_message("entity_metadata.field.current_location")} · {render_message("entity_metadata.field.inherited_location")}',
+                                    record.get("effective_current_location") or render_message("webui.render_detail_content.text.unknown_d3c1ce73"),
+                                ),
                             ])
                         record_metadata.extend([
-                            ("Review", review_display(record.get("date_of_next_review"))),
+                            ("review", render_message("entity_metadata.field.review"), review_display(record.get("date_of_next_review"))),
                             # The state disambiguates a protected existing
                             # container from an absent relationship; records
                             # structurally always have a container.
                             (
-                                "Containing aggregation",
-                                "Restricted aggregation"
+                                "containing_aggregation",
+                                render_message("advanced_search.field.parent_aggregation"),
+                                render_message("webui.open_aggregation.label.parent_aggregation_restricted_684099c8")
                                 if record.get("aggregation_state") == "redacted"
                                 else record.get("aggregation_display"),
                             ),
                         ])
-                        for label, value in record_metadata:
+                        for field_key, label, value in record_metadata:
                             with ui.column().classes("detail-field gap-1"):
                                 ui.label(label).classes("detail-field-label")
-                                if label == "Containing aggregation" and isinstance(value, dict):
+                                if field_key == "containing_aggregation" and isinstance(value, dict):
                                     with ui.button(on_click=open_containing_aggregation).props(
                                         "flat dense no-caps color=primary"
                                     ).classes("detail-linked-entity self-start -m-2 p-2"):
@@ -6221,18 +6714,25 @@ def index(q: str = "") -> None:
                                                 ui.label(value["code"]).classes(
                                                     "detail-linked-entity-identifier"
                                                 )
-                                elif label == "Vital status":
+                                elif field_key == "vital_status":
                                     ui.badge(
                                         str(value),
                                         color="red-8" if record.get("is_vital") else "blue-grey-7",
                                     ).props("outline")
                                 else:
                                     ui.label(str(value or "—")).classes("detail-field-value")
-                                    if label.startswith("Inherited "):
-                                        source_key = "effective_assigned_location_source_aggregation_id" if "assigned" in label else "effective_current_location_source_aggregation_id"
+                                    if field_key.startswith("inherited_"):
+                                        source_key = "effective_assigned_location_source_aggregation_id" if field_key == "inherited_assigned_location" else "effective_current_location_source_aggregation_id"
                                         source = location_sources.get(record.get(source_key))
                                         if source:
                                             ui.label(render_message("webui.select_record_details.label.inherited_from_aggregation_number_title_ab7fbcfd", aggregation_number=source['aggregation_number'], title=source['title'])).classes("text-xs text-slate-500")
+                        with ui.column().classes("detail-field col-span-full gap-1"):
+                            ui.label(
+                                render_message("webui.select_record_details.label.description_918dd932")
+                            ).classes("detail-field-label")
+                            ui.label(record.get("description") or "—").props("dir=auto").classes(
+                                "detail-field-value whitespace-pre-wrap break-words leading-6"
+                            )
 
                 record_command_overview.__exit__(None, None, None)
             with ui.card().classes("detail-surface w-full shadow-none p-5 gap-4"):
@@ -6998,7 +7498,7 @@ def index(q: str = "") -> None:
                                         ui.label(scheme["description"]).classes(
                                             "w-full text-xs text-slate-500 line-clamp-2"
                                         )
-                                ui.icon("chevron_right").classes(
+                                ui.icon(tree_expander_icon(False)).classes(
                                     "text-slate-400 shrink-0 self-center"
                                 )
                     if has_more:
@@ -7027,16 +7527,19 @@ def index(q: str = "") -> None:
                     return
                 has_more = len(page_rows) > 25
                 rows = [*(accumulated or []), *page_rows[:25]]
+                rows.sort(key=lambda item: (
+                    str(item.get("code") or "").casefold(), int(item.get("id") or 0),
+                ))
                 content.clear()
                 with content:
                     with ui.row().classes("w-full items-center gap-1"):
-                        ui.button(icon="arrow_back", on_click=show_schemes if not path else lambda: show_level(scheme, path[-1] if path else None, path[:-1])).props("flat round dense").tooltip(render_message("webui.show_level.tooltip.back_f6d07119"))
+                        ui.button(icon="arrow_forward" if current_direction["value"] == "rtl" else "arrow_back", on_click=show_schemes if not path else lambda: show_level(scheme, path[-1] if path else None, path[:-1])).props("flat round dense").tooltip(render_message("webui.show_level.tooltip.back_f6d07119"))
                         ui.label(scheme["title"]).classes("font-semibold")
                         for ancestor in path:
-                            ui.icon("chevron_right", size="16px").classes("text-slate-400")
+                            ui.icon(tree_expander_icon(False), size="16px").classes("text-slate-400")
                             ui.label(ancestor["code"]).classes("text-xs text-slate-500")
                         if parent:
-                            ui.icon("chevron_right", size="16px").classes("text-slate-400")
+                            ui.icon(tree_expander_icon(False), size="16px").classes("text-slate-400")
                             ui.label(parent["code"]).classes("text-xs font-semibold text-primary")
                     if not rows:
                         ui.label(render_message("webui.show_level.label.this_branch_has_no_child_classifications_y_83ec7e08")).classes("py-8 text-slate-400")
@@ -7067,7 +7570,7 @@ def index(q: str = "") -> None:
                                     ui.label(classification["code"]).classes("text-xs text-primary")
                                     if classification.get("description"):
                                         ui.label(classification["description"]).classes("text-xs text-slate-500 line-clamp-2")
-                                ui.icon("check_circle" if classification["is_terminal"] else "chevron_right", color="primary")
+                                ui.icon("check_circle" if classification["is_terminal"] else tree_expander_icon(False), color="primary")
                     if has_more:
                         ui.button(
                             render_message("webui.render_collection.button.load_more_755f4879"),
@@ -7321,6 +7824,7 @@ def index(q: str = "") -> None:
                 prepare_entity_translation_update: Callable[
                     [], tuple[str, dict[str, str], str] | None
                 ] | None = None
+                profile_change_reason = None
                 if not creating and spec.key in multilingual_fields:
                     bootstrap = state.get("localization") or {}
                     language_options = {
@@ -7355,9 +7859,11 @@ def index(q: str = "") -> None:
                             ).classes("w-full")
                             for field in multilingual_fields[spec.key]
                         }
-                        translation_reason = ui.input(
-                            render_message("webui.open_editor.input.reason_for_translation_change_82d24ea1")
-                        ).props("outlined dense").classes("w-full")
+                        translation_reason = (
+                            None if spec.key == "profiles" else ui.input(
+                                render_message("webui.open_editor.input.reason_for_translation_change_82d24ea1")
+                            ).props("outlined dense").classes("w-full")
+                        )
                         translation_status = ui.label(
                             render_message("webui.open_editor.label.choose_a_language_then_load_its_current_va_7921b5e3")
                         ).props('role="status" aria-live="polite"').classes(
@@ -7424,7 +7930,11 @@ def index(q: str = "") -> None:
                                 raise ValueError(
                                     render_message("webui.save_entity_translation.notify.load_the_selected_language_before_saving_dc2d8ba1")
                                 )
-                            reason = (translation_reason.value or "").strip()
+                            reason_control = (
+                                profile_change_reason
+                                if spec.key == "profiles" else translation_reason
+                            )
+                            reason = (reason_control.value or "").strip()
                             if not reason:
                                 raise ValueError(
                                     render_message("webui.save_entity_translation.notify.enter_a_reason_for_the_translation_change_23f6bb0d")
@@ -7445,7 +7955,11 @@ def index(q: str = "") -> None:
                             if not language or translation_state["loaded_language"] != language:
                                 ui.notify(render_message("webui.save_entity_translation.notify.load_the_selected_language_before_saving_dc2d8ba1"), color="warning")
                                 return
-                            reason = (translation_reason.value or "").strip()
+                            reason_control = (
+                                profile_change_reason
+                                if spec.key == "profiles" else translation_reason
+                            )
+                            reason = (reason_control.value or "").strip()
                             if not reason:
                                 ui.notify(render_message("webui.save_entity_translation.notify.enter_a_reason_for_the_translation_change_23f6bb0d"), color="warning")
                                 return
@@ -7459,8 +7973,8 @@ def index(q: str = "") -> None:
                                 for control in translation_controls.values():
                                     control.value = ""
                                     control.update()
-                                translation_reason.value = ""
-                                translation_reason.update()
+                                reason_control.value = ""
+                                reason_control.update()
                                 translation_status.set_text(render_message("webui.remove_entity_translation.notify.translation_removed_09e85c43"))
                                 ui.notify(render_message("webui.remove_entity_translation.notify.translation_removed_09e85c43"), color="positive")
                             except ApiError as error:
@@ -7645,8 +8159,7 @@ def index(q: str = "") -> None:
                     render_message("webui.open_editor.textarea.reason_for_sensitive_authorization_changes_1726b6f0"),
                     placeholder=render_message("webui.open_editor.textarea.required_for_profile_governance_status_or_ee1c9562"),
                 ).props("outlined autogrow").classes("w-full")
-            profile_change_reason = None
-            if not creating and spec.key == "profiles" and not translation_only:
+            if not creating and spec.key == "profiles":
                 profile_change_reason = ui.textarea(
                     render_message("webui.open_editor.textarea.reason_for_changing_this_profile_5882ddfb"), placeholder=render_message("webui.open_editor.textarea.required_b956865c"),
                 ).props("outlined autogrow").classes("w-full")
@@ -7669,7 +8182,13 @@ def index(q: str = "") -> None:
                             row["version"], reason,
                         )
                         row["version"] = saved_translation["version"]
-                        row.setdefault("translations", {})[language] = dict(values)
+                        # Older rows and protected built-in entities can expose
+                        # a JSON NULL here.  ``setdefault`` preserves an
+                        # existing None value, so normalize the local cache
+                        # before recording the successfully persisted change.
+                        if not isinstance(row.get("translations"), dict):
+                            row["translations"] = {}
+                        row["translations"][language] = dict(values)
                         saved = dict(row)
                         dialog.close()
                         ui.notify(
@@ -7808,15 +8327,15 @@ def index(q: str = "") -> None:
 
         async def load_held_itemships() -> None:
             try:
-                result = await api.search_request("user-role-assignments", {
-                    "where": {
-                        "field": "user_id" if for_user else "role_id",
-                        "operator": "eq", "value": entity["id"],
-                    },
-                    "sort": [{"field": "id", "direction": "asc"}],
-                    "limit": assignment_page["limit"],
-                    "offset": assignment_page["offset"],
-                })
+                result = await (
+                    api.user_roles(
+                        entity["id"], limit=assignment_page["limit"],
+                        offset=assignment_page["offset"],
+                    ) if for_user else api.role_users(
+                        entity["id"], limit=assignment_page["limit"],
+                        offset=assignment_page["offset"],
+                    )
+                )
                 assignments = result["items"]
                 assignment_page["total"] = int(result["total"])
                 if not assignments and assignment_page["offset"] and assignment_page["total"]:
@@ -7829,11 +8348,6 @@ def index(q: str = "") -> None:
                 assigned_ids.update({
                     item["role_id" if for_user else "user_id"] for item in assignments
                 })
-                counterpart_rows = await asyncio.gather(*(
-                    api.get(counterpart_resource, identifier)
-                    for identifier in sorted(assigned_ids)
-                ))
-                counterpart_by_id = {item["id"]: item for item in counterpart_rows}
                 selection_holder["control"].value = None
                 selection_holder["control"].update()
                 assignments_area.clear()
@@ -7844,7 +8358,7 @@ def index(q: str = "") -> None:
                         rows = []
                         for assignment in assignments:
                             counterpart_id = assignment["role_id" if for_user else "user_id"]
-                            counterpart = counterpart_by_id.get(counterpart_id, {})
+                            counterpart = assignment.get("counterpart") or {}
                             inactive_reason = ""
                             effective_status = counterpart.get("status", render_message("webui.load_held_itemships.text.inactive_06345426"))
                             if for_user:
@@ -8109,10 +8623,13 @@ def index(q: str = "") -> None:
         state["resource"] = "aggregation-details"
         try:
             current = await api.get("aggregations", aggregation["id"])
-            security_level = await api.get("security-levels", current["security_level_id"])
-            capabilities = await api.resource_capabilities("aggregations", current["id"])
-            effective_holds = await api.effective_holds("aggregation", current["id"])
-            closure = await api.effective_aggregation_closure(current["id"])
+            security_level, owning_org_unit, capabilities, effective_holds, closure = await asyncio.gather(
+                api.get("security-levels", current["security_level_id"]),
+                api.get("org-units", current["owning_org_unit_id"]),
+                api.resource_capabilities("aggregations", current["id"]),
+                api.effective_holds("aggregation", current["id"]),
+                api.effective_aggregation_closure(current["id"]),
+            )
             ancestors = []
             seen = {current["id"]}
             parent_id = current.get("parent_aggregation_id")
@@ -8415,11 +8932,11 @@ def index(q: str = "") -> None:
                             ).props("flat dense no-caps")
                         if closure:
                             with ui.row().classes(
-                                "w-full items-center gap-3 rounded-xl border border-amber-200 "
+                                "detail-status-notice w-full items-center gap-3 rounded-xl border border-amber-200 "
                                 "bg-amber-50 px-4 py-3"
                             ):
                                 ui.icon("lock", color="amber-8").classes("shrink-0")
-                                with ui.column().classes("gap-0 grow min-w-0"):
+                                with ui.column().classes("detail-status-notice-copy gap-0 grow min-w-0"):
                                     if closure["id"] == current["id"]:
                                         ui.label(render_message("webui.open_aggregation.label.closed_directly_77d7dcfc")).classes(
                                             "text-sm font-semibold text-amber-900"
@@ -8441,7 +8958,7 @@ def index(q: str = "") -> None:
                                         render_message("webui.open_aggregation.tooltip.clear_the_closure_date_all_other_metadata_1cc0adcd")
                                     )
                         if current.get("is_vital") or current.get("has_vital_descendants"):
-                            with ui.row().classes("w-full items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3"):
+                            with ui.row().classes("detail-status-notice w-full items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3"):
                                 ui.icon("emergency", color="red-8")
                                 ui.label(render_message("webui.open_aggregation.label.vital_1334921b") if current.get("is_vital") else render_message("webui.open_aggregation.label.contains_vital_resources_006b2b72")).classes("text-sm font-semibold text-red-900")
                                 ui.label(render_message("webui.open_aggregation.label.this_aggregation_cannot_be_deleted_while_v_e9204a66")).classes("text-xs text-red-800")
@@ -8449,26 +8966,22 @@ def index(q: str = "") -> None:
                             # A null ID with redacted state means the parent
                             # exists; it must never be interpreted as a root.
                             with ui.row().classes(
-                                "w-full items-center gap-2 rounded-xl border border-slate-200 "
+                                "detail-status-notice w-full items-center gap-2 rounded-xl border border-slate-200 "
                                 "bg-slate-50 px-4 py-3"
                             ):
                                 ui.icon("visibility_off", color="blue-grey-7")
                                 ui.label(render_message("webui.open_aggregation.label.parent_aggregation_restricted_684099c8")).classes(
                                     "text-sm font-semibold text-slate-700"
                                 )
-                        if current.get("description"):
-                            with ui.column().classes("w-full gap-1 rounded-xl bg-slate-50 px-4 py-3"):
-                                ui.label(render_message("webui.open_aggregation.label.description_27051c3b")).classes("detail-field-label")
-                                ui.label(current["description"]).classes("text-sm leading-6 text-slate-600")
                         if effective_holds:
                             with ui.row().classes(
-                                "w-fit max-w-full items-center gap-2 flex-wrap rounded-xl "
+                                "detail-status-notice w-fit max-w-full items-center gap-2 flex-wrap rounded-xl "
                                 "border border-amber-200 bg-amber-50 px-3 py-2"
                             ):
                                 ui.icon("gavel", color="warning").classes("shrink-0")
                                 hold_count = len(effective_holds)
                                 ui.label(
-                                    render_message("webui.open_aggregation.label.protected_by_hold_count_effective_value_065566e7", hold_count=hold_count, value='hold' if hold_count == 1 else 'holds')
+                                    render_message("webui.open_aggregation.label.protected_by_hold_count_effective_value_065566e7", hold_count=hold_count)
                                 ).classes("text-sm font-semibold text-amber-900")
                                 ui.button(
                                     render_message("webui.open_aggregation.button.view_holds_b4a3f017"), icon="visibility",
@@ -8479,51 +8992,80 @@ def index(q: str = "") -> None:
                                 ).props("flat dense no-caps color=warning")
                         with ui.grid(columns=2).classes("w-full gap-x-8 gap-y-0"):
                             aggregation_metadata = [
-                                ("Status", "Closed" if closure else "Open"),
-                                ("Security level", f"{security_level['code']} — {security_level['name']}"),
                                 (
-                                    "Owning organizational unit",
-                                    f"{current['owning_org_unit_code']} — {current['owning_org_unit_name']}",
+                                    "status", render_message("entity_metadata.field.status"),
+                                    render_message("webui.open_aggregation.badge.closed_30c24826")
+                                    if closure else render_message("webui.open_aggregation.badge.open_88407b0f"),
                                 ),
-                                ("Medium", medium_label(current.get("medium"))),
-                                ("Vital status", "Vital" if current.get("is_vital") else "Not vital"),
-                                ("Date opened", format_timestamp(current.get("date_opened"))),
+                                (
+                                    "security_level", render_message("entity_metadata.field.security_level"),
+                                    f"{security_level['code']} — {(security_level.get('localized') or {}).get('name') or security_level['name']}",
+                                ),
+                                (
+                                    "owning_org_unit",
+                                    render_message("advanced_search.field.owning_org_unit"),
+                                    f"{owning_org_unit['code']} — {(owning_org_unit.get('localized') or {}).get('name') or owning_org_unit['name']}",
+                                ),
+                                ("medium", render_message("entity_metadata.field.medium"), medium_label(current.get("medium"))),
+                                (
+                                    "vital_status",
+                                    render_message("webui.open_aggregation.button.vital_status_69064d77"),
+                                    render_message("translation_inspector.value.yes")
+                                    if current.get("is_vital") else
+                                    render_message("translation_inspector.value.no"),
+                                ),
+                                ("date_opened", render_message("entity_metadata.field.date_opened"), format_timestamp(current.get("date_opened"))),
                             ]
                             if current.get("medium") != "digital":
                                 aggregation_metadata.extend([
-                                    ("Assigned location", current.get("effective_assigned_location") or "Unknown"),
-                                    ("Current location", current.get("effective_current_location") or "Unknown"),
+                                    (
+                                        "assigned_location", render_message("entity_metadata.field.assigned_location"),
+                                        current.get("effective_assigned_location") or render_message("webui.render_detail_content.text.unknown_d3c1ce73"),
+                                    ),
+                                    (
+                                        "current_location", render_message("entity_metadata.field.current_location"),
+                                        current.get("effective_current_location") or render_message("webui.render_detail_content.text.unknown_d3c1ce73"),
+                                    ),
                                 ])
                             direct_classification = classification_path[-1] if classification_path else None
                             parent_aggregation = aggregation_context_by_id.get(
                                 current.get("parent_aggregation_id")
                             )
                             governing_relationship = (
-                                ("Parent aggregation", parent_aggregation or "Restricted aggregation")
+                                (
+                                    "parent_aggregation", render_message("entity_metadata.field.parent_aggregation"),
+                                    parent_aggregation or render_message("webui.open_aggregation.label.parent_aggregation_restricted_684099c8"),
+                                )
                                 if current.get("parent_aggregation_id") is not None
                                 else (
-                                    "Parent classification",
+                                    "parent_classification", render_message("entity_metadata.field.parent_classification"),
                                     direct_classification or direct_classification_label(classification_path),
                                 )
                             )
                             aggregation_metadata.extend([
-                                ("Review", review_display(current.get("date_of_next_review"))),
+                                ("review", render_message("entity_metadata.field.review"), review_display(current.get("date_of_next_review"))),
                                 governing_relationship,
-                                ("Contains", f"{child_total} child aggregations · {record_total} records"),
+                                (
+                                    "contains", render_message("webui.render_governance_cards.text.assigned_content_6b3ceaf7"),
+                                    render_message(
+                                        "webui.render_governance_cards.text.get_aggregations_get_2_records_5bb78a16",
+                                        get=child_total, get_2=record_total,
+                                    ),
+                                ),
                             ])
-                            for label, value in aggregation_metadata:
+                            for field_key, label, value in aggregation_metadata:
                                 with ui.column().classes("detail-field gap-1"):
                                     ui.label(label).classes("detail-field-label")
-                                    if label == "Status":
+                                    if field_key == "status":
                                         ui.badge(
                                             str(value), color="amber-8" if closure else "positive",
                                         ).props("outline")
-                                    elif label == "Vital status":
+                                    elif field_key == "vital_status":
                                         ui.badge(
                                             str(value),
                                             color="red-8" if current.get("is_vital") else "blue-grey-7",
                                         ).props("outline")
-                                    elif label in {"Parent classification", "Classification"} and isinstance(value, dict):
+                                    elif field_key == "parent_classification" and isinstance(value, dict):
                                         with ui.button(on_click=open_parent_classification).props(
                                             "flat dense no-caps color=primary"
                                         ).classes("detail-linked-entity self-start -m-2 p-2"):
@@ -8535,7 +9077,7 @@ def index(q: str = "") -> None:
                                                     ui.label(value["code"]).classes(
                                                         "detail-linked-entity-identifier"
                                                     )
-                                    elif label == "Parent aggregation" and isinstance(value, dict):
+                                    elif field_key == "parent_aggregation" and isinstance(value, dict):
                                         with ui.button(on_click=open_parent_aggregation).props(
                                             "flat dense no-caps color=primary"
                                         ).classes("detail-linked-entity self-start -m-2 p-2"):
@@ -8549,14 +9091,22 @@ def index(q: str = "") -> None:
                                                     )
                                     else:
                                         ui.label(str(value or "—")).classes("detail-field-value")
-                                        if label in {"Assigned location", "Current location"}:
-                                            source_key = "effective_assigned_location_source_aggregation_id" if label == "Assigned location" else "effective_current_location_source_aggregation_id"
+                                        if field_key in {"assigned_location", "current_location"}:
+                                            source_key = "effective_assigned_location_source_aggregation_id" if field_key == "assigned_location" else "effective_current_location_source_aggregation_id"
                                             source_id = current.get(source_key)
                                             source = aggregation_context_by_id.get(source_id)
                                             if source_id == current["id"]:
                                                 ui.label(render_message("webui.open_aggregation.label.set_on_this_aggregation_85415ad9")).classes("text-xs text-slate-500")
                                             elif source:
                                                 ui.label(render_message("webui.open_aggregation.label.inherited_from_aggregation_number_title_fdcc3805", aggregation_number=source['aggregation_number'], title=source['title'])).classes("text-xs text-slate-500")
+                            if current.get("description"):
+                                with ui.column().classes("detail-field col-span-full gap-1"):
+                                    ui.label(
+                                        render_message("webui.open_aggregation.label.description_27051c3b")
+                                    ).classes("detail-field-label")
+                                    ui.label(current["description"]).props("dir=auto").classes(
+                                        "detail-field-value whitespace-pre-wrap break-words leading-6"
+                                    )
                         aggregation_actions_host.__enter__()
                         ui.label(render_message("webui.open_aggregation.label.aggregation_actions_ef188212")).classes("aggregation-panel-heading w-full")
                         ui.label(render_message("webui.open_aggregation.label.metadata_and_review_8b297ce3")).classes("aggregation-action-group-label")
@@ -8650,11 +9200,11 @@ def index(q: str = "") -> None:
                                     with dialog, ui.card().classes("w-[520px] max-w-full"):
                                         ui.label(render_message("webui.change_aggregation_review_date.label.schedule_next_review_5b8f3054")).classes("text-xl font-semibold")
                                         ui.label(render_message("webui.change_aggregation_review_date.label.set_a_future_date_or_clear_it_when_no_revi_df572311")).classes("text-sm text-slate-500")
-                                        review_date = ui.input(render_message("webui.change_aggregation_review_date.input.date_of_next_review_a2774fe0"), value=str(current.get("date_of_next_review") or "")[:16]).props(f"outlined clearable type=datetime-local min={datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M')}").classes("w-full")
+                                        review_date = ui.input(render_message("webui.change_aggregation_review_date.input.date_of_next_review_a2774fe0"), value=review_datetime_input_value(current.get("date_of_next_review"))).props(f"outlined clearable type=datetime-local min={review_datetime_input_minimum()}").classes("w-full")
                                         reason = ui.textarea(render_message("webui.change_aggregation_review_date.textarea.reason_62653c9f")).props("outlined autogrow").classes("w-full")
                                         async def submit() -> None:
                                             if not (reason.value or "").strip(): ui.notify(render_message("webui.submit.notify.enter_a_reason_f7e81e79"), color="warning"); return
-                                            value = datetime.fromisoformat(review_date.value).isoformat() if review_date.value else None
+                                            value = review_datetime_payload(review_date.value)
                                             try:
                                                 saved = await api.change_review_date("aggregations", current["id"], current["version"], value, reason.value.strip())
                                                 dialog.close(); await open_aggregation(saved)
@@ -8795,7 +9345,17 @@ def index(q: str = "") -> None:
                                             f"{governing_root['aggregation_number']} — {governing_root['title']}"
                                             if governing_root else f"#{governing_root_id}"
                                         )
-                                        source_text += f" · governed by root aggregation {root_reference}"
+                                        source_text = render_message(
+                                            "webui.open_aggregation.text.governed_by_root_aggregation",
+                                            source=render_message_plain(
+                                                "webui.open_aggregation.text.specified_locally_for_the_governing_root_a_e8018e53"
+                                                if effective_rule["rule_source"] == "aggregation"
+                                                else "webui.open_aggregation.text.specified_by_its_classification_11387963"
+                                                if effective_rule.get("inheritance_depth", 0) == 0
+                                                else "webui.open_aggregation.text.inherited_from_an_ancestor_classification_297425fa"
+                                            ),
+                                            root_reference=root_reference,
+                                        )
                                     ui.label(source_text).classes("text-xs text-sky-700")
                                 ui.badge(render_message("webui.open_aggregation.badge.effective_a28f890c"), color="primary").props("outline")
                             with ui.element("div").classes("aggregation-retention-stages w-full"):
@@ -9380,7 +9940,7 @@ def index(q: str = "") -> None:
                     if privilege["category"] != current_category:
                         current_category = privilege["category"]
                         category_label = ui.label(
-                            current_category.replace("_", " ").upper()
+                            localized_privilege_category(current_category)
                         ).classes(
                             "text-xs tracking-wider text-slate-500 font-semibold mt-2"
                         )
@@ -9388,13 +9948,11 @@ def index(q: str = "") -> None:
                     with ui.row().classes("w-full items-start") as privilege_entry:
                         with ui.column().classes("w-full gap-0"):
                             controls[privilege["id"]] = ui.checkbox(
-                                render_message("webui.show_profile_privilege_editor.checkbox.name_code_988b7e60", name=privilege['name'], code=privilege['code']),
+                                render_message("webui.show_profile_privilege_editor.checkbox.name_code_988b7e60", name=localized_privilege_name(privilege), code=privilege['code']),
                                 value=privilege["id"] in selected_ids,
                             )
                             ui.label(
-                                privilege_help_text(
-                                    privilege["code"], privilege.get("description")
-                                )
+                                localized_privilege_description(privilege)
                             ).classes(
                                 "text-xs leading-5 text-slate-500 pl-10 -mt-1 pr-2"
                             )
@@ -9405,10 +9963,10 @@ def index(q: str = "") -> None:
             def filter_privileges() -> None:
                 query = privilege_search.value or ""
                 for privilege, entry_element in privilege_entries:
-                    entry_element.set_visibility(privilege_matches_search(privilege, query))
+                    entry_element.set_visibility(localized_privilege_matches_search(privilege, query))
                 for _, (category_label, entries) in category_sections.items():
                     category_label.set_visibility(
-                        any(privilege_matches_search(privilege, query) for privilege, _ in entries)
+                        any(localized_privilege_matches_search(privilege, query) for privilege, _ in entries)
                     )
 
             privilege_search.on_value_change(lambda _: filter_privileges())
@@ -9528,13 +10086,6 @@ def index(q: str = "") -> None:
             else:
                 await show_record_details(item)
 
-        async def open_parent(parent_id: int, source: dict[str, Any]) -> None:
-            result_state["return_anchor"] = f"compact-result-{resource}-{int(source['id'])}"
-            try:
-                await open_aggregation(await api.get("aggregations", parent_id))
-            except ApiError as error:
-                ui.notify(error_message(error), color="negative", close_button=True)
-
         def render_results() -> None:
             query = str(filter_control.value or "").strip().casefold()
             result_state.update(filter=str(filter_control.value or ""), sort=sort_control.value,
@@ -9565,12 +10116,9 @@ def index(q: str = "") -> None:
                 for item in page_rows:
                     capabilities = item.get("_record_capabilities") or {}
                     components = item.get("_components") or []
-                    parent = item.get("aggregation_display") if resource == "records" else None
                     render_compact_resource_result(
                         resource, item, on_open=open_result,
                         components=components, show_medium=True,
-                        parent_aggregation=parent,
-                        on_open_parent=(lambda _, parent_id=int(item["aggregation_id"]), source=item: open_parent(parent_id, source)) if parent and item.get("aggregation_id") else None,
                         can_preview=bool(resource == "records" and capabilities.get("view_component") and any(component_is_previewable(component) for component in components)),
                         can_expand_components=bool(resource == "records" and capabilities.get("list_components") and components),
                         initially_expanded=f"{resource}:{int(item['id'])}" in result_state["expanded_results"],
@@ -10369,7 +10917,7 @@ def index(q: str = "") -> None:
             "if (existing) existing.remove();"
             "const script = document.createElement('script');"
             "script.id = 'wathiq-translation-inspector-script';"
-            "script.src = '/static/inspector/translation-inspector.js?v=7';"
+            "script.src = '/static/inspector/translation-inspector.js?v=10';"
             "script.onload = () => resolve(true);"
             "script.onerror = () => { script.remove(); reject(new Error('Translation inspector failed to load')); };"
             "document.head.appendChild(script);"
@@ -11965,7 +12513,13 @@ def index(q: str = "") -> None:
                     })
                 payload: dict[str, Any] = {
                     "limit": int(page["limit"]), "offset": int(page["offset"]),
-                    "sort": [{"field": page["sort"], "direction": "asc"}],
+                    "sort": [
+                        {"field": page["sort"], "direction": "asc"},
+                        *(
+                            [{"field": "id", "direction": "asc"}]
+                            if page["sort"] != "id" else []
+                        ),
+                    ],
                 }
                 if conditions:
                     payload["where"] = conditions[0] if len(conditions) == 1 else {"and": conditions}
@@ -12368,7 +12922,7 @@ def index(q: str = "") -> None:
                 "w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50"
             ).style(f"padding-inline-start: {depth * 20 + 4}px"):
                 ui.button(
-                    icon="expand_more" if expanded else "chevron_right",
+                    icon=tree_expander_icon(expanded),
                     on_click=lambda: toggle_classification(item),
                 ).props("flat round dense size=sm color=blue-grey")
                 ui.icon("label" if item["is_terminal"] else "schema", color="primary").classes("w-6")
@@ -12410,7 +12964,7 @@ def index(q: str = "") -> None:
                 with ui.element("div").classes("w-8 shrink-0"):
                     if has_content:
                         ui.button(
-                            icon="expand_more" if expanded else "chevron_right",
+                            icon=tree_expander_icon(expanded),
                             on_click=lambda: toggle_aggregation(item),
                         ).props("flat round dense size=sm color=blue-grey")
                 ui.icon("folder", color="primary").classes("w-6")
@@ -12703,26 +13257,27 @@ def index(q: str = "") -> None:
                         render_message("webui.select_organization_unit_details.button.back_534197f5"), icon="arrow_back",
                         on_click=lambda: breadcrumb_back(lambda: select_entity("org-units")),
                     ).props("flat no-caps")
-                with ui.grid(columns=3).classes("w-full gap-4"):
-                    for label, value in (
-                        ("Direct status", unit.get("status")), ("Effective status", unit.get("effective_status")),
-                        ("Inactive because of", (unit.get("inactive_source") or {}).get("name")),
-                        ("Parent", (unit.get("parent") or {}).get("name")),
-                        ("Direct child units", unit.get("child_org_unit_count")),
-                        ("Direct roles", unit.get("role_count")),
+                with ui.grid(columns=3).classes("identity-detail-facts w-full gap-4"):
+                    for label, value, value_kind in (
+                        (entity_metadata_label("Status"), unit.get("status"), "status"),
+                        (render_message("webui.render_governance_cards.text.effective_status_c7a1dfe1"), unit.get("effective_status"), "status"),
+                        (render_message("webui.render_tree_level.text.inactive_via_parent_29212032"), (unit.get("inactive_source") or {}).get("name"), None),
+                        (entity_metadata_label("Parent organization unit"), (unit.get("parent") or {}).get("name"), "parent"),
+                        (render_message("navigation.item.org_units"), unit.get("child_org_unit_count"), None),
+                        (render_message("navigation.item.roles"), unit.get("role_count"), None),
                     ):
                         guidance_text = {
-                            "Direct status": render_message("webui.select_organization_unit_details.text.set_directly_on_this_organization_unit_wit_d76d3eda"),
-                            "Effective status": render_message("webui.select_organization_unit_details.text.also_includes_inactivity_inherited_from_an_109127e4"),
+                            entity_metadata_label("Status"): render_message("webui.select_organization_unit_details.text.set_directly_on_this_organization_unit_wit_d76d3eda"),
+                            render_message("webui.render_governance_cards.text.effective_status_c7a1dfe1"): render_message("webui.select_organization_unit_details.text.also_includes_inactivity_inherited_from_an_109127e4"),
                         }.get(label)
-                        with ui.column().classes("gap-0 border-b border-slate-100 pb-1.5"):
+                        with ui.column().classes("identity-detail-fact gap-0 border-b border-slate-100 pb-1.5"):
                             ui.label(label).classes("detail-field-label")
                             display_value = (
-                                str(value).replace("_", " ").title()
-                                if value is not None and label in {"Direct status", "Effective status"}
+                                localized_lifecycle_value(value)
+                                if value is not None and value_kind == "status"
                                 else str(value) if value is not None else "—"
                             )
-                            if label == "Parent" and (unit.get("parent") or {}).get("id"):
+                            if value_kind == "parent" and (unit.get("parent") or {}).get("id"):
                                 ui.label(display_value).classes(
                                     "font-medium text-primary cursor-pointer"
                                 ).on(
@@ -12765,7 +13320,7 @@ def index(q: str = "") -> None:
                                     "location_on" if is_current else "corporate_fare",
                                     size="16px",
                                 )
-                            with ui.row().classes("items-center gap-2 min-w-0 no-wrap"):
+                            with ui.element("div").classes("org-unit-lineage-copy"):
                                 lineage_name = ui.label(lineage_unit["name"]).classes(
                                     "text-sm font-semibold truncate"
                                 )
@@ -12815,7 +13370,11 @@ def index(q: str = "") -> None:
                                         "dashboard-holdings-medium"
                                     ).props("aria-hidden=true")
                                 ui.label(
-                                    render_message("webui.select_organization_unit_details.label.title_value_df57d819", title=medium.title(), value=holdings_metrics[f'{medium}_aggregation_count'])
+                                    render_message(
+                                        "webui.select_organization_unit_details.label.title_value_df57d819",
+                                        title=render_message(ADVANCED_SEARCH_CONTROLLED_VALUES["medium"][medium]),
+                                        value=holdings_metrics[f'{medium}_aggregation_count'],
+                                    )
                                 ).classes("dashboard-holdings-medium tabular-nums")
                     with ui.element("div").classes("org-unit-holdings-group"):
                         with ui.row().classes("items-center gap-2"):
@@ -12832,7 +13391,11 @@ def index(q: str = "") -> None:
                                         "dashboard-holdings-medium"
                                     ).props("aria-hidden=true")
                                 ui.label(
-                                    render_message("webui.select_organization_unit_details.label.title_value_df57d819", title=medium.title(), value=holdings_metrics[f'{medium}_record_count'])
+                                    render_message(
+                                        "webui.select_organization_unit_details.label.title_value_df57d819",
+                                        title=render_message(ADVANCED_SEARCH_CONTROLLED_VALUES["medium"][medium]),
+                                        value=holdings_metrics[f'{medium}_record_count'],
+                                    )
                                 ).classes("dashboard-holdings-medium tabular-nums")
                     with ui.element("div").classes("org-unit-holdings-group"):
                         with ui.column().classes("gap-1"):
@@ -12946,47 +13509,46 @@ def index(q: str = "") -> None:
                         render_message("webui.select_role_details.button.back_26071a1c"), icon="arrow_back",
                         on_click=lambda: breadcrumb_back(lambda: select_entity("roles")),
                     ).props("flat no-caps")
-                with ui.grid(columns=3).classes("w-full gap-4"):
-                    for label, value in (
-                        ("Direct status", role.get("status")), ("Effective status", role.get("effective_status")),
-                        ("Security clearance", " — ".join(filter(None, (
+                with ui.grid(columns=3).classes("identity-detail-facts w-full gap-4"):
+                    assignment_label = render_message("webui.show_organization_structure.select.all_assignments_1a3e1480")
+                    for label, value, value_kind in (
+                        (entity_metadata_label("Status"), role.get("status"), "status"),
+                        (render_message("webui.render_governance_cards.text.effective_status_c7a1dfe1"), role.get("effective_status"), "status"),
+                        (entity_metadata_label("Security clearance"), " — ".join(filter(None, (
                             role.get("security_level_code"), role.get("security_level_name"),
-                        )))),
-                        ("Assigned profile", " — ".join(filter(None, (
+                        ))), None),
+                        (entity_metadata_label("Profile"), " — ".join(filter(None, (
                             role.get("profile_code"),
-                            localized_profile_value(
-                                {"code": role.get("profile_code"), "name": role.get("profile_name")},
-                                "name",
-                            ),
-                        )))),
-                        ("Information governance", "Yes" if role.get("is_information_governance") else "No"),
-                        ("Organization unit", " — ".join(filter(None, (
+                            role.get("profile_name"),
+                        ))), "profile"),
+                        (entity_metadata_label("Information-governance role"), render_message("webui.render_governance_cards.text.yes_1e245559") if role.get("is_information_governance") else render_message("webui.render_governance_cards.text.no_10013db4"), "governance"),
+                        (entity_metadata_label("Organization unit"), " — ".join(filter(None, (
                             role.get("org_unit_code"), role.get("org_unit_name"),
-                        )))),
-                        ("Supervising role", " — ".join(filter(None, (
+                        ))), "organization"),
+                        (entity_metadata_label("Supervising role"), " — ".join(filter(None, (
                             role.get("supervisor_role_code"), role.get("supervisor_role_name"),
-                        ))) or None),
-                        ("Supervised roles", role.get("subordinate_role_count")),
-                        ("All assignments", role.get("assigned_user_count")),
-                        ("Current assignments", role.get("current_assignment_count")),
-                        ("Future assignments", role.get("future_assignment_count")),
-                        ("Expired assignments", role.get("expired_assignment_count")),
+                        ))) or None, "supervisor"),
+                        (render_message("webui.render_governance_cards.text.roles_assigned_this_level_cdc0781e"), role.get("subordinate_role_count"), None),
+                        (assignment_label, role.get("assigned_user_count"), None),
+                        (render_message("governance_custody.stat.current_assignments"), role.get("current_assignment_count"), None),
+                        (f"{localized_lifecycle_value('future')} · {assignment_label}", role.get("future_assignment_count"), None),
+                        (f"{localized_lifecycle_value('expired')} · {assignment_label}", role.get("expired_assignment_count"), None),
                     ):
                         guidance_text = {
-                            "Direct status": render_message("webui.select_role_details.text.set_directly_on_this_role_without_consider_0646bc65"),
-                            "Effective status": render_message("webui.select_role_details.text.also_includes_inactivity_inherited_from_it_c99dbc46"),
-                            "Assigned profile": (
+                            entity_metadata_label("Status"): render_message("webui.select_role_details.text.set_directly_on_this_role_without_consider_0646bc65"),
+                            render_message("webui.render_governance_cards.text.effective_status_c7a1dfe1"): render_message("webui.select_role_details.text.also_includes_inactivity_inherited_from_it_c99dbc46"),
+                            entity_metadata_label("Profile"): (
                                 render_message("webui.select_role_details.text.all_privileges_is_a_migration_compatibilit_bca70ba7")
                                 if role.get("profile_code") == "ALL_PRIVS" else
                                 render_message("webui.select_role_details.text.the_role_receives_its_global_capabilities_173ecedf")
                             ),
-                            "Information governance": (
+                            entity_metadata_label("Information-governance role"): (
                                 render_message("webui.select_role_details.text.this_role_may_bypass_resource_acls_only_gl_a6785150")
                             ),
                         }.get(label)
-                        with ui.column().classes("gap-0 border-b border-slate-100 pb-1.5"):
+                        with ui.column().classes("identity-detail-fact gap-0 border-b border-slate-100 pb-1.5"):
                             ui.label(label).classes("detail-field-label")
-                            if label == "Organization unit" and role.get("org_unit_id"):
+                            if value_kind == "organization" and role.get("org_unit_id"):
                                 ui.label(str(value)).classes(
                                     "font-medium text-primary cursor-pointer"
                                 ).on(
@@ -12995,7 +13557,7 @@ def index(q: str = "") -> None:
                                         role["org_unit_id"]
                                     ),
                                 ).tooltip(render_message("webui.select_role_details.tooltip.open_organization_unit_de3a3909"))
-                            elif label == "Supervising role" and role.get("supervisor_role_id"):
+                            elif value_kind == "supervisor" and role.get("supervisor_role_id"):
                                 ui.label(str(value)).classes(
                                     "font-medium text-primary cursor-pointer"
                                 ).on(
@@ -13004,9 +13566,8 @@ def index(q: str = "") -> None:
                                 ).tooltip(render_message("webui.select_role_details.tooltip.open_supervising_role_10bd647e"))
                             else:
                                 rendered_value = (
-                                    str(value).title()
-                                    if label in {"Direct status", "Effective status"}
-                                    and value is not None
+                                    localized_lifecycle_value(value)
+                                    if value_kind == "status" and value is not None
                                     else str(value) if value is not None else "—"
                                 )
                                 ui.label(rendered_value).classes("font-medium")
@@ -13051,39 +13612,36 @@ def index(q: str = "") -> None:
                     with ui.element("div").classes("role-privilege-groups w-full p-3"):
                         for category, privileges in privileges_by_category.items():
                             with ui.element("section").classes("role-privilege-group"):
-                                with ui.row().classes(
-                                    "role-privilege-group-header w-full items-center gap-2"
+                                with ui.element("header").classes(
+                                    "role-privilege-group-header w-full gap-2"
                                 ):
                                     ui.icon(
                                         category_icons.get(category, "verified_user"),
                                         size="18px",
                                     ).classes("text-primary")
                                     ui.label(
-                                        category.replace("_", " ").title()
-                                    ).classes("text-sm font-semibold grow")
+                                        localized_privilege_category(category)
+                                    ).classes("role-privilege-group-title text-sm font-semibold")
                                     ui.label(str(len(privileges))).classes(
-                                        "text-xs text-slate-500 tabular-nums"
+                                        "role-privilege-group-count text-xs text-slate-500 tabular-nums"
                                     )
                                 with ui.element("div").classes("role-privilege-list"):
                                     for privilege in privileges:
-                                        with ui.row().classes(
-                                            "role-privilege-item items-start no-wrap gap-2"
+                                        with ui.element("div").classes(
+                                            "role-privilege-item gap-2"
                                         ):
                                             ui.icon(
                                                 "check", color="positive", size="16px",
                                             ).classes("mt-0.5 shrink-0")
-                                            with ui.column().classes("gap-0 min-w-0"):
-                                                ui.label(privilege["name"]).classes(
+                                            with ui.column().classes("role-privilege-copy gap-0 min-w-0"):
+                                                ui.label(localized_privilege_name(privilege)).classes(
                                                     "text-xs font-semibold leading-4"
                                                 )
                                                 ui.label(privilege["code"]).classes(
                                                     "text-[10px] font-mono text-slate-500 "
                                                     "break-all leading-4"
                                                 ).tooltip(
-                                                    privilege_help_text(
-                                                        privilege["code"],
-                                                        privilege.get("description"),
-                                                    )
+                                                    localized_privilege_description(privilege)
                                                 )
 
     def reveal_text_indexer_key(
@@ -13953,13 +14511,11 @@ def index(q: str = "") -> None:
         table_container.clear()
         try:
             session_page_size = user_details_session_limit()
-            person, assignments = await asyncio.gather(
-                api.get("users", user_id), api.user_roles(user_id),
+            person, assignment_page_result = await asyncio.gather(
+                api.get("users", user_id), api.user_roles(user_id, limit=50, offset=0),
             )
-            role_ids = sorted({int(item["role_id"]) for item in assignments})
-            roles = await asyncio.gather(*(
-                api.get("roles", role_id) for role_id in role_ids
-            ))
+            assignments = list(assignment_page_result.get("items") or [])
+            roles = [item.get("counterpart") or {} for item in assignments]
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
             return
@@ -13977,6 +14533,11 @@ def index(q: str = "") -> None:
             else:
                 await select_text_indexer_details(user_id)
                 return
+        person = dict(person)
+        person["name"] = (
+            (person.get("localized") or {}).get("name") or person["name"]
+        )
+        roles = [role for role in roles if role.get("id") is not None]
         title.text = person["name"]
         subtitle.text = render_message("webui.select_user_details.text.user_details_and_account_administration_b2c8f493")
         register_navigation(
@@ -14160,7 +14721,11 @@ def index(q: str = "") -> None:
                         with ui.column().classes("gap-1 grow"):
                             ui.label(person["name"]).classes("text-xl font-semibold")
                             ui.label(
-                                render_message("webui.select_user_details.label.title_account_value_7ffc8b75", title=person['account_type'].title(), value=person.get('email') or 'No email address')
+                                render_message(
+                                    "webui.select_user_details.label.title_account_value_7ffc8b75",
+                                    title=localized_account_type(person["account_type"]),
+                                    value=person.get("email") or render_message("webui.select_user_details.label.no_email_address_1d665180"),
+                                )
                             ).classes("text-sm text-slate-500")
                             if person.get("account_type") == "service":
                                 with ui.row().classes("items-center gap-1"):
@@ -14177,12 +14742,12 @@ def index(q: str = "") -> None:
                             ui.label(person.get("email") or render_message("webui.select_user_details.label.no_email_address_1d665180")).classes("font-medium")
                         with ui.column().classes("gap-1 border-b border-slate-100 pb-1.5"):
                             ui.label(render_message("webui.select_user_details.label.account_type_c01f9019")).classes("detail-field-label")
-                            ui.badge(person["account_type"].title(), color="blue-grey").props("outline")
+                            ui.badge(localized_account_type(person["account_type"]), color="blue-grey").props("outline")
                         with ui.column().classes("gap-1 border-b border-slate-100 pb-1.5"):
                             ui.label(render_message("webui.select_user_details.label.status_50b881c8")).classes("detail-field-label")
                             with ui.row().classes("classification-detail-title-status items-center gap-2"):
                                 ui.badge(
-                                    person["status"].title(),
+                                    localized_lifecycle_value(person["status"]),
                                     color={"active": "positive", "suspended": "warning"}.get(
                                         person["status"], "grey-7",
                                     ),
@@ -14333,14 +14898,14 @@ def index(q: str = "") -> None:
                                             )
                                             with ui.row().classes("items-center gap-2 flex-wrap"):
                                                 ui.badge(
-                                                    str(row["role_status"]).title(),
+                                                    localized_lifecycle_value(row["role_status"]),
                                                     color=(
                                                         "positive" if row["role_status"] == "active"
                                                         else "grey-7"
                                                     ),
                                                 ).props("outline")
                                                 ui.badge(
-                                                    str(row["validity"]).title(),
+                                                    localized_lifecycle_value(row["validity"]),
                                                     color={
                                                         "current": "primary", "future": "warning",
                                                         "expired": "grey-7",
@@ -14358,11 +14923,14 @@ def index(q: str = "") -> None:
                                         "governance-list-facts user-role-assignment-facts"
                                     ):
                                         for label, value in (
-                                            ("Valid from", format_timestamp(row.get("valid_from"))),
                                             (
-                                                "Valid until",
+                                                render_message("governance_custody.field.valid_from"),
+                                                format_timestamp(row.get("valid_from")),
+                                            ),
+                                            (
+                                                render_message("governance_custody.field.valid_until"),
                                                 format_timestamp(row.get("valid_until"))
-                                                if row.get("valid_until") else "No expiry",
+                                                if row.get("valid_until") else render_message("common.value.no_expiry"),
                                             ),
                                         ):
                                             with ui.column().classes("gap-0 min-w-0"):
@@ -14686,22 +15254,25 @@ def index(q: str = "") -> None:
                 tree_row = ui.row().props(
                     f"id={organization_node_dom_id(node)}"
                 ).classes(
-                    "w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50 "
+                    "organization-browser-node-row w-full rounded-lg py-1 px-2 hover:bg-blue-50 "
                     + ("organization-browser-selected bg-blue-50" if selected else "")
                 ).style(f"padding-inline-start:{depth * 20 + 4}px")
                 with tree_row:
-                    with ui.element("div").classes("w-8 h-8 shrink-0 flex items-center justify-center"):
+                    with ui.element("div").classes("organization-browser-expander w-8 h-8 shrink-0 flex items-center justify-center"):
                         if can_expand:
                             ui.button(
                                 icon="expand_more" if key in expanded else "chevron_right",
                                 on_click=lambda _, item=node: toggle_node(item),
-                            ).props("flat round dense size=sm color=blue-grey")
+                            ).props("flat round dense size=sm color=blue-grey").classes(
+                                "organization-browser-disclosure"
+                            )
                     ui.icon(
                         {"org_unit": "corporate_fare", "role": "badge", "user": "person"}[node["type"]],
                         color="primary", size="20px",
-                    ).classes("w-6 shrink-0 mr-2")
+                    ).classes("organization-browser-icon w-6 shrink-0")
                     node_content = ui.column().classes(
-                        "grow min-w-0 gap-0 py-1 " + ("cursor-pointer" if node_selectable(node) else "")
+                        "organization-browser-content min-w-0 gap-0 py-1 "
+                        + ("cursor-pointer" if node_selectable(node) else "")
                     )
                     if node_selectable(node):
                         node_content.on("click", lambda _, item=node: select_node(item))
@@ -14716,11 +15287,13 @@ def index(q: str = "") -> None:
                     status_value = node.get("effective_status", node.get("status"))
                     if node["type"] == "user":
                         ui.badge(
-                            str(node.get("status") or "active").title(),
+                            localized_lifecycle_value(node.get("status") or "active"),
                             color={"active": "positive", "suspended": "warning"}.get(node.get("status"), "grey-7"),
-                        ).props("outline")
+                        ).props("outline").classes("organization-browser-badge")
                     elif status_value and status_value != "active":
-                        ui.badge(status_value.title(), color="grey-7").props("outline")
+                        ui.badge(
+                            localized_lifecycle_value(status_value), color="grey-7",
+                        ).props("outline").classes("organization-browser-badge")
                     if is_selector and not node_selectable(node):
                         node_content.tooltip(
                             render_message("webui.render_nodes.tooltip.this_item_is_visible_for_context_but_canno_b093611d")
@@ -14885,44 +15458,53 @@ def index(q: str = "") -> None:
                             if item.get("email"): ui.label(item["email"]).classes("text-slate-500")
                     if item.get("description"):
                         ui.label(item["description"]).classes("text-sm text-slate-600 bg-slate-50 rounded p-3 w-full")
-                    for label, value in (
-                        ("Account status" if node["type"] == "user" else "Effective status", item.get("effective_status", item.get("status"))),
-                        ("Account type", item.get("account_type")),
-                        ("Organization unit", item.get("org_unit_name")),
-                        ("Selected through role", " — ".join(filter(None, (item.get("role_code"), item.get("role_name")))) or None),
-                        ("Supervising role", item.get("supervisor_role_name")),
-                        ("Direct status", item.get("status") if node["type"] != "user" else None),
-                        ("Inactive because of", (item.get("inactive_source") or {}).get("name") if isinstance(item.get("inactive_source"), dict) else None),
-                        ("Child units", item.get("child_org_unit_count")),
-                        ("Roles", item.get("role_count")),
-                        ("Supervised roles", item.get("subordinate_role_count")),
-                        ("Assigned users", item.get("assigned_user_count")),
-                        ("Current assignments", item.get("current_assignment_count")),
-                        ("Future assignments", item.get("future_assignment_count")),
-                        ("Expired assignments", item.get("expired_assignment_count")),
-                        ("Assignment validity", item.get("assignment_validity")),
-                        ("Valid from", format_timestamp(item.get("valid_from")) if item.get("valid_from") else None),
-                        ("Valid until", format_timestamp(item.get("valid_until")) if item.get("valid_until") else None),
+                    for field_key, label, value in (
+                        ("status", entity_metadata_label("Status") if node["type"] == "user" else render_message("webui.render_governance_cards.text.effective_status_c7a1dfe1"), item.get("effective_status", item.get("status"))),
+                        ("account_type", entity_metadata_label("Account type"), item.get("account_type")),
+                        ("org_unit", entity_metadata_label("Organization unit"), item.get("org_unit_name")),
+                        ("selected_role", render_message("entity_metadata.field.role"), " — ".join(filter(None, (item.get("role_code"), item.get("role_name")))) or None),
+                        ("supervisor_role", entity_metadata_label("Supervising role"), item.get("supervisor_role_name")),
+                        ("direct_status", entity_metadata_label("Status"), item.get("status") if node["type"] != "user" else None),
+                        ("inactive_source", entity_metadata_label("Status"), (item.get("inactive_source") or {}).get("name") if isinstance(item.get("inactive_source"), dict) else None),
+                        ("child_units", render_message("webui.show_organization_structure.select.organization_units_66c328dc"), item.get("child_org_unit_count")),
+                        ("roles", render_message("webui.show_organization_structure.select.roles_2c70f24a"), item.get("role_count")),
+                        ("supervised_roles", render_message("webui.show_organization_structure.select.roles_2c70f24a"), item.get("subordinate_role_count")),
+                        ("assigned_users", render_message("webui.show_organization_structure.select.users_03e2325e"), item.get("assigned_user_count")),
+                        ("current_assignments", render_message("governance_custody.stat.current_assignments"), item.get("current_assignment_count")),
+                        ("future_assignments", render_message("webui.show_organization_structure.select.future_875190f7"), item.get("future_assignment_count")),
+                        ("expired_assignments", render_message("webui.show_organization_structure.select.expired_66c2cb88"), item.get("expired_assignment_count")),
+                        ("assignment_validity", render_message("webui.show_organization_structure.select.assignment_validity_b7656407"), item.get("assignment_validity")),
+                        ("valid_from", render_message("governance_custody.field.valid_from"), format_timestamp(item.get("valid_from")) if item.get("valid_from") else None),
+                        ("valid_until", render_message("governance_custody.field.valid_until"), format_timestamp(item.get("valid_until")) if item.get("valid_until") else None),
                     ):
                         if value is not None:
                             guidance_text = None
-                            if label == "Effective status":
+                            if field_key == "status" and node["type"] != "user":
                                 guidance_text = render_message("webui.render_summary.text.includes_inactivity_inherited_from_organiz_1ed32480")
-                            elif label == "Direct status":
+                            elif field_key == "direct_status":
                                 guidance_text = render_message("webui.render_summary.text.set_directly_on_this_item_without_consider_076d5cd7")
+                            display_value = value
+                            if field_key in {"status", "direct_status", "assignment_validity"}:
+                                display_value = localized_lifecycle_value(value)
+                            elif field_key == "account_type":
+                                display_value = localized_account_type(value)
                             with ui.column().classes("w-full gap-0 border-b border-slate-100 py-1.5"):
-                                with ui.row().classes("w-full justify-between items-center gap-3"):
-                                    ui.label(label).classes("text-xs uppercase tracking-wide text-slate-400")
-                                    ui.label(str(value).title() if label in {"Effective status", "Direct status", "Account status", "Account type", "Assignment validity"} else str(value)).classes("text-sm font-medium text-right")
+                                with ui.element("div").classes("organization-browser-summary-field w-full"):
+                                    ui.label(label).classes("organization-browser-summary-label text-xs uppercase tracking-wide text-slate-400")
+                                    ui.label(str(display_value)).classes("organization-browser-summary-value text-sm font-medium")
                                 if guidance_text:
                                     ui.label(guidance_text).classes("w-full text-[10px] leading-3 text-slate-400")
                     privileges = set(
                         (auth_state.get("principal") or {}).get("global_privileges", [])
                     )
                     if not is_selector and can_open_organization_detail(node["type"], privileges):
-                        action_label = render_message("webui.render_summary.text.open_replace_88c69185", replace=node['type'].replace('_', ' '))
+                        action_label = render_message({
+                            "org_unit": "webui.render_governance_cards.tooltip.open_organization_unit_831f72f6",
+                            "role": "webui.render_governance_cards.tooltip.open_role_5c0462a7",
+                            "user": "webui.render_governance_cards.tooltip.open_user_0dd1ba6f",
+                        }[node["type"]])
                         ui.button(
-                            action_label.title(), icon="open_in_new",
+                            action_label, icon="open_in_new",
                             on_click=lambda: open_selected(node),
                         ).props("unelevated no-caps").classes("self-end")
 
@@ -15944,7 +16526,7 @@ def index(q: str = "") -> None:
                 workspace_layout = ui.element("div").classes("advanced-search-workspace-layout")
                 workspace_layout.__enter__()
                 with ui.card().classes("advanced-search-criteria-panel w-full p-4 shadow-none border border-slate-200"):
-                    with ui.row().classes("w-full items-end gap-4 flex-wrap"):
+                    with ui.row().classes("advanced-search-target-row w-full items-end gap-4 flex-wrap"):
                         target = ui.select(targets, value=workspace["resource"], label=render_message("webui.select_advanced_search.select.search_for_410f853e")).props(
                             "outlined dense options-dense aria-label='" + render_message("webui.select_advanced_search.accessible_name.search_target_27bbcc33") + "'"
                         ).classes("w-56")
@@ -15961,11 +16543,11 @@ def index(q: str = "") -> None:
                         "role=alert tabindex=-1 aria-label='" + render_message("webui.select_advanced_search.accessible_name.search_validation_summary_9c5c4e57") + "'"
                     )
                     builder_host = ui.column().classes("w-full gap-3")
-                    with ui.row().classes("w-full items-end gap-3 flex-wrap mt-2"):
+                    with ui.row().classes("advanced-search-sort-row w-full items-end gap-3 flex-wrap mt-2"):
                         sort_field = ui.select({}, label=render_message("webui.select_advanced_search.select.sort_by_ead29b06")).props("outlined dense options-dense").classes("w-60")
                         sort_direction = ui.select({"asc": render_message("webui.select_advanced_search.select.ascending_7ac56d5e"), "desc": render_message("webui.select_advanced_search.select.descending_b4342bd5")}, value=workspace["sort_direction"], label=render_message("webui.select_advanced_search.select.direction_c0ccf4a5")).props("outlined dense options-dense").classes("w-40")
                         page_size = ui.select({25: render_message("webui.select_advanced_search.select.page_size_25_3ce9d53c"), 50: render_message("webui.select_advanced_search.select.page_size_50_34f8a03e"), 100: render_message("webui.select_advanced_search.select.page_size_100_ac5cc8df")}, value=workspace["limit"], label=render_message("webui.select_advanced_search.select.page_size_cafb2ebd")).props("outlined dense options-dense").classes("w-40")
-                    with ui.row().classes("w-full items-center gap-2 mt-2"):
+                    with ui.row().classes("advanced-search-submit-row w-full items-center gap-2 mt-2"):
                         search_advanced = ui.button(render_message("webui.select_advanced_search.button.search_97989f23"), icon="search").props("unelevated no-caps")
                         reset_advanced = ui.button(render_message("webui.select_advanced_search.button.reset_507afbb7"), icon="restart_alt").props("flat no-caps")
                         status_label = ui.label().classes("text-sm text-slate-500 ml-auto")
@@ -15979,8 +16561,15 @@ def index(q: str = "") -> None:
                     saved_context.set_visibility(False)
                     with ui.column().classes("advanced-search-saved-actions w-full gap-2"):
                         save_button = ui.button(render_message("webui.select_advanced_search.button.save_search_f4158320"), icon="save").props("outline no-caps")
+                        edit_details_button = ui.button(
+                            render_message("webui.open_aggregation.button.edit_metadata_3ee4d255"),
+                            icon="edit",
+                        ).props("outline no-caps")
+                        edit_details_button.tooltip(
+                            render_message("webui.open_aggregation.button.edit_metadata_3ee4d255")
+                        )
                         save_as_button = ui.button(render_message("webui.select_advanced_search.button.save_as_b7ca59d6"), icon="content_copy").props("outline no-caps")
-                        open_button = ui.button(render_message("webui.select_advanced_search.button.open_saved_search_8bef667f"), icon="folder_open").props("flat no-caps")
+                        open_button = ui.button(render_message("webui.select_advanced_search.button.open_saved_search_8bef667f"), icon="folder_open").props("outline no-caps")
                         new_button = ui.button(render_message("webui.select_advanced_search.button.new_search_635c50cb"), icon="add").props("flat no-caps")
                         delete_button = ui.button(render_message("webui.select_advanced_search.button.delete_f507983a"), icon="delete", color="negative").props("flat no-caps")
                 workspace_layout.__exit__(None, None, None)
@@ -16104,8 +16693,12 @@ def index(q: str = "") -> None:
             save_button.text = render_message("webui.refresh_saved_actions.text.update_saved_search_31788e51") if saved is not None else render_message("webui.refresh_saved_actions.text.save_search_76b8ff5b")
             save_button.update()
             save_button.set_visibility((saved is None and has_save) or capabilities.get("update") is True)
+            edit_details_button.set_visibility(
+                saved is not None and capabilities.get("update") is True
+            )
             save_as_button.set_visibility(has_save and saved is not None)
             save_button.set_enabled(structurally_valid)
+            edit_details_button.set_enabled(structurally_valid)
             save_as_button.set_enabled(structurally_valid)
             delete_button.set_visibility(capabilities.get("delete") is True)
             render_saved_context()
@@ -16159,28 +16752,42 @@ def index(q: str = "") -> None:
             if await dialog:
                 load_saved_into_workspace(await api.saved_search(saved_search_id))
 
-        async def save_search(*, save_as: bool = False) -> None:
+        async def save_search(
+            *, save_as: bool = False, edit_details: bool = False,
+        ) -> None:
             _, validation_error = validate_builder()
             if validation_error:
                 show_validation(validation_error); validation_summary.run_method("focus"); return
             saved = workspace.get("saved")
             capabilities = (saved or {}).get("capabilities") or {}
             creating = save_as or saved is None
+            if not creating and not edit_details:
+                payload = current_saved_payload()
+                payload.update(
+                    audience_mode=workspace["audience_mode"],
+                    role_ids=list(workspace["role_ids"]),
+                    org_unit_ids=list(workspace["org_unit_ids"]),
+                )
+                try:
+                    save_button.disable()
+                    updated = await api.update_saved_search(
+                        int(saved["id"]), int(saved["version"]), payload,
+                    )
+                    load_saved_into_workspace(updated)
+                    ui.notify(
+                        render_message("webui.persist_saved_search.notify.saved_search_updated_7bd649da"),
+                        color="positive",
+                    )
+                except ApiError as error:
+                    save_button.enable()
+                    if error.status_code == 409:
+                        await show_stale_saved_search(int(saved["id"]))
+                    else:
+                        ui.notify(error_message(error), color="negative", close_button=True)
+                return
             can_manage_audience = creating or capabilities.get("manage_audience") is True
-            try:
-                audience_options = await api.saved_search_audience_options() if can_manage_audience else {"roles": [], "org_units": []}
-            except ApiError as error:
-                ui.notify(error_message(error), color="negative", close_button=True); return
-            role_options = {int(item["id"]): f"{item['name']} ({item['code']})" for item in audience_options.get("roles", [])}
-            unit_options = {int(item["id"]): f"{item['name']} ({item['code']})" for item in audience_options.get("org_units", [])}
-            selected_role_ids = [
-                int(value) for value in ([] if save_as else workspace["role_ids"])
-                if int(value) in role_options
-            ]
-            selected_unit_ids = [
-                int(value) for value in ([] if save_as else workspace["org_unit_ids"])
-                if int(value) in unit_options
-            ]
+            selected_role_ids = [int(value) for value in ([] if save_as else workspace["role_ids"])]
+            selected_unit_ids = [int(value) for value in ([] if save_as else workspace["org_unit_ids"])]
             with ui.dialog() as dialog, ui.card().classes("w-[680px] max-w-full p-5 gap-4"):
                 ui.label(render_message("webui.save_search.label.save_as_a_new_search_201a62ae") if save_as else (render_message("webui.save_search.label.save_search_9f72f967") if creating else render_message("webui.save_search.label.update_saved_search_09fb6c1c"))).classes("text-lg font-semibold")
                 current_name = str(workspace.get("search_name") or "")
@@ -16195,12 +16802,11 @@ def index(q: str = "") -> None:
                 audience_mode = ui.radio({"private": render_message("webui.save_search.radio.only_me_739a9de4"), "shared": render_message("webui.save_search.radio.roles_or_organizational_units_01b067ca")}, value="private" if save_as else workspace["audience_mode"]).props("inline")
                 audience_host = ui.column().classes("w-full gap-3")
                 with audience_host:
-                    role_control = ui.select(role_options, value=selected_role_ids, label=render_message("webui.save_search.select.roles_c2c266e1"), multiple=True).props("outlined use-chips options-dense").classes("w-full")
-                    unit_control = ui.select(unit_options, value=selected_unit_ids, label=render_message("webui.save_search.select.organizational_units_9c039bd2"), multiple=True).props("outlined use-chips options-dense").classes("w-full")
+                    role_control = ui.select({}, value=[], label=render_message("webui.save_search.select.roles_c2c266e1"), multiple=True).props("outlined use-chips options-dense clearable input-debounce=0").classes("w-full")
+                    unit_control = ui.select({}, value=[], label=render_message("webui.save_search.select.organizational_units_9c039bd2"), multiple=True).props("outlined use-chips options-dense clearable input-debounce=0").classes("w-full")
+                    _, load_selected_roles = bind_remote_saved_audience_select(role_control, "roles")
+                    _, load_selected_units = bind_remote_saved_audience_select(unit_control, "org-units")
                     ui.label(render_message("webui.save_search.label.recipients_can_run_this_query_but_results_c13f331f")).classes("text-xs text-slate-500")
-                reason_control = None
-                if not creating:
-                    reason_control = ui.textarea(render_message("webui.save_search.textarea.reason_for_change_1456875c")).props("outlined maxlength=500 autogrow").classes("w-full")
                 error_label = ui.label().classes("text-sm text-negative")
                 with ui.row().classes("w-full justify-end gap-2"):
                     ui.button(render_message("webui.save_search.button.cancel_6ad2d1bd"), on_click=dialog.close).props("flat no-caps")
@@ -16220,8 +16826,6 @@ def index(q: str = "") -> None:
                     units = list(unit_control.value or []) if mode == "shared" else []
                     if mode == "shared" and not (roles or units):
                         error_label.text = render_message("webui.persist_saved_search.text.choose_at_least_one_role_or_organizational_2c3b3c87"); return
-                    if reason_control is not None and not str(reason_control.value or "").strip():
-                        error_label.text = render_message("webui.persist_saved_search.text.a_reason_is_required_when_updating_a_saved_6b76ee63"); return
                     workspace["search_name"] = name
                     workspace["search_category"] = str(category_control.value or "").strip() or None
                     workspace["search_description"] = str(description_control.value or "").strip() or None
@@ -16234,7 +16838,6 @@ def index(q: str = "") -> None:
                         else:
                             updated = await api.update_saved_search(
                                 int(saved["id"]), int(saved["version"]), payload,
-                                str(reason_control.value).strip(),
                             )
                         workspace["audience_mode"] = mode
                         workspace["role_ids"] = roles
@@ -16248,11 +16851,14 @@ def index(q: str = "") -> None:
                         else:
                             error_label.text = error_message(error)
                 submit.on("click", persist_saved_search)
+                await asyncio.gather(
+                    load_selected_roles(selected_role_ids),
+                    load_selected_units(selected_unit_ids),
+                )
             dialog.open()
 
         async def open_saved_search_dialog() -> None:
             administrator = "search.saved_search.administrator" in privileges
-            audience_options = await api.saved_search_audience_options() if administrator else {"roles": [], "org_units": []}
             with ui.dialog() as dialog, ui.card().classes("w-[900px] max-w-full max-h-[90vh] p-5 gap-4"):
                 ui.label(render_message("webui.open_saved_search_dialog.label.open_saved_search_306aeadf")).classes("text-lg font-semibold")
                 filters: dict[str, Any] = {"offset": 0, "limit": 25}
@@ -16274,8 +16880,10 @@ def index(q: str = "") -> None:
                         ui.label(render_message("webui.open_saved_search_dialog.label.administrative_filters_ea190231")).classes("text-sm font-semibold text-slate-600")
                         with ui.row().classes("w-full gap-3 items-end flex-wrap"):
                             owner_filter = ui.number(render_message("webui.open_saved_search_dialog.number.owner_user_id_05651181"), min=1).props("outlined dense").classes("w-40")
-                            role_filter = ui.select({int(item["id"]): item["name"] for item in audience_options.get("roles", [])}, label=render_message("webui.open_saved_search_dialog.select.role_audience_47211c66")).props("outlined dense clearable options-dense").classes("w-52")
-                            unit_filter = ui.select({int(item["id"]): item["name"] for item in audience_options.get("org_units", [])}, label=render_message("webui.open_saved_search_dialog.select.unit_audience_29a50f10")).props("outlined dense clearable options-dense").classes("w-52")
+                            role_filter = ui.select({}, label=render_message("webui.open_saved_search_dialog.select.role_audience_47211c66")).props("outlined dense clearable options-dense input-debounce=0").classes("w-52")
+                            unit_filter = ui.select({}, label=render_message("webui.open_saved_search_dialog.select.unit_audience_29a50f10")).props("outlined dense clearable options-dense input-debounce=0").classes("w-52")
+                            bind_remote_saved_audience_select(role_filter, "roles")
+                            bind_remote_saved_audience_select(unit_filter, "org-units")
                             minimum_filter = ui.number(render_message("webui.open_saved_search_dialog.number.minimum_result_cap_32191a13"), min=1, max=5000).props("outlined dense").classes("w-44")
                             maximum_filter = ui.number(render_message("webui.open_saved_search_dialog.number.maximum_result_cap_87c75dd6"), min=1, max=5000).props("outlined dense").classes("w-44")
                             updated_from = ui.input(render_message("webui.open_saved_search_dialog.input.updated_from_6262aba2")).props("outlined dense type=datetime-local").classes("w-48")
@@ -16481,11 +17089,14 @@ def index(q: str = "") -> None:
                 )
                 has_more = len(page_rows) > 25
                 rows = [*(accumulated or []), *page_rows[:25]]
+                rows.sort(key=lambda item: (
+                    str(item.get("code") or "").casefold(), int(item.get("id") or 0),
+                ))
                 content.clear()
                 with content:
                     with ui.row().classes("w-full items-center gap-2"):
                         ui.button(
-                            icon="arrow_back",
+                            icon="arrow_forward" if current_direction["value"] == "rtl" else "arrow_back",
                             on_click=show_schemes if parent_item is None else lambda: show_level(
                                 scheme, path[-1] if path else None, path[:-1],
                             ),
@@ -16514,7 +17125,7 @@ def index(q: str = "") -> None:
                                 with ui.column().classes("grow min-w-0 gap-0"):
                                     ui.label(item["title"]).classes("font-semibold")
                                     ui.badge(item["code"], color="primary").props("outline")
-                                ui.icon("check_circle" if item["is_terminal"] else "chevron_right", color="primary")
+                                ui.icon("check_circle" if item["is_terminal"] else tree_expander_icon(False), color="primary")
                     if has_more:
                         ui.button(
                             render_message("webui.render_collection.button.load_more_755f4879"),
@@ -16581,42 +17192,59 @@ def index(q: str = "") -> None:
                     node_kind = "classification" if kind == "classification" else "aggregation"
                     node = (node_kind, int(item["id"]))
                     expanded = node in browser["expanded"]
-                    with ui.row().classes("w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50").style(
-                        f"padding-inline-start:{depth * 20 + 4}px"
-                    ):
-                        ui.button(
-                            icon="expand_more" if expanded else "chevron_right",
-                            on_click=lambda _, selected=item, selected_kind=node_kind: toggle_node(selected_kind, selected),
-                        ).props("flat round dense size=sm color=blue-grey")
-                        ui.icon("schema" if node_kind == "classification" and not item.get("is_terminal") else "label" if node_kind == "classification" else "folder", color="primary")
-                        with ui.column().classes("grow min-w-0 gap-0"):
-                            ui.label(item["title"]).classes("text-sm font-semibold")
-                            ui.label(item.get("code") or item.get("aggregation_number")).classes("text-xs text-slate-500")
-                        if node_kind == "aggregation":
+                    with ui.column().classes("advanced-relationship-tree-node gap-0"):
+                        with ui.row().classes(
+                            "advanced-relationship-tree-row w-full rounded-lg py-1 pe-2 hover:bg-blue-50"
+                        ):
                             ui.button(
-                                render_message("webui.render_collection.button.select_c2c58965"), icon="check",
-                                on_click=lambda _, selected=item: select_aggregation(selected),
-                            ).props("flat dense no-caps")
-                    if expanded:
-                        child_path = (
-                            f"classifications/{item['id']}/aggregations"
-                            if node_kind == "classification" and item["is_terminal"] else
-                            f"classifications/{item['id']}/children"
-                            if node_kind == "classification" else
-                            f"aggregations/{item['id']}/children"
-                        )
-                        render_collection(
-                            child_path,
-                            "aggregation" if node_kind == "aggregation" or item.get("is_terminal") else "classification",
-                            depth + 1,
-                        )
+                                icon=tree_expander_icon(expanded),
+                                on_click=lambda _, selected=item, selected_kind=node_kind: toggle_node(selected_kind, selected),
+                            ).props("flat round dense size=sm color=blue-grey").classes(
+                                "advanced-relationship-tree-expander"
+                            )
+                            ui.icon(
+                                "schema" if node_kind == "classification" and not item.get("is_terminal")
+                                else "label" if node_kind == "classification" else "folder",
+                                color="primary",
+                            ).classes("advanced-relationship-tree-icon")
+                            with ui.column().classes(
+                                "advanced-relationship-tree-content min-w-0 gap-0"
+                            ):
+                                ui.label(item["title"]).classes("text-sm font-semibold")
+                                ui.label(item.get("code") or item.get("aggregation_number")).classes(
+                                    "text-xs text-slate-500"
+                                )
+                            if node_kind == "aggregation":
+                                ui.button(
+                                    render_message("webui.render_collection.button.select_c2c58965"), icon="check",
+                                    on_click=lambda _, selected=item: select_aggregation(selected),
+                                ).props("flat dense no-caps").classes(
+                                    "advanced-relationship-tree-action"
+                                )
+                        if expanded:
+                            child_path = (
+                                f"classifications/{item['id']}/aggregations"
+                                if node_kind == "classification" and item["is_terminal"] else
+                                f"classifications/{item['id']}/children"
+                                if node_kind == "classification" else
+                                f"aggregations/{item['id']}/children"
+                            )
+                            with ui.column().classes(
+                                "advanced-relationship-tree-children w-auto gap-0"
+                            ):
+                                render_collection(
+                                    child_path,
+                                    "aggregation" if node_kind == "aggregation" or item.get("is_terminal") else "classification",
+                                    depth + 1,
+                                )
                 if collection.get("next_cursor"):
                     async def load_more(collection_path: str = path) -> None:
                         await load_collection(collection_path, append=True)
                         render_tree()
-                    ui.button(render_message("webui.render_collection.button.load_more_755f4879"), icon="more_horiz", on_click=load_more).props("flat dense no-caps").style(
-                        f"margin-inline-start:{depth * 20 + 32}px"
-                    )
+                    ui.button(
+                        render_message("webui.render_collection.button.load_more_755f4879"),
+                        icon="more_horiz", on_click=load_more,
+                    ).props("flat dense no-caps").classes("self-start ms-8")
 
             def render_tree() -> None:
                 content.clear()
@@ -16666,10 +17294,10 @@ def index(q: str = "") -> None:
 
         def render_condition(node: dict[str, Any], parent: list[dict[str, Any]], index: int) -> None:
             with ui.card().classes("advanced-search-condition w-full p-2 shadow-none border border-slate-200"):
-                with ui.row().classes("w-full items-end gap-2 flex-wrap"):
+                with ui.row().classes("advanced-search-condition-row w-full items-end gap-2 flex-wrap"):
                     kind = ui.select({"structured": render_message("webui.render_condition.select.metadata_65eb8656"), "full_text": render_message("webui.render_condition.select.full_text_3ef4f841")}, value=node.get("kind", "structured"), label=render_message("webui.render_condition.select.condition_type_5394683e")).props("outlined dense options-dense").classes("w-36")
                     if node.get("kind") == "full_text":
-                        query_control = ui.input(render_message("webui.render_condition.input.search_words_or_phrase_f4d8da06"), value=node.get("query", "")).props("outlined dense clearable").classes("grow min-w-64")
+                        query_control = ui.input(render_message("webui.render_condition.input.search_words_or_phrase_f4d8da06"), value=node.get("query", "")).props("outlined dense clearable inputmode=search").classes("advanced-search-auto-value grow min-w-64")
                         query_control.on_value_change(lambda event: (
                             node.__setitem__("query", event.value or ""),
                             update_search_enabled(), refresh_sort_options(), persist_workspace(),
@@ -16698,20 +17326,21 @@ def index(q: str = "") -> None:
                                 first = ui.input(render_message("webui.render_condition.input.from_8e3ed147"), value=values[0] if values else "").props("outlined dense clearable").classes("min-w-40")
                                 second = ui.input(render_message("webui.render_condition.input.to_5f691965"), value=values[1] if len(values) > 1 else "").props("outlined dense clearable").classes("min-w-40")
                                 if field_kind == "datetime":
-                                    first.props(add="type=datetime-local")
-                                    second.props(add="type=datetime-local")
+                                    first.props(add="type=datetime-local dir=ltr").classes(add="advanced-search-technical-value")
+                                    second.props(add="type=datetime-local dir=ltr").classes(add="advanced-search-technical-value")
                                 first.on_value_change(lambda event: (node.__setitem__("value", [event.value, (node.get("value") or ["", ""])[1]]), update_search_enabled()))
                                 second.on_value_change(lambda event: (node.__setitem__("value", [(node.get("value") or ["", ""])[0], event.value]), update_search_enabled()))
                                 value_control = None
                             elif operator_name in {"in", "not_in"}:
                                 rendered = ", ".join(str(item) for item in node.get("value", [])) if isinstance(node.get("value"), list) else ""
-                                value_control = ui.input(render_message("webui.render_condition.input.values_comma_separated_c3e84e2f"), value=rendered).props("outlined dense clearable").classes("grow min-w-56")
+                                value_control = ui.input(render_message("webui.render_condition.input.values_comma_separated_c3e84e2f"), value=rendered).props("outlined dense clearable").classes("advanced-search-auto-value grow min-w-56")
                                 value_control.on_value_change(lambda event: (node.__setitem__("value", [part.strip() for part in str(event.value or "").split(",") if part.strip()][:100]), update_search_enabled()))
                             elif field_name in relation_sources:
                                 endpoint, label_fields = relation_sources[field_name]
                                 selected_value = node.get("value")
+                                selected_label = str(node.get("_value_label") or "…")
                                 value_control = ui.select(
-                                    ({int(selected_value): str(selected_value)} if selected_value is not None else {}),
+                                    ({int(selected_value): selected_label} if selected_value is not None else {}),
                                     value=selected_value,
                                     label=render_message("webui.render_condition.select.value_3acb61a0"),
                                 ).props("outlined dense clearable").classes("grow min-w-56")
@@ -16721,6 +17350,24 @@ def index(q: str = "") -> None:
                                     resource=endpoint,
                                     search_fields=tuple(label_fields),
                                     label_fields=tuple(label_fields),
+                                    on_options_resolved=lambda options, condition=node: (
+                                        condition.__setitem__(
+                                            "_value_label", options[int(condition["value"])]
+                                        )
+                                        if condition.get("value") is not None
+                                        and int(condition["value"]) in options
+                                        else None
+                                    ),
+                                )
+                                value_control.on_value_change(
+                                    lambda event, condition=node, control=value_control: (
+                                        condition.__setitem__(
+                                            "_value_label",
+                                            dict(control.options or {}).get(event.value, ""),
+                                        )
+                                        if event.value is not None
+                                        else condition.pop("_value_label", None)
+                                    )
                                 )
                                 if field_name in {
                                     "aggregation_id", "parent_aggregation_id",
@@ -16746,11 +17393,11 @@ def index(q: str = "") -> None:
                                 if field_name == "component.content_status":
                                     style_status_chip_select(value_control)
                             elif field_kind == "integer":
-                                value_control = ui.number(render_message("advanced_search.field.value"), value=node.get("value")).props("outlined dense clearable").classes("min-w-40")
+                                value_control = ui.number(render_message("advanced_search.field.value"), value=node.get("value")).props("outlined dense clearable dir=ltr").classes("advanced-search-technical-value min-w-40")
                             else:
-                                value_control = ui.input(render_message("webui.render_condition.input.value_8dc59edc"), value=node.get("value", "")).props("outlined dense clearable").classes("grow min-w-56")
+                                value_control = ui.input(render_message("webui.render_condition.input.value_8dc59edc"), value=node.get("value", "")).props("outlined dense clearable").classes("advanced-search-auto-value grow min-w-56")
                                 if field_kind == "datetime":
-                                    value_control.props(add="type=datetime-local")
+                                    value_control.props(add="type=datetime-local dir=ltr").classes(add="advanced-search-technical-value")
                             if value_control is not None and operator_name not in {"in", "not_in"}:
                                 value_control.on_value_change(lambda event: (node.__setitem__("value", event.value), update_search_enabled()))
                         field_control.on_value_change(lambda event: (
@@ -16785,7 +17432,7 @@ def index(q: str = "") -> None:
                     depth=depth,
                 ) + "'"
             ):
-                with ui.row().classes("w-full items-center gap-2"):
+                with ui.row().classes("advanced-search-group-toolbar w-full items-center gap-2"):
                     group_operator = ui.select(labels, value=node.get("operator", "and"), label=render_message("webui.render_group.select.match_c4607f29")).props("outlined dense options-dense").classes("w-32")
                     ui.label(render_message("webui.render_group.label.level_depth_40cb374d", depth=depth)).classes("text-xs text-slate-500")
                     ui.space()
@@ -16887,21 +17534,9 @@ def index(q: str = "") -> None:
                     )
                 else:
                     result = await api.search_request(workspace["resource"], payload)
-                workspace["aggregation_contexts"] = {}
                 workspace["record_component_details"] = {}
                 workspace["record_capabilities"] = {}
                 if workspace["resource"] == "records":
-                    for aggregation_id in sorted({
-                        int(item["aggregation_id"]) for item in result.get("items", [])
-                        if item.get("aggregation_id") is not None
-                    }):
-                        try:
-                            aggregation = await api.get("aggregations", aggregation_id)
-                            workspace["aggregation_contexts"][aggregation_id] = relationship_cell(
-                                aggregation
-                            )
-                        except ApiError:
-                            workspace["aggregation_contexts"][aggregation_id] = None
                     async def load_matching_component_details(
                         record_item: dict[str, Any],
                     ) -> tuple[int, dict[str, Any], list[dict[str, Any]]]:
@@ -16986,9 +17621,6 @@ def index(q: str = "") -> None:
                                 matching_components if uses_full_text
                                 else list(authorized_component_details.values())
                             )
-                            parent_aggregation = workspace.get("aggregation_contexts", {}).get(
-                                int(item["aggregation_id"])
-                            ) if item.get("aggregation_id") is not None else None
                             render_compact_resource_result(
                                 "records", item,
                                 on_open=lambda selected: open_advanced_record(int(selected["id"])),
@@ -16996,11 +17628,6 @@ def index(q: str = "") -> None:
                                 metadata_matched=bool(search_meta.get("metadata_matched")),
                                 content_matched=bool(matching_components),
                                 show_medium=True,
-                                parent_aggregation=parent_aggregation,
-                                on_open_parent=(
-                                    lambda _, parent_id=int(item["aggregation_id"]), source_id=int(item["id"]):
-                                        open_advanced_parent(parent_id, source_id)
-                                ) if parent_aggregation and item.get("aggregation_id") is not None else None,
                                 can_preview=bool(
                                     record_capabilities.get("view_component")
                                     and any(component_is_previewable(component) for component in authorized_component_details.values())
@@ -17035,12 +17662,6 @@ def index(q: str = "") -> None:
             persist_workspace()
             state.pop("discard_navigation_guard", None)
             await open_aggregation(await api.get("aggregations", identifier))
-
-        async def open_advanced_parent(parent_id: int, source_id: int) -> None:
-            workspace["return_anchor"] = f"compact-result-records-{int(source_id)}"
-            persist_workspace()
-            state.pop("discard_navigation_guard", None)
-            await open_aggregation(await api.get("aggregations", parent_id))
 
         async def confirm_target_reset() -> bool:
             with ui.dialog() as dialog, ui.card().classes("w-[480px] max-w-full p-5 gap-4"):
@@ -17112,6 +17733,9 @@ def index(q: str = "") -> None:
         new_button.on("click", start_new_search)
         open_button.on("click", open_saved_search_dialog)
         save_button.on("click", lambda: save_search(save_as=False))
+        edit_details_button.on(
+            "click", lambda: save_search(save_as=False, edit_details=True),
+        )
         save_as_button.on("click", lambda: save_search(save_as=True))
         delete_button.on("click", delete_saved_search)
         first_page.on("click", lambda: move_page(0))
@@ -17432,7 +18056,10 @@ def index(q: str = "") -> None:
                 limit=26, offset=len(existing),
                 **({"roots_only": True} if parent_id is None else {"parent_classification_id": parent_id}),
             )
-            rows = [*existing, *page_rows[:25]]
+            rows = sorted(
+                [*existing, *page_rows[:25]],
+                key=lambda row: (str(row.get("code") or ""), int(row["id"])),
+            )
             current_scheme = workspace["scheme"]
             if current_scheme and int(current_scheme["id"]) == scheme_id:
                 workspace["children"][parent_id] = rows
@@ -18298,7 +18925,10 @@ def index(q: str = "") -> None:
     async def open_hold_editor(hold: dict[str, Any] | None = None) -> None:
         editing = hold is not None
         def person_label(person: dict[str, Any]) -> str:
-            return f"{person['name']} — {person.get('email') or 'no email'}"
+            return (
+                f"{(person.get('localized') or {}).get('name') or person['name']} — "
+                f"{person.get('email') or render_message('webui.select_user_details.label.no_email_address_1d665180')}"
+            )
 
         known_people = {
             int(person["id"]): person_label(person)
@@ -18319,14 +18949,6 @@ def index(q: str = "") -> None:
                 name = ui.input(render_message("webui.open_hold_editor.input.name_fc2e95e9"), value=(hold or {}).get("name", "")).props("outlined maxlength=300").classes("w-full")
                 valid_from = ui.input(render_message("webui.open_hold_editor.input.valid_from_5618bb9a"), value=initial_valid_from).props("outlined type=datetime-local").classes("w-full")
                 valid_to = ui.input(render_message("webui.open_hold_editor.input.valid_to_exclusive_ac7e61ca"), value=initial_valid_to).props("outlined type=datetime-local").classes("w-full")
-            people_page = {"offset": 0, "limit": 25, "total": 0, "loading": False}
-            with ui.row().classes("w-full items-center gap-2 no-wrap"):
-                people_query = ui.input(
-                    render_message("webui.render_table.input.name_email_or_external_identifier_52dac4f4")
-                ).props("outlined dense clearable").classes("grow")
-                people_search = ui.button(
-                    render_message("webui.index.button.search_4d02b714"), icon="search"
-                ).props("flat dense no-caps")
             owner = ui.select(
                 dict(known_people), value=(hold or {}).get("owner_user_id"), label=render_message("webui.open_hold_editor.select.owner_2084c633"), with_input=True,
             ).props("outlined use-input").classes("w-full")
@@ -18337,14 +18959,11 @@ def index(q: str = "") -> None:
                 multiple=True, label=render_message("webui.open_hold_editor.select.contributors_38f1f3e5"), with_input=True,
             ).props("outlined use-chips use-input").classes("w-full")
             style_person_select(contributors, multiple=True)
-            with ui.row().classes("w-full items-center justify-end gap-1"):
-                people_previous = ui.button(
-                    render_message("webui.render_table.button.previous_ff5ac91d"), icon="chevron_left"
-                ).props("flat dense no-caps")
-                people_status = ui.label().classes("text-xs text-slate-500 min-w-32 text-center")
-                people_next = ui.button(
-                    render_message("webui.render_table.button.next_7c669a6d"), icon="chevron_right"
-                ).props("flat dense no-caps")
+            load_owner_options = bind_remote_people_select(owner)
+            load_contributor_options = bind_remote_people_select(
+                contributors,
+                excluded_ids=lambda: ({int(owner.value)} if owner.value is not None else set()),
+            )
             description = ui.textarea(render_message("webui.open_hold_editor.textarea.description_930a66c1"), value=(hold or {}).get("description") or "").props("outlined autogrow maxlength=4000").classes("w-full")
             preserve = ui.checkbox(render_message("webui.open_hold_editor.checkbox.preserve_resource_metadata_and_state_8a5875d3"), value=(hold or {}).get("preserve_resource_state", False))
             ui.label(render_message("webui.open_hold_editor.label.valid_to_is_exclusive_dates_currently_use_b0942828")).classes("text-xs text-slate-500")
@@ -18389,48 +19008,9 @@ def index(q: str = "") -> None:
                 ui.button(render_message("webui.open_hold_editor.button.cancel_9df95680"), on_click=dialog.close).props("flat no-caps")
                 ui.button(render_message("webui.open_hold_editor.button.save_hold_c7de035c"), icon="save", on_click=save).props("unelevated no-caps")
 
-            async def load_people_page(*, reset: bool = False) -> None:
-                if people_page["loading"]:
-                    return
-                if reset:
-                    people_page["offset"] = 0
-                people_page["loading"] = True
-                people_previous.props(add="disable")
-                people_next.props(add="disable")
-                try:
-                    result = await api.active_people(
-                        people_query.value or "", limit=people_page["limit"],
-                        offset=people_page["offset"],
-                    )
-                    people_page["total"] = int(result["total"])
-                    for person in result["items"]:
-                        known_people[int(person["id"])] = person_label(person)
-                    owner.options = dict(known_people)
-                    owner.update()
-                    contributors.options = {
-                        key: value for key, value in known_people.items()
-                        if key != owner.value
-                    }
-                    contributors.update()
-                    start = people_page["offset"] + 1 if result["items"] else 0
-                    end = people_page["offset"] + len(result["items"])
-                    people_status.text = render_message("webui.load_people_page.text.start_end_total_63345877", start=start, end=end, total=people_page['total'])
-                    people_previous.set_enabled(people_page["offset"] > 0)
-                    people_next.set_enabled(end < people_page["total"])
-                except ApiError as error:
-                    ui.notify(error_message(error), color="negative", close_button=True)
-                finally:
-                    people_page["loading"] = False
-
-            async def move_people_page(direction: int) -> None:
-                people_page["offset"] = max(
-                    0, people_page["offset"] + direction * people_page["limit"],
-                )
-                await load_people_page()
-
             def filter_owner_from_contributors() -> None:
                 contributors.options = {
-                    key: value for key, value in known_people.items()
+                    key: value for key, value in dict(contributors.options).items()
                     if key != owner.value
                 }
                 contributors.value = [
@@ -18438,14 +19018,10 @@ def index(q: str = "") -> None:
                     if value != owner.value
                 ]
                 contributors.update()
+                background_tasks.create(load_contributor_options())
 
             owner.on_value_change(filter_owner_from_contributors)
-            people_search.on("click", lambda: load_people_page(reset=True))
-            people_query.on("keydown.enter", lambda: load_people_page(reset=True))
-            people_previous.on("click", lambda: move_people_page(-1))
-            people_next.on("click", lambda: move_people_page(1))
         dialog.open()
-        background_tasks.create(load_people_page(reset=True))
 
     async def add_resource_to_hold_dialog(resource_type: str, resource_id: int, refresh_page: Any) -> None:
         dialog = ui.dialog()
@@ -18568,7 +19144,7 @@ def index(q: str = "") -> None:
             hold_people=await api.hold_people()
         except ApiError:
             hold_people=[]
-        people_options={item["id"]:item["name"] for item in hold_people}
+        people_options={item["id"]:(item.get("localized") or {}).get("name") or item["name"] for item in hold_people}
         owner_options={None:render_message("webui.select_holds.text.all_owners_d14f22bf")}; owner_options.update(people_options)
         contributor_options={None:render_message("webui.select_holds.text.all_contributors_88e3d166")}; contributor_options.update(people_options)
         privileges = set((auth_state.get("principal") or {}).get("global_privileges", []))
@@ -18624,7 +19200,7 @@ def index(q: str = "") -> None:
                         for hold in rows:
                             with ui.card().classes(
                                 "governance-list-card shadow-none " +
-                                ("border-l-4 border-l-amber-400" if hold.get("is_effective") else "")
+                                ("hold-list-card--effective" if hold.get("is_effective") else "")
                             ):
                                 with ui.row().classes("w-full items-start no-wrap gap-3"):
                                     ui.avatar(icon="gavel", color="amber-1" if hold.get("is_effective") else "blue-1", text_color="amber-9" if hold.get("is_effective") else "primary", size="42px")
@@ -18632,13 +19208,19 @@ def index(q: str = "") -> None:
                                         ui.label(hold["name"]).classes("font-semibold text-base leading-tight")
                                         ui.label(hold["code"]).classes("text-xs font-medium text-primary")
                                         ui.label(hold.get("description") or render_message("webui.load.label.no_description_provided_4b47ab9c")).classes("text-xs text-slate-500 mt-1 leading-5")
-                                    ui.badge(hold["state"].title(), color={"active":"warning","scheduled":"primary","expired":"blue-grey"}.get(hold["state"], "blue-grey")).props("outline")
-                                with ui.element("div").classes("governance-list-facts w-full"):
+                                    hold_state_label = {
+                                        "scheduled": render_message("webui.select_holds.select.scheduled_860621ba"),
+                                        "active": render_message("webui.select_holds.select.active_f5bdb37b"),
+                                        "expired": render_message("webui.select_holds.select.expired_99643a2d"),
+                                    }.get(hold["state"], str(hold["state"] or "—"))
+                                    ui.badge(hold_state_label, color={"active":"warning","scheduled":"primary","expired":"blue-grey"}.get(hold["state"], "blue-grey")).props("outline")
+                                with ui.element("div").classes("governance-list-facts hold-list-facts w-full"):
                                     for label, value in (
-                                        ("Owner", hold["owner"]["name"]),
-                                        ("Contributors", f"{len(hold.get('contributors') or [])} contributors"),
-                                        ("Validity", f"{format_timestamp(hold.get('valid_from'))} – {format_timestamp(hold.get('valid_to')) if hold.get('valid_to') else 'Until released'}"),
-                                        ("Held items", str(hold.get("direct_held_item_count", 0))),
+                                        (render_message("webui.select_hold_details.label.owner_7d141da3"), (hold["owner"].get("localized") or {}).get("name") or hold["owner"]["name"]),
+                                        (render_message("webui.select_hold_details.label.contributors_008a0e27"), str(len(hold.get("contributors") or []))),
+                                        (render_message("webui.select_holds.select.valid_from_ebec3edf"), format_timestamp(hold.get("valid_from"))),
+                                        (render_message("webui.select_holds.select.valid_until_5ebd52b4"), format_timestamp(hold.get("valid_to")) if hold.get("valid_to") else render_message("common.value.no_expiry")),
+                                        (render_message("webui.select_hold_details.label.held_items_244f35b3"), str(hold.get("direct_held_item_count", 0))),
                                     ):
                                         with ui.column().classes("gap-0 min-w-0"):
                                             ui.label(label).classes("detail-field-label")
@@ -18669,35 +19251,31 @@ def index(q: str = "") -> None:
         register_navigation("hold-details", hold["name"], entity_id=hold_id, accessible_label=f"{hold['name']} — {hold['code']}")
         show_authenticated_view(); state.update(resource="hold-details", rows=[], searched=True)
         search_bar.set_visibility(False); aggregation_mode_bar.set_visibility(False); add_button.set_visibility(False); add_record_button.set_visibility(False)
-        title.text=hold["name"]; subtitle.text=render_message("webui.select_hold_details.text.code_title_fbb1087b", code=hold['code'], title=hold['state'].title()); guidance.text=""; table_container.clear()
+        localized_hold_states = {
+            "scheduled": render_message("webui.select_holds.select.scheduled_860621ba"),
+            "active": render_message("webui.select_holds.select.active_f5bdb37b"),
+            "expired": render_message("webui.select_holds.select.expired_99643a2d"),
+        }
+        localized_hold_state = localized_hold_states.get(
+            hold["state"], str(hold["state"] or "—")
+        )
+        title.text=hold["name"]; subtitle.text=render_message("webui.select_hold_details.text.code_title_fbb1087b", code=hold['code'], title=localized_hold_state); guidance.text=""; table_container.clear()
 
         async def manage_contributors() -> None:
             known_people = {
-                int(person["id"]): f"{person['name']} — {person.get('email') or 'no email'}"
+                int(person["id"]): f"{(person.get('localized') or {}).get('name') or person['name']} — {person.get('email') or render_message('webui.select_user_details.label.no_email_address_1d665180')}"
                 for person in hold["contributors"]
                 if int(person["id"]) != int(hold["owner_user_id"])
             }
-            people_page = {"offset": 0, "limit": 25, "total": 0, "loading": False}
             dialog = ui.dialog()
             with dialog, ui.card().classes("w-[620px] max-w-full"):
                 ui.label(render_message("webui.manage_contributors.label.manage_contributors_39fd431b")).classes("text-xl font-semibold")
-                with ui.row().classes("w-full items-center gap-2 no-wrap"):
-                    people_query = ui.input(
-                        render_message("webui.render_table.input.name_email_or_external_identifier_52dac4f4")
-                    ).props("outlined dense clearable").classes("grow")
-                    people_search = ui.button(
-                        render_message("webui.index.button.search_4d02b714"), icon="search"
-                    ).props("flat dense no-caps")
                 selected = ui.select(known_people, value=[item["id"] for item in hold["contributors"]], multiple=True, label=render_message("webui.manage_contributors.select.active_contributors_be1212fb")).props("outlined use-chips use-input").classes("w-full")
                 style_person_select(selected, multiple=True)
-                with ui.row().classes("w-full items-center justify-end gap-1"):
-                    people_previous = ui.button(
-                        render_message("webui.render_table.button.previous_ff5ac91d"), icon="chevron_left"
-                    ).props("flat dense no-caps")
-                    people_status = ui.label().classes("text-xs text-slate-500 min-w-32 text-center")
-                    people_next = ui.button(
-                        render_message("webui.render_table.button.next_7c669a6d"), icon="chevron_right"
-                    ).props("flat dense no-caps")
+                load_contributor_options = bind_remote_people_select(
+                    selected,
+                    excluded_ids=lambda: {int(hold["owner_user_id"])},
+                )
                 reason = ui.textarea(render_message("webui.manage_contributors.textarea.reason_17ba4d8f")).props("outlined autogrow maxlength=2000").classes("w-full")
                 async def submit() -> None:
                     if not (reason.value or "").strip(): ui.notify(render_message("webui.submit.notify.a_reason_is_required_2d25211d"), color="warning"); return
@@ -18709,47 +19287,7 @@ def index(q: str = "") -> None:
                     ui.button(render_message("webui.manage_contributors.button.cancel_551081d0"), on_click=dialog.close).props("flat no-caps")
                     ui.button(render_message("webui.manage_contributors.button.save_contributors_9b6b56e2"), icon="group", on_click=submit).props("unelevated no-caps")
 
-                async def load_people_page(*, reset: bool = False) -> None:
-                    if people_page["loading"]:
-                        return
-                    if reset:
-                        people_page["offset"] = 0
-                    people_page["loading"] = True
-                    try:
-                        result = await api.active_people(
-                            people_query.value or "", limit=people_page["limit"],
-                            offset=people_page["offset"],
-                        )
-                        people_page["total"] = int(result["total"])
-                        for person in result["items"]:
-                            if int(person["id"]) != int(hold["owner_user_id"]):
-                                known_people[int(person["id"])] = (
-                                    f"{person['name']} — {person.get('email') or 'no email'}"
-                                )
-                        selected.options = dict(known_people)
-                        selected.update()
-                        start = people_page["offset"] + 1 if result["items"] else 0
-                        end = people_page["offset"] + len(result["items"])
-                        people_status.text = render_message("webui.load_people_page.text.start_end_total_63345877", start=start, end=end, total=people_page['total'])
-                        people_previous.set_enabled(people_page["offset"] > 0)
-                        people_next.set_enabled(end < people_page["total"])
-                    except ApiError as error:
-                        ui.notify(error_message(error), color="negative", close_button=True)
-                    finally:
-                        people_page["loading"] = False
-
-                async def move_people_page(direction: int) -> None:
-                    people_page["offset"] = max(
-                        0, people_page["offset"] + direction * people_page["limit"],
-                    )
-                    await load_people_page()
-
-                people_search.on("click", lambda: load_people_page(reset=True))
-                people_query.on("keydown.enter", lambda: load_people_page(reset=True))
-                people_previous.on("click", lambda: move_people_page(-1))
-                people_next.on("click", lambda: move_people_page(1))
             dialog.open()
-            background_tasks.create(load_people_page(reset=True))
 
         async def delete_current_hold() -> None:
             async def remove(reason: str) -> None:
@@ -18766,30 +19304,30 @@ def index(q: str = "") -> None:
                         with ui.column().classes("gap-0 grow min-w-0"):
                             with ui.row().classes("items-center gap-2"):
                                 ui.label(hold["name"]).classes("text-xl font-semibold text-slate-900")
-                                ui.badge(hold["state"].title(), color="positive" if hold["state"]=="active" else "blue-grey").props("outline")
+                                ui.badge(localized_hold_state, color="positive" if hold["state"]=="active" else "blue-grey").props("outline")
                             ui.label(hold["code"]).classes("text-xs font-medium tracking-wide text-slate-500")
                             ui.label(hold.get("description") or render_message("webui.select_hold_details.label.no_description_provided_d1db5944")).classes("text-sm text-slate-600 mt-2 leading-5")
                     with ui.element("div").classes("hold-summary-facts w-full"):
                         for label,value in (
-                            ("Valid from",format_timestamp(hold["valid_from"])),
-                            ("Valid until",format_timestamp(hold["valid_to"]) if hold.get("valid_to") else "No scheduled end"),
-                            ("Protection",("Enhanced state preservation" if hold["preserve_resource_state"] else "Core protection")),
+                            (render_message("webui.select_holds.select.valid_from_ebec3edf"),format_timestamp(hold["valid_from"])),
+                            (render_message("webui.select_holds.select.valid_until_5ebd52b4"),format_timestamp(hold["valid_to"]) if hold.get("valid_to") else render_message("common.value.no_expiry")),
+                            (render_message("webui.select_holds.select.protection_517995ff"),(render_message("webui.select_holds.select.enhanced_state_preservation_39552bdf") if hold["preserve_resource_state"] else render_message("webui.select_holds.select.core_protection_6f52e26e"))),
                         ):
                             with ui.column().classes("gap-0 min-w-0"):
                                 ui.label(label).classes("detail-field-label")
                                 ui.label(value).classes("text-sm font-medium w-full").tooltip(value)
                     with ui.column().classes("hold-people-block w-full gap-1"):
                         ui.label(render_message("webui.select_hold_details.label.owner_7d141da3")).classes("detail-field-label")
-                        with ui.button(on_click=lambda: select_user_details(hold["owner"]["id"])).props("flat dense no-caps color=blue-grey-9").classes("self-start -ml-2"):
+                        with ui.button(on_click=lambda: select_user_details(hold["owner"]["id"])).props("flat dense no-caps color=blue-grey-9").classes("hold-person-button self-start -ml-2"):
                             render_user_avatar(hold["owner"], size="26px").style("margin-inline-end:7px !important")
-                            ui.label(hold["owner"]["name"]).classes("text-sm")
+                            ui.label((hold["owner"].get("localized") or {}).get("name") or hold["owner"]["name"]).classes("text-sm")
                         ui.label(render_message("webui.select_hold_details.label.contributors_008a0e27")).classes("detail-field-label mt-1")
-                        with ui.row().classes("w-full items-center gap-2 -ml-2"):
+                        with ui.row().classes("hold-people-row w-full items-center gap-2 -ml-2"):
                             if hold["contributors"]:
                                 for contributor in hold["contributors"]:
-                                    with ui.button(on_click=lambda _, user_id=contributor["id"]: select_user_details(user_id)).props("flat dense no-caps color=blue-grey-9").classes("gap-1"):
+                                    with ui.button(on_click=lambda _, user_id=contributor["id"]: select_user_details(user_id)).props("flat dense no-caps color=blue-grey-9").classes("hold-person-button gap-1"):
                                         render_user_avatar(contributor, size="25px").style("margin-inline-end:5px !important")
-                                        ui.label(contributor["name"]).classes("text-xs")
+                                        ui.label((contributor.get("localized") or {}).get("name") or contributor["name"]).classes("text-sm")
                             else:
                                 ui.label(render_message("webui.select_hold_details.label.no_contributors_assigned_401fb846")).classes("text-xs text-slate-500")
                 with ui.card().classes("detail-surface hold-command-actions shadow-none p-4 gap-3"):
@@ -18809,8 +19347,8 @@ def index(q: str = "") -> None:
                     else:
                         delete_button.disable()
                         delete_button.tooltip(render_message("webui.select_hold_details.tooltip.remove_all_held_items_before_deleting_this_292c752f") if hold["capability_reasons"].get("delete") == "hold_not_empty" else render_message("webui.select_hold_details.tooltip.you_are_not_authorized_to_delete_this_hold_6fd753f2"))
-            assigned_by_options={None:render_message("webui.select_hold_details.text.any_assigning_user_2e01c2df"),hold["owner"]["id"]:hold["owner"]["name"]}
-            assigned_by_options.update({item["id"]:item["name"] for item in hold["contributors"]})
+            assigned_by_options={None:render_message("webui.select_hold_details.text.any_assigning_user_2e01c2df"),hold["owner"]["id"]:(hold["owner"].get("localized") or {}).get("name") or hold["owner"]["name"]}
+            assigned_by_options.update({item["id"]:(item.get("localized") or {}).get("name") or item["name"] for item in hold["contributors"]})
             with ui.card().classes("detail-surface w-full shadow-none p-4 gap-3"):
                 ui.label(render_message("webui.select_hold_details.label.filter_held_items_480cc40c")).classes("font-semibold")
                 with ui.grid(columns=4).classes("w-full gap-3"):

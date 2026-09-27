@@ -892,8 +892,16 @@ class ErmsApiClient:
     async def saved_search_administration(self, **filters: Any) -> dict[str, Any]:
         return await self.request("GET", "/api/v1/saved-searches/administration", params=filters)
 
-    async def saved_search_audience_options(self) -> dict[str, Any]:
-        return await self.request("GET", "/api/v1/saved-searches/audience-options")
+    async def saved_search_audience_options(
+        self, audience_kind: str, *, query: str = "", ids: list[int] | None = None,
+        limit: int = 25, offset: int = 0,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"q": query, "limit": limit, "offset": offset}
+        if ids:
+            params["ids"] = ",".join(str(value) for value in ids)
+        return await self.request(
+            "GET", f"/api/v1/saved-searches/audience-options/{audience_kind}", params=params,
+        )
 
     async def saved_search(self, saved_search_id: int) -> dict[str, Any]:
         return await self.request("GET", f"/api/v1/saved-searches/{saved_search_id}")
@@ -902,11 +910,15 @@ class ErmsApiClient:
         return await self.request("POST", "/api/v1/saved-searches", json=payload)
 
     async def update_saved_search(
-        self, saved_search_id: int, version: int, payload: dict[str, Any], reason: str,
+        self, saved_search_id: int, version: int, payload: dict[str, Any],
+        reason: str | None = None,
     ) -> dict[str, Any]:
+        headers = {"If-Match": str(version)}
+        if reason:
+            headers["X-Change-Reason"] = reason
         return await self.request(
             "PUT", f"/api/v1/saved-searches/{saved_search_id}", json=payload,
-            headers={"If-Match": str(version), "X-Change-Reason": reason},
+            headers=headers,
         )
 
     async def delete_saved_search(
@@ -1313,11 +1325,11 @@ class ErmsApiClient:
             params={"version": version} if version else {}, json=payload,
         )
 
-    async def user_roles(self, user_id: int) -> list[dict[str, Any]]:
-        return await self.request("GET", f"/api/v1/users/{user_id}/roles")
+    async def user_roles(self, user_id: int, **filters: Any) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/users/{user_id}/roles", params=filters)
 
-    async def role_users(self, role_id: int) -> list[dict[str, Any]]:
-        return await self.request("GET", f"/api/v1/roles/{role_id}/users")
+    async def role_users(self, role_id: int, **filters: Any) -> dict[str, Any]:
+        return await self.request("GET", f"/api/v1/roles/{role_id}/users", params=filters)
 
     async def delete_assignment(self, assignment_id: int, version: int) -> None:
         await self.request(

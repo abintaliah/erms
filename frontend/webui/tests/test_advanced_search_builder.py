@@ -138,6 +138,31 @@ def test_save_as_is_available_only_for_an_opened_saved_search():
     assert 'save_as_button.set_visibility(has_save and saved is not None)' in APP_SOURCE
 
 
+def test_updating_an_open_saved_search_is_direct_and_reason_free():
+    save_search = APP_SOURCE[
+        APP_SOURCE.index("async def save_search"):
+        APP_SOURCE.index("async def open_saved_search_dialog")
+    ]
+    direct_update = save_search[
+        save_search.index("if not creating and not edit_details:"):
+        save_search.index("can_manage_audience")
+    ]
+    assert "await api.update_saved_search(" in direct_update
+    assert "reason_control" not in save_search
+    assert "a_reason_is_required_when_updating" not in save_search
+
+
+def test_saved_search_metadata_has_an_explicit_edit_details_action():
+    advanced_search = APP_SOURCE[APP_SOURCE.index("async def select_advanced_search"):]
+    assert 'edit_details_button = ui.button(' in advanced_search
+    assert '"Edit metadata"' in advanced_search
+    assert 'icon="edit"' in advanced_search
+    assert ').props("outline no-caps")' in advanced_search
+    assert 'save_search(save_as=False, edit_details=True)' in advanced_search
+    assert 'if not creating and not edit_details:' in advanced_search
+    assert 'edit_details_button.set_visibility(' in advanced_search
+
+
 def test_saved_search_category_is_committed_and_can_be_updated_reliably():
     assert 'autocomplete=list(workspace.get("category_suggestions") or [])' in APP_SOURCE
     assert 'new-value-mode=add-unique' not in APP_SOURCE
@@ -157,6 +182,26 @@ def test_restored_advanced_search_selectors_reject_stale_values_before_rendering
     assert 'if int(value) in unit_options' in APP_SOURCE
     assert 'value=selected_role_ids' in APP_SOURCE
     assert 'value=selected_unit_ids' in APP_SOURCE
+
+
+def test_restored_relationship_values_are_resolved_to_localized_labels():
+    assert 'async def resolve_selected_options()' in APP_SOURCE
+    assert 'api.get(resource, int(value)) for value in selected_values' in APP_SOURCE
+    assert 'include_level_number=resource == "security-levels"' in APP_SOURCE
+    assert 'level_label=security_level_label' in APP_SOURCE
+    assert 'selected_label = str(node.get("_value_label") or "…")' in APP_SOURCE
+    assert '({int(selected_value): selected_label} if selected_value is not None else {})' in APP_SOURCE
+    assert '"_value_label", options[int(condition["value"])]' in APP_SOURCE
+    assert 'dict(control.options or {}).get(event.value, "")' in APP_SOURCE
+    assert '({int(selected_value): str(selected_value)} if selected_value is not None else {})' not in APP_SOURCE
+
+    assert compile_advanced_search_node({
+        "type": "condition", "kind": "structured",
+        "field": "security_level_id", "operator": "eq", "value": 1,
+        "_value_label": "G · عام · المستوى 1",
+    }, "records") == {
+        "field": "security_level_id", "operator": "eq", "value": 1,
+    }
 
 
 def test_open_saved_search_uses_the_approved_search_first_layout():
@@ -195,6 +240,11 @@ def test_advanced_search_uses_clearable_catalogues_and_classification_aggregatio
     assert 'and advanced_search_has_component_field(workspace["root"])' in APP_SOURCE
     assert 'Browse classification and aggregation hierarchy' in APP_SOURCE
     assert 'f"classification-schemes/{scheme_id}/roots"' in APP_SOURCE
+    assert '"advanced-relationship-tree-row w-full rounded-lg py-1 pe-2 hover:bg-blue-50"' in APP_SOURCE
+    assert '"advanced-relationship-tree-children w-auto gap-0"' in APP_SOURCE
+    assert '.advanced-relationship-tree-expander { grid-area: expander; }' in APP_SOURCE
+    assert 'html[dir="rtl"] .advanced-relationship-tree-row {' in APP_SOURCE
+    assert 'icon=tree_expander_icon(expanded)' in APP_SOURCE
     assert ').props("outlined dense clearable")' in APP_SOURCE
     assert 'if selected_value not in controlled_options:' in APP_SOURCE
     assert "one file you are allowed to access must meet every file condition" in APP_SOURCE
@@ -218,6 +268,42 @@ def test_advanced_search_builder_and_results_use_compact_aligned_layouts():
     assert 'compact-result-list w-full gap-0' in APP_SOURCE
     assert 'render_compact_resource_result(' in APP_SOURCE
     assert '.compact-result-row {' in APP_SOURCE
+    assert 'grid-template-areas: "identity actions";' in APP_SOURCE
+    assert 'with ui.element("div").classes("compact-result-identity"):' in APP_SOURCE
+    rtl_result_layout = APP_SOURCE.split('html[dir="rtl"] .compact-result-row {', 1)[1].split('}', 1)[0]
+    assert 'grid-template-areas: "actions identity";' in rtl_result_layout
+    rtl_identity_layout = APP_SOURCE.split('html[dir="rtl"] .compact-result-identity {', 1)[1].split('}', 1)[0]
+    assert 'grid-template-areas: "title type";' in rtl_identity_layout
+    assert 'justify-content: end;' in rtl_identity_layout
+    assert 'compact-result-primary w-full items-center no-wrap' in APP_SOURCE
+    assert 'compact-result-meta w-full items-center no-wrap' in APP_SOURCE
+    rtl_result_title_row = APP_SOURCE.rsplit('html[dir="rtl"] .compact-result-primary,', 1)[1].split('}', 1)[0]
+    assert 'justify-content: flex-start !important;' in rtl_result_title_row
+    assert 'width: auto !important;' in rtl_result_title_row
+    assert 'justify-self: start !important;' in rtl_result_title_row
+    assert "compact-result-parent" not in APP_SOURCE
+    assert 'html[dir="rtl"] .compact-result-indicators { order: -1; }' in APP_SOURCE
+    rtl_result_actions = APP_SOURCE.split('html[dir="rtl"] .compact-result-actions {', 1)[1].split('}', 1)[0]
+    assert 'flex-direction: row !important;' in rtl_result_actions
+    assert '.compact-result-type {' in APP_SOURCE
+    assert '.compact-result-actions { grid-area: actions; flex-wrap: nowrap; gap: 0; }' in APP_SOURCE
+    assert 'ui.button(icon=tree_expander_icon(False))' in APP_SOURCE
+
+
+def test_advanced_search_builder_mirrors_its_structure_in_rtl():
+    for class_name in (
+        "advanced-search-target-row",
+        "advanced-search-sort-row",
+        "advanced-search-submit-row",
+        "advanced-search-group-toolbar",
+        "advanced-search-condition-row",
+    ):
+        assert class_name in APP_SOURCE
+    assert '[dir="rtl"] .advanced-search-condition-row' in APP_SOURCE
+    assert 'flex-direction: row-reverse !important' in APP_SOURCE
+    assert 'border-right-width: 4px !important' in APP_SOURCE
+    assert 'advanced-search-technical-value' in APP_SOURCE
+    assert 'advanced-search-auto-value' in APP_SOURCE
 
 
 def test_each_advanced_search_preview_is_attributed_to_its_component():
@@ -233,14 +319,15 @@ def test_each_advanced_search_preview_is_attributed_to_its_component():
     assert 'record_capabilities.get("view_component")' in result_renderer
 
 
-def test_advanced_results_include_medium_parent_and_component_indicators():
+def test_advanced_results_include_medium_and_component_indicators_without_parent_link():
     result_renderer = APP_SOURCE[
         APP_SOURCE.index("def render_results(result:"):
         APP_SOURCE.index("async def open_advanced_record")
     ]
     assert "show_medium=True" in result_renderer
-    assert "parent_aggregation=parent_aggregation" in result_renderer
-    assert "open_advanced_parent(parent_id, source_id)" in result_renderer
+    assert "parent_aggregation=" not in result_renderer
+    assert "open_advanced_parent" not in result_renderer
+    assert 'workspace["aggregation_contexts"]' not in APP_SOURCE
     assert "components_are_matches=uses_full_text" in result_renderer
     assert 'metadata_matched=bool(search_meta.get("metadata_matched"))' in result_renderer
     assert "content_matched=bool(matching_components)" in result_renderer
@@ -249,4 +336,24 @@ def test_advanced_results_include_medium_parent_and_component_indicators():
 def test_global_and_advanced_search_open_actions_are_icon_only():
     assert 'ui.button("Open record", icon="open_in_new"' not in APP_SOURCE
     assert 'ui.button("Open aggregation", icon="open_in_new"' not in APP_SOURCE
+
+
+def test_classification_browse_selectors_sort_each_level_by_code():
+    code_order = '''rows.sort(key=lambda item: (
+                    str(item.get("code") or "").casefold(), int(item.get("id") or 0),
+                ))'''
+    assert APP_SOURCE.count(code_order) >= 2
+
+
+def test_classification_browse_selectors_mirror_navigation_icons_in_rtl():
+    assert APP_SOURCE.count(
+        'ui.icon("check_circle" if classification["is_terminal"] else tree_expander_icon(False)'
+    ) == 1
+    assert APP_SOURCE.count(
+        'ui.icon("check_circle" if item["is_terminal"] else tree_expander_icon(False)'
+    ) == 1
+    assert APP_SOURCE.count(
+        'icon="arrow_forward" if current_direction["value"] == "rtl" else "arrow_back"'
+    ) >= 2
+    assert 'current_direction["value"] = normalized' in APP_SOURCE
     assert "aria-label='Open {'record' if is_record else 'aggregation'}'" in APP_SOURCE

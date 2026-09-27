@@ -15,7 +15,11 @@ from frontend.webui.locale_services import (
 )
 from frontend.webui.scripts.check_i18n_catalogue import validate_repository_catalogue
 from frontend.webui.scripts.extract_english_messages import extract
-from frontend.webui.app import index
+from frontend.webui.app import (
+    index, review_datetime_input_minimum, review_datetime_input_value,
+    review_datetime_payload,
+)
+from frontend.webui.locale_services import clear_locale_context, set_locale_context
 
 
 def test_manifest_has_context_and_exact_placeholder_schemas():
@@ -68,6 +72,20 @@ def test_navigation_and_translation_administration_have_arabic_catalogue_entries
     assert arabic["localization.administration.result_count"].startswith("{count}")
 
 
+def test_privilege_catalogue_has_contextual_english_and_arabic_copy():
+    root = Path(__file__).parents[3]
+    english = load_english_manifest()
+    artifact = json.loads(
+        (root / "frontend/webui/i18n/messages.ar.generated.json").read_text()
+    )
+    arabic = {item["message_key"]: item["translated_text"] for item in artifact["items"]}
+    assert english["privilege.authorization.administer.name"]["default_text"] == "Authorization Administer"
+    assert english["privilege.authorization.administer.description"]["context_group"] == "privilege.authorization.administer"
+    assert arabic["privilege.authorization.administer.name"] == "إدارة التفويض"
+    assert arabic["privilege.authorization.administer.description"].startswith("تتيح هذه الصلاحية")
+    assert arabic["privilege.category.administration"] == "إدارة النظام"
+
+
 def test_literal_audit_follows_data_driven_presentation_structures(tmp_path):
     source = tmp_path / "page.py"
     source.write_text(
@@ -108,6 +126,17 @@ def test_timezone_services_preserve_instants_and_calendar_dates():
     assert utc_instant_to_working(value, "Asia/Dubai").hour == 12
     assert working_datetime_to_utc(datetime(2026, 1, 1, 12), "Asia/Dubai") == value
     assert date_value(date(2026, 1, 1)) == "2026-01-01"
+
+
+def test_review_datetime_dialog_round_trips_through_the_working_timezone():
+    set_locale_context("en", "Asia/Dubai")
+    try:
+        assert review_datetime_input_value("2026-10-01T06:00:00Z") == "2026-10-01T10:00"
+        assert review_datetime_payload("2026-10-01T10:00") == "2026-10-01T06:00:00Z"
+        assert review_datetime_payload("") is None
+        assert len(review_datetime_input_minimum()) == 16
+    finally:
+        clear_locale_context("test")
 
 
 def test_timezone_services_reject_gap_and_ambiguous_wall_times():

@@ -94,9 +94,27 @@ def validate_repository_catalogue() -> None:
     defined = set(load_english_manifest())
     referenced = referenced_keys()
     unknown = sorted(referenced - defined)
-    stale = sorted(defined - referenced)
+    # Privileges are a database-backed catalogue whose contextual keys are
+    # selected dynamically from immutable privilege codes at runtime. Their
+    # exact database-to-manifest coverage is maintained by
+    # sync_privilege_translation_keys.py, so they are intentionally not
+    # discoverable as literal render_message calls.
+    data_driven = {key for key in defined if key.startswith("privilege.")}
+    stale = sorted(defined - referenced - data_driven)
     if unknown or stale:
         raise ValueError(f"catalogue mismatch; unknown={unknown}, stale={stale}")
+    privilege_fields: dict[str, set[str]] = {}
+    for key in data_driven:
+        if key.startswith("privilege.category."):
+            continue
+        code, field = key.removeprefix("privilege.").rsplit(".", 1)
+        privilege_fields.setdefault(code, set()).add(field)
+    incomplete = sorted(
+        code for code, fields in privilege_fields.items()
+        if fields != {"name", "description"}
+    )
+    if incomplete:
+        raise ValueError(f"privilege catalogue entries require name and description pairs: {incomplete}")
     for artifact_path in sorted(manifest_path.parent.glob("messages.*.generated.json")):
         artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
         artifact_keys = [item["message_key"] for item in artifact.get("items", [])]

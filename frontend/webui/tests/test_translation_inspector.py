@@ -56,10 +56,26 @@ def test_inspector_uses_one_delegated_interaction_layer():
     assert "['pointerover','over']" in INSPECTOR_SOURCE
     assert "['focusin','focus']" in INSPECTOR_SOURCE
     assert "['click','click']" in INSPECTOR_SOURCE
-    assert "preventDefault" not in INSPECTOR_SOURCE
+    click_handler = INSPECTOR_SOURCE.split("click:e=>", 1)[1].split(",key:e=>", 1)[0]
+    assert "e.preventDefault()" in click_handler
+    assert "e.stopPropagation()" in click_handler
     assert "stopImmediatePropagation" not in INSPECTOR_SOURCE
     assert "e.key==='Escape'" in INSPECTOR_SOURCE
     assert "#wathiq-translation-inspector" in INSPECTOR_SOURCE
+
+
+def test_inspector_retains_metadata_after_sanitizing_its_own_dom_markers():
+    assert "textData.get(n)?.entries" in INSPECTOR_SOURCE
+    assert "previous.value!==p.value" in INSPECTOR_SOURCE
+    assert "if(p.entries.length||!previous" in INSPECTOR_SOURCE
+
+
+def test_inspector_panel_is_movable_and_kept_inside_the_viewport():
+    assert "function makeMovable(p)" in INSPECTOR_SOURCE
+    assert "setPointerCapture" in INSPECTOR_SOURCE
+    assert "function place(p,left,top)" in INSPECTOR_SOURCE
+    assert "sessionStorage.setItem(POSITION_STORE" in INSPECTOR_SOURCE
+    assert "addEventListener('resize'" in INSPECTOR_SOURCE
 
 
 def test_inspector_panel_supports_copy_and_filtered_administration_navigation():

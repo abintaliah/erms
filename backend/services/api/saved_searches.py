@@ -15,6 +15,7 @@ from .database import get_connection
 from .authorization_policy import require_global_privilege
 from .schemas import SearchRequest
 from .search import canonicalize_search_request, search_rows
+from .entity_localization import localize_rows, preferred_language
 
 
 router = APIRouter(prefix="/api/v1/saved-searches", tags=["saved searches"])
@@ -86,8 +87,10 @@ def _has(connection: Connection, code: str) -> bool:
     ).fetchone()["value"])
 
 
-def _reason(request: Request) -> str:
+def _reason(request: Request, *, default: str | None = None) -> str:
     value = request.headers.get("X-Change-Reason", "").strip()
+    if not value and default is not None:
+        return default
     if not value:
         raise HTTPException(status_code=422, detail={"code": "saved_search_change_reason_required"})
     return value
@@ -270,19 +273,72 @@ def list_saved_searches(
     return {"items": items, "total": total, "limit": limit, "offset": offset, "returned": len(items)}
 
 
-@router.get("/audience-options")
-def audience_options(connection: Connection = Depends(get_connection, scope="function")):
+@router.get("/audience-options/{audience_kind}")
+def audience_options(
+    audience_kind: Literal["roles", "org-units"],
+    request: Request,
+    q: str = Query("", max_length=120),
+    ids: str | None = Query(None, max_length=1200),
+    limit: int = Query(25, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    """Return a bounded audience lookup page; never preload either directory."""
     administrator = _has(connection, "search.saved_search.administrator")
-    role_ids, unit_ids = _eligible_ids(connection, administrator=administrator)
-    roles = list(connection.execute(
-        "SELECT id,code,name,org_unit_id FROM roles WHERE id=ANY(%s::bigint[]) ORDER BY lower(name),id",
-        (list(role_ids),),
-    ).fetchall()) if role_ids else []
-    units = list(connection.execute(
-        "SELECT id,code,name FROM org_units WHERE id=ANY(%s::bigint[]) ORDER BY lower(name),id",
-        (list(unit_ids),),
-    ).fetchall()) if unit_ids else []
-    return {"roles": roles, "org_units": units, "administrator_scope": administrator}
+    language = preferred_language(connection, request)
+    requested_ids: list[int] = []
+    if ids:
+        try:
+            requested_ids = list(dict.fromkeys(int(value) for value in ids.split(",") if value.strip()))
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail={"code": "invalid_audience_ids"}) from error
+        if len(requested_ids) > 100:
+            raise HTTPException(status_code=422, detail={"code": "too_many_audience_ids"})
+    term = q.strip()
+    if audience_kind == "roles":
+        eligibility = (
+            "NOT target.is_system AND target.account_type_restriction IS NULL AND role_effectively_active(target.id)"
+            if administrator else
+            """EXISTS (SELECT 1 FROM user_role_assignments assignment
+                         WHERE assignment.role_id=target.id AND assignment.user_id=current_user_id()
+                           AND assignment.valid_from<=CURRENT_TIMESTAMP
+                           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP))
+                 AND NOT target.is_system AND target.account_type_restriction IS NULL
+                 AND role_effectively_active(target.id)"""
+        )
+        columns = "target.id,target.code,target.name,target.description,target.org_unit_id,target.translations"
+        table = "roles"
+    else:
+        eligibility = (
+            "org_unit_effectively_active(target.id)" if administrator else
+            """EXISTS (SELECT 1 FROM roles role JOIN user_role_assignments assignment ON assignment.role_id=role.id
+                         WHERE role.org_unit_id=target.id AND assignment.user_id=current_user_id()
+                           AND assignment.valid_from<=CURRENT_TIMESTAMP
+                           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+                           AND role_effectively_active(role.id))"""
+        )
+        columns = "target.id,target.code,target.name,target.description,target.translations"
+        table = "org_units"
+    where = f"""WHERE ({eligibility})
+      AND (%s::bigint[] IS NULL OR target.id=ANY(%s::bigint[]))
+      AND (%s='' OR target.code ILIKE '%%'||%s||'%%' OR target.name ILIKE '%%'||%s||'%%'
+           OR COALESCE(target.translations->%s->>'name','') ILIKE '%%'||%s||'%%')"""
+    id_filter = requested_ids or None
+    params = (id_filter, id_filter, term, term, term, language, term)
+    total = connection.execute(
+        f"SELECT count(*) AS value FROM {table} target {where}", params,
+    ).fetchone()["value"]
+    rows = list(connection.execute(
+        f"""SELECT {columns} FROM {table} target {where}
+             ORDER BY lower(COALESCE(NULLIF(target.translations->%s->>'name',''),target.name)),target.id
+             LIMIT %s OFFSET %s""",
+        (*params, language, limit, offset),
+    ).fetchall())
+    localize_rows(rows, language, "name")
+    return {
+        "items": rows, "total": total, "limit": limit, "offset": offset,
+        "returned": len(rows), "administrator_scope": administrator,
+    }
 
 
 @router.get("/administration", dependencies=[Depends(require_saved_search_administrator)])
@@ -412,7 +468,7 @@ def update_saved_search(
     version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    reason = _reason(request)
+    reason = _reason(request, default="Updated saved search")
     row = _get(connection, saved_search_id, lock=True)
     if row["version"] != version:
         raise HTTPException(status_code=409, detail={"code": "stale_version"})

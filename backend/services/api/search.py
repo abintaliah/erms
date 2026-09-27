@@ -696,6 +696,7 @@ def search_rows(
     request: SearchRequest,
     *, endpoint: str | None = None,
     include_system_roles: bool = False,
+    localized_sort_language: str | None = None,
 ) -> dict[str, Any]:
     if _full_text_leaves(request.where) and not boolean_environment("FULL_TEXT_SEARCH_ENABLED", True):
         raise HTTPException(status_code=503, detail={
@@ -757,8 +758,32 @@ def search_rows(
     total = connection.execute(count_query, parameters).fetchone()["total"]
 
     relevance,relevance_parameters=_relevance_expression(table,positive_leaves)
+    language_candidates = []
+    if localized_sort_language:
+        language_candidates.append(localized_sort_language)
+        if "-" in localized_sort_language:
+            language_candidates.append(localized_sort_language.split("-", 1)[0])
+
+    def sort_expression(field: str) -> sql.Composable:
+        if field == "_relevance":
+            return relevance
+        canonical = sql.SQL("resource.{}").format(sql.Identifier(field))
+        if field != "name" or not language_candidates or table not in {
+            "org_units", "roles", "users",
+        }:
+            return canonical
+        translated_candidates = [
+            sql.SQL("NULLIF(resource.translations -> {} ->> {}, '')").format(
+                sql.Literal(language_tag), sql.Literal(field),
+            )
+            for language_tag in language_candidates
+        ]
+        return sql.SQL("lower(COALESCE({}, {}))").format(
+            sql.SQL(", ").join(translated_candidates), canonical,
+        )
+
     order_clause = sql.SQL(", ").join(
-        sql.SQL("{} {}").format(relevance if field == "_relevance" else sql.SQL("resource.{}").format(sql.Identifier(field)), sql.SQL(direction.upper()))
+        sql.SQL("{} {}").format(sort_expression(field), sql.SQL(direction.upper()))
         for field, direction in sort_fields
     )
     result_query = sql.SQL("SELECT resource.*,({})::double precision AS _fts_relevance FROM {} resource{} ORDER BY {} LIMIT %s OFFSET %s").format(

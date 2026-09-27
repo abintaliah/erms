@@ -72,7 +72,7 @@ def test_direct_classification_label_uses_only_leaf_classification():
     ]
 
     assert direct_classification_label(path) == "1111 — Meeting agendas"
-    assert direct_classification_label([]) == "Unclassified"
+    assert direct_classification_label([]) == "—"
 
 
 def test_record_draft_component_context_requires_and_normalizes_visible_form_values():
@@ -201,7 +201,8 @@ def test_classification_tree_rtl_grid_does_not_double_mirror_expanders():
     assert 'grid-template-areas: "expander icon content badge"' in rtl_tree
     assert '"badge content icon expander"' not in rtl_tree
     assert 'html[dir="rtl"] .classification-tree-content { direction: rtl; text-align: right; }' in APP_SOURCE
-    assert 'return "chevron_left" if initial_direction == "rtl" else "chevron_right"' in APP_SOURCE
+    assert 'return "chevron_left" if current_direction["value"] == "rtl" else "chevron_right"' in APP_SOURCE
+    assert 'current_direction["value"] = normalized' in APP_SOURCE
     assert 'icon=tree_expander_icon(item["id"] in workspace["expanded"])' in APP_SOURCE
 
 
@@ -302,6 +303,17 @@ def test_personal_dialog_list_height_is_compact_and_capped():
 def test_classification_workspace_tree_and_summary_are_taller():
     assert '"w-full h-[870px] min-h-0 gap-4 items-stretch"' in APP_SOURCE
     assert '"w-full h-[820px] min-h-0 gap-4 items-stretch"' not in APP_SOURCE
+
+
+def test_classification_workspace_tree_is_always_sorted_by_code_ascending():
+    workspace = APP_SOURCE[APP_SOURCE.index("async def select_classification_workspace"):]
+    load_children = workspace[
+        workspace.index("async def load_children"):
+        workspace.index("async def load_classification_path")
+    ]
+    assert "rows = sorted(" in load_children
+    assert 'str(row.get("code") or "")' in load_children
+    assert 'int(row["id"])' in load_children
 
 
 def test_dashboard_overview_shows_medium_breakdowns_and_admin_hold_total():
@@ -422,6 +434,19 @@ def test_relationship_options_prioritize_name_over_internal_id():
         ("code", "name"),
     )
     assert options == {42: "RM · Records Management"}
+
+
+def test_security_level_relationship_options_use_localized_name_and_level():
+    options = relationship_options(
+        [{
+            "id": 42, "code": "G", "name": "General", "level_number": 1,
+            "localized": {"name": "عام"},
+        }],
+        ("code", "name"),
+        include_level_number=True,
+        level_label="المستوى",
+    )
+    assert options == {42: "G · عام · المستوى 1"}
 
 
 def test_relationship_columns_replace_foreign_keys_with_business_labels():
@@ -616,7 +641,35 @@ def test_identity_details_use_grouped_command_panels():
     assert 'await api.delete_assignment(row["id"], row["version"])' in source
     assert '"click.stop",' in source
     assert 'session_results = ui.element("div").classes("login-session-card-grid w-full")' in source
-    assert 'label in {"Direct status", "Effective status"}' in source
+    assert source.count('localized_lifecycle_value(value)') >= 3
+    assert '"identity-detail-facts w-full gap-4"' in source
+
+
+def test_user_details_localize_controlled_values_and_assignment_facts():
+    source = inspect.getsource(index)
+    assert '(person.get("localized") or {}).get("name") or person["name"]' in source
+    assert 'roles = [item.get("counterpart") or {} for item in assignments]' in source
+    assert 'title=localized_account_type(person["account_type"])' in source
+    assert 'ui.badge(localized_account_type(person["account_type"])' in source
+    assert 'localized_lifecycle_value(person["status"])' in source
+    assert 'localized_lifecycle_value(row["role_status"])' in source
+    assert 'localized_lifecycle_value(row["validity"])' in source
+    assert 'render_message("governance_custody.field.valid_from")' in source
+    assert 'render_message("governance_custody.field.valid_until")' in source
+    assert 'render_message("common.value.no_expiry")' in source
+    assert 'str(row["role_status"]).title()' not in source
+    assert 'str(row["validity"]).title()' not in source
+
+
+def test_saved_search_audiences_and_memberships_use_bounded_enriched_pages():
+    source = inspect.getsource(index)
+    assert 'def bind_remote_saved_audience_select(' in source
+    assert 'if len(term) < 2:' in source
+    assert 'api.saved_search_audience_options(\n                    audience_kind, query=term, limit=25, offset=0,' in source
+    assert 'await api.saved_search_audience_options()' not in source
+    assert 'api.user_roles(\n                        entity["id"], limit=assignment_page["limit"]' in source
+    assert 'counterpart = assignment.get("counterpart") or {}' in source
+    assert 'counterpart_rows = await asyncio.gather' not in source
 
 
 def test_org_unit_details_show_dedicated_holdings_summary_and_card_style_labels():
@@ -640,7 +693,7 @@ def test_org_unit_parent_values_navigate_to_parent_details():
     assert 'and fact_index == 0' in source
     assert 'parent_id=row["parent_org_unit_id"]' in source
     assert 'select_organization_unit_details(parent_id)' in source
-    assert 'label == "Parent" and (unit.get("parent") or {}).get("id")' in source
+    assert 'value_kind == "parent" and (unit.get("parent") or {}).get("id")' in source
     assert 'unit["parent"]["id"]' in source
     assert '.tooltip("Open parent organization unit")' in source
 
@@ -657,6 +710,9 @@ def test_org_unit_details_show_clickable_vertical_lineage_before_holdings():
     assert 'select_organization_unit_details(ancestor_id)' in source
     assert 'if not is_current:' in source
     assert 'ui.label(lineage_unit["code"]).classes(' in source
+    assert 'ui.element("div").classes("org-unit-lineage-copy")' in source
+    assert 'html[dir="rtl"] .org-unit-lineage-copy' in APP_SOURCE
+    assert 'direction: rtl; flex-direction: row !important;' in APP_SOURCE
     assert 'ui.label("Current unit").classes(' not in source
 
 
@@ -684,9 +740,10 @@ def test_role_details_group_profile_privileges_with_names_and_codes():
     assert 'privileges_by_category: dict[str, list[dict[str, Any]]]' in source
     assert 'ui.label("Privileges inherited from profile")' in source
     assert '"role-privilege-groups w-full p-3"' in source
-    assert 'ui.label(privilege["name"])' in source
+    assert 'ui.label(localized_privilege_name(privilege))' in source
     assert 'ui.label(privilege["code"])' in source
-    assert 'privilege_help_text(' in source
+    assert 'localized_privilege_description(privilege)' in source
+    assert 'localized_privilege_category(category)' in source
 
 
 def test_user_details_use_fixed_blue_avatar_and_one_column_session_cards():
@@ -829,6 +886,17 @@ def test_entity_translations_are_saved_by_the_main_entity_action_for_all_seven_e
     assert 'icon="save", on_click=save_entity_translation' not in editor
 
 
+def test_profile_uses_one_reason_for_canonical_and_translation_changes():
+    editor = APP_SOURCE[
+        APP_SOURCE.index("async def open_editor("):
+        APP_SOURCE.index("async def show_memberships(")
+    ]
+    assert 'None if spec.key == "profiles" else ui.input(' in editor
+    assert 'profile_change_reason\n                                if spec.key == "profiles" else translation_reason' in editor
+    assert 'if not creating and spec.key == "profiles":' in editor
+    assert 'if not creating and spec.key == "profiles" and not translation_only:' not in editor
+
+
 def test_builtin_role_editor_is_translation_only():
     editor = APP_SOURCE[
         APP_SOURCE.index("async def open_editor("):
@@ -845,6 +913,9 @@ def test_builtin_role_editor_is_translation_only():
     ]
     assert "api.update_entity_translation(" in translation_only_save
     assert "api.update(" not in translation_only_save
+    assert 'if not isinstance(row.get("translations"), dict):' in translation_only_save
+    assert 'row["translations"] = {}' in translation_only_save
+    assert 'row["translations"][language] = dict(values)' in translation_only_save
 
 
 def test_detail_pages_use_light_blue_metadata_and_retention_visual_system():
@@ -962,8 +1033,9 @@ def test_child_aggregation_shows_clickable_parent_instead_of_inherited_classific
     source = with_english_messages(inspect.getsource(index))
     assert "async def open_parent_aggregation()" in source
     assert 'governing_relationship = (' in source
-    assert '("Parent aggregation", parent_aggregation or "Restricted aggregation")' in source
-    assert 'elif label == "Parent aggregation" and isinstance(value, dict):' in source
+    assert '"parent_aggregation", "Parent aggregation"' in source
+    assert 'parent_aggregation or "Parent aggregation restricted"' in source
+    assert 'elif field_key == "parent_aggregation" and isinstance(value, dict):' in source
     assert "on_click=open_parent_aggregation" in source
     assert 'ui.label(value.get("title") or "—").classes(' in source
     assert 'ui.label(value["aggregation_number"]).classes(' in source
@@ -1381,6 +1453,25 @@ def test_organization_browser_hides_detail_links_without_destination_privilege()
     assert '(auth_state.get("principal") or {}).get("global_privileges", [])' in source
 
 
+def test_organization_browser_localizes_statuses_summary_and_rtl_disclosures():
+    source = inspect.getsource(index)
+    assert "organization-browser-node-row" in source
+    assert "organization-browser-expander" in source
+    assert "organization-browser-disclosure" in source
+    assert 'localized_lifecycle_value(node.get("status") or "active")' in source
+    assert '"current": render_message("webui.show_organization_structure.select.current_8d79efc1")' in source
+    assert 'display_value = localized_lifecycle_value(value)' in source
+    assert 'display_value = localized_account_type(value)' in source
+    assert 'entity_metadata_label("Status")' in source
+    assert 'render_message("webui.show_organization_structure.select.organization_units_66c328dc")' in source
+    assert 'render_message("webui.show_organization_structure.select.roles_2c70f24a")' in source
+    assert '"org_unit": "webui.render_governance_cards.tooltip.open_organization_unit_831f72f6"' in source
+    assert 'ui.badge(status_value.title()' not in source
+    assert "organization-browser-summary-field" in source
+    assert "organization-browser-summary-label" in source
+    assert "organization-browser-summary-value" in source
+
+
 def test_browsed_relationship_selection_adds_option_and_value_atomically():
     class FakeControl:
         def __init__(self):
@@ -1589,19 +1680,20 @@ def test_review_and_location_experience_has_accessible_text_labels():
     assert 'ui.input("Assigned location"' in source
     assert 'ui.input("Current location"' in source
     assert 'ui.textarea("Reason *")' in source
-    assert '"Inherited assigned location", record.get("effective_assigned_location")' in source
-    assert '"Inherited current location", record.get("effective_current_location")' in source
+    assert 'f\'{"Assigned location"} · {"Inherited location"}\'' in source
+    assert 'record.get("effective_assigned_location") or "Unknown"' in source
+    assert 'f\'{"Current location"} · {"Inherited location"}\'' in source
+    assert 'record.get("effective_current_location") or "Unknown"' in source
     assert 'if record.get("medium") != "digital":' in source
     assert 'if current.get("medium") != "digital":' in source
     assert 'aggregation_metadata.extend([' in source
     assert '"Record status"' not in source
     assert '"Closure state"' not in source
     assert '"View all", icon="arrow_forward"' in source
-    assert '"Review", review_display(record.get("date_of_next_review"))' in source
-    assert '("Vital status", "Vital" if record.get("is_vital") else "Not vital")' in source
-    assert '("Vital status", "Vital" if current.get("is_vital") else "Not vital")' in source
-    assert '("Medium", medium_label(record.get("medium")))' in source
-    assert '("Medium", medium_label(current.get("medium")))' in source
+    assert '"review", "Review", review_display(record.get("date_of_next_review"))' in source
+    assert '"Vital status"' in source
+    assert '"medium", "Medium", medium_label(record.get("medium"))' in source
+    assert '"medium", "Medium", medium_label(current.get("medium"))' in source
     assert 'color="red-8" if record.get("is_vital") else "blue-grey-7"' in source
     assert 'color="red-8" if current.get("is_vital") else "blue-grey-7"' in source
     assert 'ui.label("Vital record")' in source
@@ -1621,8 +1713,8 @@ def test_record_and_aggregation_searches_use_shared_compact_results():
     assert 'if spec.key in {"aggregations", "records"}:' in source
     assert "render_entity_compact_results(spec)" in source
     assert "show_medium=True" in source
-    assert 'parent_aggregation=parent' in source
-    assert 'icon="folder", on_click=lambda _, parent=parent_aggregation' in source
+    assert 'parent_aggregation=parent' not in source
+    assert 'icon="folder", on_click=lambda _, parent=parent_aggregation' not in source
     assert 'await decorate_record_search_components(decorated_rows)' in source
     assert 'flex: 0 0 92px; width: 92px;' in source
     assert 'font-variant-numeric: tabular-nums;' in source
@@ -1699,11 +1791,60 @@ def test_dashboard_complete_review_list_uses_server_side_pages():
     assert 'items = fetched[:page["limit"]]' in dashboard_source
 
 
-def test_hold_people_selectors_use_server_search_pages_not_full_user_lists():
+def test_identity_lists_use_stable_name_first_ordering():
+    load_source = APP_SOURCE[
+        APP_SOURCE.index("async def load_rows("):
+        APP_SOURCE.index("async def select_entity(")
+    ]
+    assert '"sort": "level_number" if spec.key == "security-levels" else "name"' in load_source
+    assert '{"field": page["sort"], "direction": "asc"}' in load_source
+    assert '[{"field": "id", "direction": "asc"}]' in load_source
+
+
+def test_role_and_organization_unit_details_localize_fields_and_rtl_facts():
+    organization_source = APP_SOURCE[
+        APP_SOURCE.index("async def select_organization_unit_details("):
+        APP_SOURCE.index("async def select_role_details(")
+    ]
+    role_source = APP_SOURCE[
+        APP_SOURCE.index("async def select_role_details("):
+        APP_SOURCE.index("async def select_user_details(")
+    ]
+    for source in (organization_source, role_source):
+        assert 'classes("identity-detail-facts w-full gap-4")' in source
+        assert 'classes("identity-detail-fact gap-0 border-b border-slate-100 pb-1.5")' in source
+        assert 'ui.label("Direct status")' not in source
+        assert 'if label in {"Direct status", "Effective status"}' not in source
+    assert 'entity_metadata_label("Parent organization unit")' in organization_source
+    assert 'entity_metadata_label("Security clearance")' in role_source
+    assert 'entity_metadata_label("Information-governance role")' in role_source
+    assert 'role.get("profile_name")' in role_source
+
+
+def test_hold_people_selectors_use_independent_remote_typeahead_not_shared_search():
     holds_source = APP_SOURCE[
         APP_SOURCE.index("async def open_hold_editor("):
         APP_SOURCE.index("async def select_translation_administration(")
     ]
     assert 'api.list("users", limit=500)' not in holds_source
-    assert holds_source.count("await api.active_people(") >= 2
-    assert holds_source.count('{"offset": 0, "limit": 25, "total": 0, "loading": False}') >= 2
+    assert holds_source.count("bind_remote_people_select(") >= 3
+    assert "people_query = ui.input(" not in holds_source
+    assert "people_previous = ui.button(" not in holds_source
+    assert "people_next = ui.button(" not in holds_source
+    assert 'excluded_ids=lambda: ({int(owner.value)} if owner.value is not None else set())' in holds_source
+    assert 'excluded_ids=lambda: {int(hold["owner_user_id"])}' in holds_source
+    assert 'contributors.value = [' in holds_source
+
+
+def test_remote_people_typeahead_is_debounced_and_preserves_selected_people():
+    helper_source = APP_SOURCE[
+        APP_SOURCE.index("def bind_remote_people_select("):
+        APP_SOURCE.index("def bind_remote_scheme_select(")
+    ]
+    assert "term = query.strip()" in helper_source
+    assert "if len(term) < 2:" in helper_source
+    assert 'await api.active_people(term, limit=25, offset=0)' in helper_source
+    assert 'control.on("input-value", schedule_filter)' in helper_source
+    assert 'control.on("popup-show"' not in helper_source
+    assert 'await asyncio.sleep(0.2)' in helper_source
+    assert 'selected_options = {' in helper_source

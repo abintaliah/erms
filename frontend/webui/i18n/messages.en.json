@@ -5194,6 +5194,1926 @@
     "rendered_example": "The working timezone Europe/Example is not a valid IANA timezone."
   },
   {
+    "message_key": "privilege.aggregation.acl.manage.description",
+    "context_group": "privilege.aggregation.acl.manage",
+    "default_text": "Change which roles receive permissions through an aggregation's ACL and child defaults.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.acl.manage permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Change which roles receive permissions through an aggregation's ACL and child defaults.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.acl.manage.name",
+    "context_group": "privilege.aggregation.acl.manage",
+    "default_text": "Aggregation Acl Manage",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.acl.manage.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation Acl Manage",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.close.description",
+    "context_group": "privilege.aggregation.close",
+    "default_text": "Close an aggregation so its normal contents and metadata can no longer be changed.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.close permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Close an aggregation so its normal contents and metadata can no longer be changed.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.close.name",
+    "context_group": "privilege.aggregation.close",
+    "default_text": "Aggregation Close",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.close.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation Close",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.create_child.description",
+    "context_group": "privilege.aggregation.create_child",
+    "default_text": "Create an aggregation beneath an existing aggregation when its ACL also permits it.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.create_child permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Create an aggregation beneath an existing aggregation when its ACL also permits it.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.create_child.name",
+    "context_group": "privilege.aggregation.create_child",
+    "default_text": "Aggregation Create Child",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.create_child.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation Create Child",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.create_root.description",
+    "context_group": "privilege.aggregation.create_root",
+    "default_text": "Create a new top-level aggregation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.create_root permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Create a new top-level aggregation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.create_root.name",
+    "context_group": "privilege.aggregation.create_root",
+    "default_text": "Aggregation Create Root",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.create_root.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation Create Root",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.delete.description",
+    "context_group": "privilege.aggregation.delete",
+    "default_text": "Permanently delete an aggregation when all deletion conditions are satisfied.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.delete permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Permanently delete an aggregation when all deletion conditions are satisfied.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.delete.name",
+    "context_group": "privilege.aggregation.delete",
+    "default_text": "Aggregation Delete",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.delete.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation Delete",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.location.change.description",
+    "context_group": "privilege.aggregation.location.change",
+    "default_text": "Change an aggregation's assigned or current physical location, with a recorded reason.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.location.change permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Change an aggregation's assigned or current physical location, with a recorded reason.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.location.change.name",
+    "context_group": "privilege.aggregation.location.change",
+    "default_text": "Change Aggregation Location",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.location.change.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Aggregation Location",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.modify.description",
+    "context_group": "privilege.aggregation.modify",
+    "default_text": "Change aggregation metadata when its ACL also permits modification.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.modify permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Change aggregation metadata when its ACL also permits modification.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.modify.name",
+    "context_group": "privilege.aggregation.modify",
+    "default_text": "Aggregation Modify",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.modify.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation Modify",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.move.description",
+    "context_group": "privilege.aggregation.move",
+    "default_text": "Move an aggregation to another permitted parent aggregation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.move permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Move an aggregation to another permitted parent aggregation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.move.name",
+    "context_group": "privilege.aggregation.move",
+    "default_text": "Aggregation Move",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.move.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation Move",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.reclassify.description",
+    "context_group": "privilege.aggregation.reclassify",
+    "default_text": "Assign an aggregation to a different classification where policy permits it.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.reclassify permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Assign an aggregation to a different classification where policy permits it.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.reclassify.name",
+    "context_group": "privilege.aggregation.reclassify",
+    "default_text": "Aggregation Reclassify",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.reclassify.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation Reclassify",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.reopen.description",
+    "context_group": "privilege.aggregation.reopen",
+    "default_text": "Reopen a closed aggregation when an authorized correction requires it.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.reopen permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Reopen a closed aggregation when an authorized correction requires it.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.reopen.name",
+    "context_group": "privilege.aggregation.reopen",
+    "default_text": "Aggregation Reopen",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.reopen.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation Reopen",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.review_date.change.description",
+    "context_group": "privilege.aggregation.review_date.change",
+    "default_text": "Governed scheduling or clearing of an aggregation review date.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.review_date.change permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Governed scheduling or clearing of an aggregation review date.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.review_date.change.name",
+    "context_group": "privilege.aggregation.review_date.change",
+    "default_text": "Change Aggregation Review Date",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.review_date.change.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Aggregation Review Date",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.security_level.change.description",
+    "context_group": "privilege.aggregation.security_level.change",
+    "default_text": "Change an aggregation's security level within the caller's clearance and hierarchy rules.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.security_level.change permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Change an aggregation's security level within the caller's clearance and hierarchy rules.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.security_level.change.name",
+    "context_group": "privilege.aggregation.security_level.change",
+    "default_text": "Aggregation Security Level Change",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.security_level.change.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation Security Level Change",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.view.description",
+    "context_group": "privilege.aggregation.view",
+    "default_text": "Open aggregations and view their metadata, subject to clearance and the resource ACL. Shows the Aggregations page in navigation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.view permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Open aggregations and view their metadata, subject to clearance and the resource ACL. Shows the Aggregations page in navigation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.view.name",
+    "context_group": "privilege.aggregation.view",
+    "default_text": "Aggregation View",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.view.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation View",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.vital_status.change.description",
+    "context_group": "privilege.aggregation.vital_status.change",
+    "default_text": "Mark an aggregation as vital or no longer vital, with a recorded reason.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege aggregation.vital_status.change permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Mark an aggregation as vital or no longer vital, with a recorded reason.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.aggregation.vital_status.change.name",
+    "context_group": "privilege.aggregation.vital_status.change",
+    "default_text": "Change Aggregation Vital Status",
+    "semantic_meaning": "Friendly name of the immutable system privilege aggregation.vital_status.change.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Aggregation Vital Status",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.audit.view.description",
+    "context_group": "privilege.audit.view",
+    "default_text": "View the system audit trail and its recorded security and business events. Shows the Audit trail and Security operations pages in navigation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege audit.view permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "View the system audit trail and its recorded security and business events. Shows the Audit trail and Security operations pages in navigation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.audit.view.name",
+    "context_group": "privilege.audit.view",
+    "default_text": "Audit View",
+    "semantic_meaning": "Friendly name of the immutable system privilege audit.view.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Audit View",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.authorization.administer.description",
+    "context_group": "privilege.authorization.administer",
+    "default_text": "Create and maintain authorization profiles and their privilege assignments. Shows the Profiles and Governance custody pages in navigation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege authorization.administer permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Create and maintain authorization profiles and their privilege assignments. Shows the Profiles and Governance custody pages in navigation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.authorization.administer.name",
+    "context_group": "privilege.authorization.administer",
+    "default_text": "Authorization Administer",
+    "semantic_meaning": "Friendly name of the immutable system privilege authorization.administer.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Authorization Administer",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.authorization.explain.description",
+    "context_group": "privilege.authorization.explain",
+    "default_text": "Inspect why a person is allowed or denied an operation on protected information.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege authorization.explain permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Inspect why a person is allowed or denied an operation on protected information.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.authorization.explain.name",
+    "context_group": "privilege.authorization.explain",
+    "default_text": "Authorization Explain",
+    "semantic_meaning": "Friendly name of the immutable system privilege authorization.explain.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Authorization Explain",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.authorization.recovery.description",
+    "context_group": "privilege.authorization.recovery",
+    "default_text": "Perform explicitly controlled recovery when ordinary authorization administration cannot restore access.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege authorization.recovery permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Perform explicitly controlled recovery when ordinary authorization administration cannot restore access.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.authorization.recovery.name",
+    "context_group": "privilege.authorization.recovery",
+    "default_text": "Authorization Recovery",
+    "semantic_meaning": "Friendly name of the immutable system privilege authorization.recovery.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Authorization Recovery",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.category.administration",
+    "context_group": "privilege.category",
+    "default_text": "Administration",
+    "semantic_meaning": "Heading for the Administration group in the privilege catalogue.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Administration",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.category.aggregation",
+    "context_group": "privilege.category",
+    "default_text": "Aggregation",
+    "semantic_meaning": "Heading for the Aggregation group in the privilege catalogue.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.category.component",
+    "context_group": "privilege.category",
+    "default_text": "Component",
+    "semantic_meaning": "Heading for the Component group in the privilege catalogue.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Component",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.category.exceptional",
+    "context_group": "privilege.category",
+    "default_text": "Exceptional",
+    "semantic_meaning": "Heading for the Exceptional group in the privilege catalogue.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Exceptional",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.category.other",
+    "context_group": "privilege.category",
+    "default_text": "Other",
+    "semantic_meaning": "Heading for the Other group in the privilege catalogue.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Other",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.category.record",
+    "context_group": "privilege.category",
+    "default_text": "Record",
+    "semantic_meaning": "Heading for the Record group in the privilege catalogue.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Record",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.classification.modify_metadata.description",
+    "context_group": "privilege.classification.modify_metadata",
+    "default_text": "Modify multilingual names and descriptions for classifications.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege classification.modify_metadata permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Modify multilingual names and descriptions for classifications.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.classification.modify_metadata.name",
+    "context_group": "privilege.classification.modify_metadata",
+    "default_text": "Modify Classification Metadata",
+    "semantic_meaning": "Friendly name of the immutable system privilege classification.modify_metadata.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Modify Classification Metadata",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.classification_scheme.modify_metadata.description",
+    "context_group": "privilege.classification_scheme.modify_metadata",
+    "default_text": "Modify multilingual names and descriptions for classification schemes.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege classification_scheme.modify_metadata permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Modify multilingual names and descriptions for classification schemes.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.classification_scheme.modify_metadata.name",
+    "context_group": "privilege.classification_scheme.modify_metadata",
+    "default_text": "Modify Classification Scheme Metadata",
+    "semantic_meaning": "Friendly name of the immutable system privilege classification_scheme.modify_metadata.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Modify Classification Scheme Metadata",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.classifications.administer.description",
+    "context_group": "privilege.classifications.administer",
+    "default_text": "Create, publish, update, deactivate, and otherwise manage classification schemes and classifications. Shows the Classification schemes page in navigation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege classifications.administer permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Create, publish, update, deactivate, and otherwise manage classification schemes and classifications. Shows the Classification schemes page in navigation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.classifications.administer.name",
+    "context_group": "privilege.classifications.administer",
+    "default_text": "Classifications Administer",
+    "semantic_meaning": "Friendly name of the immutable system privilege classifications.administer.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Classifications Administer",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.closure.correct_record_placement.description",
+    "context_group": "privilege.closure.correct_record_placement",
+    "default_text": "Correct record placement inside a closed aggregation without resetting its retention clock.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege closure.correct_record_placement permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Correct record placement inside a closed aggregation without resetting its retention clock.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.closure.correct_record_placement.name",
+    "context_group": "privilege.closure.correct_record_placement",
+    "default_text": "Closure Correct Record Placement",
+    "semantic_meaning": "Friendly name of the immutable system privilege closure.correct_record_placement.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Closure Correct Record Placement",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.content.index.execute.description",
+    "context_group": "privilege.content.index.execute",
+    "default_text": "Use the lease-scoped internal text-indexing worker contract.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege content.index.execute permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Use the lease-scoped internal text-indexing worker contract.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.content.index.execute.name",
+    "context_group": "privilege.content.index.execute",
+    "default_text": "Execute Content Indexing",
+    "semantic_meaning": "Friendly name of the immutable system privilege content.index.execute.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Execute Content Indexing",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.holds.administer.description",
+    "context_group": "privilege.holds.administer",
+    "default_text": "Create, update, and delete legal holds and manage their owners and contributors.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege holds.administer permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Create, update, and delete legal holds and manage their owners and contributors.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.holds.administer.name",
+    "context_group": "privilege.holds.administer",
+    "default_text": "Administer Legal Holds",
+    "semantic_meaning": "Friendly name of the immutable system privilege holds.administer.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Administer Legal Holds",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.holds.held_items.manage_all.description",
+    "context_group": "privilege.holds.held_items.manage_all",
+    "default_text": "Add or remove held items from any legal hold.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege holds.held_items.manage_all permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Add or remove held items from any legal hold.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.holds.held_items.manage_all.name",
+    "context_group": "privilege.holds.held_items.manage_all",
+    "default_text": "Manage All Legal Hold Items",
+    "semantic_meaning": "Friendly name of the immutable system privilege holds.held_items.manage_all.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Manage All Legal Hold Items",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.identity.sessions.administer.description",
+    "context_group": "privilege.identity.sessions.administer",
+    "default_text": "Review and revoke active login sessions. Shows the Login sessions page in navigation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege identity.sessions.administer permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Review and revoke active login sessions. Shows the Login sessions page in navigation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.identity.sessions.administer.name",
+    "context_group": "privilege.identity.sessions.administer",
+    "default_text": "Identity Sessions Administer",
+    "semantic_meaning": "Friendly name of the immutable system privilege identity.sessions.administer.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Identity Sessions Administer",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.identity.text_indexers.administer.description",
+    "context_group": "privilege.identity.text_indexers.administer",
+    "default_text": "Create and manage non-interactive text-indexer identities and their API credentials.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege identity.text_indexers.administer permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Create and manage non-interactive text-indexer identities and their API credentials.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.identity.text_indexers.administer.name",
+    "context_group": "privilege.identity.text_indexers.administer",
+    "default_text": "Administer Text Indexers",
+    "semantic_meaning": "Friendly name of the immutable system privilege identity.text_indexers.administer.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Administer Text Indexers",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.identity.users.administer.description",
+    "context_group": "privilege.identity.users.administer",
+    "default_text": "Create and manage person and service accounts, including their lifecycle state. Shows the Users page in navigation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege identity.users.administer permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Create and manage person and service accounts, including their lifecycle state. Shows the Users page in navigation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.identity.users.administer.name",
+    "context_group": "privilege.identity.users.administer",
+    "default_text": "Identity Users Administer",
+    "semantic_meaning": "Friendly name of the immutable system privilege identity.users.administer.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Identity Users Administer",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.localization.administer.description",
+    "context_group": "privilege.localization.administer",
+    "default_text": "Manage supported languages and translation catalogues.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege localization.administer permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Manage supported languages and translation catalogues.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.localization.administer.name",
+    "context_group": "privilege.localization.administer",
+    "default_text": "Administer Localization",
+    "semantic_meaning": "Friendly name of the immutable system privilege localization.administer.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Administer Localization",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.org_unit.modify_metadata.description",
+    "context_group": "privilege.org_unit.modify_metadata",
+    "default_text": "Modify multilingual names and descriptions for organization units.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege org_unit.modify_metadata permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Modify multilingual names and descriptions for organization units.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.org_unit.modify_metadata.name",
+    "context_group": "privilege.org_unit.modify_metadata",
+    "default_text": "Modify Organization Unit Metadata",
+    "semantic_meaning": "Friendly name of the immutable system privilege org_unit.modify_metadata.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Modify Organization Unit Metadata",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.organization.administer.description",
+    "context_group": "privilege.organization.administer",
+    "default_text": "Create and manage organization units, roles, and role assignments. Shows the Organization units and Roles pages in navigation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege organization.administer permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Create and manage organization units, roles, and role assignments. Shows the Organization units and Roles pages in navigation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.organization.administer.name",
+    "context_group": "privilege.organization.administer",
+    "default_text": "Organization Administer",
+    "semantic_meaning": "Friendly name of the immutable system privilege organization.administer.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Organization Administer",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.organization.browse.description",
+    "context_group": "privilege.organization.browse",
+    "default_text": "Browse the organization hierarchy and view concise organization-unit, role, and user summaries. Shows Browse under Organization Structure.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege organization.browse permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Browse the organization hierarchy and view concise organization-unit, role, and user summaries. Shows Browse under Organization Structure.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.organization.browse.name",
+    "context_group": "privilege.organization.browse",
+    "default_text": "Browse Organization Structure",
+    "semantic_meaning": "Friendly name of the immutable system privilege organization.browse.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Browse Organization Structure",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.organization.ownership.correct.description",
+    "context_group": "privilege.organization.ownership.correct",
+    "default_text": "Correct a mistaken root aggregation owner and propagate the correction through its holdings.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege organization.ownership.correct permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Correct a mistaken root aggregation owner and propagate the correction through its holdings.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.organization.ownership.correct.name",
+    "context_group": "privilege.organization.ownership.correct",
+    "default_text": "Correct Organizational Ownership",
+    "semantic_meaning": "Friendly name of the immutable system privilege organization.ownership.correct.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Correct Organizational Ownership",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.profile.modify_metadata.description",
+    "context_group": "privilege.profile.modify_metadata",
+    "default_text": "Modify multilingual names and descriptions for authorization profiles.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege profile.modify_metadata permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Modify multilingual names and descriptions for authorization profiles.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.profile.modify_metadata.name",
+    "context_group": "privilege.profile.modify_metadata",
+    "default_text": "Modify Profile Metadata",
+    "semantic_meaning": "Friendly name of the immutable system privilege profile.modify_metadata.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Modify Profile Metadata",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.acl.manage.description",
+    "context_group": "privilege.record.acl.manage",
+    "default_text": "Change which roles receive permissions through a record's ACL.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.acl.manage permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Change which roles receive permissions through a record's ACL.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.acl.manage.name",
+    "context_group": "privilege.record.acl.manage",
+    "default_text": "Record Acl Manage",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.acl.manage.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Acl Manage",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.add.description",
+    "context_group": "privilege.record.component.add",
+    "default_text": "Upload a new digital component to a record.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.component.add permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Upload a new digital component to a record.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.add.name",
+    "context_group": "privilege.record.component.add",
+    "default_text": "Record Component Add",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.component.add.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Component Add",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.download.description",
+    "context_group": "privilege.record.component.download",
+    "default_text": "Download digital components attached to a record.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.component.download permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Download digital components attached to a record.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.download.name",
+    "context_group": "privilege.record.component.download",
+    "default_text": "Record Component Download",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.component.download.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Component Download",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.print.description",
+    "context_group": "privilege.record.component.print",
+    "default_text": "Print a digital component through a supported printing workflow.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.component.print permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Print a digital component through a supported printing workflow.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.print.name",
+    "context_group": "privilege.record.component.print",
+    "default_text": "Record Component Print",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.component.print.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Component Print",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.reindex.description",
+    "context_group": "privilege.record.component.reindex",
+    "default_text": "Request asynchronous extraction and search indexing for authorized component content.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.component.reindex permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Request asynchronous extraction and search indexing for authorized component content.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.reindex.name",
+    "context_group": "privilege.record.component.reindex",
+    "default_text": "Reindex Record Components",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.component.reindex.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Reindex Record Components",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.remove.description",
+    "context_group": "privilege.record.component.remove",
+    "default_text": "Remove a digital component from a record.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.component.remove permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Remove a digital component from a record.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.remove.name",
+    "context_group": "privilege.record.component.remove",
+    "default_text": "Record Component Remove",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.component.remove.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Component Remove",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.reorder.description",
+    "context_group": "privilege.record.component.reorder",
+    "default_text": "Change the display order of a record's digital components.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.component.reorder permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Change the display order of a record's digital components.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.reorder.name",
+    "context_group": "privilege.record.component.reorder",
+    "default_text": "Record Component Reorder",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.component.reorder.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Component Reorder",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.replace.description",
+    "context_group": "privilege.record.component.replace",
+    "default_text": "Atomically replace a digital component while preserving the replacement audit trail.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.component.replace permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Atomically replace a digital component while preserving the replacement audit trail.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.replace.name",
+    "context_group": "privilege.record.component.replace",
+    "default_text": "Record Component Replace",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.component.replace.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Component Replace",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.share.description",
+    "context_group": "privilege.record.component.share",
+    "default_text": "Share a digital component through a supported sharing workflow.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.component.share permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Share a digital component through a supported sharing workflow.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.share.name",
+    "context_group": "privilege.record.component.share",
+    "default_text": "Record Component Share",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.component.share.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Component Share",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.view.description",
+    "context_group": "privilege.record.component.view",
+    "default_text": "Open and preview digital components attached to a record.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.component.view permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Open and preview digital components attached to a record.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.component.view.name",
+    "context_group": "privilege.record.component.view",
+    "default_text": "Record Component View",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.component.view.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Component View",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.create.description",
+    "context_group": "privilege.record.create",
+    "default_text": "Create a record in an aggregation whose ACL accepts it.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.create permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Create a record in an aggregation whose ACL accepts it.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.create.name",
+    "context_group": "privilege.record.create",
+    "default_text": "Record Create",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.create.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Create",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.delete.description",
+    "context_group": "privilege.record.delete",
+    "default_text": "Permanently delete a record when all deletion conditions are satisfied.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.delete permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Permanently delete a record when all deletion conditions are satisfied.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.delete.name",
+    "context_group": "privilege.record.delete",
+    "default_text": "Record Delete",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.delete.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Delete",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.modify.description",
+    "context_group": "privilege.record.modify",
+    "default_text": "Change record metadata when its ACL also permits modification.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.modify permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Change record metadata when its ACL also permits modification.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.modify.name",
+    "context_group": "privilege.record.modify",
+    "default_text": "Record Modify",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.modify.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Modify",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.move.description",
+    "context_group": "privilege.record.move",
+    "default_text": "Move a record to another permitted aggregation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.move permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Move a record to another permitted aggregation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.move.name",
+    "context_group": "privilege.record.move",
+    "default_text": "Record Move",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.move.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Move",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.review_date.change.description",
+    "context_group": "privilege.record.review_date.change",
+    "default_text": "Governed scheduling or clearing of a record review date.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.review_date.change permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Governed scheduling or clearing of a record review date.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.review_date.change.name",
+    "context_group": "privilege.record.review_date.change",
+    "default_text": "Change Record Review Date",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.review_date.change.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Record Review Date",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.security_level.change.description",
+    "context_group": "privilege.record.security_level.change",
+    "default_text": "Change a record's security level within the caller's clearance and hierarchy rules.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.security_level.change permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Change a record's security level within the caller's clearance and hierarchy rules.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.security_level.change.name",
+    "context_group": "privilege.record.security_level.change",
+    "default_text": "Record Security Level Change",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.security_level.change.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Security Level Change",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.view.description",
+    "context_group": "privilege.record.view",
+    "default_text": "Open records and view their metadata, subject to clearance and the resource ACL. Shows the Records page in navigation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.view permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Open records and view their metadata, subject to clearance and the resource ACL. Shows the Records page in navigation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.view.name",
+    "context_group": "privilege.record.view",
+    "default_text": "Record View",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.view.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record View",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.vital_status.change.description",
+    "context_group": "privilege.record.vital_status.change",
+    "default_text": "Mark a record as vital or no longer vital, with a recorded reason.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege record.vital_status.change permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Mark a record as vital or no longer vital, with a recorded reason.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.record.vital_status.change.name",
+    "context_group": "privilege.record.vital_status.change",
+    "default_text": "Change Record Vital Status",
+    "semantic_meaning": "Friendly name of the immutable system privilege record.vital_status.change.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Record Vital Status",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.role.modify_metadata.description",
+    "context_group": "privilege.role.modify_metadata",
+    "default_text": "Modify multilingual names and descriptions for roles.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege role.modify_metadata permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Modify multilingual names and descriptions for roles.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.role.modify_metadata.name",
+    "context_group": "privilege.role.modify_metadata",
+    "default_text": "Modify Role Metadata",
+    "semantic_meaning": "Friendly name of the immutable system privilege role.modify_metadata.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Modify Role Metadata",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.search.query.debug.description",
+    "context_group": "privilege.search.query.debug",
+    "default_text": "Request sanitized API-level diagnostics for searches performed by the current user.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege search.query.debug permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Request sanitized API-level diagnostics for searches performed by the current user.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.search.query.debug.name",
+    "context_group": "privilege.search.query.debug",
+    "default_text": "Debug Search Query",
+    "semantic_meaning": "Friendly name of the immutable system privilege search.query.debug.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Debug Search Query",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.search.saved_search.administrator.description",
+    "context_group": "privilege.search.saved_search.administrator",
+    "default_text": "Inspect and modify any saved search and manage any eligible role or organizational-unit audience.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege search.saved_search.administrator permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Inspect and modify any saved search and manage any eligible role or organizational-unit audience.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.search.saved_search.administrator.name",
+    "context_group": "privilege.search.saved_search.administrator",
+    "default_text": "Administer Saved Searches",
+    "semantic_meaning": "Friendly name of the immutable system privilege search.saved_search.administrator.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Administer Saved Searches",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.search.saved_search.delete.description",
+    "context_group": "privilege.search.saved_search.delete",
+    "default_text": "Delete owned saved searches and, with saved-search administration, searches owned by other users.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege search.saved_search.delete permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Delete owned saved searches and, with saved-search administration, searches owned by other users.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.search.saved_search.delete.name",
+    "context_group": "privilege.search.saved_search.delete",
+    "default_text": "Delete Saved Searches",
+    "semantic_meaning": "Friendly name of the immutable system privilege search.saved_search.delete.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Delete Saved Searches",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.search.saved_search.save.description",
+    "context_group": "privilege.search.saved_search.save",
+    "default_text": "Create saved searches, copy accessible searches, and manage permitted audiences for owned searches.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege search.saved_search.save permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Create saved searches, copy accessible searches, and manage permitted audiences for owned searches.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.search.saved_search.save.name",
+    "context_group": "privilege.search.saved_search.save",
+    "default_text": "Save Searches",
+    "semantic_meaning": "Friendly name of the immutable system privilege search.saved_search.save.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Save Searches",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.security.resource.downgrade.description",
+    "context_group": "privilege.security.resource.downgrade",
+    "default_text": "Lower a resource's security level after the required checks and audit reason.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege security.resource.downgrade permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Lower a resource's security level after the required checks and audit reason.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.security.resource.downgrade.name",
+    "context_group": "privilege.security.resource.downgrade",
+    "default_text": "Security Resource Downgrade",
+    "semantic_meaning": "Friendly name of the immutable system privilege security.resource.downgrade.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Security Resource Downgrade",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.security_level.modify_metadata.description",
+    "context_group": "privilege.security_level.modify_metadata",
+    "default_text": "Modify multilingual names and descriptions for security levels.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege security_level.modify_metadata permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Modify multilingual names and descriptions for security levels.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.security_level.modify_metadata.name",
+    "context_group": "privilege.security_level.modify_metadata",
+    "default_text": "Modify Security Level Metadata",
+    "semantic_meaning": "Friendly name of the immutable system privilege security_level.modify_metadata.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Modify Security Level Metadata",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.security_levels.administer.description",
+    "context_group": "privilege.security_levels.administer",
+    "default_text": "Create and maintain the security levels used for roles, aggregations, and records. Shows the Security levels page in navigation.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege security_levels.administer permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Create and maintain the security levels used for roles, aggregations, and records. Shows the Security levels page in navigation.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.security_levels.administer.name",
+    "context_group": "privilege.security_levels.administer",
+    "default_text": "Security Levels Administer",
+    "semantic_meaning": "Friendly name of the immutable system privilege security_levels.administer.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Security Levels Administer",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.user.modify_metadata.description",
+    "context_group": "privilege.user.modify_metadata",
+    "default_text": "Modify multilingual names and descriptions for users.",
+    "semantic_meaning": "Accessible explanation of what the immutable system privilege user.modify_metadata permits.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Modify multilingual names and descriptions for users.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.user.modify_metadata.name",
+    "context_group": "privilege.user.modify_metadata",
+    "default_text": "Modify User Metadata",
+    "semantic_meaning": "Friendly name of the immutable system privilege user.modify_metadata.",
+    "common_locations": [
+      "Role details",
+      "Profile privilege editor"
+    ],
+    "translator_guidance": "Translate the user-facing privilege catalogue text. Keep privilege codes unchanged.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Modify User Metadata",
+    "is_html": false
+  },
+  {
     "message_key": "profile.built_in.all_privileges.description",
     "context_group": "profile.built_in.all_privileges",
     "default_text": "Migration and controlled compatibility profile",
@@ -10764,24 +12684,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.load_people_page.text.start_end_total_63345877",
-    "context_group": "webui.load_people_page",
-    "default_text": "{start}–{end} / {total}",
-    "semantic_meaning": "Interpolated interface text in the load people page workflow.",
-    "common_locations": [
-      "WebUI: load people page"
-    ],
-    "translator_guidance": "Translate the complete message naturally and preserve every named placeholder exactly.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {
-      "start": "text",
-      "end": "text",
-      "total": "text"
-    },
-    "rendered_example": "<start>–<end> / <total>",
-    "is_html": false
-  },
-  {
     "message_key": "webui.load_saved_page.badge.mine_47cb9b71",
     "context_group": "webui.load_saved_page",
     "default_text": "Mine",
@@ -12682,7 +14584,7 @@
   {
     "message_key": "webui.open_aggregation.label.protected_by_hold_count_effective_value_065566e7",
     "context_group": "webui.open_aggregation",
-    "default_text": "Protected by {hold_count} effective {value}",
+    "default_text": "Protected by effective holds ({hold_count})",
     "semantic_meaning": "Interpolated interface text in the open aggregation workflow.",
     "common_locations": [
       "WebUI: open aggregation"
@@ -12690,10 +14592,9 @@
     "translator_guidance": "Translate the complete message naturally and preserve every named placeholder exactly.",
     "grammatical_role": "interface text",
     "parameter_schema": {
-      "hold_count": "text",
-      "value": "text"
+      "hold_count": "text"
     },
-    "rendered_example": "Protected by <hold_count> effective <value>",
+    "rendered_example": "Protected by effective holds (<hold_count>)",
     "is_html": false
   },
   {
@@ -12853,6 +14754,23 @@
     "grammatical_role": "interface text",
     "parameter_schema": {},
     "rendered_example": "Add child aggregation",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.open_aggregation.text.governed_by_root_aggregation",
+    "context_group": "webui.open_aggregation",
+    "default_text": "{source} · governed by root aggregation {root_reference}",
+    "semantic_meaning": "Explains the effective retention-rule source for a child aggregation and identifies the root aggregation governing it.",
+    "common_locations": [
+      "WebUI: aggregation effective-retention card"
+    ],
+    "translator_guidance": "Preserve both named placeholders. The source describes where the rule was defined and root_reference contains the root aggregation number and title.",
+    "grammatical_role": "retention-rule source sentence",
+    "parameter_schema": {
+      "root_reference": "text",
+      "source": "text"
+    },
+    "rendered_example": "Specified by its classification · governed by root aggregation 1111/2026/3 — Example",
     "is_html": false
   },
   {
@@ -14417,20 +16335,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.persist_saved_search.text.a_reason_is_required_when_updating_a_saved_6b76ee63",
-    "context_group": "webui.persist_saved_search",
-    "default_text": "A reason is required when updating a saved search.",
-    "semantic_meaning": "Interface text in the persist saved search workflow.",
-    "common_locations": [
-      "WebUI: persist saved search"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "A reason is required when updating a saved search.",
-    "is_html": false
-  },
-  {
     "message_key": "webui.persist_saved_search.text.choose_at_least_one_role_or_organizational_2c3b3c87",
     "context_group": "webui.persist_saved_search",
     "default_text": "Choose at least one role or organizational unit.",
@@ -15727,20 +17631,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.render_compact_resource_result.accessible_name.open_parent_aggregation_42880433",
-    "context_group": "webui.render_compact_resource_result",
-    "default_text": "Open parent aggregation",
-    "semantic_meaning": "Accessible name in the render compact resource result workflow.",
-    "common_locations": [
-      "WebUI accessibility: render compact resource result"
-    ],
-    "translator_guidance": "Translate as a concise accessible name for the corresponding control or region.",
-    "grammatical_role": "accessible name",
-    "parameter_schema": {},
-    "rendered_example": "Open parent aggregation",
-    "is_html": false
-  },
-  {
     "message_key": "webui.render_compact_resource_result.accessible_name.preview_digital_component_f8b12cac",
     "context_group": "webui.render_compact_resource_result",
     "default_text": "Preview digital component",
@@ -15780,20 +17670,6 @@
     "grammatical_role": "accessible name",
     "parameter_schema": {},
     "rendered_example": "Show digital components",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_compact_resource_result.button.open_parent_aggregation_a38da378",
-    "context_group": "webui.render_compact_resource_result",
-    "default_text": "Open parent aggregation",
-    "semantic_meaning": "Action label in the render compact resource result workflow.",
-    "common_locations": [
-      "WebUI: render compact resource result"
-    ],
-    "translator_guidance": "Translate as a concise action label; preserve the intent used in this workflow.",
-    "grammatical_role": "action label",
-    "parameter_schema": {},
-    "rendered_example": "Open parent aggregation",
     "is_html": false
   },
   {
@@ -15942,22 +17818,6 @@
     "grammatical_role": "action guidance",
     "parameter_schema": {},
     "rendered_example": "Open aggregation",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_compact_resource_result.tooltip.open_parent_aggregation_parent_label_2d8be084",
-    "context_group": "webui.render_compact_resource_result",
-    "default_text": "Open parent aggregation: {parent_label}",
-    "semantic_meaning": "Interpolated interface text in the render compact resource result workflow.",
-    "common_locations": [
-      "WebUI: render compact resource result"
-    ],
-    "translator_guidance": "Translate the complete message naturally and preserve every named placeholder exactly.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {
-      "parent_label": "text"
-    },
-    "rendered_example": "Open parent aggregation: <parent_label>",
     "is_html": false
   },
   {
@@ -20262,22 +22122,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.render_summary.text.open_replace_88c69185",
-    "context_group": "webui.render_summary",
-    "default_text": "Open {replace}",
-    "semantic_meaning": "Interpolated interface text in the render summary workflow.",
-    "common_locations": [
-      "WebUI: render summary"
-    ],
-    "translator_guidance": "Translate the complete message naturally and preserve every named placeholder exactly.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {
-      "replace": "text"
-    },
-    "rendered_example": "Open <replace>",
-    "is_html": false
-  },
-  {
     "message_key": "webui.render_summary.text.set_directly_on_this_item_without_consider_076d5cd7",
     "context_group": "webui.render_summary",
     "default_text": "Set directly on this item, without considering its ancestors.",
@@ -22736,20 +24580,6 @@
     "grammatical_role": "field label",
     "parameter_schema": {},
     "rendered_example": "Description",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.save_search.textarea.reason_for_change_1456875c",
-    "context_group": "webui.save_search",
-    "default_text": "Reason for change",
-    "semantic_meaning": "Field label in the save search workflow.",
-    "common_locations": [
-      "WebUI: save search"
-    ],
-    "translator_guidance": "Translate as a concise field label; preserve the intent used in this workflow.",
-    "grammatical_role": "field label",
-    "parameter_schema": {},
-    "rendered_example": "Reason for change",
     "is_html": false
   },
   {
@@ -26702,7 +28532,7 @@
   {
     "message_key": "webui.select_record_details.label.protected_by_hold_count_effective_value_fdfb1fe2",
     "context_group": "webui.select_record_details",
-    "default_text": "Protected by {hold_count} effective {value}",
+    "default_text": "Protected by effective holds ({hold_count})",
     "semantic_meaning": "Interpolated interface text in the select record details workflow.",
     "common_locations": [
       "WebUI: select record details"
@@ -26710,10 +28540,9 @@
     "translator_guidance": "Translate the complete message naturally and preserve every named placeholder exactly.",
     "grammatical_role": "interface text",
     "parameter_schema": {
-      "hold_count": "text",
-      "value": "text"
+      "hold_count": "text"
     },
-    "rendered_example": "Protected by <hold_count> effective <value>",
+    "rendered_example": "Protected by effective holds (<hold_count>)",
     "is_html": false
   },
   {

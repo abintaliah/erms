@@ -4,6 +4,7 @@ from frontend.webui.tests.localization_assertions import with_english_messages
 
 APP = Path(__file__).parents[1] / "app.py"
 CLIENT = Path(__file__).parents[1] / "api_client.py"
+HOLDS_API = Path(__file__).parents[3] / "backend" / "services" / "api" / "holds.py"
 
 
 def test_holds_workspace_and_navigation_are_wired():
@@ -57,6 +58,62 @@ def test_holds_workspace_and_navigation_are_wired():
     assert 'select_user_details(user_id)' in source
 
 
+def test_hold_details_localizes_state_validity_and_protection_values():
+    source = APP.read_text(encoding="utf-8")
+    details = source[source.index("async def select_hold_details("):]
+    assert 'localized_hold_states = {' in details
+    assert 'render_message("webui.select_holds.select.active_f5bdb37b")' in details
+    assert 'render_message("webui.select_holds.select.valid_from_ebec3edf")' in details
+    assert 'render_message("webui.select_holds.select.valid_until_5ebd52b4")' in details
+    assert 'render_message("common.value.no_expiry")' in details
+    assert 'render_message("webui.select_holds.select.protection_517995ff")' in details
+    assert 'render_message("webui.select_holds.select.enhanced_state_preservation_39552bdf")' in details
+    assert 'render_message("webui.select_holds.select.core_protection_6f52e26e")' in details
+    assert 'ui.badge(hold["state"].title()' not in details
+    assert '("Valid from",' not in details
+    assert '"No scheduled end"' not in details
+    assert '"Enhanced state preservation" if hold' not in details
+
+
+def test_hold_listing_localizes_card_labels_states_and_open_ended_validity():
+    source = APP.read_text(encoding="utf-8")
+    listing = source[source.index("async def select_holds()"):source.index("async def select_hold_details(")]
+    assert 'ui.badge(hold_state_label' in listing
+    assert 'render_message("webui.select_hold_details.label.owner_7d141da3")' in listing
+    assert 'render_message("webui.select_hold_details.label.contributors_008a0e27")' in listing
+    assert 'render_message("webui.select_holds.select.valid_from_ebec3edf")' in listing
+    assert 'render_message("webui.select_holds.select.valid_until_5ebd52b4")' in listing
+    assert 'render_message("common.value.no_expiry")' in listing
+    assert 'render_message("webui.select_hold_details.label.held_items_244f35b3")' in listing
+    assert '"hold-list-card--effective"' in listing
+    assert 'hold["state"].title()' not in listing
+    assert '("Owner",' not in listing
+    assert '("Contributors",' not in listing
+    assert '("Validity",' not in listing
+    assert '"Until released"' not in listing
+    assert '("Held items",' not in listing
+
+
+def test_hold_api_projects_owner_and_contributor_names_in_preferred_language():
+    source = HOLDS_API.read_text(encoding="utf-8")
+    assert "from .entity_localization import localize_rows, preferred_language" in source
+    assert "localized: dict[str, Any] | None = None" in source
+    assert "user_account.status,user_account.translations" in source
+    assert "u.status,u.translations FROM hold_contributors" in source
+    assert 'localize_rows(result["contributors"], language_tag, "name")' in source
+    assert 'localize_rows([result["owner"]], language_tag, "name")' in source
+    assert 'localize_rows(hold_contributors, language_tag, "name")' in source
+    assert "preferred_language(connection, request)" in source
+
+
+def test_hold_person_buttons_keep_avatars_on_the_rtl_leading_edge():
+    source = APP.read_text(encoding="utf-8")
+    assert 'html[dir="rtl"] .hold-person-button .q-btn__content' in source
+    assert '"hold-person-button self-start -ml-2"' in source
+    assert '"hold-person-button gap-1"' in source
+    assert 'ui.label((contributor.get("localized") or {}).get("name") or contributor["name"]).classes("text-sm")' in source
+
+
 def test_hold_mutations_collect_reasons_and_refresh_live_state():
     source = with_english_messages(APP.read_text(encoding="utf-8"))
     assert 'async def hold_reason_dialog(' in source
@@ -64,8 +121,8 @@ def test_hold_mutations_collect_reasons_and_refresh_live_state():
     assert 'Reason for removing this direct assignment' in source
     assert 'Remove from all holds? Inherited protection from parent aggregations will remain.' in source
     assert 'Remove from all holds? Inherited protection from its aggregation hierarchy will remain.' in source
-    assert 'await api.effective_holds("record", record_id)' in source
-    assert 'await api.effective_holds("aggregation", current["id"])' in source
+    assert 'api.effective_holds("record", record_id)' in source
+    assert 'api.effective_holds("aggregation", current["id"])' in source
     assert 'effective_holds, "record", record_id' in source
     assert 'effective_holds, "aggregation", current["id"]' in source
     assert 'Remove from this hold' in source

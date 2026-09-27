@@ -71,6 +71,7 @@ ROLE_NODE_SQL = """
            role.profile_id, role.is_information_governance, role.is_system,
            role.account_type_restriction,
            profile.code AS profile_code, profile.name AS profile_name,
+           profile.translations AS profile_translations,
            security.code AS security_level_code,
            security.name AS security_level_name,
            security.translations AS security_level_translations,
@@ -397,20 +398,27 @@ def browse_record_summary(
 
 @router.get("/organization/roots", tags=["organization browser"])
 def browse_organization_roots(
+    request: Request,
     limit: int = Query(25, ge=1, le=50), offset: int = Query(0, ge=0),
     _authorization: Any = Depends(require_organization_browse),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return list(connection.execute(
+    rows = list(connection.execute(
         f"SELECT * FROM ({ORG_UNIT_NODE_SQL}) source "
         "WHERE parent_org_unit_id IS NULL ORDER BY code COLLATE \"C\", id LIMIT %s OFFSET %s",
         (limit, offset),
     ).fetchall())
+    language_tag = preferred_language(connection, request)
+    for row in rows:
+        localized = localized_projection(row, language_tag, "name")
+        row["name"] = localized["name"]
+        row["description"] = localized["description"]
+    return rows
 
 
 @router.get("/organization/org-units/{org_unit_id}/children", tags=["organization browser"])
 def browse_organization_children(
-    org_unit_id: int, include_roles: bool = True,
+    org_unit_id: int, request: Request, include_roles: bool = True,
     limit: int = Query(25, ge=1, le=50),
     unit_offset: int = Query(0, ge=0), role_offset: int = Query(0, ge=0),
     _authorization: Any = Depends(require_organization_browse),
@@ -430,6 +438,11 @@ def browse_organization_children(
             "WHERE org_unit_id=%s ORDER BY code COLLATE \"C\", id LIMIT %s OFFSET %s",
             (org_unit_id, limit + 1, role_offset),
         ).fetchall())
+    language_tag = preferred_language(connection, request)
+    for row in [*units, *roles]:
+        localized = localized_projection(row, language_tag, "name")
+        row["name"] = localized["name"]
+        row["description"] = localized["description"]
     return {
         "org_units": units[:limit], "roles": roles[:limit],
         "more_org_units": len(units) > limit,
@@ -439,7 +452,8 @@ def browse_organization_children(
 
 @router.get("/organization/roles/{role_id}/users", tags=["organization browser"])
 def browse_role_users(
-    role_id: int, validity: Literal["all", "current", "future", "expired"] = "all",
+    role_id: int, request: Request,
+    validity: Literal["all", "current", "future", "expired"] = "all",
     limit: int = Query(25, ge=1, le=50), offset: int = Query(0, ge=0),
     _authorization: Any = Depends(require_organization_browse),
     connection: Connection = Depends(get_connection, scope="function"),
@@ -453,7 +467,7 @@ def browse_role_users(
         "future": "assignment.valid_from > CURRENT_TIMESTAMP",
         "expired": "assignment.valid_until IS NOT NULL AND assignment.valid_until <= CURRENT_TIMESTAMP",
     }[validity]
-    return list(connection.execute(
+    rows = list(connection.execute(
         f"""SELECT assignment.id AS assignment_id, assignment.role_id,
                    assignment.valid_from, assignment.valid_until,
                    assignment.version AS assignment_version,
@@ -461,7 +475,9 @@ def browse_role_users(
                         WHEN assignment.valid_until IS NOT NULL AND assignment.valid_until <= CURRENT_TIMESTAMP THEN 'expired'
                         ELSE 'current' END AS assignment_validity,
                    role.code AS role_code, role.name AS role_name,
-                   person.id, person.name, person.email, person.external_id,
+                   role.translations AS role_translations,
+                   person.id, person.name, person.translations,
+                   person.email, person.external_id,
                    person.account_type, person.status, person.date_created,
                    person.date_deactivated, person.date_suspended, person.version
               FROM user_role_assignments assignment
@@ -472,6 +488,15 @@ def browse_role_users(
              LIMIT %s OFFSET %s""",
         (role_id, limit, offset),
     ).fetchall())
+    language_tag = preferred_language(connection, request)
+    for row in rows:
+        row["name"] = localized_projection(row, language_tag, "name")["name"]
+        row["role_name"] = localized_projection(
+            {"name": row.get("role_name"), "translations": row.get("role_translations")},
+            language_tag,
+            "name",
+        )["name"]
+    return rows
 
 
 @router.get("/organization/org-units/{org_unit_id}/summary", tags=["organization browser"])
@@ -583,6 +608,14 @@ def browse_role_summary(
     localized = localized_projection(row, language_tag, "name")
     row["name"] = localized["name"]
     row["description"] = localized["description"]
+    row["profile_name"] = localized_projection(
+        {
+            "name": row.get("profile_name"),
+            "translations": row.pop("profile_translations", {}),
+        },
+        language_tag,
+        "name",
+    )["name"]
     row["org_unit_name"] = localized_projection(
         {"name": row.get("org_unit_name"), "translations": row.pop("org_unit_translations", {})},
         language_tag,
@@ -623,6 +656,7 @@ def browse_role_summary(
 
 @router.get("/organization/search", tags=["organization browser"])
 def search_organization_structure(
+    request: Request,
     query: str = Query(min_length=1, max_length=200),
     entity_type: Literal["all", "org_unit", "role", "user"] = "all",
     status: Literal["all", "active", "inactive", "suspended"] = "all",
@@ -646,17 +680,19 @@ def search_organization_structure(
                       FROM paths JOIN org_units parent
                         ON parent.id=paths.parent_org_unit_id
                 )
-                SELECT source.id, source.code, source.name, source.status,
+                SELECT source.id, source.code, source.name, source.description,
+                       source.translations, source.status,
                        source.effective_status,
                        (SELECT array_agg(path_id ORDER BY ordinal DESC)
                           FROM unnest(path.reverse_path) WITH ORDINALITY p(path_id, ordinal)
                        ) AS org_unit_path
                   FROM ({ORG_UNIT_NODE_SQL}) source
                   JOIN paths path ON path.id=source.id AND path.parent_org_unit_id IS NULL
-                 WHERE (source.code ILIKE %s OR source.name ILIKE %s OR COALESCE(source.description,'') ILIKE %s)
+                 WHERE (source.code ILIKE %s OR source.name ILIKE %s OR COALESCE(source.description,'') ILIKE %s
+                        OR COALESCE(source.translations::text, '') ILIKE %s)
                    AND {status_filter}
                  ORDER BY source.code LIMIT %s""",
-            (pattern, pattern, pattern, *status_parameters, limit),
+            (pattern, pattern, pattern, pattern, *status_parameters, limit),
         ).fetchall())
     if entity_type in {"all", "role"}:
         results.extend({"type": "role", **row} for row in connection.execute(
@@ -670,17 +706,19 @@ def search_organization_structure(
                       FROM paths JOIN org_units parent
                         ON parent.id=paths.parent_org_unit_id
                 )
-                SELECT source.id, source.code, source.name, source.status,
+                SELECT source.id, source.code, source.name, source.description,
+                       source.translations, source.status,
                        source.effective_status, source.org_unit_id,
                        (SELECT array_agg(path_id ORDER BY ordinal DESC)
                           FROM unnest(path.reverse_path) WITH ORDINALITY p(path_id, ordinal)
                        ) AS org_unit_path
                   FROM ({ROLE_NODE_SQL}) source
                   JOIN paths path ON path.id=source.org_unit_id AND path.parent_org_unit_id IS NULL
-                 WHERE (source.code ILIKE %s OR source.name ILIKE %s OR COALESCE(source.description,'') ILIKE %s)
+                 WHERE (source.code ILIKE %s OR source.name ILIKE %s OR COALESCE(source.description,'') ILIKE %s
+                        OR COALESCE(source.translations::text, '') ILIKE %s)
                    AND {status_filter}
                  ORDER BY source.code LIMIT %s""",
-            (pattern, pattern, pattern, *status_parameters, limit),
+            (pattern, pattern, pattern, pattern, *status_parameters, limit),
         ).fetchall())
     if entity_type in {"all", "user"}:
         results.extend({"type": "user", **row} for row in connection.execute(
@@ -694,9 +732,11 @@ def search_organization_structure(
                       FROM paths JOIN org_units parent
                         ON parent.id=paths.parent_org_unit_id
                 )
-                SELECT DISTINCT person.id, person.name, person.email, person.status,
+                SELECT DISTINCT person.id, person.name, person.translations,
+                              person.email, person.status,
                               assignment.role_id, assignment.id AS assignment_id,
                               role.code AS role_code, role.name AS role_name,
+                              role.translations AS role_translations,
                               (SELECT array_agg(path_id ORDER BY ordinal DESC)
                                  FROM unnest(path.reverse_path) WITH ORDINALITY p(path_id, ordinal)
                               ) AS org_unit_path
@@ -704,9 +744,20 @@ def search_organization_structure(
               LEFT JOIN user_role_assignments assignment ON assignment.user_id=person.id
               LEFT JOIN roles role ON role.id=assignment.role_id
               LEFT JOIN paths path ON path.id=role.org_unit_id AND path.parent_org_unit_id IS NULL
-                  WHERE (person.name ILIKE %s OR COALESCE(person.email,'') ILIKE %s)
+                  WHERE (person.name ILIKE %s OR COALESCE(person.email,'') ILIKE %s
+                         OR COALESCE(person.translations::text, '') ILIKE %s)
                     AND {status_filter.replace('source.effective_status', 'person.status')}
                ORDER BY person.name, person.id LIMIT %s""",
-            (pattern, pattern, *status_parameters, limit),
+            (pattern, pattern, pattern, *status_parameters, limit),
         ).fetchall())
+    language_tag = preferred_language(connection, request)
+    for row in results:
+        if row["type"] in {"org_unit", "role", "user"}:
+            row["name"] = localized_projection(row, language_tag, "name")["name"]
+        if row["type"] == "user" and row.get("role_name"):
+            row["role_name"] = localized_projection(
+                {"name": row["role_name"], "translations": row.get("role_translations")},
+                language_tag,
+                "name",
+            )["name"]
     return results[:limit]

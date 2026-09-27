@@ -287,9 +287,14 @@ def list_classifications(
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
     parameters.extend((limit, offset))
     rows = list(connection.execute(
-        f"SELECT c.* FROM classifications c{where} ORDER BY c.code, c.id LIMIT %s OFFSET %s", parameters
+        f'SELECT c.* FROM classifications c{where} '
+        'ORDER BY c.code COLLATE "C" ASC, c.id ASC LIMIT %s OFFSET %s',
+        parameters,
     ).fetchall())
-    return sort_localized_rows(localize_rows(rows, preferred_language(connection, request), "title"), "title")
+    # Classification trees are navigated by their stable classification codes.
+    # Preserve that ordering after localization; translated titles must not
+    # reshuffle either root classifications or children.
+    return localize_rows(rows, preferred_language(connection, request), "title")
 
 
 @router.post("/classifications/search", response_model=None, tags=["classifications"])
