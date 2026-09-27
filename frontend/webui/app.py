@@ -1938,6 +1938,14 @@ def index(q: str = "") -> None:
         html[dir="rtl"] .organization-browser-disclosure {
             transform: scaleX(-1);
         }
+        html[dir="rtl"] .organization-browser-page-layout {
+            direction: rtl;
+            flex-direction: row !important;
+        }
+        html[dir="rtl"] .organization-browser-page-tree {
+            border-right-width: 0 !important;
+            border-left-width: 1px !important;
+        }
         .translation-card-heading { order: 1; }
         .translation-card-actions { order: 2; }
         html[dir="rtl"] .translation-card-heading { order: 2; }
@@ -1966,6 +1974,11 @@ def index(q: str = "") -> None:
             grid-template-areas: "expander icon content badge";
         }
         html[dir="rtl"] .classification-tree-content { direction: rtl; text-align: right; }
+        html[dir="rtl"] #aggregation-browser-tree .aggregation-browser-tree-row {
+            direction: rtl;
+            flex-direction: row !important;
+            text-align: right;
+        }
         .advanced-relationship-tree-node {
             position: relative;
             width: 100%;
@@ -12927,7 +12940,7 @@ def index(q: str = "") -> None:
             node = ("classification", item["id"])
             expanded = node in browse["expanded"]
             with ui.row().props(f"id={browse_item_dom_id(item)}").classes(
-                "w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50"
+                "aggregation-browser-tree-row w-full items-center no-wrap rounded-lg py-1 pe-2 hover:bg-blue-50"
             ).style(f"padding-inline-start: {depth * 20 + 4}px"):
                 ui.button(
                     icon=tree_expander_icon(expanded),
@@ -12965,7 +12978,7 @@ def index(q: str = "") -> None:
             expanded = node in browse["expanded"]
             selected = browse["selected"] == node
             with ui.row().props(f"id={browse_item_dom_id(item)}").classes(
-                "w-full items-center no-wrap rounded-lg py-1 pr-2 hover:bg-blue-50 "
+                "aggregation-browser-tree-row w-full items-center no-wrap rounded-lg py-1 pe-2 hover:bg-blue-50 "
                 + ("bg-blue-50" if selected else "")
             ).style(f"padding-inline-start: {depth * 20 + 4}px"):
                 has_content = item["child_aggregation_count"] or item["record_count"]
@@ -13011,7 +13024,7 @@ def index(q: str = "") -> None:
             item["type"] = "record"
             selected = browse["selected"] == ("record", item["id"])
             with ui.row().props(f"id={browse_item_dom_id(item)}").classes(
-                "w-full items-center no-wrap rounded-lg py-2 pr-2 hover:bg-blue-50 cursor-pointer "
+                "aggregation-browser-tree-row w-full items-center no-wrap rounded-lg py-2 pe-2 hover:bg-blue-50 cursor-pointer "
                 + ("bg-blue-50" if selected else "")
             ).style(f"padding-inline-start: {depth * 20 + 40}px").on(
                 "click", lambda: select_browse_item(item)
@@ -15626,10 +15639,11 @@ def index(q: str = "") -> None:
             search_results_host = ui.column().classes("w-full gap-0")
             layout_direction = "flex-col" if is_selector else "no-wrap"
             browser_height = "h-[520px]" if is_selector else "h-[720px]"
-            with ui.row().classes(f"w-full {browser_height} gap-0 border border-slate-200 rounded-lg overflow-hidden {layout_direction}"):
+            page_layout_class = "" if is_selector else "organization-browser-page-layout"
+            with ui.row().classes(f"w-full {browser_height} gap-0 border border-slate-200 rounded-lg overflow-hidden {layout_direction} {page_layout_class}"):
                 tree_classes = (
                     "w-full h-[340px] overflow-auto border-b"
-                    if is_selector else "w-1/2 min-w-[360px] h-full overflow-auto border-r"
+                    if is_selector else "organization-browser-page-tree w-1/2 min-w-[360px] h-full overflow-auto border-r"
                 )
                 tree_host = ui.column().classes(f"{tree_classes} p-2 gap-0 border-slate-200").props("id=organization-browser-tree")
                 summary_host = ui.column().classes(
