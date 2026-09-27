@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 
 import psycopg
+import pytest
 
 from backend.services.api.localization import ARABIC_TERMINOLOGY, synchronize_generated_arabic_drafts
 
@@ -18,9 +19,9 @@ def test_generated_arabic_artifact_is_complete_contextual_and_placeholder_safe()
     candidates = artifact["items"]
     definition_keys = [item["message_key"] for item in definitions]
     assert definition_keys == sorted(definition_keys)
-    assert artifact["generator"] == "OpenAI Codex"
-    assert artifact["model"] == "GPT-5.6 Sol Light"
-    assert artifact["prompt_version"] == "wathiq-arabic-bootstrap-v2-contextual"
+    assert artifact["generator"] == "Wathiq Translation Administration"
+    assert artifact["model"] == "database-reviewed-translations"
+    assert artifact["prompt_version"] == "manual-admin-export-v1"
     assert [item["message_key"] for item in candidates] == definition_keys
     assert len({item["message_key"] for item in candidates}) == len(definitions)
 
@@ -278,15 +279,77 @@ def test_filters_publication_review_and_new_language_source_copies(client):
     )
     assert preview.status_code == 200, preview.text
     selection = preview.json()
-    assert selection["count"] > 0
+    assert selection["count"] == 0
+    assert selection["source_copy_excluded"] > 0
+    assert selection["items"] == []
     assert selection["invalid"] == []
-    source_copy_publication = client.post(
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        source_copy = connection.execute(
+            """SELECT translation.message_key,translation.version,translation.translated_text
+                 FROM ui_message_translations translation
+                 JOIN ui_message_definitions definition USING(message_key)
+                WHERE translation.language_tag='fr'
+                  AND translation.origin='source_copy'
+                  AND definition.context_group='preferences'
+                ORDER BY translation.message_key LIMIT 1"""
+        ).fetchone()
+    assert source_copy is not None
+
+    source_copy_bulk_publication = client.post(
         "/api/v1/admin/i18n/translations/fr/bulk-review-publish",
-        headers={"X-Change-Reason": "Deliberately publish French starter values"},
-        json={"items": selection["items"]},
+        headers={"X-Change-Reason": "Attempt to publish an untouched fallback"},
+        json={"items": [{"message_key": source_copy[0], "version": source_copy[1]}]},
     )
-    assert source_copy_publication.status_code == 200, source_copy_publication.text
-    assert source_copy_publication.json()["published"] == selection["count"]
+    assert source_copy_bulk_publication.status_code == 422
+    assert source_copy_bulk_publication.json()["detail"]["parameters"]["invalid"] == [
+        {"message_key": source_copy[0], "code": "source_copy_not_publishable"}
+    ]
+
+    source_copy_publication = client.post(
+        f"/api/v1/admin/i18n/messages/{source_copy[0]}/translations/fr/publish",
+        headers={
+            "If-Match": str(source_copy[1]),
+            "X-Change-Reason": "Attempt to publish an untouched fallback",
+        },
+    )
+    assert source_copy_publication.status_code == 422
+    assert source_copy_publication.json()["detail"]["code"] == "source_copy_not_publishable"
+
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        connection.execute(
+            "SELECT set_config('app.change_reason','Attempt direct source-copy publication',true)"
+        )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            with connection.transaction():
+                connection.execute(
+                    """UPDATE ui_message_translations
+                          SET status='published',published_text=translated_text
+                        WHERE language_tag='fr' AND message_key=%s""",
+                    (source_copy[0],),
+                )
+
+    deliberate_same_wording = client.put(
+        f"/api/v1/admin/i18n/messages/{source_copy[0]}/translations/fr",
+        headers={
+            "If-Match": str(source_copy[1]),
+            "X-Change-Reason": "Deliberately retain the English wording",
+        },
+        json={
+            "translated_text": source_copy[2],
+            "origin": "manual",
+            "reviewed": False,
+        },
+    )
+    assert deliberate_same_wording.status_code == 200, deliberate_same_wording.text
+    deliberate_publication = client.post(
+        f"/api/v1/admin/i18n/messages/{source_copy[0]}/translations/fr/publish",
+        headers={
+            "If-Match": str(deliberate_same_wording.json()["version"]),
+            "X-Change-Reason": "Publish deliberately retained wording",
+        },
+    )
+    assert deliberate_publication.status_code == 200, deliberate_publication.text
+    assert deliberate_publication.json()["origin"] == "manual"
 
 
 def test_bulk_generated_review_publication_is_atomic_audited_and_revision_bounded(client):
@@ -382,6 +445,47 @@ def test_english_source_catalogue_is_exportable_without_publication(client):
                 WHERE language_tag='en' AND published_text IS NOT NULL"""
         ).fetchone()[0]
     assert published == 0
+
+    page = client.get(
+        "/api/v1/admin/i18n/messages",
+        params={"language_tag": "en", "key": MESSAGE_KEY, "limit": 20, "offset": 0},
+    )
+    assert page.status_code == 200, page.text
+    source = page.json()["items"][0]
+    source_publication = client.post(
+        f"/api/v1/admin/i18n/messages/{MESSAGE_KEY}/translations/en/publish",
+        headers={
+            "If-Match": str(source["translation_version"]),
+            "X-Change-Reason": "Publish the English source baseline",
+        },
+    )
+    assert source_publication.status_code == 200, source_publication.text
+    assert source_publication.json()["origin"] == "source_copy"
+
+    english_edit = client.put(
+        f"/api/v1/admin/i18n/messages/{MESSAGE_KEY}/translations/en",
+        headers={
+            "If-Match": str(source_publication.json()["version"]),
+            "X-Change-Reason": "Apply an English editorial revision",
+        },
+        json={
+            "translated_text": "The requested language {language} is unavailable.",
+            "origin": "manual",
+            "reviewed": False,
+        },
+    )
+    assert english_edit.status_code == 200, english_edit.text
+    edited_publication = client.post(
+        f"/api/v1/admin/i18n/messages/{MESSAGE_KEY}/translations/en/publish",
+        headers={
+            "If-Match": str(english_edit.json()["version"]),
+            "X-Change-Reason": "Publish the English editorial revision",
+        },
+    )
+    assert edited_publication.status_code == 200, edited_publication.text
+    assert edited_publication.json()["published_text"] == (
+        "The requested language {language} is unavailable."
+    )
 
 
 def test_translation_artifact_export_import_round_trip_is_validated_and_non_destructive(client):

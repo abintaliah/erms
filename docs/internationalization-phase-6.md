@@ -26,9 +26,10 @@ verb endings, punctuation pieces, and partial words—are prohibited as
 placeholder contracts and must be corrected in the authoritative English
 definition rather than forced on an administrator.
 
-An absent translation or untouched English `source_copy` may be replaced. The
-`source_copy` value records provenance only; it does not prevent a system
-administrator from deliberately reviewing and publishing the draft.
+An absent translation or untouched English `source_copy` may be replaced. For
+a non-source language, `source_copy` identifies an untranslated fallback and
+cannot be published. Deliberately unchanged wording must first be saved as a
+manual translation with a reason.
 Manual, imported, previously generated, reviewed, or published translations
 are otherwise protected. The artifact can declare an exact known defective
 generated value as superseded; only that exact value may be staged as a

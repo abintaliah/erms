@@ -3919,6 +3919,22 @@
     "is_html": false
   },
   {
+    "message_key": "localization.bulk.dialog.source_copies_excluded",
+    "context_group": "localization.bulk",
+    "default_text": "{count} English source copies are excluded because they are still awaiting translation.",
+    "semantic_meaning": "Notice that untouched English fallback copies are excluded from bulk publication for a non-English language.",
+    "common_locations": [
+      "WebUI: Translation Administration bulk dialog"
+    ],
+    "translator_guidance": "Preserve the count placeholder and make clear that these entries require a deliberate translation before publication.",
+    "grammatical_role": "status message",
+    "parameter_schema": {
+      "count": "integer"
+    },
+    "rendered_example": "2387 English source copies are excluded because they are still awaiting translation.",
+    "is_html": false
+  },
+  {
     "message_key": "localization.bulk.dialog.summary",
     "context_group": "localization.bulk",
     "default_text": "{count} drafts in {scope} will be marked as reviewed by you and published.",
@@ -4703,6 +4719,20 @@
     "grammatical_role": "imperative sentence",
     "parameter_schema": {},
     "rendered_example": "Select a valid review-state filter."
+  },
+  {
+    "message_key": "localization.validation.source_copy.not_publishable",
+    "context_group": "localization.validation",
+    "default_text": "An English source copy cannot be published as a translation. Save a deliberate translation first.",
+    "semantic_meaning": "Publication error for an untouched English fallback copy in a non-English language.",
+    "common_locations": [
+      "translation editor",
+      "bulk translation publication"
+    ],
+    "translator_guidance": "Explain that the administrator must deliberately save a translation before it can be published, even if its wording intentionally remains English.",
+    "grammatical_role": "complete sentence",
+    "parameter_schema": {},
+    "rendered_example": "An English source copy cannot be published as a translation. Save a deliberate translation first."
   },
   {
     "message_key": "localization.validation.status.invalid",

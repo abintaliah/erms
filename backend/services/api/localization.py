@@ -1552,7 +1552,7 @@ def generation_report(
 def _bulk_draft_rows(
     connection: Connection, language_tag: str, context_group: str,
     *, lock: bool = False,
-) -> tuple[dict, list[dict]]:
+) -> tuple[dict, list[dict], list[dict]]:
     language = connection.execute(
         "SELECT * FROM supported_languages WHERE lower(language_tag)=lower(%s)" + (" FOR UPDATE" if lock else ""),
         (language_tag,),
@@ -1580,7 +1580,13 @@ def _bulk_draft_rows(
               ORDER BY definition.context_group,definition.message_key{lock_sql}""",
         parameters,
     ).fetchall()
-    return dict(language), list(rows)
+    source_copies = (
+        [row for row in rows if row["origin"] == "source_copy"]
+        if language["language_tag"].lower() != "en" else []
+    )
+    excluded = {row["message_key"] for row in source_copies}
+    eligible = [row for row in rows if row["message_key"] not in excluded]
+    return dict(language), eligible, source_copies
 
 
 def _bulk_validation_errors(rows: list[dict]) -> list[dict[str, str]]:
@@ -1605,11 +1611,12 @@ def preview_bulk_translation_publication(
     _: Any = Depends(require_localization_admin),
     connection: Connection = Depends(get_connection,scope="function"),
 ):
-    language,rows=_bulk_draft_rows(connection,language_tag,context_group)
+    language,rows,source_copies=_bulk_draft_rows(connection,language_tag,context_group)
     errors=_bulk_validation_errors(rows)
     return {
         "language_tag":language["language_tag"],"context_group":context_group.strip() or None,
         "count":len(rows),"items":[{"message_key":row["message_key"],"version":row["version"]} for row in rows],
+        "source_copy_excluded":len(source_copies),
         "invalid":errors,
     }
 
@@ -1626,12 +1633,16 @@ def bulk_review_publish_translations(
     requested={item.message_key:item.version for item in payload.items}
     if len(requested)!=len(payload.items):
         raise _error(422,"duplicate_message_key","localization.validation.bulk.duplicate")
-    language,available=_bulk_draft_rows(connection,language_tag,"",lock=True)
+    language,available,source_copies=_bulk_draft_rows(connection,language_tag,"",lock=True)
     rows=[row for row in available if row["message_key"] in requested]
     found={row["message_key"] for row in rows}
-    missing=sorted(set(requested)-found)
+    excluded={row["message_key"] for row in source_copies if row["message_key"] in requested}
+    missing=sorted(set(requested)-found-excluded)
     stale=sorted(row["message_key"] for row in rows if row["version"]!=requested[row["message_key"]])
-    errors=_bulk_validation_errors(rows)
+    errors=[
+        {"message_key":key,"code":"source_copy_not_publishable"}
+        for key in sorted(excluded)
+    ]+_bulk_validation_errors(rows)
     if missing or stale or errors:
         raise _error(409 if stale else 422,"bulk_publication_blocked","localization.validation.bulk.blocked",
                      missing=missing,stale=stale,invalid=errors)
@@ -1702,6 +1713,8 @@ def publish_translation(
       WHERE translation.message_key=%s AND lower(translation.language_tag)=lower(%s) FOR UPDATE OF translation,language""",(message_key,language_tag)).fetchone()
     if row is None: raise _error(422,"missing_translation","localization.validation.translation.missing")
     if row["version"]!=expected: raise _stale_version(expected,row["version"],dict(row))
+    if row["language_tag"].lower()!="en" and row["origin"]=="source_copy":
+        raise _error(422,"source_copy_not_publishable","localization.validation.source_copy.not_publishable")
     normalized,_,_=_validate_translation(definition,row["translated_text"])
     _set_reason(connection,reason,principal.user_id)
     published=connection.execute("""UPDATE ui_message_translations SET translated_text=%s,published_text=%s,status='published',needs_review=false,

@@ -1428,9 +1428,6 @@ def index(q: str = "") -> None:
         ui.query("html").props(remove="lang dir").props(
             add=f"lang={language} dir={normalized}"
         )
-        drawer.props(remove="side").props(
-            add="side=right" if normalized == "rtl" else "side=left"
-        )
         drawer_toggle_button.icon = (
             "chevron_right" if normalized == "rtl" else "chevron_left"
         )
@@ -2236,8 +2233,13 @@ def index(q: str = "") -> None:
         }
         .erms-drawer .q-drawer__content { overflow-x: visible !important; }
         .erms-nav-scroll {
-            height: 100%; overflow-y: auto; overflow-x: hidden;
-            padding: 0 8px 24px; scrollbar-gutter: stable;
+            height: 100%; width: 100%;
+        }
+        .erms-nav-scroll .q-scrollarea__content {
+            width: 100%; box-sizing: border-box;
+            padding: 0 8px 24px;
+        }
+        .erms-nav-scroll .q-scrollarea__container {
             overscroll-behavior: contain;
         }
         .erms-drawer-toggle {
@@ -3474,10 +3476,13 @@ def index(q: str = "") -> None:
         drawer_links.append((button, label, navigation_key))
         return button
 
-    with ui.left_drawer(value=True).props(
+    drawer_factory = ui.right_drawer if initial_direction == "rtl" else ui.left_drawer
+    with drawer_factory(value=True).props(
         "width=300 mini-width=64 show-if-above"
     ).classes("erms-drawer") as drawer:
-        drawer_toggle_button = ui.button(icon="chevron_left").props(
+        drawer_toggle_button = ui.button(
+            icon="chevron_right" if initial_direction == "rtl" else "chevron_left"
+        ).props(
             "flat dense aria-label='" + render_message("webui.index.accessible_name.collapse_navigation_b4de6b59") + "'"
         ).classes("erms-drawer-toggle")
         with drawer_toggle_button:
@@ -3494,66 +3499,67 @@ def index(q: str = "") -> None:
             "roles": render_message("navigation.item.roles"),
             "users": render_message("navigation.item.users"),
         }
-        with ui.column().classes("erms-nav-scroll w-full gap-0 no-wrap"):
-            dashboard_navigation = drawer_link(
-                render_message("navigation.item.dashboard"), "dashboard", navigation_key="dashboard", extra_classes="mt-4",
-            )
-            for heading_key, entries in (
-                ("records_heading", (("advanced-search", "manage_search"), ("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
-                ("organization_heading", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
-            ):
-                heading_control = ui.label(localized_navigation[heading_key]).classes(
+        with ui.scroll_area().classes("erms-nav-scroll w-full h-full"):
+            with ui.column().classes("w-full gap-0 no-wrap"):
+                dashboard_navigation = drawer_link(
+                    render_message("navigation.item.dashboard"), "dashboard", navigation_key="dashboard", extra_classes="mt-4",
+                )
+                for heading_key, entries in (
+                    ("records_heading", (("advanced-search", "manage_search"), ("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
+                    ("organization_heading", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
+                ):
+                    heading_control = ui.label(localized_navigation[heading_key]).classes(
+                        "erms-nav-heading px-4 pt-5 pb-2"
+                    )
+                    drawer_headings.append(heading_control)
+                    section_keys = tuple(key for key, _ in entries)
+                    if heading_key == "organization_heading":
+                        organization_browser_navigation = drawer_link(
+                            render_message("navigation.item.organization_browser"), "lan", navigation_key="organization-browser",
+                        )
+                        section_keys = ("organization-browser", *section_keys)
+                    drawer_sections.append((heading_control, section_keys))
+                    for key, icon in entries:
+                        navigation[key] = drawer_link(
+                            localized_navigation[key],
+                            icon, navigation_key=key,
+                        )
+                system_heading = ui.label(render_message("webui.index.label.system_administration_53cbe26c")).classes(
                     "erms-nav-heading px-4 pt-5 pb-2"
                 )
-                drawer_headings.append(heading_control)
-                section_keys = tuple(key for key, _ in entries)
-                if heading_key == "organization_heading":
-                    organization_browser_navigation = drawer_link(
-                        render_message("navigation.item.organization_browser"), "lan", navigation_key="organization-browser",
-                    )
-                    section_keys = ("organization-browser", *section_keys)
-                drawer_sections.append((heading_control, section_keys))
-                for key, icon in entries:
-                    navigation[key] = drawer_link(
-                        localized_navigation[key],
-                        icon, navigation_key=key,
-                    )
-            system_heading = ui.label(render_message("webui.index.label.system_administration_53cbe26c")).classes(
-                "erms-nav-heading px-4 pt-5 pb-2"
-            )
-            drawer_headings.append(system_heading)
-            drawer_sections.append((system_heading, (
-                "audit-trail", "login-sessions", "security-operations",
-                "security-levels", "profiles", "governance-custody", "holds",
-                "text-indexers", "translations",
-            )))
-            text_indexers_navigation = drawer_link(
-                render_message("navigation.item.text_indexers"), "manage_search", navigation_key="text-indexers",
-            )
-            audit_navigation = drawer_link(
-                render_message("navigation.item.audit_trail"), "manage_history", navigation_key="audit-trail",
-            )
-            sessions_navigation = drawer_link(
-                render_message("navigation.item.login_sessions"), "devices", navigation_key="login-sessions",
-            )
-            security_operations_navigation = drawer_link(
-                render_message("navigation.item.security_operations"), "monitor_heart", navigation_key="security-operations",
-            )
-            navigation["security-levels"] = drawer_link(
-                render_message("navigation.item.security_levels"), "security", navigation_key="security-levels",
-            )
-            navigation["profiles"] = drawer_link(
-                render_message("navigation.item.profiles"), "admin_panel_settings", navigation_key="profiles",
-            )
-            navigation["translations"] = drawer_link(
-                render_message("navigation.item.translations"), "translate", navigation_key="translations",
-            )
-            custody_navigation = drawer_link(
-                render_message("navigation.item.governance_custody"), "shield_person", navigation_key="governance-custody",
-            )
-            holds_navigation = drawer_link(
-                render_message("navigation.item.holds"), "gavel", navigation_key="holds",
-            )
+                drawer_headings.append(system_heading)
+                drawer_sections.append((system_heading, (
+                    "audit-trail", "login-sessions", "security-operations",
+                    "security-levels", "profiles", "governance-custody", "holds",
+                    "text-indexers", "translations",
+                )))
+                text_indexers_navigation = drawer_link(
+                    render_message("navigation.item.text_indexers"), "manage_search", navigation_key="text-indexers",
+                )
+                audit_navigation = drawer_link(
+                    render_message("navigation.item.audit_trail"), "manage_history", navigation_key="audit-trail",
+                )
+                sessions_navigation = drawer_link(
+                    render_message("navigation.item.login_sessions"), "devices", navigation_key="login-sessions",
+                )
+                security_operations_navigation = drawer_link(
+                    render_message("navigation.item.security_operations"), "monitor_heart", navigation_key="security-operations",
+                )
+                navigation["security-levels"] = drawer_link(
+                    render_message("navigation.item.security_levels"), "security", navigation_key="security-levels",
+                )
+                navigation["profiles"] = drawer_link(
+                    render_message("navigation.item.profiles"), "admin_panel_settings", navigation_key="profiles",
+                )
+                navigation["translations"] = drawer_link(
+                    render_message("navigation.item.translations"), "translate", navigation_key="translations",
+                )
+                custody_navigation = drawer_link(
+                    render_message("navigation.item.governance_custody"), "shield_person", navigation_key="governance-custody",
+                )
+                holds_navigation = drawer_link(
+                    render_message("navigation.item.holds"), "gavel", navigation_key="holds",
+                )
 
     def set_active_drawer_link(page: str) -> None:
         navigation_key = {
@@ -19799,6 +19805,12 @@ def index(q: str = "") -> None:
                 scope_text=(context_group if context_group else render_message("localization.bulk.scope.all"))
                 ui.label(render_message("localization.bulk.dialog.summary",count=preview["count"],scope=scope_text)).classes("text-sm")
                 ui.label(render_message("localization.bulk.dialog.guidance")).classes("text-xs text-slate-500")
+                source_copy_excluded=int(preview.get("source_copy_excluded") or 0)
+                if source_copy_excluded:
+                    ui.label(render_message(
+                        "localization.bulk.dialog.source_copies_excluded",
+                        count=source_copy_excluded,
+                    )).classes("text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3")
                 invalid=preview.get("invalid") or []
                 if invalid:
                     with ui.card().classes("w-full shadow-none border border-red-300 bg-red-50 p-3 gap-1"):

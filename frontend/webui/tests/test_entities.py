@@ -1214,9 +1214,12 @@ def test_translation_administration_reveals_filtered_matches_and_ignores_stale_r
 
 def test_navigation_links_scroll_independently_when_the_drawer_is_taller_than_the_viewport():
     source = with_english_messages(inspect.getsource(index))
-    assert 'ui.column().classes("erms-nav-scroll w-full gap-0 no-wrap")' in source
-    assert ".erms-nav-scroll" in source
-    assert "height: 100%; overflow-y: auto; overflow-x: hidden;" in source
+    assert 'drawer_factory = ui.right_drawer if initial_direction == "rtl" else ui.left_drawer' in source
+    assert 'drawer.props(remove="side")' not in source
+    assert 'ui.scroll_area().classes("erms-nav-scroll w-full h-full")' in source
+    assert 'ui.column().classes("w-full gap-0 no-wrap")' in source
+    assert ".erms-nav-scroll .q-scrollarea__content" in source
+    assert ".erms-nav-scroll .q-scrollarea__container" in source
 
 
 def test_empty_navigation_sections_are_hidden_with_their_links():
