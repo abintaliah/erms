@@ -6,8 +6,8 @@
   "specification_sha256": "2c0eaebae8824199ffb0bf1fd74949bea21b2eb0a884a702360fee194cc812aa",
   "catalogue_sha256": "b6e161f44a40eabb30acc000baa6c3530651b90c02a986e458f19f2753b2ee58",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
-  "batch_id": "admin-export-ar-20260927101915",
-  "generated_at": "2026-09-27T10:19:15.827351+04:00",
+  "batch_id": "admin-export-ar-20260927103134",
+  "generated_at": "2026-09-27T10:31:34.150177+04:00",
   "artifact_type": "wathiq_translation_administration_export",
   "language_tag": "ar",
   "language_metadata": {
@@ -18,7 +18,7 @@
       "locale": "ar"
     }
   },
-  "catalogue_revision": 35,
+  "catalogue_revision": 37,
   "includes_reviewed_drafts": false,
   "superseded_translations": {
     "localization.bulk.action.review_publish_all": [
@@ -1314,14 +1314,14 @@
     },
     {
       "message_key": "dashboard.legend.on_hold",
-      "translated_text": "قيد التحفظ",
+      "translated_text": "قيد التعليق",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",
         "source_origin": "generated",
         "source_status": "published",
-        "date_reviewed": "2026-09-26T15:39:42.699140+00:00",
-        "date_published": "2026-09-26T15:39:42.699140+00:00"
+        "date_reviewed": "2026-09-27T06:29:51.077899+00:00",
+        "date_published": "2026-09-27T06:29:51.077899+00:00"
       }
     },
     {
@@ -1434,14 +1434,14 @@
     },
     {
       "message_key": "dashboard.metric.held",
-      "translated_text": "قيد التحفظ {count}",
+      "translated_text": "قيد التعليق {count}",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",
         "source_origin": "generated",
         "source_status": "published",
-        "date_reviewed": "2026-09-26T15:39:42.699140+00:00",
-        "date_published": "2026-09-26T15:39:42.699140+00:00"
+        "date_reviewed": "2026-09-27T06:30:05.899858+00:00",
+        "date_published": "2026-09-27T06:30:05.899858+00:00"
       }
     },
     {
