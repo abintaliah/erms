@@ -1,5 +1,6 @@
 import pytest
 from pathlib import Path
+from frontend.webui.tests.localization_assertions import with_english_messages
 
 from frontend.webui.app import (
     advanced_search_depth, advanced_search_has_positive_full_text,
@@ -10,7 +11,9 @@ from frontend.webui.app import (
 )
 
 
-APP_SOURCE = (Path(__file__).parents[1] / "app.py").read_text(encoding="utf-8")
+APP_SOURCE = with_english_messages(
+    (Path(__file__).parents[1] / "app.py").read_text(encoding="utf-8")
+)
 
 
 def test_nested_builder_compiles_existing_boolean_and_full_text_grammar():
@@ -66,8 +69,8 @@ def test_component_metadata_fields_use_the_existing_leaf_shape_and_are_grouped()
         {"field": "component.size_in_bytes", "operator": "lt", "value": 100},
     ]}
     options = advanced_search_field_options("records")
-    assert options["title"] == "Record — Title"
-    assert options["component.file_name"] == "Digital component — File name"
+    assert options["title"].replace("\u2068", "").replace("\u2069", "") == "Record — Title"
+    assert options["component.file_name"].replace("\u2068", "").replace("\u2069", "") == "Digital component — File name"
 
 
 def test_component_metadata_fields_are_not_available_for_aggregations():
@@ -187,20 +190,20 @@ def test_saved_search_administrator_sees_system_inventory_under_all():
 
 
 def test_advanced_search_uses_clearable_catalogues_and_classification_aggregation_browser():
-    assert '"medium": {"digital": "Digital", "physical": "Physical", "mixed": "Mixed"}' in APP_SOURCE
+    assert '"medium": {"digital": "advanced_search.value.digital", "physical": "advanced_search.value.physical", "mixed": "advanced_search.value.mixed"}' in APP_SOURCE
     assert '"component.content_status": {' in APP_SOURCE
     assert 'and advanced_search_has_component_field(workspace["root"])' in APP_SOURCE
     assert 'Browse classification and aggregation hierarchy' in APP_SOURCE
     assert 'f"classification-schemes/{scheme_id}/roots"' in APP_SOURCE
     assert ').props("outlined dense clearable")' in APP_SOURCE
     assert 'if selected_value not in controlled_options:' in APP_SOURCE
-    assert 'one file you are allowed "' in APP_SOURCE
+    assert "one file you are allowed to access must meet every file condition" in APP_SOURCE
     assert 'style_status_chip_select(value_control)' in APP_SOURCE
     assert '<q-chip outline color="primary" icon="task_alt"' in APP_SOURCE
 
 
 def test_record_component_attributions_open_the_governed_viewer():
-    assert "aria-label='Preview digital component'" in APP_SOURCE
+    assert "Preview digital component" in APP_SOURCE
     assert 'preview_record_components(selected, component_id)' in APP_SOURCE
     assert 'workspace["record_component_details"] = {' in APP_SOURCE
     assert 'for component in search_meta.get("matching_components", [])' in APP_SOURCE

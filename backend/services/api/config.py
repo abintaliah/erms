@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 
@@ -17,6 +18,20 @@ def required_environment(name: str) -> str:
     value = os.getenv(name)
     if not value:
         raise RuntimeError(f"{name} is required")
+    return value
+
+
+def default_working_timezone() -> str:
+    """Return the configured canonical IANA timezone or fail readiness."""
+    value = required_environment("DEFAULT_WORKING_TIMEZONE").strip()
+    try:
+        zone = ZoneInfo(value)
+    except ZoneInfoNotFoundError as exception:
+        raise RuntimeError(
+            "DEFAULT_WORKING_TIMEZONE must be a valid IANA timezone identifier"
+        ) from exception
+    if zone.key != value:
+        raise RuntimeError("DEFAULT_WORKING_TIMEZONE must use its canonical IANA identifier")
     return value
 
 

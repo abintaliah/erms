@@ -23,7 +23,14 @@ def _create_profile(client: TestClient, code: str = "RECORDS_EDITOR") -> dict:
 def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient):
     privileges = _by_code(client, "/api/v1/privileges?limit=500")
     profiles = _by_code(client, "/api/v1/profiles?limit=500")
-    assert len(privileges) == 50
+    assert len(privileges) == 61
+    assert privileges["localization.administer"]["is_reserved"] is True
+    assert {
+        "classification_scheme.modify_metadata", "classification.modify_metadata",
+        "user.modify_metadata", "role.modify_metadata", "org_unit.modify_metadata",
+        "security_level.modify_metadata",
+        "profile.modify_metadata",
+    } <= set(privileges)
     assert "holds.administer" in privileges
     assert "holds.held_items.manage_all" in privileges
     assert "organization.browse" in privileges
@@ -53,7 +60,7 @@ def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient
     system_members = client.get(
         f"/api/v1/profiles/{profiles['SYS_ADMIN']['id']}/privileges"
     ).json()
-    assert {"record.component.reindex","search.query.debug"} <= {
+    assert {"record.component.reindex","search.query.debug","localization.administer","profile.modify_metadata"} <= {
         item["code"] for item in system_members
     }
 

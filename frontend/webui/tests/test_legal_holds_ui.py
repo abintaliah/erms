@@ -1,4 +1,5 @@
 from pathlib import Path
+from frontend.webui.tests.localization_assertions import with_english_messages
 
 
 APP = Path(__file__).parents[1] / "app.py"
@@ -6,7 +7,7 @@ CLIENT = Path(__file__).parents[1] / "api_client.py"
 
 
 def test_holds_workspace_and_navigation_are_wired():
-    source = APP.read_text(encoding="utf-8")
+    source = with_english_messages(APP.read_text(encoding="utf-8"))
     assert '"Holds", "gavel", navigation_key="holds"' in source
     assert 'async def select_holds()' in source
     assert 'async def select_hold_details(hold_id: int)' in source
@@ -23,7 +24,7 @@ def test_holds_workspace_and_navigation_are_wired():
     assert '"Remove from all holds"' in source
     assert 'color="positive" if hold["state"]=="active" else "blue-grey"' in source
     assert 'render_user_avatar(contributor, size="25px").style(' in source
-    assert '"margin-right:5px !important"' in source
+    assert '"margin-inline-end:5px !important"' in source
     assert 'held_item_assigned_from=ui.input("Assignment date from")' in source
     assert 'held_item_assigned_before=ui.input("Assignment date before")' in source
     assert '"hold-command-layout w-full"' in source
@@ -57,7 +58,7 @@ def test_holds_workspace_and_navigation_are_wired():
 
 
 def test_hold_mutations_collect_reasons_and_refresh_live_state():
-    source = APP.read_text(encoding="utf-8")
+    source = with_english_messages(APP.read_text(encoding="utf-8"))
     assert 'async def hold_reason_dialog(' in source
     assert 'Reason for updating this hold' in source
     assert 'Reason for removing this direct assignment' in source
@@ -71,7 +72,7 @@ def test_hold_mutations_collect_reasons_and_refresh_live_state():
 
 
 def test_hold_editor_datetime_conversion_uses_application_timezone_without_javascript():
-    source = APP.read_text(encoding="utf-8")
+    source = with_english_messages(APP.read_text(encoding="utf-8"))
     hold_editor = source[source.index("async def open_hold_editor("):source.index("async def add_resource_to_hold_dialog(")]
     assert "ui.run_javascript" not in hold_editor
     assert 'return parsed.astimezone().strftime("%Y-%m-%dT%H:%M")' in hold_editor
@@ -80,7 +81,7 @@ def test_hold_editor_datetime_conversion_uses_application_timezone_without_javas
 
 
 def test_aggregation_command_centre_matches_the_approved_two_column_layout():
-    source = APP.read_text(encoding="utf-8")
+    source = with_english_messages(APP.read_text(encoding="utf-8"))
     assert '"aggregation-command-layout w-full p-5"' in source
     assert '"Aggregation overview"' in source
     assert '"detail-surface aggregation-actions-panel shadow-none p-4 gap-3"' in source
@@ -105,21 +106,21 @@ def test_aggregation_command_centre_matches_the_approved_two_column_layout():
 
 
 def test_access_explainer_renders_redaction_safe_hold_constraints():
-    source = APP.read_text(encoding="utf-8")
+    source = with_english_messages(APP.read_text(encoding="utf-8"))
     assert 'result.get("resource_state_constraints", [])' in source
     assert 'details restricted' in source
     assert 'An effective legal hold prevents this' in source
 
 
 def test_security_level_change_remains_separate_from_hold_frozen_metadata():
-    source = APP.read_text(encoding="utf-8")
+    source = with_english_messages(APP.read_text(encoding="utf-8"))
     assert 'async def show_security_level_change(' in source
     assert 'if capabilities.get("change_security_level"):' in source
     assert 'await api.preview_security_level_change({' in source
     assert 'await api.apply_security_level_change({' in source
     assert '"Reason *"' in source
     assert '"security_level_id",' in source
-    assert '"Level action for a reviewed security-level change."' in source
+    assert "Level action for a reviewed security-level change." in source
     assert '"none": "Change only this resource"' in source
     assert '"raise_ancestors": "Also raise parent aggregations as needed"' in source
     assert '"downgrade_subtree": "Also lower contained resources as needed"' in source

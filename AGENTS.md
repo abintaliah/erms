@@ -57,3 +57,51 @@
   columns, pagination controls, and deliberate empty/loading/error states.
 - UI table work is incomplete until its rendered appearance has been compared
   with existing Wathiq tables in a live browser.
+
+## WebUI performance
+
+- All work under `frontend/webui` and its supporting API routes must follow the
+  normative `docs/webui-performance.md` contract.
+- Do not reintroduce catalogue parsing on message-render paths, duplicate page
+  requests, serial independent requests, destructive dashboard loading states,
+  or optional assets on the initial authenticated critical path.
+- Every new cache must define its scope, key, freshness policy, invalidation,
+  failure behavior, and identity/language isolation.
+- Performance-sensitive UI work is incomplete until repeated navigation,
+  background-task abandonment, data freshness after mutation, and both LTR and
+  RTL behavior have been verified.
+- Never call `api.list(resource)` for a tenant-grown collection such as users,
+  roles, organization units, classifications, aggregations, records, or holds.
+  Use true server pagination or a bounded type-ahead selector. A client-side
+  pagination control over a 100/500-row download is not pagination.
+- Relationship controls must use bounded remote search, retain selected values,
+  and fetch individual selected IDs when needed. Hierarchy views must page each
+  branch independently; never download a complete hierarchy to calculate one
+  row's inherited state.
+
+## Translation artifacts during WebUI development
+
+- Before adding, changing, or removing any user-visible WebUI text, read and
+  follow sections 7.5 and 7.8.1–7.8.4 of
+  `specs/internationalization-and-user-preferences.md`.
+- Treat `frontend/webui/i18n/messages.ar.generated.json` as the canonical merge
+  base. It may contain administrator-curated translations promoted through the
+  Translation Administration export workflow; it is not disposable generated
+  output.
+- Merge by `message_key`. Preserve administrator-authored, imported, reviewed,
+  and published wording and provenance. Generate only missing new keys or
+  explicitly invalidated machine-generated values. Never regenerate the whole
+  artifact over curated translations.
+- Keep `frontend/webui/i18n/messages.en.json` sorted lexicographically by the
+  complete contextual `message_key` after every catalogue edit. Reorder every
+  maintained language artifact to that exact sequence without changing its
+  text or provenance. Source discovery, insertion, database, and merge order are
+  never valid catalogue ordering rules.
+- Database-only administrator edits are invisible to source control until a
+  complete export is deliberately promoted to the checked-in artifact. If a
+  newer export is known to exist but is unavailable, stop artifact replacement
+  and obtain it rather than overwriting those edits.
+- UI work is incomplete until English and maintained-language active-key
+  coverage agrees and placeholder, blank, terminology, stale-key, provenance,
+  and artifact-hash checks pass. State the artifact/key changes and remaining
+  review requirements in the implementation handoff.

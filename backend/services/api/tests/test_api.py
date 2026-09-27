@@ -28,11 +28,11 @@ def test_real_environment_overrides_dotenv(monkeypatch, tmp_path):
 def test_health(client: TestClient):
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {
-        "status": "ok",
-        "full_text_search_enabled": True,
-        "content_indexing_scheduling_enabled": True,
-    }
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["full_text_search_enabled"] is True
+    assert body["content_indexing_scheduling_enabled"] is True
+    assert body["localization"]["ready"] is True
 
 
 def test_event_history_operations_are_discovered_from_audit_data(client: TestClient):
@@ -1188,8 +1188,17 @@ def test_pdf_rendition_is_inline_and_audited(client: TestClient, record: dict):
     response = client.get(f"/api/v1/digital-components/{uploaded['id']}/rendition")
     assert response.status_code == 200
     assert response.content == pdf
+    assert response.headers["content-length"] == str(len(pdf))
     assert response.headers["content-type"].startswith("application/pdf")
     assert response.headers["content-disposition"].startswith("inline;")
+    ranged = client.get(
+        f"/api/v1/digital-components/{uploaded['id']}/rendition",
+        headers={"Range": "bytes=5-11"},
+    )
+    assert ranged.status_code == 206
+    assert ranged.content == pdf[5:12]
+    assert ranged.headers["content-length"] == "7"
+    assert ranged.headers["content-range"] == f"bytes 5-11/{len(pdf)}"
     history = client.get(f"/api/v1/digital-components/{uploaded['id']}/history").json()
     assert "CONTENT_VIEWED" in [event["operation"] for event in history]
 

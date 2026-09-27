@@ -10,8 +10,8 @@ def test_component_cards_offer_authorized_reindex_and_truthful_index_state():
     source=inspect.getsource(render_component_cards)
     assert 'capability_allowed(capabilities, "reindex_components")' in source
     assert 'icon="manage_search"' in source
-    assert 'Index: {index_status' in source
-    assert "Last indexed" in source
+    assert 'webui.render_component_cards.badge.index_title_c266923f' in source
+    assert "webui.render_component_cards.label.last_indexed" in source
 
 
 def test_api_client_exposes_component_record_and_status_operations():

@@ -1,4 +1,5 @@
 from pathlib import Path
+from frontend.webui.tests.localization_assertions import with_english_messages
 
 
 APP = Path(__file__).parents[1] / "app.py"
@@ -7,7 +8,7 @@ LOCAL_STACK = Path(__file__).parents[3] / "run-local-stack.sh"
 
 
 def test_global_search_header_results_and_safe_snippets_are_present():
-    source = APP.read_text()
+    source = with_english_messages(APP.read_text())
     assert 'placeholder="Search records, files and aggregations"' in source
     assert 'global_search_input.on("keydown.enter"' in source
     assert 'classes("erms-global-search-wrap no-wrap")' in source
@@ -16,8 +17,8 @@ def test_global_search_header_results_and_safe_snippets_are_present():
     assert "if full_text_search_enabled():" in source
     assert 'async def run_global_search(' in source
     assert 'async def change_global_search_page(' in source
-    assert "aria-label='Previous page'" in source
-    assert "aria-label='Next page'" in source
+    assert "Previous page" in source
+    assert "Next page" in source
     assert '"Load more results"' not in source
     assert '"Recently added content may still be indexing' in source
     assert 'def render_safe_snippet(' in source
@@ -30,7 +31,7 @@ def test_global_search_header_results_and_safe_snippets_are_present():
     assert 'for component in item.get("matching_components", [])' in source
     assert '{**authorized_component_details.get(int(component["id"]), {}), **component}' in source
     assert 'preview_record_components(selected, component_id)' in source
-    assert "aria-label='Preview digital component'" in source
+    assert "Preview digital component" in source
     assert 'can_expand_components=bool(' in source
     assert 'record_capabilities.get("list_components") and matching_components' in source
     assert 'record_capabilities.get("view_component")' in source
@@ -38,7 +39,7 @@ def test_global_search_header_results_and_safe_snippets_are_present():
     assert 'content_matched=bool(matching_components)' in source
     assert 'classes("compact-result-component-badge")' in source
     assert 'components_are_matches=True' in source
-    assert "f\"{'matching ' if components_are_matches else ''}digital component\"" in source
+    assert "'matching ' if components_are_matches else ''" in APP.read_text()
     assert 'async def open_global_record(record_id: int)' in source
     assert 'async def open_global_aggregation(aggregation: dict[str, Any])' in source
     assert 'global_search_return_anchor' in source
@@ -49,7 +50,7 @@ def test_global_search_header_results_and_safe_snippets_are_present():
 
 
 def test_diagnostics_are_privileged_opt_in_transient_and_failure_aware():
-    source = APP.read_text()
+    source = with_english_messages(APP.read_text())
     assert '"search.query.debug" in set(' in source
     assert '"search_diagnostics_enabled": False' in source
     assert 'Diagnostics will apply to the next explicit search.' in source
@@ -59,7 +60,7 @@ def test_diagnostics_are_privileged_opt_in_transient_and_failure_aware():
 
 
 def test_service_credentials_are_service_only_and_one_time_reveal_is_transient():
-    source = APP.read_text()
+    source = with_english_messages(APP.read_text())
     assert 'if person.get("account_type") == "service"' in source
     assert 'ui.badge("Non-interactive"' in source
     assert 'ui.label("API credentials")' in source
@@ -70,7 +71,7 @@ def test_service_credentials_are_service_only_and_one_time_reveal_is_transient()
 
 
 def test_text_indexer_health_and_bounded_backfill_are_administered_in_the_ui():
-    source = APP.read_text()
+    source = with_english_messages(APP.read_text())
     client = CLIENT.read_text()
     assert 'api.text_indexers_health()' in source
     assert 'ui.label("Health")' in source
@@ -115,18 +116,23 @@ def test_local_stack_uses_a_unique_default_worker_identity_per_invocation():
 
 
 def test_builtin_roles_are_visible_read_only_and_link_to_text_indexers():
-    source = APP.read_text()
-    assert 'await api.list(spec.key, include_system=True)' in source
+    source = with_english_messages(APP.read_text())
+    assert 'include_system=True if spec.key == "roles" else None' in source
     assert 'ui.badge("Built-in · read-only"' in source
-    assert '"Built-in roles are provisioned by the platform and cannot be edited, "' in source
+    assert "Built-in roles are provisioned by the platform and cannot be edited" in source
     assert 'role.get("code") == "text-indexer-service"' in source
     assert '"Open Text Indexers", icon="manage_search"' in source
-    assert 'if not (spec.key == "roles" and row.get("is_system")):' in source
+    assert 'translation_only = bool(' in source
+    assert '(spec.key == "roles" and row.get("is_system"))' in source
+    assert 'row.get("code") == "TEXT_INDEXER_SERVICE"' in source
+    assert 'if translation_only:' in source
+    assert 'controls[field.name].disable()' in source
+    assert 'icon="translate"' in source
     assert "not a role for a person" in source
 
 
 def test_text_indexer_credentials_are_server_paginated_with_retention_guidance():
-    source = APP.read_text()
+    source = with_english_messages(APP.read_text())
     client = CLIENT.read_text()
     assert "api.text_indexer_credentials" in source
     assert '"All credentials"' in source

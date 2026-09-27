@@ -13,6 +13,7 @@ from psycopg import Connection
 from .concurrency import expected_version
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .database import get_connection
+from .entity_localization import localize_rows, preferred_language, sort_localized_rows
 from .schemas import (
     EventHistoryRead,
     SecurityLevelChangeApplyRequest,
@@ -29,6 +30,7 @@ from .authorization_admin import (
     _universal_custodian_count,
     assert_continuity,
 )
+from .http_cache import apply_collection_etag
 
 
 def _continuity_snapshot(connection: Connection) -> tuple[int, int]:
@@ -186,11 +188,13 @@ def create_security_level(payload: SecurityLevelCreate, connection: Connection =
 
 @router.get("/security-levels", response_model=list[SecurityLevelRead])
 def list_security_levels(
+    request: Request,
+    response: Response,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return list(connection.execute(
+    rows = list(connection.execute(
         """SELECT level.*,
                   (SELECT count(*) FROM roles role WHERE role.security_level_id=level.id) roles_assigned_count,
                   (SELECT count(*) FROM aggregations aggregation WHERE aggregation.security_level_id=level.id) aggregation_count,
@@ -198,11 +202,39 @@ def list_security_levels(
              FROM security_levels level ORDER BY level.level_number,level.id LIMIT %s OFFSET %s""",
         (limit, offset)
     ).fetchall())
+    localized = sort_localized_rows(localize_rows(rows, preferred_language(connection, request), "name"), "name")
+    return apply_collection_etag(request, response, localized) or localized
+
+
+@router.get("/security-levels/page")
+def page_security_levels(
+    request: Request, q: str | None = None,
+    sort: str = Query("level_number", pattern="^(level_number|code|name)$"),
+    limit: int = Query(25, ge=1, le=50), offset: int = Query(0, ge=0),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    predicate = "WHERE (%s::text IS NULL OR level.code ILIKE '%%'||%s||'%%' OR level.name ILIKE '%%'||%s||'%%' OR level.description ILIKE '%%'||%s||'%%')"
+    parameters = (q, q, q, q)
+    total = connection.execute(
+        f"SELECT count(*) value FROM security_levels level {predicate}", parameters,
+    ).fetchone()["value"]
+    order = {"level_number": "level.level_number", "code": "lower(level.code)", "name": "lower(level.name)"}[sort]
+    rows = list(connection.execute(
+        f"""SELECT level.*,
+                    (SELECT count(*) FROM roles role WHERE role.security_level_id=level.id) roles_assigned_count,
+                    (SELECT count(*) FROM aggregations aggregation WHERE aggregation.security_level_id=level.id) aggregation_count,
+                    (SELECT count(*) FROM records record WHERE record.security_level_id=level.id) record_count
+               FROM security_levels level {predicate}
+              ORDER BY {order}, level.id LIMIT %s OFFSET %s""",
+        (*parameters, limit, offset),
+    ).fetchall())
+    items = localize_rows(rows, preferred_language(connection, request), "name")
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/security-levels/{level_id}", response_model=SecurityLevelRead)
-def get_security_level(level_id: int, connection: Connection = Depends(get_connection, scope="function")):
-    return get_or_404(connection, "security_levels", level_id)
+def get_security_level(level_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
+    return localize_rows([get_or_404(connection, "security_levels", level_id)], preferred_language(connection, request), "name")[0]
 
 
 @router.get(

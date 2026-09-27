@@ -1,6 +1,37 @@
 from fastapi.testclient import TestClient
 
 
+def test_dashboard_uses_preferred_language_for_organization_unit_names(
+    client: TestClient,
+):
+    current = client.get("/api/v1/entity-translations/org-units/1/ar")
+    assert current.status_code == 200, current.text
+    translated = client.patch(
+        "/api/v1/entity-translations/org-units/1/ar",
+        headers={
+            "If-Match": str(current.json()["version"]),
+            "X-Change-Reason": "Add Arabic dashboard name",
+        },
+        json={"name": "قسم الوثائق الرقمية"},
+    )
+    assert translated.status_code == 200, translated.text
+    preference = client.get("/api/v1/preferences")
+    assert preference.status_code == 200, preference.text
+    selected = client.put(
+        "/api/v1/preferences",
+        headers={"If-Match": str(preference.json()["version"])},
+        json={"language_tag": "ar", "working_timezone": "Asia/Dubai"},
+    )
+    assert selected.status_code == 200, selected.text
+
+    ownership = client.get("/api/v1/dashboard/ownership-counts")
+    assert ownership.status_code == 200, ownership.text
+    assert ownership.json()[0]["org_unit_name"] == "قسم الوثائق الرقمية"
+    summary = client.get("/api/v1/dashboard/summary")
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["ownership_counts"][0]["org_unit_name"] == "قسم الوثائق الرقمية"
+
+
 def test_resource_responses_and_filters_expose_organizational_owner(
     client: TestClient,
 ):

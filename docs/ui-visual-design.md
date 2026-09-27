@@ -1,5 +1,11 @@
 # Web UI visual design
 
+> **DEPRECATED — NON-NORMATIVE.** This document has been incorporated into and
+> superseded in full by the
+> [Wathiq WebUI Design Language](webui-design-language.md). It is retained only
+> as historical context. Do not use it as an implementation, design, or review
+> authority. If any wording differs, the superseding document governs.
+
 The ERMS web interface uses a calm, light enterprise visual system. These rules
 are cosmetic: they do not change navigation, permissions, API behavior, entity
 semantics, or application workflows.

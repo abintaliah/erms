@@ -137,6 +137,16 @@ class TextPolicyTests(unittest.TestCase):
             self.assertEqual(worker.recover_temporary_files(),2)
             self.assertEqual(len(list(root.iterdir())),1)
 
+    def test_startup_recovery_tolerates_another_worker_removing_candidate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); stale=root/"wathiq-index-stale"; stale.mkdir()
+            old=time.time()-7200; os.utime(stale,(old,old))
+            settings=Settings("http://127.0.0.1:8000","wti_x","test",Path("/tika"),4,5,60,120,
+                              100,1000,100,200,10,1000,root,1,100)
+            worker=object.__new__(Worker); worker.settings=settings
+            with patch("backend.services.text_indexer.worker.shutil.rmtree", side_effect=FileNotFoundError):
+                self.assertEqual(worker.recover_temporary_files(),0)
+
 
 if __name__ == "__main__":
     unittest.main()

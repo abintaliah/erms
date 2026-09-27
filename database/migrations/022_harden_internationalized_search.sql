@@ -1,0 +1,10 @@
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX classification_schemes_translation_text_trgm_idx ON classification_schemes USING gin ((translations::text) gin_trgm_ops);
+CREATE INDEX classifications_translation_text_trgm_idx ON classifications USING gin ((translations::text) gin_trgm_ops);
+CREATE INDEX users_translation_text_trgm_idx ON users USING gin ((translations::text) gin_trgm_ops);
+CREATE INDEX roles_translation_text_trgm_idx ON roles USING gin ((translations::text) gin_trgm_ops);
+CREATE INDEX org_units_translation_text_trgm_idx ON org_units USING gin ((translations::text) gin_trgm_ops);
+CREATE INDEX security_levels_translation_text_trgm_idx ON security_levels USING gin ((translations::text) gin_trgm_ops);
+INSERT INTO schema_migrations(version) VALUES ('022_harden_internationalized_search') ON CONFLICT DO NOTHING;
+COMMIT;

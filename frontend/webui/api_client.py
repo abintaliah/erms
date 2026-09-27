@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import inspect
+import json
+import time
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
@@ -23,6 +26,11 @@ class ApiError(RuntimeError):
 
 
 class ErmsApiClient:
+    _REFERENCE_RESOURCES = {
+        "classification-schemes", "org-units", "privileges", "profiles",
+        "roles", "security-levels",
+    }
+
     def __init__(self, base_url: str, *, transport: httpx.AsyncBaseTransport | None = None):
         self._transport = transport
         self._client = httpx.AsyncClient(
@@ -33,12 +41,26 @@ class ErmsApiClient:
         # A page can load dashboard cards and navigation counts concurrently.
         # Keep that burst comfortably below the API's default database pool size.
         self._request_slots = asyncio.Semaphore(4)
+        self._inflight_reads: dict[str, asyncio.Task[Any]] = {}
+        self._reference_cache: dict[str, dict[str, Any]] = {}
         self._session_token: str | None = None
         self._unauthorized_handler: Callable[[], Any] | None = None
 
     def set_session_token(self, token: str | None) -> None:
         """Keep authentication attached to this browser page's API client."""
+        if token != self._session_token:
+            self.clear_reference_cache()
         self._session_token = token
+
+    def clear_reference_cache(self) -> None:
+        """Discard identity-scoped reference rows after identity/data changes."""
+        self._reference_cache.clear()
+
+    def cancel_pending_reads(self) -> None:
+        """Stop reads belonging to a page transition the user abandoned."""
+        for task in tuple(self._inflight_reads.values()):
+            if not task.done():
+                task.cancel()
 
     def set_unauthorized_handler(self, handler: Callable[[], Any]) -> None:
         self._unauthorized_handler = handler
@@ -47,11 +69,57 @@ class ErmsApiClient:
         await self._client.aclose()
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        with_metadata = bool(kwargs.pop("_with_metadata", False))
         headers = dict(kwargs.pop("headers", {}))
         headers.setdefault("X-Event-Source", "web_ui")
         if self._session_token:
             headers.setdefault("Authorization", f"Bearer {self._session_token}")
         kwargs["headers"] = headers
+        normalized_method = method.upper()
+        if normalized_method not in {"GET", "HEAD"}:
+            # Reference lists are intentionally broad: any successful or failed
+            # mutation may affect labels, eligibility, status, or authorization.
+            self.clear_reference_cache()
+        if normalized_method in {"GET", "HEAD"}:
+            # Independent components often need the same reference data while a
+            # page is rendering. Share the in-flight HTTP operation, but return
+            # a private result because callers decorate response dictionaries.
+            request_key = json.dumps(
+                [normalized_method, path, kwargs, with_metadata],
+                sort_keys=True, default=str,
+                separators=(",", ":"),
+            )
+            task = self._inflight_reads.get(request_key)
+            if task is None:
+                task = asyncio.create_task(
+                    self._perform_request(
+                        normalized_method, path, kwargs,
+                        with_metadata=with_metadata,
+                    )
+                )
+                self._inflight_reads[request_key] = task
+                task.add_done_callback(
+                    lambda completed, key=request_key: self._finish_inflight_read(
+                        key, completed,
+                    )
+                )
+            return copy.deepcopy(await asyncio.shield(task))
+        return await self._perform_request(
+            normalized_method, path, kwargs, with_metadata=with_metadata,
+        )
+
+    def _finish_inflight_read(
+        self, request_key: str, task: asyncio.Task[Any],
+    ) -> None:
+        if self._inflight_reads.get(request_key) is task:
+            self._inflight_reads.pop(request_key, None)
+        if not task.cancelled():
+            task.exception()  # mark an unobserved failure as retrieved
+
+    async def _perform_request(
+        self, method: str, path: str, kwargs: dict[str, Any], *,
+        with_metadata: bool = False,
+    ) -> Any:
         try:
             async with self._request_slots:
                 response = await self._client.request(method, path, **kwargs)
@@ -71,10 +139,38 @@ class ErmsApiClient:
                 if inspect.isawaitable(result):
                     await result
             raise ApiError(response.status_code, detail)
-        if response.status_code == 204:
-            return None
-        content_type = response.headers.get("content-type", "")
-        return response.json() if "json" in content_type else response.content
+        if response.status_code in {204, 304}:
+            payload = None
+        else:
+            content_type = response.headers.get("content-type", "")
+            payload = response.json() if "json" in content_type else response.content
+        if with_metadata:
+            return {
+                "status_code": response.status_code,
+                "etag": response.headers.get("etag"),
+                "payload": payload,
+            }
+        return payload
+
+    async def _reference_get(
+        self, cache_key: str, path: str, *, params: dict[str, Any],
+    ) -> Any:
+        cached = self._reference_cache.get(cache_key)
+        if cached and time.monotonic() - cached["checked_at"] < 30:
+            return copy.deepcopy(cached["value"])
+        headers = {"If-None-Match": cached["etag"]} if cached and cached.get("etag") else {}
+        result = await self.request(
+            "GET", path, params=params, headers=headers, _with_metadata=True,
+        )
+        if result["status_code"] == 304 and cached:
+            cached["checked_at"] = time.monotonic()
+            return copy.deepcopy(cached["value"])
+        entry = {
+            "value": result["payload"], "etag": result.get("etag"),
+            "checked_at": time.monotonic(),
+        }
+        self._reference_cache[cache_key] = entry
+        return copy.deepcopy(entry["value"])
 
     async def login(self, email: str, password: str, *, user_agent: str | None = None) -> tuple[dict[str, Any], str]:
         async with httpx.AsyncClient(
@@ -97,6 +193,179 @@ class ErmsApiClient:
     async def me(self) -> dict[str, Any]:
         return await self.request("GET", "/api/v1/auth/me")
 
+    async def localization_bootstrap(self) -> dict[str, Any]:
+        return await self.request("GET", "/api/v1/i18n/bootstrap")
+
+    async def localization_catalogue(
+        self, language_tag: str, *, etag: str | None = None,
+    ) -> dict[str, Any]:
+        headers = {"If-None-Match": etag} if etag else {}
+        headers["X-Event-Source"] = "web_ui"
+        if self._session_token:
+            headers["Authorization"] = f"Bearer {self._session_token}"
+        try:
+            async with self._request_slots:
+                response = await self._client.get(
+                    f"/api/v1/i18n/catalogues/{language_tag}", headers=headers,
+                )
+        except RuntimeError as error:
+            if self._client.is_closed:
+                raise ApiError(503, "The browser session disconnected from the ERMS API") from error
+            raise
+        except httpx.HTTPError as error:
+            raise ApiError(503, "Cannot connect to the ERMS API") from error
+        if response.status_code == 304:
+            return {"not_modified": True, "etag": response.headers.get("etag") or etag}
+        if response.is_error:
+            try:
+                detail = response.json().get("detail", response.text)
+            except ValueError:
+                detail = response.text or response.reason_phrase
+            if response.status_code == 401 and self._unauthorized_handler:
+                result = self._unauthorized_handler()
+                if inspect.isawaitable(result):
+                    await result
+            raise ApiError(response.status_code, detail)
+        payload = response.json()
+        payload["etag"] = response.headers.get("etag")
+        payload["not_modified"] = False
+        return payload
+
+    async def localization_languages(self) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/admin/i18n/languages")
+
+    async def create_localization_language(
+        self, payload: dict[str, Any], reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", "/api/v1/admin/i18n/languages", json=payload,
+            headers={"X-Change-Reason": reason},
+        )
+
+    async def update_localization_language(
+        self, language_tag: str, payload: dict[str, Any], version: int, reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "PUT", f"/api/v1/admin/i18n/languages/{language_tag}", json=payload,
+            headers={"If-Match": str(version), "X-Change-Reason": reason},
+        )
+
+    async def localization_messages(self, **params: Any) -> dict[str, Any]:
+        # httpx serializes ``None`` query values as empty strings.  FastAPI
+        # correctly rejects an empty string for the optional boolean filter,
+        # so omit inactive filters instead of sending ``needs_attention=``.
+        return await self.request(
+            "GET",
+            "/api/v1/admin/i18n/messages",
+            params={key: value for key, value in params.items() if value is not None},
+        )
+
+    async def update_localization_translation(
+        self, message_key: str, language_tag: str, payload: dict[str, Any], version: int, reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "PUT", f"/api/v1/admin/i18n/messages/{message_key}/translations/{language_tag}",
+            json=payload, headers={"If-Match": str(version), "X-Change-Reason": reason},
+        )
+
+    async def publish_localization_translation(
+        self, message_key: str, language_tag: str, version: int, reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/admin/i18n/messages/{message_key}/translations/{language_tag}/publish",
+            headers={"If-Match": str(version), "X-Change-Reason": reason},
+        )
+
+    async def localization_generation_report(self, language_tag: str) -> dict[str, Any]:
+        return await self.request(
+            "GET", f"/api/v1/admin/i18n/generation-report/{language_tag}"
+        )
+
+    async def preview_bulk_localization_publication(
+        self, language_tag: str, context_group: str = "",
+    ) -> dict[str, Any]:
+        return await self.request(
+            "GET", f"/api/v1/admin/i18n/translations/{language_tag}/bulk-publication-preview",
+            params={"context_group": context_group} if context_group else None,
+        )
+
+    async def bulk_review_publish_localization(
+        self, language_tag: str, items: list[dict[str, Any]], reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/admin/i18n/translations/{language_tag}/bulk-review-publish",
+            json={"items": items}, headers={"X-Change-Reason": reason},
+        )
+
+    async def store_generated_localization_drafts(
+        self, language_tag: str, payload: dict[str, Any], reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/admin/i18n/generated-drafts/{language_tag}",
+            json=payload, headers={"X-Change-Reason": reason},
+        )
+
+    async def preview_localization_export(
+        self, language_tag: str, *, include_reviewed_drafts: bool = False,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "GET", f"/api/v1/admin/i18n/translations/{language_tag}/export-preview",
+            params={"include_reviewed_drafts": include_reviewed_drafts},
+        )
+
+    async def export_localization_artifact(
+        self, language_tag: str, *, include_reviewed_drafts: bool = False,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "GET", f"/api/v1/admin/i18n/translations/{language_tag}/export",
+            params={"include_reviewed_drafts": include_reviewed_drafts},
+        )
+
+    async def preview_localization_import(
+        self, language_tag: str, artifact: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/admin/i18n/translations/{language_tag}/import-preview",
+            json={"artifact": artifact},
+        )
+
+    async def import_localization_artifact(
+        self, language_tag: str, artifact: dict[str, Any], reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/admin/i18n/translations/{language_tag}/import",
+            json={"artifact": artifact}, headers={"X-Change-Reason": reason},
+        )
+
+    async def preferences(self) -> dict[str, Any]:
+        return await self.request("GET", "/api/v1/preferences")
+
+    async def update_preferences(
+        self, language_tag: str, working_timezone: str, version: int,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "PUT", "/api/v1/preferences",
+            json={"language_tag": language_tag, "working_timezone": working_timezone},
+            headers={"If-Match": str(version)},
+        )
+
+    async def entity_translation(
+        self, entity_type: str, entity_id: int, language_tag: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "GET", f"/api/v1/entity-translations/{entity_type}/{entity_id}/{language_tag}"
+        )
+
+    async def update_entity_translation(
+        self, entity_type: str, entity_id: int, language_tag: str,
+        payload: dict[str, Any], version: int, reason: str,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "PATCH", f"/api/v1/entity-translations/{entity_type}/{entity_id}/{language_tag}",
+            json=payload,
+            headers={"If-Match": str(version), "X-Change-Reason": reason},
+        )
+
     async def my_recent_activity(
         self, *, limit: int = 6, since: datetime | None = None,
     ) -> list[dict[str, Any]]:
@@ -106,7 +375,10 @@ class ErmsApiClient:
         return await self.request("GET", "/api/v1/auth/me/recent-activity", params=params)
 
     async def profile_references(self) -> list[dict[str, Any]]:
-        return await self.request("GET", "/api/v1/profiles/reference", params={"limit": 500})
+        cache_key = "profiles/reference?limit=500"
+        return await self._reference_get(
+            cache_key, "/api/v1/profiles/reference", params={"limit": 500},
+        )
 
     async def creation_role_options(
         self, parent_aggregation_id: int | None = None,
@@ -243,8 +515,12 @@ class ErmsApiClient:
         )
 
     async def list(self, resource: str, *, limit: int = 500, **filters: Any) -> list[dict[str, Any]]:
-        return await self.request(
-            "GET", f"/api/v1/{resource}", params={"limit": limit, **filters}
+        params = {"limit": limit, **filters}
+        if resource not in self._REFERENCE_RESOURCES:
+            return await self.request("GET", f"/api/v1/{resource}", params=params)
+        cache_key = json.dumps([resource, params], sort_keys=True, default=str)
+        return await self._reference_get(
+            cache_key, f"/api/v1/{resource}", params=params,
         )
 
     async def get(self, resource: str, entity_id: int) -> dict[str, Any]:
@@ -263,26 +539,41 @@ class ErmsApiClient:
             raise ValueError("favourites support only aggregations and records")
         await self.request("DELETE", f"/api/v1/favourites/{resource}/{entity_id}")
 
-    async def browse_schemes(self) -> list[dict[str, Any]]:
-        return await self.request("GET", "/api/v1/browse/classification-schemes")
+    async def browse_schemes(
+        self, query: str = "", *, limit: int = 25, offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        return await self.request(
+            "GET", "/api/v1/browse/classification-schemes",
+            params={"q": query, "limit": limit, "offset": offset},
+        )
 
-    async def organization_roots(self) -> list[dict[str, Any]]:
-        return await self.request("GET", "/api/v1/browse/organization/roots")
+    async def organization_roots(
+        self, *, limit: int = 25, offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        return await self.request(
+            "GET", "/api/v1/browse/organization/roots",
+            params={"limit": limit, "offset": offset},
+        )
 
     async def organization_children(
         self, org_unit_id: int, *, include_roles: bool = True,
+        limit: int = 25, unit_offset: int = 0, role_offset: int = 0,
     ) -> dict[str, list[dict[str, Any]]]:
         return await self.request(
             "GET", f"/api/v1/browse/organization/org-units/{org_unit_id}/children",
-            params={"include_roles": str(include_roles).lower()},
+            params={
+                "include_roles": str(include_roles).lower(), "limit": limit,
+                "unit_offset": unit_offset, "role_offset": role_offset,
+            },
         )
 
     async def organization_role_users(
         self, role_id: int, *, validity: str = "all",
+        limit: int = 25, offset: int = 0,
     ) -> list[dict[str, Any]]:
         return await self.request(
             "GET", f"/api/v1/browse/organization/roles/{role_id}/users",
-            params={"validity": validity},
+            params={"validity": validity, "limit": limit, "offset": offset},
         )
 
     async def organization_summary(self, kind: str, entity_id: int) -> dict[str, Any]:
@@ -520,8 +811,70 @@ class ErmsApiClient:
     async def event_history_filter_options(self) -> dict[str, list[str]]:
         return await self.request("GET", "/api/v1/event-history/filter-options")
 
-    async def search_request(self, resource: str, payload: dict[str, Any]) -> dict[str, Any]:
-        return await self.request("POST", f"/api/v1/{resource}/search", json=payload)
+    async def search_request(
+        self, resource: str, payload: dict[str, Any], **params: Any,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "POST", f"/api/v1/{resource}/search", json=payload,
+            params={key: value for key, value in params.items() if value is not None},
+        )
+
+    async def active_people(
+        self, query: str = "", *, limit: int = 25, offset: int = 0,
+    ) -> dict[str, Any]:
+        conditions: list[dict[str, Any]] = [
+            {"field": "status", "operator": "eq", "value": "active"},
+            {"field": "account_type", "operator": "eq", "value": "person"},
+        ]
+        term = query.strip()
+        if term:
+            conditions.append({"or": [
+                {"field": "name", "operator": "contains_ci", "value": term},
+                {"field": "email", "operator": "contains_ci", "value": term},
+                {"field": "external_id", "operator": "contains_ci", "value": term},
+            ]})
+        return await self.search_request("users", {
+            "where": {"and": conditions},
+            "sort": [{"field": "name", "direction": "asc"}],
+            "limit": limit,
+            "offset": offset,
+        })
+
+    async def relationship_page(
+        self, resource: str, search_fields: tuple[str, ...], query: str = "", *,
+        limit: int = 25, offset: int = 0,
+        filters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        conditions: list[dict[str, Any]] = [
+            {"field": field, "operator": "eq", "value": value}
+            for field, value in (filters or {}).items()
+            if value is not None
+        ]
+        term = query.strip()
+        if term:
+            conditions.append({"or": [
+                {"field": field, "operator": "contains_ci", "value": term}
+                for field in search_fields
+            ]})
+        payload: dict[str, Any] = {
+            "limit": limit,
+            "offset": offset,
+            "sort": [{"field": search_fields[0], "direction": "asc"}],
+        }
+        if conditions:
+            payload["where"] = {"and": conditions}
+        return await self.search_request(resource, payload)
+
+    async def administration_reference_page(
+        self, resource: str, *, query: str = "", sort: str = "name",
+        limit: int = 25, offset: int = 0,
+    ) -> dict[str, Any]:
+        if resource not in {"profiles", "security-levels"}:
+            raise ValueError("unsupported administration reference page")
+        return await self.request(
+            "GET", f"/api/v1/{resource}/page",
+            params={"q": query or None, "sort": sort, "limit": limit, "offset": offset},
+        )
 
     async def full_text_search(self, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.request("POST", "/api/v1/full-text-search", json=payload)
@@ -568,6 +921,14 @@ class ErmsApiClient:
         result = await self.search_request(resource, {"limit": 1, "offset": 0})
         return int(result["total"])
 
+    async def effective_aggregation_closure(
+        self, aggregation_id: int,
+    ) -> dict[str, Any] | None:
+        result = await self.request(
+            "GET", f"/api/v1/aggregations/{aggregation_id}/effective-closure",
+        )
+        return result.get("closure")
+
     async def dashboard_summary(
         self, *, recent_limit: int, recent_since: datetime,
     ) -> dict[str, Any]:
@@ -579,16 +940,15 @@ class ErmsApiClient:
             },
         )
 
-    async def dashboard_reviews(self, state: str) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        while True:
-            page = await self.request(
-                "GET", "/api/v1/dashboard/reviews",
-                params={"state": state, "limit": 500, "offset": len(rows)},
-            )
-            rows.extend(page)
-            if len(page) < 500:
-                return rows
+    async def dashboard_reviews(
+        self, state: str, *, limit: int = 25, offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        return await self.request(
+            "GET", "/api/v1/dashboard/reviews",
+            # Fetch one look-ahead row so the UI can enable Next without a
+            # separate count query or downloading every review.
+            params={"state": state, "limit": limit + 1, "offset": offset},
+        )
 
     async def search(
         self, resource: str, query: str, fields: tuple[str, ...],

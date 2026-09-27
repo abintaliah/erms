@@ -49,6 +49,28 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/014_rename_system_role_to_platform_role.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/015_restore_system_role_terminology.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/016_add_retention_schedule_foundation.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/017_add_search_subsystem_foundation.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/018_add_advanced_search_phase1.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/019_add_internationalization_foundation.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/020_add_ui_message_catalogue.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/021_add_multilingual_entity_metadata.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/022_harden_internationalized_search.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/023_add_multilingual_profile_metadata.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/024_grant_profile_metadata_to_system_administrator.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/025_allow_text_indexer_role_translations.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/026_allow_text_indexer_profile_translations.sql
 ```
 
 Migration 004 makes lifecycle timestamps authoritative. Organization units and
@@ -110,6 +132,34 @@ Migration 018 installs Advanced Search Phase 1 persistence: saved-search
 definitions, role and organizational-unit audiences, owner/concurrency/history
 controls, the saved-search privilege family, and the approved built-in profile
 grants.
+
+Migration 019 installs the approved internationalization Phase 1 foundation:
+the extensible language registry, per-user language and working-timezone
+preferences, audited optimistic concurrency, the reserved
+`localization.administer` privilege, and the original six entity metadata privileges.
+
+Migration 020 installs the Phase 2 contextual UI-message catalogue, draft and
+published translation state, review provenance, row-scoped optimistic
+concurrency, validation constraints, and immutable catalogue history. Checked-in
+English definitions and non-English source-copy queues are synchronized by the
+API startup process after the migration is applied.
+
+Migration 021 adds validated JSONB translation maps to the six approved
+multilingual administrative entities. It also adds optional canonical
+description fields to users and security levels while preserving all existing
+canonical name/title columns and relationships.
+
+Migration 022 installs trigram indexes used as bounded prefilters for
+translated metadata search. Search still verifies the exact field and enabled
+language after the indexed prefilter, preventing JSON keys or disabled-language
+values from becoming results.
+
+Migration 023 adds authorization Profiles as the seventh multilingual domain
+entity. It adds the validated and indexed `profiles.translations` map, the
+person-only `profile.modify_metadata` privilege, and that privilege's protected
+`ALL_PRIVS` membership. Migration 024 grants the same privilege to `SYS_ADMIN`
+by default. Existing profile codes, canonical names, privilege
+membership, role assignments, and built-in protections remain unchanged.
 
 ## Targeted data corrections
 

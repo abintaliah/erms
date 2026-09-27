@@ -94,6 +94,13 @@ Clients should prevent overlapping refreshes of this endpoint. A refresh
 requested while one is already in flight should reuse, await, or decline the
 existing request rather than start another concurrent dashboard load.
 
+The WebUI's navigation, caching, and non-destructive refresh behavior is
+normatively defined in the
+[WebUI performance contract](webui-performance.md#5-dashboard-navigation-and-refresh).
+Returning to the Dashboard must render the last page-session summary
+immediately and revalidate it in the background; it must not blank and rebuild
+the page while waiting for this endpoint.
+
 The Dashboard combines authorized entity totals with personal recent records
 activity. Aggregation and record totals follow the caller's resource visibility.
 Administrative totals are available only to callers with the corresponding
@@ -118,7 +125,16 @@ not issue additional API requests:
 - **Review urgency** appears beside the existing Overdue and Upcoming reminder
   lists. It divides the complete authorized review count between overdue items
   and items due within the configured warning window. The existing previews,
-  dates, empty states, and **View all** actions remain unchanged.
+  dates, empty states, and **View all** actions remain. A complete review list
+  is server-paginated at 25 visible rows. The client requests one additional
+  look-ahead row only to determine whether **Next** is available; it must not
+  download every authorized review before showing the first page.
+
+Hold creation and contributor management use the existing governed user-search
+endpoint. They request 25 active person accounts at a time, support searching
+by name, email, or external identifier, and retain already-selected identities
+while navigating result pages. These dialogs must not preload the complete user
+directory or cache it as stable reference data.
 - **Digital storage by organizational unit** is the final Dashboard section.
   It ranks eligible units by authorized digital-component storage, shows the
   largest five individually, and folds all remaining eligible units into one

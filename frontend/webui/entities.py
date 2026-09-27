@@ -66,7 +66,7 @@ ENTITIES = {
     "users": EntitySpec(
         "users", "Users", "user",
         (("_avatar", ""), ("name", "Name"), ("email", "Email"), ("account_type", "Account type"), ("status", "Status")),
-        (FieldSpec("name", "Name", required=True), FieldSpec("email", "Email"), FieldSpec("external_id", "External ID"), FieldSpec("account_type", "Account type", "account_type", True)),
+        (FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("email", "Email"), FieldSpec("external_id", "External ID"), FieldSpec("account_type", "Account type", "account_type", True)),
     ),
     "roles": EntitySpec(
         "roles", "Roles", "role",
@@ -76,7 +76,7 @@ ENTITIES = {
     "security-levels": EntitySpec(
         "security-levels", "Security levels", "security level",
         (("code", "Code"), ("name", "Name"), ("level_number", "Level"), ("prevents_disposition", "Prevents disposition")),
-        (FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("level_number", "Level number", "int", True), FieldSpec("prevents_disposition", "Prevents disposition", "bool")),
+        (FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("level_number", "Level number", "int", True), FieldSpec("prevents_disposition", "Prevents disposition", "bool")),
     ),
     "profiles": EntitySpec(
         "profiles", "Profiles", "profile",

@@ -45,6 +45,27 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         return "service_lease_scoped", "content.index.execute", None
     if path == "/api/v1/full-text-search":
         return "resource_scoped", "record.view", "record.view"
+    if path in {"/api/v1/preferences", "/api/v1/i18n/bootstrap"}:
+        return "authenticated_only", None, None
+    if path.startswith("/api/v1/i18n/catalogues/"):
+        return "authenticated_only", None, None
+    if path.startswith("/api/v1/admin/i18n/"):
+        return "globally_privileged", "localization.administer", None
+    if path.startswith("/api/v1/entity-translations/"):
+        entity_privileges = {
+            "classification-schemes": "classification_scheme.modify_metadata",
+            "classifications": "classification.modify_metadata",
+            "users": "user.modify_metadata",
+            "roles": "role.modify_metadata",
+            "org-units": "org_unit.modify_metadata",
+            "security-levels": "security_level.modify_metadata",
+            "profiles": "profile.modify_metadata",
+        }
+        entity_type = path.split("/")[4]
+        privilege = entity_privileges.get(entity_type)
+        if privilege is None:
+            raise ValueError(f"{method} {path} has no approved entity translation privilege")
+        return "globally_privileged", privilege, None
     if path.startswith("/api/v1/saved-searches"):
         if method == "POST" and path == "/api/v1/saved-searches":
             return "globally_privileged", "search.saved_search.save", None

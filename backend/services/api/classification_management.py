@@ -6,6 +6,12 @@ from psycopg import Connection
 from .concurrency import expected_version
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .database import get_connection
+from .entity_localization import (
+    localize_rows,
+    localize_search_result,
+    preferred_language,
+    sort_localized_rows,
+)
 from .schemas import (
     AggregationRetentionRuleCreate,
     AggregationRetentionRuleRead,
@@ -24,6 +30,7 @@ from .schemas import (
     SearchResponse,
 )
 from .search import search_rows
+from .http_cache import apply_collection_etag
 from .authorization_policy import require_audit_view, require_classifications_admin
 
 
@@ -51,6 +58,8 @@ def create_scheme(payload: ClassificationSchemeCreate, connection: Connection = 
 
 @router.get("/classification-schemes", response_model=list[ClassificationSchemeRead], tags=["classification schemes"])
 def list_schemes(
+    request: Request,
+    response: Response,
     eligible: bool | None = None,
     sort: Literal["created", "title", "code", "published_status"] = "created",
     direction: Literal["asc", "desc"] = "asc",
@@ -83,15 +92,27 @@ def list_schemes(
         f" ORDER BY {order_expressions[sort]} {order_direction}, "
         f"LOWER(title) {order_direction}, id {order_direction} LIMIT %s OFFSET %s"
     )
-    return list(connection.execute(
+    rows = list(connection.execute(
         query,
         (limit, offset),
     ).fetchall())
+    localized = localize_rows(rows, preferred_language(connection, request), "title")
+    result = sort_localized_rows(localized, "title") if sort == "title" else localized
+    return apply_collection_etag(request, response, result) or result
 
 
 @router.post("/classification-schemes/search", response_model=None, tags=["classification schemes"])
-def search_schemes(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
-    return search_rows(connection, "classification_schemes", payload, endpoint="/api/v1/classification-schemes/search")
+def search_schemes(
+    request: Request, payload: SearchRequest,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return localize_search_result(
+        search_rows(
+            connection, "classification_schemes", payload,
+            endpoint="/api/v1/classification-schemes/search",
+        ),
+        preferred_language(connection, request), "title",
+    )
 
 
 @router.get(
@@ -129,8 +150,8 @@ def classification_counts_by_scheme(
 
 
 @router.get("/classification-schemes/{scheme_id}", response_model=ClassificationSchemeRead, tags=["classification schemes"])
-def get_scheme(scheme_id: int, connection: Connection = Depends(get_connection, scope="function")):
-    return get_or_404(connection, "classification_schemes", scheme_id)
+def get_scheme(scheme_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
+    return localize_rows([get_or_404(connection, "classification_schemes", scheme_id)], preferred_language(connection, request), "title")[0]
 
 
 @router.patch("/classification-schemes/{scheme_id}", response_model=ClassificationSchemeRead, tags=["classification schemes"], dependencies=[Depends(require_classifications_admin)])
@@ -244,6 +265,7 @@ def create_classification(payload: ClassificationCreate, connection: Connection 
 
 @router.get("/classifications", response_model=list[ClassificationRead], tags=["classifications"])
 def list_classifications(
+    request: Request,
     classification_scheme_id: int | None = None,
     parent_classification_id: int | None = None,
     roots_only: bool = False,
@@ -264,14 +286,24 @@ def list_classifications(
                         "EXISTS (SELECT 1 FROM effective_classification_retention_rule(c.id))"))
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
     parameters.extend((limit, offset))
-    return list(connection.execute(
+    rows = list(connection.execute(
         f"SELECT c.* FROM classifications c{where} ORDER BY c.code, c.id LIMIT %s OFFSET %s", parameters
     ).fetchall())
+    return sort_localized_rows(localize_rows(rows, preferred_language(connection, request), "title"), "title")
 
 
 @router.post("/classifications/search", response_model=None, tags=["classifications"])
-def search_classifications(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
-    return search_rows(connection, "classifications", payload, endpoint="/api/v1/classifications/search")
+def search_classifications(
+    request: Request, payload: SearchRequest,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return localize_search_result(
+        search_rows(
+            connection, "classifications", payload,
+            endpoint="/api/v1/classifications/search",
+        ),
+        preferred_language(connection, request), "title",
+    )
 
 
 @router.get("/classifications/recent", response_model=list[ClassificationRead], tags=["classifications"])
@@ -293,12 +325,12 @@ def recent_classifications(
 
 
 @router.get("/classifications/{classification_id}", response_model=ClassificationRead, tags=["classifications"])
-def get_classification(classification_id: int, connection: Connection = Depends(get_connection, scope="function")):
-    return get_or_404(connection, "classifications", classification_id)
+def get_classification(classification_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
+    return localize_rows([get_or_404(connection, "classifications", classification_id)], preferred_language(connection, request), "title")[0]
 
 
 @router.get("/classifications/{classification_id}/path", response_model=list[ClassificationRead], tags=["classifications"])
-def classification_path(classification_id: int, connection: Connection = Depends(get_connection, scope="function")):
+def classification_path(classification_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
     rows = connection.execute(
         """WITH RECURSIVE lineage AS (
                SELECT c.*, 0 depth FROM classifications c WHERE id=%s
@@ -306,12 +338,12 @@ def classification_path(classification_id: int, connection: Connection = Depends
                JOIN lineage child ON p.id=child.parent_classification_id
            ) SELECT id, classification_scheme_id, parent_classification_id, code, title,
                     description, authority, scope_note, keywords, is_terminal,
-                    date_created, date_updated, date_deactivated, date_first_used, version
+                    date_created, date_updated, date_deactivated, date_first_used, version, translations
              FROM lineage ORDER BY depth DESC""", (classification_id,)
     ).fetchall()
     if not rows:
         raise HTTPException(status_code=404, detail="classification not found")
-    return list(rows)
+    return localize_rows(list(rows), preferred_language(connection, request), "title")
 
 
 @router.patch("/classifications/{classification_id}", response_model=ClassificationRead, tags=["classifications"], dependencies=[Depends(require_classifications_admin)])

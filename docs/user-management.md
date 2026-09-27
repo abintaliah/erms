@@ -19,6 +19,28 @@ Profiles are named collections of global privileges. Profiles and resource ACL
 entries are assigned to roles only. A user's effective access is derived through
 current assignments to effective roles.
 
+Profiles are also the seventh multilingual administrative entity under the
+internationalization specification. Their stable code remains untranslated;
+their name and description may have enabled-language values in the shared
+`translations` map. Editing these values requires `profile.modify_metadata`.
+That privilege is included by default in `ALL_PRIVS` and `SYS_ADMIN`.
+Profile selectors and references display the signed-in user's preferred value,
+with the canonical field—and for protected built-ins, the application catalogue
+label—used only as fallback.
+
+Built-in roles, including `text-indexer-service`, remain immutable through the
+ordinary role API. Administrators with `role.modify_metadata` may nevertheless
+open their metadata dialog in translation-only mode: canonical controls are
+disabled and Save writes only the selected locale's name/description through
+the entity-translation API. This supplies localized service-role metadata
+without making platform-owned role configuration mutable.
+
+The protected `TEXT_INDEXER_SERVICE` authorization profile follows the same
+translation-only rule under `profile.modify_metadata`. Its code, canonical
+name and description, system status, privilege membership, and other canonical
+state remain immutable; only locale-scoped translated name and description
+values may be changed.
+
 ## Users
 
 `users` contains:

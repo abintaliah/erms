@@ -33,6 +33,188 @@ def test_api_client_bounds_concurrent_page_requests():
     assert maximum_active == 4
 
 
+def test_api_client_coalesces_identical_concurrent_reads_and_isolates_results():
+    request_count = 0
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        await asyncio.sleep(0.01)
+        return httpx.Response(200, json={"items": [{"id": 7}]})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            first, second = await asyncio.gather(
+                client.request("GET", "/api/v1/reference", params={"limit": 500}),
+                client.request("GET", "/api/v1/reference", params={"limit": 500}),
+            )
+            first["items"][0]["id"] = 99
+            return first, second
+        finally:
+            await client.close()
+
+    first, second = asyncio.run(exercise())
+    assert request_count == 1
+    assert first["items"][0]["id"] == 99
+    assert second["items"][0]["id"] == 7
+
+
+def test_api_client_does_not_coalesce_mutations():
+    request_count = 0
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        await asyncio.sleep(0.01)
+        return httpx.Response(200, json={"ok": True})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await asyncio.gather(
+                client.request("POST", "/api/v1/actions", json={"value": 1}),
+                client.request("POST", "/api/v1/actions", json={"value": 1}),
+            )
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert request_count == 2
+
+
+def test_reference_lists_are_cached_revalidated_and_invalidated_by_mutation():
+    requests: list[tuple[str, str | None]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.headers.get("if-none-match")))
+        if request.method == "POST":
+            return httpx.Response(200, json={"ok": True})
+        if request.headers.get("if-none-match") == '"roles-1"':
+            return httpx.Response(304, headers={"ETag": '"roles-1"'})
+        return httpx.Response(
+            200, json=[{"id": 1, "name": "Custodian"}],
+            headers={"ETag": '"roles-1"'},
+        )
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            first = await client.list("roles")
+            second = await client.list("roles")
+            next(iter(client._reference_cache.values()))["checked_at"] = 0
+            revalidated = await client.list("roles")
+            await client.request("POST", "/api/v1/actions", json={"ok": True})
+            after_mutation = await client.list("roles")
+            return first, second, revalidated, after_mutation
+        finally:
+            await client.close()
+
+    values = asyncio.run(exercise())
+    assert all(value == [{"id": 1, "name": "Custodian"}] for value in values)
+    assert requests == [
+        ("GET", None),
+        ("GET", '"roles-1"'),
+        ("POST", None),
+        ("GET", None),
+    ]
+
+
+def test_navigation_can_cancel_an_abandoned_read():
+    started = asyncio.Event()
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        started.set()
+        await asyncio.sleep(10)
+        return httpx.Response(200, json={"late": True})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            pending = asyncio.create_task(client.request("GET", "/api/v1/slow"))
+            await started.wait()
+            client.cancel_pending_reads()
+            with pytest.raises(asyncio.CancelledError):
+                await pending
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+
+
+def test_dashboard_reviews_fetches_one_small_page_with_lookahead():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json=[])
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.dashboard_reviews("overdue", limit=25, offset=50)
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise()) == []
+    assert captured == {
+        "path": "/api/v1/dashboard/reviews",
+        "params": {"state": "overdue", "limit": "26", "offset": "50"},
+    }
+
+
+def test_active_people_uses_filtered_server_side_search_page():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"items": [], "total": 0})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.active_people("yahya", limit=25, offset=25)
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise()) == {"items": [], "total": 0}
+    assert captured["path"] == "/api/v1/users/search"
+    assert captured["body"]["limit"] == 25
+    assert captured["body"]["offset"] == 25
+    assert {condition.get("field") for condition in captured["body"]["where"]["and"][:2]} == {
+        "status", "account_type",
+    }
+    assert len(captured["body"]["where"]["and"][2]["or"]) == 3
+
+
+def test_localization_catalogue_uses_etag_and_handles_not_modified():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["if_none_match"] = request.headers.get("if-none-match")
+        captured["authorization"] = request.headers.get("authorization")
+        return httpx.Response(304, headers={"ETag": '"ar-17"'})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        client.set_session_token("session-token")
+        try:
+            return await client.localization_catalogue("ar", etag='"ar-16"')
+        finally:
+            await client.close()
+
+    result = asyncio.run(exercise())
+    assert captured == {
+        "path": "/api/v1/i18n/catalogues/ar",
+        "if_none_match": '"ar-16"',
+        "authorization": "Bearer session-token",
+    }
+    assert result == {"not_modified": True, "etag": '"ar-17"'}
+
+
 def test_search_builds_controlled_or_grammar():
     captured = {}
 
@@ -105,6 +287,35 @@ def test_saved_search_update_sends_version_and_reason_headers():
     assert captured == {
         "method": "PUT", "path": "/api/v1/saved-searches/8",
         "version": "3", "reason": "Refine criteria",
+    }
+
+
+def test_entity_translation_update_is_locale_scoped_and_versioned():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(
+            method=request.method,
+            path=request.url.path,
+            body=json.loads(request.content),
+            version=request.headers.get("if-match"),
+            reason=request.headers.get("x-change-reason"),
+        )
+        return httpx.Response(200, json={"entity_id": 7, "version": 4})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.update_entity_translation(
+                "roles", 7, "ar", {"name": "مدير"}, 3, "Add Arabic name"
+            )
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured == {
+        "method": "PATCH", "path": "/api/v1/entity-translations/roles/7/ar",
+        "body": {"name": "مدير"}, "version": "3", "reason": "Add Arabic name",
     }
 
 
@@ -754,3 +965,52 @@ def test_security_operations_client_routes_are_read_only():
         ("GET", "/api/v1/security-operations/summary", {"hours": "48"}),
         ("GET", "/api/v1/security-operations/reconciliation", {}),
     ]
+
+
+def test_relationship_page_is_bounded_and_searches_on_the_server():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["payload"] = __import__("json").loads(request.content)
+        return httpx.Response(200, json={"items": [], "total": 0, "limit": 25, "offset": 50})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.relationship_page(
+                "roles", ("code", "name"), "records", limit=25, offset=50,
+                filters={"status": "active"},
+            )
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured["path"] == "/api/v1/roles/search"
+    assert captured["payload"]["limit"] == 25
+    assert captured["payload"]["offset"] == 50
+    assert captured["payload"]["where"] == {"and": [
+        {"field": "status", "operator": "eq", "value": "active"},
+        {"or": [
+            {"field": "code", "operator": "contains_ci", "value": "records"},
+            {"field": "name", "operator": "contains_ci", "value": "records"},
+        ]},
+    ]}
+
+
+def test_effective_closure_uses_narrow_resource_endpoint():
+    seen = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        return httpx.Response(200, json={"closure": {"id": 9, "date_closed": "2026-01-01"}})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            return await client.effective_aggregation_closure(42)
+        finally:
+            await client.close()
+
+    assert asyncio.run(exercise())["id"] == 9
+    assert seen == ["/api/v1/aggregations/42/effective-closure"]
