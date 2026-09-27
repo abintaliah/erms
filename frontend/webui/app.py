@@ -2747,6 +2747,30 @@ def index(q: str = "") -> None:
             white-space: nowrap; border-radius: 8px; background: rgba(255,255,255,.62);
             padding: 7px 9px; color: #536b7f; font-size: .75rem;
         }
+        .aggregation-browser-retention-source {
+            display: flex; align-items: center; gap: 6px; color: #4f46e5;
+            font-size: .75rem; font-weight: 650;
+        }
+        .aggregation-browser-retention-facts {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px; width: 100%;
+        }
+        .aggregation-browser-retention-fact {
+            min-width: 0; padding: 10px; border: 1px solid #dbe8f2;
+            border-radius: 10px; background: #f8fbfd; text-align: start;
+        }
+        .aggregation-browser-retention-fact-icon {
+            width: 26px; height: 26px; flex: 0 0 26px; border-radius: 999px;
+            background: #e2f2fc; color: var(--erms-blue);
+        }
+        .aggregation-browser-retention-fact-label {
+            color: #7b899a; font-size: .64rem; font-weight: 750;
+            letter-spacing: .035em; line-height: 1.2;
+        }
+        .aggregation-browser-retention-fact-value {
+            color: #243247; font-size: .9rem; font-weight: 700;
+            line-height: 1.35; overflow-wrap: anywhere;
+        }
         .record-command-layout {
             display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(330px, .72fr);
             align-items: start; gap: 12px;
@@ -2807,6 +2831,7 @@ def index(q: str = "") -> None:
             .hold-held-item-filter-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 600px) {
+            .aggregation-browser-retention-facts { grid-template-columns: minmax(0, 1fr); }
             .hold-summary-facts { grid-template-columns: minmax(0, 1fr); }
             .hold-held-item-filter-primary,
             .hold-held-item-filter-secondary { grid-template-columns: minmax(0, 1fr); }
@@ -12730,14 +12755,40 @@ def index(q: str = "") -> None:
                             ui.label(render_message("webui.render_detail_content.label.loading_retention_information_0c61089c"))
                     elif retention:
                         source = render_message("webui.render_detail_content.text.local_aggregation_override_7185c566") if retention.get("rule_source") == "aggregation" else render_message("webui.render_detail_content.text.inherited_from_classification_1708e778")
-                        ui.label(source).classes("text-xs font-medium text-indigo-700")
-                        with ui.row().classes("w-full gap-4 text-sm"):
-                            ui.label(render_message("webui.render_detail_content.label.current_current_period_years_years_cfce25a3", current_period_years=retention['current_period_years']))
-                            ui.label(render_message("webui.render_detail_content.label.intermediate_intermediate_period_years_yea_9677da95", intermediate_period_years=retention['intermediate_period_years']))
-                        ui.badge(
-                            localized_disposition_value(retention["final_disposition"]),
-                            color="indigo",
-                        ).props("outline")
+                        with ui.row().classes("aggregation-browser-retention-source w-full no-wrap"):
+                            ui.icon("account_tree", size="15px")
+                            ui.label(source)
+                        with ui.element("div").classes("aggregation-browser-retention-facts"):
+                            retention_facts = (
+                                (
+                                    "schedule",
+                                    entity_metadata_label("Current retention (years)"),
+                                    render_message("common.duration.years", count=retention["current_period_years"]),
+                                ),
+                                (
+                                    "inventory_2",
+                                    entity_metadata_label("Intermediate retention (years)"),
+                                    render_message("common.duration.years", count=retention["intermediate_period_years"]),
+                                ),
+                                (
+                                    "outlined_flag",
+                                    entity_metadata_label("Final disposition"),
+                                    localized_disposition_value(retention["final_disposition"]),
+                                ),
+                            )
+                            for fact_icon, fact_label, fact_value in retention_facts:
+                                with ui.column().classes("aggregation-browser-retention-fact gap-2"):
+                                    with ui.row().classes("items-center gap-2 no-wrap"):
+                                        with ui.element("span").classes(
+                                            "aggregation-browser-retention-fact-icon flex items-center justify-center"
+                                        ):
+                                            ui.icon(fact_icon, size="16px")
+                                        ui.label(fact_label).classes(
+                                            "aggregation-browser-retention-fact-label"
+                                        )
+                                    ui.label(fact_value).classes(
+                                        "aggregation-browser-retention-fact-value"
+                                    )
                     else:
                         ui.label(render_message("webui.render_detail_content.label.no_effective_retention_rule_is_available_4d243b93")).classes("text-sm text-slate-400")
 

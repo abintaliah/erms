@@ -18915,22 +18915,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.render_detail_content.label.current_current_period_years_years_cfce25a3",
-    "context_group": "webui.render_detail_content",
-    "default_text": "Current: {current_period_years} years",
-    "semantic_meaning": "Interpolated interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate the complete message naturally and preserve every named placeholder exactly.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {
-      "current_period_years": "text"
-    },
-    "rendered_example": "Current: <current_period_years> years",
-    "is_html": false
-  },
-  {
     "message_key": "webui.render_detail_content.label.effective_retention_rule_d14a3565",
     "context_group": "webui.render_detail_content",
     "default_text": "Effective retention rule",
@@ -18942,22 +18926,6 @@
     "grammatical_role": "interface text",
     "parameter_schema": {},
     "rendered_example": "Effective retention rule",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.label.intermediate_intermediate_period_years_yea_9677da95",
-    "context_group": "webui.render_detail_content",
-    "default_text": "Intermediate: {intermediate_period_years} years",
-    "semantic_meaning": "Interpolated interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate the complete message naturally and preserve every named placeholder exactly.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {
-      "intermediate_period_years": "text"
-    },
-    "rendered_example": "Intermediate: <intermediate_period_years> years",
     "is_html": false
   },
   {

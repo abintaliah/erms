@@ -947,6 +947,10 @@ def test_detail_pages_use_light_blue_metadata_and_retention_visual_system():
     assert 'f"{effective_rule[\\"current_period_years\\"]} years"' in source
     assert 'localized_disposition_value(final_disposition)' in source
     assert 'localized_disposition_value(retention["final_disposition"])' in source
+    assert '"aggregation-browser-retention-facts"' in source
+    assert '"aggregation-browser-retention-fact gap-2"' in source
+    assert '.aggregation-browser-retention-facts {' in source
+    assert 'grid-template-columns: repeat(3, minmax(0, 1fr))' in source
     assert 'entity_metadata_label("Intermediate retention (years)")' in source
     assert 'entity_metadata_label("Final disposition")' in source
     assert 'ui.label(str(len(children))).classes("text-2xl font-bold text-primary")' not in source
