@@ -28,7 +28,10 @@ def test_service_credential_lifecycle_and_one_time_secret(client):
         json={"name": "Replacement indexer", "expires_at": expires},
     )
     assert rotated.status_code == 201, rotated.text
-    rows = client.get(f"/api/v1/text-indexers/{account['id']}").json()["credentials"]
+    rows = client.get(
+        f"/api/v1/text-indexers/{account['id']}/credentials",
+        params={"history": "all", "limit": 20, "offset": 0},
+    ).json()["items"]
     assert {row["status"] for row in rows} == {"active", "revoked"}
     revoked = client.post(
         f"/api/v1/text-indexers/{account['id']}/credentials/{rotated.json()['id']}/revoke"

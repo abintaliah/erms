@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .concurrency import expected_version
 from .database import get_connection
+from .entity_localization import localize_rows, preferred_language
 from .resource_authorization import require_resource_operation
 from .authorization_policy import require_global_privilege
 
@@ -93,6 +94,7 @@ class UserReference(BaseModel):
     name: str
     email: str | None = None
     status: str
+    localized: dict[str, Any] | None = None
 
 
 class HoldCapabilities(BaseModel):
@@ -240,21 +242,23 @@ def _state(row: dict) -> str:
     return "active"
 
 
-def _serialize_hold(connection: Connection, row: dict) -> dict:
+def _serialize_hold(connection: Connection, row: dict, language_tag: str = "en") -> dict:
     result = dict(row)
     result.pop("server_time", None)
     result["state"] = _state(row)
     result["is_effective"] = result["state"] == "active"
     result["contributors"] = list(connection.execute(
-        """SELECT user_account.id,user_account.name,user_account.email,user_account.status
+        """SELECT user_account.id,user_account.name,user_account.email,user_account.status,user_account.translations
              FROM hold_contributors contributor JOIN users user_account ON user_account.id=contributor.user_id
             WHERE contributor.hold_id=%s ORDER BY user_account.name,user_account.id""", (row["id"],),
     ).fetchall())
+    localize_rows(result["contributors"], language_tag, "name")
     result["owner"] = connection.execute(
-        "SELECT id,name,email,status FROM users WHERE id=%s", (row["owner_user_id"],),
+        "SELECT id,name,email,status,translations FROM users WHERE id=%s", (row["owner_user_id"],),
     ).fetchone()
     if result["owner"] is None:
         raise RuntimeError(f"hold {row['id']} references a missing owner")
+    localize_rows([result["owner"]], language_tag, "name")
     result["direct_held_item_count"] = connection.execute(
         """SELECT (SELECT count(*) FROM hold_aggregation_assignments assignment
                     WHERE assignment.hold_id=%s AND current_user_can_view_aggregation(assignment.aggregation_id))
@@ -280,22 +284,25 @@ def _serialize_hold(connection: Connection, row: dict) -> dict:
     return result
 
 
-def _serialize_holds(connection: Connection, rows: list[dict]) -> list[dict]:
+def _serialize_holds(connection: Connection, rows: list[dict], language_tag: str = "en") -> list[dict]:
     """Serialize a page with set-based related-data reads (no per-row queries)."""
     if not rows:
         return []
     hold_ids=[row["id"] for row in rows]
     owner_ids=list({row["owner_user_id"] for row in rows})
     owners={row["id"]:row for row in connection.execute(
-        "SELECT id,name,email,status FROM users WHERE id=ANY(%s::bigint[])",(owner_ids,),
+        "SELECT id,name,email,status,translations FROM users WHERE id=ANY(%s::bigint[])",(owner_ids,),
     ).fetchall()}
+    localize_rows(list(owners.values()), language_tag, "name")
     contributors:dict[int,list[dict]]={hold_id:[] for hold_id in hold_ids}
     for contributor in connection.execute(
-        """SELECT c.hold_id,u.id,u.name,u.email,u.status FROM hold_contributors c
+        """SELECT c.hold_id,u.id,u.name,u.email,u.status,u.translations FROM hold_contributors c
              JOIN users u ON u.id=c.user_id WHERE c.hold_id=ANY(%s::bigint[])
              ORDER BY c.hold_id,u.name,u.id""",(hold_ids,),
     ).fetchall():
         hold_id=contributor.pop("hold_id"); contributors[hold_id].append(contributor)
+    for hold_contributors in contributors.values():
+        localize_rows(hold_contributors, language_tag, "name")
     counts={row["hold_id"]:row["value"] for row in connection.execute(
         """SELECT requested.hold_id,
                   (SELECT count(*) FROM hold_aggregation_assignments a WHERE a.hold_id=requested.hold_id AND current_user_can_view_aggregation(a.aggregation_id))
@@ -322,6 +329,7 @@ def _serialize_holds(connection: Connection, rows: list[dict]) -> list[dict]:
 
 @router.get("/holds", response_model=HoldPage)
 def list_holds(
+    request: Request,
     q: str | None = None, state_filter: Literal["scheduled", "active", "expired"] | None = Query(None, alias="state"),
     owner_user_id: int | None = None, contributor_user_id: int | None = None,
     valid_from_gte: datetime | None = None, valid_from_lt: datetime | None = None,
@@ -361,12 +369,12 @@ def list_holds(
               ORDER BY {order} {'DESC' if descending else 'ASC'},hold.id LIMIT %s OFFSET %s""",
         (*parameters,limit,offset),
     ).fetchall()
-    items = _serialize_holds(connection, list(rows))
+    items = _serialize_holds(connection, list(rows), preferred_language(connection, request))
     return {"items": items, "total": total, "limit": limit, "offset": offset, "returned": len(items)}
 
 
 @router.post("/holds", status_code=201, dependencies=[Depends(require_holds_administer)], response_model=HoldResponse)
-def create_hold(payload: HoldCreate, connection: Connection = Depends(get_connection, scope="function")):
+def create_hold(payload: HoldCreate, request: Request, connection: Connection = Depends(get_connection, scope="function")):
     _require_admin(connection)
     connection.execute(
         "SELECT set_config('app.hold_contributor_ids',%s,true)",
@@ -381,26 +389,27 @@ def create_hold(payload: HoldCreate, connection: Connection = Depends(get_connec
     ).fetchone()
     for user_id in payload.contributor_user_ids:
         connection.execute("INSERT INTO hold_contributors(hold_id,user_id) VALUES (%s,%s)", (row["id"], user_id))
-    return _serialize_hold(connection, row)
+    return _serialize_hold(connection, row, preferred_language(connection, request))
 
 
 @router.get("/holds/people", response_model=list[UserReference])
-def list_hold_people(connection: Connection = Depends(get_connection, scope="function")):
-    return list(connection.execute(
-        f"""SELECT DISTINCT person.id,person.name,person.email,person.status
+def list_hold_people(request: Request, connection: Connection = Depends(get_connection, scope="function")):
+    rows = list(connection.execute(
+        f"""SELECT DISTINCT person.id,person.name,person.email,person.status,person.translations
               FROM users person
              WHERE EXISTS(SELECT 1 FROM holds hold WHERE hold.owner_user_id=person.id AND {_visibility_sql()})
                 OR EXISTS(SELECT 1 FROM hold_contributors c JOIN holds hold ON hold.id=c.hold_id
                             WHERE c.user_id=person.id AND {_visibility_sql()})
              ORDER BY person.name,person.id"""
     ).fetchall())
+    return localize_rows(rows, preferred_language(connection, request), "name")
 
 
 @router.get("/holds/{hold_id}", response_model=HoldResponse)
-def get_hold(hold_id: int, connection: Connection = Depends(get_connection, scope="function")):
+def get_hold(hold_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
     row = _hold(connection, hold_id)
     row["server_time"] = connection.execute("SELECT CURRENT_TIMESTAMP value").fetchone()["value"]
-    return _serialize_hold(connection, row)
+    return _serialize_hold(connection, row, preferred_language(connection, request))
 
 
 @router.patch("/holds/{hold_id}", dependencies=[Depends(require_holds_administer)], response_model=HoldResponse)
@@ -411,13 +420,13 @@ def update_hold(hold_id: int, payload: HoldUpdate, request: Request, version: in
         raise HTTPException(status_code=409, detail={"code": "stale_version"})
     values = payload.model_dump(exclude_unset=True)
     if not values:
-        existing["server_time"] = datetime.now(existing["valid_from"].tzinfo); return _serialize_hold(connection, existing)
+        existing["server_time"] = datetime.now(existing["valid_from"].tzinfo); return _serialize_hold(connection, existing, preferred_language(connection, request))
     if "code" in values: values["code"] = values["code"].strip()
     if "name" in values: values["name"] = values["name"].strip()
     assignments = ",".join(f"{key}=%s" for key in values)
     row = connection.execute(f"UPDATE holds SET {assignments} WHERE id=%s AND version=%s RETURNING *,CURRENT_TIMESTAMP server_time", (*values.values(),hold_id,version)).fetchone()
     if row is None: raise HTTPException(status_code=409, detail={"code": "stale_version"})
-    return _serialize_hold(connection, row)
+    return _serialize_hold(connection, row, preferred_language(connection, request))
 
 
 @router.delete("/holds/{hold_id}", status_code=204, dependencies=[Depends(require_holds_administer)])
@@ -436,9 +445,10 @@ def delete_hold(hold_id: int, request: Request, version: int = Depends(expected_
 
 
 @router.get("/holds/{hold_id}/contributors")
-def list_contributors(hold_id: int, connection: Connection = Depends(get_connection, scope="function")):
+def list_contributors(hold_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
     _hold(connection, hold_id)
-    return list(connection.execute("SELECT user_account.id,user_account.name,user_account.email,user_account.status FROM hold_contributors c JOIN users user_account ON user_account.id=c.user_id WHERE c.hold_id=%s ORDER BY user_account.name,user_account.id", (hold_id,)).fetchall())
+    rows = list(connection.execute("SELECT user_account.id,user_account.name,user_account.email,user_account.status,user_account.translations FROM hold_contributors c JOIN users user_account ON user_account.id=c.user_id WHERE c.hold_id=%s ORDER BY user_account.name,user_account.id", (hold_id,)).fetchall())
+    return localize_rows(rows, preferred_language(connection, request), "name")
 
 
 @router.put("/holds/{hold_id}/contributors", dependencies=[Depends(require_holds_administer)])
@@ -460,7 +470,7 @@ def replace_contributors(hold_id: int, payload: ContributorReplace, request: Req
                               "removed_user_ids": sorted(set(old_ids) - set(payload.user_ids)),
                               "before_user_ids": old_ids, "after_user_ids": sorted(payload.user_ids)}), reason),
     )
-    return _serialize_hold(connection,row)
+    return _serialize_hold(connection,row,preferred_language(connection, request))
 
 
 def _resource_visible(connection: Connection, resource_type: str, resource_id: int) -> dict:

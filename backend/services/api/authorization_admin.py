@@ -15,6 +15,8 @@ from .schemas import (
     EventHistoryRead, PrivilegeRead, ProfileCreate, ProfilePrivilegeReplace, ProfileRead,
     ProfileUpdate, RoleProfileAssignment, RoleRead,
 )
+from .http_cache import apply_collection_etag
+from .entity_localization import localize_rows, preferred_language, sort_localized_rows
 
 
 router = APIRouter(
@@ -145,10 +147,11 @@ def assert_continuity(connection: Connection, before_admins: int, before_custodi
 
 
 @router.get("/privileges", response_model=list[PrivilegeRead])
-def list_privileges(limit: int=Query(500,ge=1,le=500), offset: int=Query(0,ge=0), connection: Connection=Depends(get_connection,scope="function")):
-    return list(connection.execute(
+def list_privileges(request: Request, response: Response, limit: int=Query(500,ge=1,le=500), offset: int=Query(0,ge=0), connection: Connection=Depends(get_connection,scope="function")):
+    rows = list(connection.execute(
         "SELECT * FROM privileges ORDER BY category,code LIMIT %s OFFSET %s", (limit,offset)
     ).fetchall())
+    return apply_collection_etag(request, response, rows) or rows
 
 
 @router.get("/privileges/{privilege_id}", response_model=PrivilegeRead)
@@ -162,19 +165,54 @@ def create_profile(payload: ProfileCreate, connection: Connection=Depends(get_co
 
 
 @router.get("/profiles", response_model=list[ProfileRead])
-def list_profiles(limit: int=Query(500,ge=1,le=500), offset: int=Query(0,ge=0), connection: Connection=Depends(get_connection,scope="function")):
-    return list(connection.execute(
+def list_profiles(request: Request, response: Response, limit: int=Query(500,ge=1,le=500), offset: int=Query(0,ge=0), connection: Connection=Depends(get_connection,scope="function")):
+    rows = list(connection.execute(
         """SELECT profile.*,
                   (SELECT count(*) FROM profile_privileges membership WHERE membership.profile_id=profile.id) privilege_count,
                   (SELECT count(*) FROM roles role WHERE role.profile_id=profile.id) role_count
              FROM profiles profile ORDER BY profile.name,profile.id LIMIT %s OFFSET %s""",
         (limit,offset),
     ).fetchall())
+    localized = sort_localized_rows(
+        localize_rows(rows, preferred_language(connection, request), "name"), "name"
+    )
+    return apply_collection_etag(request, response, localized) or localized
+
+
+@router.get("/profiles/page")
+def page_profiles(
+    request: Request,
+    q: str | None = None,
+    sort: str = Query("name", pattern="^(name|code|is_system)$"),
+    limit: int = Query(25, ge=1, le=50), offset: int = Query(0, ge=0),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    predicate = "WHERE (%s::text IS NULL OR profile.code ILIKE '%%'||%s||'%%' OR profile.name ILIKE '%%'||%s||'%%' OR profile.description ILIKE '%%'||%s||'%%' OR profile.translations::text ILIKE '%%'||%s||'%%')"
+    parameters = (q, q, q, q, q)
+    total = connection.execute(
+        f"SELECT count(*) value FROM profiles profile {predicate}", parameters,
+    ).fetchone()["value"]
+    order = {"name": "lower(profile.name)", "code": "lower(profile.code)", "is_system": "profile.is_system"}[sort]
+    items = list(connection.execute(
+        f"""SELECT profile.*,
+                    (SELECT count(*) FROM profile_privileges membership WHERE membership.profile_id=profile.id) privilege_count,
+                    (SELECT count(*) FROM roles role WHERE role.profile_id=profile.id) role_count
+               FROM profiles profile {predicate}
+              ORDER BY {order}, profile.id LIMIT %s OFFSET %s""",
+        (*parameters, limit, offset),
+    ).fetchall())
+    localized = sort_localized_rows(
+        localize_rows(items, preferred_language(connection, request), "name"), "name"
+    )
+    return {"items": localized, "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/profiles/{profile_id}", response_model=ProfileRead)
-def get_profile(profile_id: int, connection: Connection=Depends(get_connection,scope="function")):
-    return get_or_404(connection,"profiles",profile_id)
+def get_profile(profile_id: int, request: Request, connection: Connection=Depends(get_connection,scope="function")):
+    return localize_rows(
+        [get_or_404(connection,"profiles",profile_id)],
+        preferred_language(connection, request), "name",
+    )[0]
 
 
 @router.get(
@@ -196,6 +234,9 @@ def get_profile_history(
 
 @router.patch("/profiles/{profile_id}", response_model=ProfileRead)
 def update_profile(profile_id:int,payload:ProfileUpdate,request:Request,version:int=Depends(expected_version),connection:Connection=Depends(get_connection,scope="function")):
+    profile=get_or_404(connection,"profiles",profile_id)
+    if profile["code"]=="TEXT_INDEXER_SERVICE":
+        raise HTTPException(status_code=409,detail="TEXT_INDEXER_SERVICE profile is protected")
     _reason(request)
     return update_row(connection,"profiles",profile_id,payload.model_dump(exclude_unset=True),version)
 

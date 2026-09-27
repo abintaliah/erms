@@ -14,6 +14,7 @@ from .authorization_policy import (
 )
 from .authorization_admin import CUSTODY_PRIVILEGE_CODES
 from .database import get_connection
+from .entity_localization import localized_projection, preferred_language
 from .resource_acls import _effective_aggregation, _effective_record, _grant_rows
 from .schemas import AccessExplanationRead, ExplainableUserRead, GovernanceCustodyRead
 
@@ -322,16 +323,25 @@ def explainable_users(connection: Connection = Depends(get_connection, scope="fu
 
 
 @router.get("/governance-custody", response_model=GovernanceCustodyRead, dependencies=[Depends(require_authorization_admin)])
-def governance_custody(connection: Connection = Depends(get_connection, scope="function")):
+def governance_custody(
+    request: Request,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    language_tag = preferred_language(connection, request)
     levels = list(connection.execute(
-        "SELECT id,code,name,level_number FROM security_levels ORDER BY level_number"
+        "SELECT id,code,name,translations,level_number FROM security_levels ORDER BY level_number"
     ).fetchall())
+    for level in levels:
+        level["name"] = localized_projection(level, language_tag, "name")["name"]
+        level.pop("translations", None)
     highest_level = levels[-1] if levels else None
     role_rows = list(connection.execute(
-        """SELECT role.id,role.code,role.name,role.status,role.profile_id,
+        """SELECT role.id,role.code,role.name,role.translations AS role_translations,
+                  role.status,role.profile_id,
                   profile.code AS profile_code,profile.name AS profile_name,
                   level.id AS security_level_id,level.code AS security_level_code,
-                  level.name AS security_level_name,level.level_number,
+                  level.name AS security_level_name,
+                  level.translations AS security_level_translations,level.level_number,
                   role_effectively_active(role.id) AS effective
            FROM roles role
            JOIN profiles profile ON profile.id=role.profile_id
@@ -349,9 +359,11 @@ def governance_custody(connection: Connection = Depends(get_connection, scope="f
 
     assignment_rows = list(connection.execute(
         """SELECT assignment.id,assignment.user_id,account.name AS user_name,
+                  account.translations AS user_translations,
                   account.email AS user_email,account.status AS user_status,
                   account.account_type,
                   assignment.role_id,role.code AS role_code,role.name AS role_name,
+                  role.translations AS role_translations,
                   assignment.valid_from,assignment.valid_until,
                   role_effectively_active(role.id) AS role_effective,
                   (assignment.valid_from<=CURRENT_TIMESTAMP
@@ -369,6 +381,19 @@ def governance_custody(connection: Connection = Depends(get_connection, scope="f
     qualifying_role_ids: set[int] = set()
     for raw_role in role_rows:
         role = dict(raw_role)
+        role["name"] = localized_projection(
+            {"name": role["name"], "translations": role.pop("role_translations", {})},
+            language_tag,
+            "name",
+        )["name"]
+        role["security_level_name"] = localized_projection(
+            {
+                "name": role["security_level_name"],
+                "translations": role.pop("security_level_translations", {}),
+            },
+            language_tag,
+            "name",
+        )["name"]
         supplied = profile_privileges.get(role["profile_id"], set())
         missing = sorted(required_privileges - supplied)
         role["is_highest_clearance"] = bool(
@@ -398,6 +423,22 @@ def governance_custody(connection: Connection = Depends(get_connection, scope="f
     assignments: list[dict] = []
     for raw_assignment in assignment_rows:
         assignment = dict(raw_assignment)
+        assignment["user_name"] = localized_projection(
+            {
+                "name": assignment["user_name"],
+                "translations": assignment.pop("user_translations", {}),
+            },
+            language_tag,
+            "name",
+        )["name"]
+        assignment["role_name"] = localized_projection(
+            {
+                "name": assignment["role_name"],
+                "translations": assignment.pop("role_translations", {}),
+            },
+            language_tag,
+            "name",
+        )["name"]
         reasons: list[str] = []
         if assignment["account_type"] != "person":
             reasons.append("service_account")

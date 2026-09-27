@@ -18,6 +18,7 @@ NAVIGATION_PRIVILEGES = {
     "profiles": "authorization.administer",
     "governance-custody": "authorization.administer",
     "security-operations": "audit.view",
+    "translations": "localization.administer",
 }
 
 

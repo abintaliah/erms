@@ -19,6 +19,21 @@ def clean_database(client: TestClient):
     password = "Temporary-Test-Password-123!"
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
         connection.execute("TRUNCATE saved_searches, user_favourite_records, user_favourite_aggregations, user_classification_selections, aggregation_retention_rules, classification_retention_rules, classifications, classification_schemes, login_sessions, user_credentials, user_role_assignments, roles, users, org_units, record_draft_components, record_drafts, digital_components, records, aggregations RESTART IDENTITY CASCADE")
+        # Resetting the now-complete UI catalogue for every test is fixture
+        # setup, not a governed user change. Suppress per-row audit events here
+        # to avoid generating thousands of throwaway WAL records per test.
+        connection.execute("ALTER TABLE ui_message_translations DISABLE TRIGGER USER")
+        connection.execute("TRUNCATE ui_message_translations")
+        connection.execute("SELECT set_config('app.change_reason','Reset localization test catalogue',true)")
+        connection.execute("DELETE FROM supported_languages WHERE lower(language_tag) NOT IN ('en','ar')")
+        connection.execute("UPDATE supported_languages SET catalogue_revision=1")
+        connection.execute(
+            """INSERT INTO ui_message_translations(message_key,language_tag,translated_text,status,origin)
+               SELECT definition.message_key,language.language_tag,definition.default_text,'draft','source_copy'
+                 FROM ui_message_definitions definition CROSS JOIN supported_languages language
+                WHERE lower(language.language_tag)<>'en'"""
+        )
+        connection.execute("ALTER TABLE ui_message_translations ENABLE TRIGGER USER")
         connection.execute("ALTER TABLE event_history DISABLE TRIGGER USER")
         # Security Levels are canonical seeded catalogue rows and are not
         # truncated between tests. Preserve their matching immutable baseline

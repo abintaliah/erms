@@ -183,8 +183,10 @@ def test_temporal_role_assignment_and_navigation(
 
     user_roles = client.get(f"/api/v1/users/{user['id']}/roles")
     role_users = client.get(f"/api/v1/roles/{role['id']}/users")
-    assert [item["id"] for item in user_roles.json()] == [assignment["id"]]
-    assert [item["id"] for item in role_users.json()] == [assignment["id"]]
+    assert [item["id"] for item in user_roles.json()["items"]] == [assignment["id"]]
+    assert [item["id"] for item in role_users.json()["items"]] == [assignment["id"]]
+    assert user_roles.json()["items"][0]["counterpart"]["id"] == role["id"]
+    assert role_users.json()["items"][0]["counterpart"]["id"] == user["id"]
 
     invalid_period = client.patch(
         f"/api/v1/user-role-assignments/{assignment['id']}",
@@ -296,7 +298,7 @@ def test_org_unit_and_role_lifecycle_controls_effective_assignments(
     )
     assert inactive_role.status_code == 200
     assert client.get(f"/api/v1/users/{user['id']}").json()["status"] == "active"
-    assert client.get(f"/api/v1/users/{user['id']}/roles").json()[0]["id"] == assignment.json()["id"]
+    assert client.get(f"/api/v1/users/{user['id']}/roles").json()["items"][0]["id"] == assignment.json()["id"]
 
     reactivated_role = client.post(
         f"/api/v1/roles/{child_role['id']}/activate",

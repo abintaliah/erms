@@ -1,13 +1,14 @@
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from psycopg import Connection
 
 from .authentication import Principal, principal_from_request
 from .database import get_connection
 from .schemas import DashboardReviewItem, DashboardSummaryRead
 from .config import integer_environment
+from .entity_localization import localized_projection, preferred_language
 
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
@@ -43,6 +44,7 @@ DASHBOARD_REVIEW_PREVIEW_LIMIT = integer_environment("DASHBOARD_REVIEW_PREVIEW_L
 
 @router.get("/summary", response_model=DashboardSummaryRead)
 def dashboard_summary(
+    request: Request,
     recent_limit: int = Query(7, ge=1, le=50),
     recent_since: datetime | None = None,
     principal: Principal = Depends(principal_from_request),
@@ -182,7 +184,7 @@ def dashboard_summary(
 
     ownership_counts = list(connection.execute(
         """WITH eligible_units AS (
-               SELECT DISTINCT unit.id,unit.code,unit.name
+               SELECT DISTINCT unit.id,unit.code,unit.name,unit.translations
                FROM user_role_assignments assignment
                JOIN roles role ON role.id=assignment.role_id
                JOIN org_units unit ON unit.id=role.org_unit_id
@@ -217,7 +219,7 @@ def dashboard_summary(
                 GROUP BY record.owning_org_unit_id
            )
            SELECT unit.id AS org_unit_id,unit.code AS org_unit_code,
-                  unit.name AS org_unit_name,
+                  unit.name AS org_unit_name,unit.translations,
                   coalesce(aggregation_metrics.aggregation_count,0) AS aggregation_count,
                   coalesce(aggregation_metrics.open_aggregation_count,0) AS open_aggregation_count,
                   coalesce(aggregation_metrics.closed_aggregation_count,0) AS closed_aggregation_count,
@@ -233,6 +235,16 @@ def dashboard_summary(
         LEFT JOIN component_metrics ON component_metrics.org_unit_id=unit.id
             ORDER BY unit.name COLLATE "C",unit.id"""
     ).fetchall())
+    dashboard_language = preferred_language(connection, request)
+    for owner_count in ownership_counts:
+        owner_count["name"] = owner_count["org_unit_name"]
+        localized = localized_projection(owner_count, dashboard_language, "name")
+        owner_count["org_unit_name"] = localized["name"]
+        owner_count.pop("name", None)
+        owner_count.pop("translations", None)
+    ownership_counts.sort(key=lambda item: (
+        str(item["org_unit_name"] or "").casefold(), item["org_unit_id"]
+    ))
 
     favourite_aggregations = list(connection.execute(
         """SELECT aggregation.id,aggregation.aggregation_number,aggregation.title,

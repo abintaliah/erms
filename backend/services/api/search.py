@@ -143,6 +143,7 @@ SEARCH_FIELDS: dict[str, dict[str, SearchField]] = {
         "id": INTEGER,
         "version": INTEGER,
         "name": TEXT,
+        "description": NULLABLE_TEXT,
         "email": NULLABLE_TEXT,
         "external_id": NULLABLE_TEXT,
         "account_type": TEXT,
@@ -371,7 +372,41 @@ def _compile_expression(
                 table_alias=component_alias,
                 column_name=component_field[1],
             )
-        return _compile_comparison(expression, fields)
+        comparison, parameters = _compile_comparison(expression, fields)
+        multilingual_fields = {
+            "classification_schemes": {"title", "description"},
+            "classifications": {"title", "description"},
+            "users": {"name", "description"},
+            "roles": {"name", "description"},
+            "org_units": {"name", "description"},
+            "security_levels": {"name", "description"},
+        }
+        if (
+            expression.field in multilingual_fields.get(resource, set())
+            and expression.operator in TEXT_OPERATORS | {"eq"}
+        ):
+            raw_value = _coerce_value(expression.field, fields[expression.field], expression.value)
+            value = _wildcard_like(raw_value) if expression.operator == "matches_ci" else _escape_like(raw_value)
+            if expression.operator == "contains_ci":
+                value = f"%{value}%"
+            elif expression.operator == "starts_with_ci":
+                value = f"{value}%"
+            elif expression.operator == "ends_with_ci":
+                value = f"%{value}"
+            translated = sql.SQL(
+                "(resource.translations::text ILIKE %s ESCAPE '\\' AND "
+                "EXISTS (SELECT 1 "
+                "FROM jsonb_each(COALESCE(resource.translations,'{{}}'::jsonb)) translation "
+                "JOIN supported_languages search_language "
+                "ON search_language.language_tag=translation.key AND search_language.is_enabled "
+                "WHERE translation.value->>{} ILIKE %s ESCAPE '\\'))"
+            ).format(sql.Literal(expression.field))
+            # The first predicate is a conservative indexed prefilter. The
+            # second preserves field and enabled-language semantics.
+            return sql.SQL("(({}) OR ({}))").format(comparison, translated), [
+                *parameters, value, value,
+            ]
+        return comparison, parameters
 
     if expression.full_text is not None:
         condition_counter[0] += 1
@@ -660,6 +695,8 @@ def search_rows(
     table: str,
     request: SearchRequest,
     *, endpoint: str | None = None,
+    include_system_roles: bool = False,
+    localized_sort_language: str | None = None,
 ) -> dict[str, Any]:
     if _full_text_leaves(request.where) and not boolean_environment("FULL_TEXT_SEARCH_ENABLED", True):
         raise HTTPException(status_code=503, detail={
@@ -674,7 +711,7 @@ def search_rows(
             "EXISTS (SELECT 1 FROM records visible_record WHERE visible_record.id=resource.record_id "
             "AND current_user_can_list_record_components(visible_record.id))"
         ),
-        "roles": sql.SQL("NOT is_system"),
+        "roles": None if include_system_roles else sql.SQL("NOT is_system"),
     }.get(table)
     clauses: list[sql.Composable] = []
     parameters: list[Any] = []
@@ -721,8 +758,32 @@ def search_rows(
     total = connection.execute(count_query, parameters).fetchone()["total"]
 
     relevance,relevance_parameters=_relevance_expression(table,positive_leaves)
+    language_candidates = []
+    if localized_sort_language:
+        language_candidates.append(localized_sort_language)
+        if "-" in localized_sort_language:
+            language_candidates.append(localized_sort_language.split("-", 1)[0])
+
+    def sort_expression(field: str) -> sql.Composable:
+        if field == "_relevance":
+            return relevance
+        canonical = sql.SQL("resource.{}").format(sql.Identifier(field))
+        if field != "name" or not language_candidates or table not in {
+            "org_units", "roles", "users",
+        }:
+            return canonical
+        translated_candidates = [
+            sql.SQL("NULLIF(resource.translations -> {} ->> {}, '')").format(
+                sql.Literal(language_tag), sql.Literal(field),
+            )
+            for language_tag in language_candidates
+        ]
+        return sql.SQL("lower(COALESCE({}, {}))").format(
+            sql.SQL(", ").join(translated_candidates), canonical,
+        )
+
     order_clause = sql.SQL(", ").join(
-        sql.SQL("{} {}").format(relevance if field == "_relevance" else sql.SQL("resource.{}").format(sql.Identifier(field)), sql.SQL(direction.upper()))
+        sql.SQL("{} {}").format(sort_expression(field), sql.SQL(direction.upper()))
         for field, direction in sort_fields
     )
     result_query = sql.SQL("SELECT resource.*,({})::double precision AS _fts_relevance FROM {} resource{} ORDER BY {} LIMIT %s OFFSET %s").format(

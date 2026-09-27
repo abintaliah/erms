@@ -8,6 +8,34 @@ migrations have been installed.
 Every event-history row produced by a canonical seed uses source `seeding`.
 The source `migration` is reserved exclusively for genuine database upgrades.
 
+## Generated Arabic UI-translation drafts
+
+Apply the approved Phase 6 Arabic draft artifact explicitly with:
+
+```bash
+PYTHONPATH=. backend/services/api/.venv/bin/python \
+  database/seeds/004_seed_generated_arabic_ui_translations.py \
+  --database-url "$DATABASE_URL"
+```
+
+The utility accepts `--database-url` and otherwise falls back to `DATABASE_URL`.
+It synchronizes the application-owned message
+definitions, validates every generated translation, and replaces only untouched
+Arabic `source_copy` rows. It is idempotent: later runs protect generated,
+manual, imported, reviewed, and published values. It reports stored, protected,
+and failed counts and exits unsuccessfully if any artifact entry fails. The API
+does not invoke this seed during startup.
+
+The seed program is deliberately independent of individual translation keys.
+During future Agentic-AI WebUI development, the agent updates the authoritative
+English catalogue and `frontend/webui/i18n/messages.ar.generated.json` in the
+same code change: adding Arabic drafts for new keys, regenerating materially
+changed entries, and removing entries for safely removed definitions. It also
+refreshes provenance and hashes and runs completeness, stale-key, placeholder,
+terminology, and Arabic-quality checks. Operators rerun this unchanged utility
+to apply newly eligible drafts; it never silently overwrites existing generated
+or administrator-managed database values.
+
 The canonical classification-scheme seeds are:
 
 - `002_seed_ewa_functional_classification_scheme.sql`, formerly introduced by

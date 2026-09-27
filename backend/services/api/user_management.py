@@ -10,6 +10,12 @@ from psycopg import Connection, sql
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .concurrency import expected_version
 from .database import get_connection
+from .entity_localization import (
+    localize_rows,
+    localize_search_result,
+    preferred_language,
+    sort_localized_rows,
+)
 from .schemas import (
     EventHistoryRead,
     DeletionPreflightRead,
@@ -61,6 +67,7 @@ from .text_indexing_maintenance import (
     reconcile as reconcile_text_indexing,
     retry_failed as retry_failed_text_indexing,
 )
+from .http_cache import apply_collection_etag
 
 
 router = APIRouter(prefix="/api/v1")
@@ -353,12 +360,14 @@ def _history(connection: Connection, entity_type: str, entity_id: int):
 
 @router.get("/profiles/reference", response_model=list[ProfileReferenceRead], tags=["profiles"])
 def list_profile_references(
+    request: Request,
+    response: Response,
     limit: int = Query(default=500, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     """Profile identity and unrestricted-profile warning state for role selectors."""
-    return list(connection.execute(
+    rows = list(connection.execute(
         """SELECT profile.*,
                   ((SELECT count(*) FROM profile_privileges membership
                      WHERE membership.profile_id=profile.id)
@@ -368,6 +377,10 @@ def list_profile_references(
             ORDER BY profile.name,profile.id LIMIT %s OFFSET %s""",
         (limit, offset),
     ).fetchall())
+    localized = sort_localized_rows(
+        localize_rows(rows, preferred_language(connection, request), "name"), "name"
+    )
+    return apply_collection_etag(request, response, localized) or localized
 
 
 @router.post("/org-units", response_model=OrgUnitRead, status_code=201, tags=["org units"], dependencies=[Depends(require_organization_admin)])
@@ -377,29 +390,44 @@ def create_org_unit(payload: OrgUnitCreate, connection: Connection = Depends(get
 
 @router.get("/org-units", response_model=list[OrgUnitRead], tags=["org units"])
 def list_org_units(
+    request: Request,
+    response: Response,
     parent_org_unit_id: int | None = None,
     unit_status: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return list_rows(
+    rows = list_rows(
         connection,
         "org_units",
         limit=limit,
         offset=offset,
         filters={"parent_org_unit_id": parent_org_unit_id, "status": unit_status},
     )
+    localized = sort_localized_rows(localize_rows(rows, preferred_language(connection, request), "name"), "name")
+    return apply_collection_etag(request, response, localized) or localized
 
 
 @router.post("/org-units/search", response_model=None, tags=["org units"])
-def search_org_units(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
-    return search_rows(connection, "org_units", payload, endpoint="/api/v1/org-units/search")
+def search_org_units(
+    request: Request, payload: SearchRequest,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    language_tag = preferred_language(connection, request)
+    return localize_search_result(
+        search_rows(
+            connection, "org_units", payload,
+            endpoint="/api/v1/org-units/search",
+            localized_sort_language=language_tag,
+        ),
+        language_tag, "name",
+    )
 
 
 @router.get("/org-units/{org_unit_id}", response_model=OrgUnitRead, tags=["org units"])
-def get_org_unit(org_unit_id: int, connection: Connection = Depends(get_connection, scope="function")):
-    return get_or_404(connection, "org_units", org_unit_id)
+def get_org_unit(org_unit_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
+    return localize_rows([get_or_404(connection, "org_units", org_unit_id)], preferred_language(connection, request), "name")[0]
 
 
 @router.get("/org-units/{org_unit_id}/deletion-preflight", response_model=DeletionPreflightRead, tags=["org units"], dependencies=[Depends(require_organization_admin)])
@@ -631,28 +659,40 @@ def create_user(payload: UserCreate, connection: Connection = Depends(get_connec
 
 @router.get("/users", response_model=list[UserRead], tags=["users"])
 def list_users(
+    request: Request,
     user_status: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return list_rows(
+    rows = list_rows(
         connection,
         "users",
         limit=limit,
         offset=offset,
         filters={"status": user_status},
     )
+    return sort_localized_rows(localize_rows(rows, preferred_language(connection, request), "name"), "name")
 
 
 @router.post("/users/search", response_model=None, tags=["users"])
-def search_users(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
-    return search_rows(connection, "users", payload, endpoint="/api/v1/users/search")
+def search_users(
+    request: Request, payload: SearchRequest,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    language_tag = preferred_language(connection, request)
+    return localize_search_result(
+        search_rows(
+            connection, "users", payload, endpoint="/api/v1/users/search",
+            localized_sort_language=language_tag,
+        ),
+        language_tag, "name",
+    )
 
 
 @router.get("/users/{user_id}", response_model=UserRead, tags=["users"])
-def get_user(user_id: int, connection: Connection = Depends(get_connection, scope="function")):
-    return get_or_404(connection, "users", user_id)
+def get_user(user_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
+    return localize_rows([get_or_404(connection, "users", user_id)], preferred_language(connection, request), "name")[0]
 
 
 @router.get(
@@ -819,6 +859,8 @@ def create_role(payload: RoleCreate, connection: Connection = Depends(get_connec
 
 @router.get("/roles", response_model=list[RoleRead], tags=["roles"])
 def list_roles(
+    request: Request,
+    response: Response,
     org_unit_id: int | None = None,
     supervisor_role_id: int | None = None,
     role_status: str | None = Query(default=None, alias="status"),
@@ -834,23 +876,36 @@ def list_roles(
     }
     if not include_system:
         filters["is_system"] = False
-    return list_rows(
+    rows = list_rows(
         connection,
         "roles",
         limit=limit,
         offset=offset,
         filters=filters,
     )
+    localized = sort_localized_rows(localize_rows(rows, preferred_language(connection, request), "name"), "name")
+    return apply_collection_etag(request, response, localized) or localized
 
 
 @router.post("/roles/search", response_model=None, tags=["roles"])
-def search_roles(payload: SearchRequest, connection: Connection = Depends(get_connection, scope="function")):
-    return search_rows(connection, "roles", payload, endpoint="/api/v1/roles/search")
+def search_roles(
+    request: Request, payload: SearchRequest, include_system: bool = False,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    language_tag = preferred_language(connection, request)
+    return localize_search_result(
+        search_rows(
+            connection, "roles", payload, endpoint="/api/v1/roles/search",
+            include_system_roles=include_system,
+            localized_sort_language=language_tag,
+        ),
+        language_tag, "name",
+    )
 
 
 @router.get("/roles/{role_id}", response_model=RoleRead, tags=["roles"])
-def get_role(role_id: int, connection: Connection = Depends(get_connection, scope="function")):
-    return get_or_404(connection, "roles", role_id)
+def get_role(role_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
+    return localize_rows([get_or_404(connection, "roles", role_id)], preferred_language(connection, request), "name")[0]
 
 
 @router.get("/roles/{role_id}/deletion-preflight", response_model=DeletionPreflightRead, tags=["roles"], dependencies=[Depends(require_organization_admin)])
@@ -1081,33 +1136,81 @@ def get_assignment_history(
 
 @router.get(
     "/users/{user_id}/roles",
-    response_model=list[UserRoleAssignmentRead],
     tags=["user role assignments"],
     dependencies=[Depends(require_identity_users_admin)],
 )
-def get_user_roles(user_id: int, connection: Connection = Depends(get_connection, scope="function")):
+def get_user_roles(
+    user_id: int, request: Request, q: str = Query("", max_length=120),
+    limit: int = Query(25, ge=1, le=50), offset: int = Query(0, ge=0),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
     get_or_404(connection, "users", user_id)
-    return list_rows(
-        connection,
-        "user_role_assignments",
-        limit=500,
-        offset=0,
-        filters={"user_id": user_id},
-    )
+    language = preferred_language(connection, request)
+    term = q.strip()
+    params = (user_id, term, term, term, language, term)
+    where = """WHERE assignment.user_id=%s
+      AND (%s='' OR role.code ILIKE '%%'||%s||'%%' OR role.name ILIKE '%%'||%s||'%%'
+           OR COALESCE(role.translations->%s->>'name','') ILIKE '%%'||%s||'%%')"""
+    total = connection.execute(
+        f"SELECT count(*) AS value FROM user_role_assignments assignment JOIN roles role ON role.id=assignment.role_id {where}", params,
+    ).fetchone()["value"]
+    rows = list(connection.execute(
+        f"""SELECT assignment.*, role.code AS counterpart_code, role.name AS counterpart_name,
+                    role.description AS counterpart_description, role.status AS counterpart_status,
+                    role.translations AS counterpart_translations
+               FROM user_role_assignments assignment JOIN roles role ON role.id=assignment.role_id {where}
+              ORDER BY lower(COALESCE(NULLIF(role.translations->%s->>'name',''),role.name)),assignment.id
+              LIMIT %s OFFSET %s""", (*params, language, limit, offset),
+    ).fetchall())
+    for row in rows:
+        localized = localize_rows([{
+            "name": row["counterpart_name"], "description": row["counterpart_description"],
+            "translations": row["counterpart_translations"],
+        }], language, "name")[0]["localized"]
+        row["counterpart"] = {
+            "id": row["role_id"], "code": row["counterpart_code"],
+            "name": localized["name"], "description": localized["description"],
+            "status": row["counterpart_status"],
+        }
+    return {"items": rows, "total": total, "limit": limit, "offset": offset, "returned": len(rows)}
 
 
 @router.get(
     "/roles/{role_id}/users",
-    response_model=list[UserRoleAssignmentRead],
     tags=["user role assignments"],
     dependencies=[Depends(require_organization_admin)],
 )
-def get_role_users(role_id: int, connection: Connection = Depends(get_connection, scope="function")):
+def get_role_users(
+    role_id: int, request: Request, q: str = Query("", max_length=120),
+    limit: int = Query(25, ge=1, le=50), offset: int = Query(0, ge=0),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
     get_or_404(connection, "roles", role_id)
-    return list_rows(
-        connection,
-        "user_role_assignments",
-        limit=500,
-        offset=0,
-        filters={"role_id": role_id},
-    )
+    language = preferred_language(connection, request)
+    term = q.strip()
+    params = (role_id, term, term, term, term, language, term)
+    where = """WHERE assignment.role_id=%s
+      AND (%s='' OR user_row.name ILIKE '%%'||%s||'%%' OR user_row.email ILIKE '%%'||%s||'%%'
+           OR user_row.external_id ILIKE '%%'||%s||'%%'
+           OR COALESCE(user_row.translations->%s->>'name','') ILIKE '%%'||%s||'%%')"""
+    total = connection.execute(
+        f"SELECT count(*) AS value FROM user_role_assignments assignment JOIN users user_row ON user_row.id=assignment.user_id {where}", params,
+    ).fetchone()["value"]
+    rows = list(connection.execute(
+        f"""SELECT assignment.*, user_row.name AS counterpart_name, user_row.email AS counterpart_email,
+                    user_row.external_id AS counterpart_external_id, user_row.account_type AS counterpart_account_type,
+                    user_row.status AS counterpart_status, user_row.translations AS counterpart_translations
+               FROM user_role_assignments assignment JOIN users user_row ON user_row.id=assignment.user_id {where}
+              ORDER BY lower(COALESCE(NULLIF(user_row.translations->%s->>'name',''),user_row.name)),assignment.id
+              LIMIT %s OFFSET %s""", (*params, language, limit, offset),
+    ).fetchall())
+    for row in rows:
+        localized = localize_rows([{
+            "name": row["counterpart_name"], "translations": row["counterpart_translations"],
+        }], language, "name")[0]["localized"]
+        row["counterpart"] = {
+            "id": row["user_id"], "name": localized["name"], "email": row["counterpart_email"],
+            "external_id": row["counterpart_external_id"], "account_type": row["counterpart_account_type"],
+            "status": row["counterpart_status"],
+        }
+    return {"items": rows, "total": total, "limit": limit, "offset": offset, "returned": len(rows)}

@@ -16,11 +16,23 @@ readonly POSTGRES_DB="erms_test"
 readonly LIFECYCLE_MIGRATION_DB="erms_lifecycle_migration_test_$$"
 readonly HOLDS_MIGRATION_DB="erms_holds_migration_test_$$"
 readonly ADVANCED_SEARCH_MIGRATION_DB="erms_advanced_search_migration_test_$$"
+readonly I18N_MIGRATION_DB="erms_i18n_migration_test_$$"
+readonly I18N_CATALOGUE_MIGRATION_DB="erms_i18n_catalogue_migration_test_$$"
+readonly I18N_ENTITY_MIGRATION_DB="erms_i18n_entity_migration_test_$$"
+readonly I18N_HARDENING_MIGRATION_DB="erms_i18n_hardening_migration_test_$$"
 readonly PRE_HOLDS_SCHEMA="$(mktemp "${TMPDIR:-/tmp}/erms-pre-holds-schema.XXXXXX.sql")"
 readonly PRE_ADVANCED_SEARCH_SCHEMA="$(mktemp "${TMPDIR:-/tmp}/erms-pre-advanced-search-schema.XXXXXX.sql")"
+readonly PRE_I18N_SCHEMA="$(mktemp "${TMPDIR:-/tmp}/erms-pre-i18n-schema.XXXXXX.sql")"
+readonly PRE_I18N_CATALOGUE_SCHEMA="$(mktemp "${TMPDIR:-/tmp}/erms-pre-i18n-catalogue-schema.XXXXXX.sql")"
+readonly PRE_I18N_ENTITY_SCHEMA="$(mktemp "${TMPDIR:-/tmp}/erms-pre-i18n-entity-schema.XXXXXX.sql")"
+readonly PRE_I18N_HARDENING_SCHEMA="$(mktemp "${TMPDIR:-/tmp}/erms-pre-i18n-hardening-schema.XXXXXX.sql")"
 LIFECYCLE_MIGRATION_DB_CREATED=false
 HOLDS_MIGRATION_DB_CREATED=false
 ADVANCED_SEARCH_MIGRATION_DB_CREATED=false
+I18N_MIGRATION_DB_CREATED=false
+I18N_CATALOGUE_MIGRATION_DB_CREATED=false
+I18N_ENTITY_MIGRATION_DB_CREATED=false
+I18N_HARDENING_MIGRATION_DB_CREATED=false
 
 cleanup() {
     local exit_code=$?
@@ -46,7 +58,29 @@ cleanup() {
             exit_code=1
         fi
     fi
-    rm -f "${PRE_HOLDS_SCHEMA}" "${PRE_ADVANCED_SEARCH_SCHEMA}"
+    if [[ "${I18N_MIGRATION_DB_CREATED}" == true ]]; then
+        if ! docker exec "${CONTAINER_NAME}" dropdb --force --if-exists \
+            --username "${POSTGRES_USER}" "${I18N_MIGRATION_DB}" >/dev/null; then
+            echo "Failed to drop disposable database ${I18N_MIGRATION_DB}" >&2
+            exit_code=1
+        fi
+    fi
+    if [[ "${I18N_CATALOGUE_MIGRATION_DB_CREATED}" == true ]]; then
+        if ! docker exec "${CONTAINER_NAME}" dropdb --force --if-exists --username "${POSTGRES_USER}" "${I18N_CATALOGUE_MIGRATION_DB}" >/dev/null; then
+            echo "Failed to drop disposable database ${I18N_CATALOGUE_MIGRATION_DB}" >&2; exit_code=1
+        fi
+    fi
+    if [[ "${I18N_ENTITY_MIGRATION_DB_CREATED}" == true ]]; then
+        if ! docker exec "${CONTAINER_NAME}" dropdb --force --if-exists --username "${POSTGRES_USER}" "${I18N_ENTITY_MIGRATION_DB}" >/dev/null; then
+            echo "Failed to drop disposable database ${I18N_ENTITY_MIGRATION_DB}" >&2; exit_code=1
+        fi
+    fi
+    if [[ "${I18N_HARDENING_MIGRATION_DB_CREATED}" == true ]]; then
+        if ! docker exec "${CONTAINER_NAME}" dropdb --force --if-exists --username "${POSTGRES_USER}" "${I18N_HARDENING_MIGRATION_DB}" >/dev/null; then
+            echo "Failed to drop disposable database ${I18N_HARDENING_MIGRATION_DB}" >&2; exit_code=1
+        fi
+    fi
+    rm -f "${PRE_HOLDS_SCHEMA}" "${PRE_ADVANCED_SEARCH_SCHEMA}" "${PRE_I18N_SCHEMA}" "${PRE_I18N_CATALOGUE_SCHEMA}" "${PRE_I18N_ENTITY_SCHEMA}" "${PRE_I18N_HARDENING_SCHEMA}"
     docker rm --force "${CONTAINER_NAME}" >/dev/null 2>&1 || true
     exit "${exit_code}"
 }
@@ -72,7 +106,7 @@ docker run \
     --detach \
     --rm \
     --name "${CONTAINER_NAME}" \
-    --tmpfs /var/lib/postgresql/data:rw,noexec,nosuid,size=1g \
+    --tmpfs /var/lib/postgresql:rw,noexec,nosuid,size=1g \
     --env POSTGRES_USER="${POSTGRES_USER}" \
     --env POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
     --env POSTGRES_DB="${POSTGRES_DB}" \
@@ -99,6 +133,10 @@ readonly DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.
 readonly LIFECYCLE_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${LIFECYCLE_MIGRATION_DB}"
 readonly HOLDS_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${HOLDS_MIGRATION_DB}"
 readonly ADVANCED_SEARCH_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${ADVANCED_SEARCH_MIGRATION_DB}"
+readonly I18N_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${I18N_MIGRATION_DB}"
+readonly I18N_CATALOGUE_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${I18N_CATALOGUE_MIGRATION_DB}"
+readonly I18N_ENTITY_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${I18N_ENTITY_MIGRATION_DB}"
+readonly I18N_HARDENING_MIGRATION_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${HOST_PORT}/${I18N_HARDENING_MIGRATION_DB}"
 
 docker exec "${CONTAINER_NAME}" createdb \
     --username "${POSTGRES_USER}" "${LIFECYCLE_MIGRATION_DB}"
@@ -158,6 +196,62 @@ docker exec "${CONTAINER_NAME}" dropdb --force \
     --username "${POSTGRES_USER}" "${ADVANCED_SEARCH_MIGRATION_DB}"
 ADVANCED_SEARCH_MIGRATION_DB_CREATED=false
 
+awk '
+    /^-- Internationalization and user preferences Phase 1 begins\.$/ { skipping=1; next }
+    skipping && /^COMMIT;$/ { print; skipping=0; next }
+    !skipping { print }
+' "${DATABASE_DIR}/schema.sql" >"${PRE_I18N_SCHEMA}"
+docker exec "${CONTAINER_NAME}" createdb --username "${POSTGRES_USER}" "${I18N_MIGRATION_DB}"
+I18N_MIGRATION_DB_CREATED=true
+psql "${I18N_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --file "${PRE_I18N_SCHEMA}"
+psql "${I18N_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/migrations/019_add_internationalization_foundation.sql"
+psql "${I18N_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --command \
+    "DO \$\$ BEGIN IF to_regclass('public.supported_languages') IS NULL OR to_regclass('public.user_preferences') IS NULL OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='019_add_internationalization_foundation') OR NOT EXISTS(SELECT 1 FROM privileges WHERE code='localization.administer' AND is_reserved) OR (SELECT count(*) FROM supported_languages WHERE language_tag IN ('en','ar'))<>2 THEN RAISE EXCEPTION 'internationalization migration verification failed'; END IF; END \$\$"
+docker exec "${CONTAINER_NAME}" dropdb --force --username "${POSTGRES_USER}" "${I18N_MIGRATION_DB}"
+I18N_MIGRATION_DB_CREATED=false
+
+awk '
+    /^-- Internationalization Phase 2 message catalogue begins\.$/ { skipping=1; next }
+    skipping && /^COMMIT;$/ { print; skipping=0; next }
+    !skipping { print }
+' "${DATABASE_DIR}/schema.sql" >"${PRE_I18N_CATALOGUE_SCHEMA}"
+docker exec "${CONTAINER_NAME}" createdb --username "${POSTGRES_USER}" "${I18N_CATALOGUE_MIGRATION_DB}"
+I18N_CATALOGUE_MIGRATION_DB_CREATED=true
+psql "${I18N_CATALOGUE_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --file "${PRE_I18N_CATALOGUE_SCHEMA}"
+psql "${I18N_CATALOGUE_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/migrations/020_add_ui_message_catalogue.sql"
+psql "${I18N_CATALOGUE_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --command \
+    "DO \$\$ BEGIN IF to_regclass('public.ui_message_definitions') IS NULL OR to_regclass('public.ui_message_translations') IS NULL OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='020_add_ui_message_catalogue') THEN RAISE EXCEPTION 'internationalization catalogue migration verification failed'; END IF; END \$\$"
+docker exec "${CONTAINER_NAME}" dropdb --force --username "${POSTGRES_USER}" "${I18N_CATALOGUE_MIGRATION_DB}"
+I18N_CATALOGUE_MIGRATION_DB_CREATED=false
+
+awk '
+    /^-- Internationalization Phase 4 multilingual entity metadata begins\.$/ { skipping=1; next }
+    skipping && /^COMMIT;$/ { print; skipping=0; next }
+    !skipping { print }
+' "${DATABASE_DIR}/schema.sql" >"${PRE_I18N_ENTITY_SCHEMA}"
+docker exec "${CONTAINER_NAME}" createdb --username "${POSTGRES_USER}" "${I18N_ENTITY_MIGRATION_DB}"
+I18N_ENTITY_MIGRATION_DB_CREATED=true
+psql "${I18N_ENTITY_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --file "${PRE_I18N_ENTITY_SCHEMA}"
+psql "${I18N_ENTITY_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/migrations/021_add_multilingual_entity_metadata.sql"
+psql "${I18N_ENTITY_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --command \
+    "DO \$\$ BEGIN IF NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='021_add_multilingual_entity_metadata') OR EXISTS(SELECT 1 FROM (VALUES ('classification_schemes'),('classifications'),('users'),('roles'),('org_units'),('security_levels')) expected(table_name) WHERE NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND information_schema.columns.table_name=expected.table_name AND column_name='translations')) THEN RAISE EXCEPTION 'multilingual entity migration verification failed'; END IF; END \$\$"
+docker exec "${CONTAINER_NAME}" dropdb --force --username "${POSTGRES_USER}" "${I18N_ENTITY_MIGRATION_DB}"
+I18N_ENTITY_MIGRATION_DB_CREATED=false
+
+awk '
+    /^-- Internationalization Phase 5 search and hardening begins\.$/ { skipping=1; next }
+    skipping && /^COMMIT;$/ { print; skipping=0; next }
+    !skipping { print }
+' "${DATABASE_DIR}/schema.sql" >"${PRE_I18N_HARDENING_SCHEMA}"
+docker exec "${CONTAINER_NAME}" createdb --username "${POSTGRES_USER}" "${I18N_HARDENING_MIGRATION_DB}"
+I18N_HARDENING_MIGRATION_DB_CREATED=true
+psql "${I18N_HARDENING_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --file "${PRE_I18N_HARDENING_SCHEMA}"
+psql "${I18N_HARDENING_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/migrations/022_harden_internationalized_search.sql"
+psql "${I18N_HARDENING_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --command \
+    "DO \$\$ BEGIN IF NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='022_harden_internationalized_search') OR to_regclass('public.users_translation_text_trgm_idx') IS NULL OR NOT EXISTS(SELECT 1 FROM pg_extension WHERE extname='pg_trgm') THEN RAISE EXCEPTION 'internationalization hardening migration verification failed'; END IF; END \$\$"
+docker exec "${CONTAINER_NAME}" dropdb --force --username "${POSTGRES_USER}" "${I18N_HARDENING_MIGRATION_DB}"
+I18N_HARDENING_MIGRATION_DB_CREATED=false
+
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/schema.sql"
 "${SCRIPT_DIR}/check_security_schema_parity.sh" "${DATABASE_URL}" "${DATABASE_DIR}/schema.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
@@ -169,7 +263,8 @@ psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/legal_holds.
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/event_history.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/user_management.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${SCRIPT_DIR}/content_storage_and_concurrency.sql"
-env DATABASE_URL="${DATABASE_URL}" PYTHONPATH="${PROJECT_DIR}" \
+env DATABASE_URL="${DATABASE_URL}" DEFAULT_WORKING_TIMEZONE="Asia/Dubai" \
+    TEXT_INDEXER_CREDENTIAL_HISTORY_RETENTION_DAYS="365" PYTHONPATH="${PROJECT_DIR}" \
     "${API_VENV}/bin/python" -m pytest "${API_DIR}/tests"
 "${SCRIPT_DIR}/backup_restore_authorization.sh" "${DATABASE_URL}" "${CONTAINER_NAME}"
 

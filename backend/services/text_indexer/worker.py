@@ -35,13 +35,25 @@ class Worker:
         root.mkdir(mode=0o700,parents=True,exist_ok=True); os.chmod(root,0o700)
         cutoff=time.time()-(self.settings.stale_temp_hours*3600)
         removed=0
-        # Recovery work is intentionally bounded so startup cannot be held up by
-        # an unexpectedly large or hostile temporary directory.
-        for entry in sorted(root.iterdir(), key=lambda item: item.stat().st_mtime)[:self.settings.temp_sweep_limit]:
-            if not entry.name.startswith("wathiq-index-") or entry.stat().st_mtime>cutoff:
+        candidates=[]
+        for entry in root.iterdir():
+            try:
+                candidates.append((entry.stat().st_mtime,entry))
+            except FileNotFoundError:
+                # Another worker may have completed the same bounded startup
+                # sweep after this directory listing was produced.
                 continue
-            if entry.is_dir(): shutil.rmtree(entry)
-            else: entry.unlink()
+        # Recovery work is intentionally bounded so startup cannot be held up by
+        # an unexpectedly large or hostile temporary directory. Multiple
+        # supervised workers can perform this idempotent sweep concurrently.
+        for modified,entry in sorted(candidates,key=lambda item:item[0])[:self.settings.temp_sweep_limit]:
+            if not entry.name.startswith("wathiq-index-") or modified>cutoff:
+                continue
+            try:
+                if entry.is_dir(): shutil.rmtree(entry)
+                else: entry.unlink()
+            except FileNotFoundError:
+                continue
             removed+=1
         return removed
 

@@ -29,7 +29,7 @@ pool = ConnectionPool(
     min_size=integer_environment("DB_POOL_MIN_SIZE", 1, minimum=0),
     max_size=integer_environment("DB_POOL_MAX_SIZE", 10, minimum=1),
     timeout=POOL_TIMEOUT,
-    kwargs={"row_factory": dict_row},
+    kwargs={"row_factory": dict_row, "options": "-c timezone=UTC"},
     name="erms-api",
     open=False,
 )

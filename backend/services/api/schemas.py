@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Annotated, Any, Generic, Literal, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 
 NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -23,6 +23,7 @@ class SecurityLevelCreate(ApiModel):
     name: NonBlankString
     level_number: int = Field(ge=0)
     prevents_disposition: bool = False
+    description: str | None = None
 
 
 class SecurityLevelUpdate(ApiModel):
@@ -30,6 +31,7 @@ class SecurityLevelUpdate(ApiModel):
     name: NonBlankString | None = None
     level_number: int | None = Field(default=None, ge=0)
     prevents_disposition: bool | None = None
+    description: str | None = None
 
 
 class SecurityLevelRead(SecurityLevelCreate):
@@ -40,6 +42,8 @@ class SecurityLevelRead(SecurityLevelCreate):
     roles_assigned_count: int = 0
     aggregation_count: int = 0
     record_count: int = 0
+    localized: dict[str, Any] | None = None
+    translations: dict[str, dict[str, str]] | None = None
 
 
 class PrivilegeRead(ApiModel):
@@ -77,6 +81,8 @@ class ProfileRead(ApiModel):
     version: int
     privilege_count: int = 0
     role_count: int = 0
+    localized: dict[str, Any] | None = None
+    translations: dict[str, dict[str, str]] | None = None
 
 
 class ProfileReferenceRead(ProfileRead):
@@ -484,12 +490,12 @@ class AggregationCreate(ApiModel):
     aggregation_number: NonBlankString
     title: NonBlankString
     description: str | None = None
-    date_opened: datetime | None = None
-    date_closed: datetime | None = None
+    date_opened: AwareDatetime | None = None
+    date_closed: AwareDatetime | None = None
     security_level_id: int | None = None
     medium: Literal["digital", "physical", "mixed"] | None = None
     is_vital: bool = False
-    date_of_next_review: datetime | None = None
+    date_of_next_review: AwareDatetime | None = None
     assigned_location: LocationCode | None = None
     current_location: LocationCode | None = None
 
@@ -514,8 +520,8 @@ class AggregationUpdate(ApiModel):
     aggregation_number: NonBlankString | None = None
     title: NonBlankString | None = None
     description: str | None = None
-    date_opened: datetime | None = None
-    date_closed: datetime | None = None
+    date_opened: AwareDatetime | None = None
+    date_closed: AwareDatetime | None = None
     security_level_id: int | None = None
     medium: Literal["digital", "physical", "mixed"] | None = None
 
@@ -586,7 +592,7 @@ class ClassificationSchemeCreate(ApiModel):
     authority: str | None = None
     scope_note: str | None = None
     edition: str | None = None
-    date_published: datetime | None = None
+    date_published: AwareDatetime | None = None
 
 
 class ClassificationSchemeUpdate(ApiModel):
@@ -596,7 +602,7 @@ class ClassificationSchemeUpdate(ApiModel):
     authority: str | None = None
     scope_note: str | None = None
     edition: str | None = None
-    date_published: datetime | None = None
+    date_published: AwareDatetime | None = None
     date_deactivated: datetime | None = None
 
 
@@ -607,6 +613,8 @@ class ClassificationSchemeRead(ClassificationSchemeCreate):
     date_deactivated: datetime | None
     date_first_used: datetime | None
     version: int
+    localized: dict[str, Any] | None = None
+    translations: dict[str, dict[str, str]] | None = None
 
 
 class ClassificationSchemeClassificationCounts(ApiModel):
@@ -772,6 +780,8 @@ class ClassificationRead(ApiModel):
     date_deactivated: datetime | None
     date_first_used: datetime | None
     version: int
+    localized: dict[str, Any] | None = None
+    translations: dict[str, dict[str, str]] | None = None
 
 
 class AggregationRetentionRuleCreate(RetentionRuleInput):
@@ -806,11 +816,11 @@ class RecordCreate(ApiModel):
     record_number: NonBlankString
     title: NonBlankString
     description: str | None = None
-    date_originated: datetime | None = None
+    date_originated: AwareDatetime | None = None
     security_level_id: int | None = None
     medium: Literal["digital", "physical", "mixed"] | None = None
     is_vital: bool = False
-    date_of_next_review: datetime | None = None
+    date_of_next_review: AwareDatetime | None = None
 
     @model_validator(mode="after")
     def validate_review_date(self):
@@ -834,7 +844,7 @@ class RecordUpdate(ApiModel):
     record_number: NonBlankString | None = None
     title: NonBlankString | None = None
     description: str | None = None
-    date_originated: datetime | None = None
+    date_originated: AwareDatetime | None = None
     security_level_id: int | None = None
     medium: Literal["digital", "physical", "mixed"] | None = None
 
@@ -849,7 +859,7 @@ class VitalStatusChange(ApiModel):
 
 
 class ReviewDateChange(ApiModel):
-    date_of_next_review: datetime | None = None
+    date_of_next_review: AwareDatetime | None = None
     reason: NonBlankString
 
     @model_validator(mode="after")
@@ -938,10 +948,10 @@ class RecordDraftCreate(ApiModel):
     record_number: NonBlankString | None = None
     title: NonBlankString | None = None
     description: str | None = None
-    date_originated: datetime | None = None
+    date_originated: AwareDatetime | None = None
     medium: Literal["digital", "physical", "mixed"] | None = None
     is_vital: bool = False
-    date_of_next_review: datetime | None = None
+    date_of_next_review: AwareDatetime | None = None
 
     @model_validator(mode="after")
     def validate_review_date(self):
@@ -1001,7 +1011,7 @@ class DigitalComponentCreate(ApiModel):
     record_id: int
     component_order: int = Field(gt=0)
     file_name: NonBlankString
-    date_originated: datetime | None = None
+    date_originated: AwareDatetime | None = None
     mime_type: NonBlankString
     size_in_bytes: int = Field(ge=0)
     checksum_algo: NonBlankString
@@ -1012,7 +1022,7 @@ class DigitalComponentUpdate(ApiModel):
     record_id: int | None = None
     component_order: int | None = Field(default=None, gt=0)
     file_name: NonBlankString | None = None
-    date_originated: datetime | None = None
+    date_originated: AwareDatetime | None = None
     mime_type: NonBlankString | None = None
     size_in_bytes: int | None = Field(default=None, ge=0)
     checksum_algo: NonBlankString | None = None
@@ -1176,6 +1186,8 @@ class OrgUnitRead(ApiModel):
     date_created: datetime
     date_deactivated: datetime | None
     version: int
+    localized: dict[str, Any] | None = None
+    translations: dict[str, dict[str, str]] | None = None
 
 
 class UserCreate(ApiModel):
@@ -1183,6 +1195,7 @@ class UserCreate(ApiModel):
     email: NonBlankString | None = None
     external_id: NonBlankString | None = None
     account_type: Literal["person", "service"] = "person"
+    description: str | None = None
 
 
 class UserUpdate(ApiModel):
@@ -1190,6 +1203,7 @@ class UserUpdate(ApiModel):
     email: NonBlankString | None = None
     external_id: NonBlankString | None = None
     account_type: Literal["person", "service"] | None = None
+    description: str | None = None
 
 
 class UserRead(ApiModel):
@@ -1203,11 +1217,14 @@ class UserRead(ApiModel):
     date_deactivated: datetime | None
     date_suspended: datetime | None
     version: int
+    description: str | None = None
+    localized: dict[str, Any] | None = None
+    translations: dict[str, dict[str, str]] | None = None
 
 
 class ServiceCredentialCreate(ApiModel):
     name: NonBlankString
-    expires_at: datetime
+    expires_at: AwareDatetime
 
     @model_validator(mode="after")
     def expiry_is_future(self):
@@ -1217,7 +1234,7 @@ class ServiceCredentialCreate(ApiModel):
 
 
 class ServiceCredentialRotate(ServiceCredentialCreate):
-    overlap_until: datetime | None = None
+    overlap_until: AwareDatetime | None = None
 
     @model_validator(mode="after")
     def overlap_is_bounded(self):
@@ -1374,13 +1391,15 @@ class RoleRead(ApiModel):
     is_system: bool = False
     account_type_restriction: Literal["person", "service"] | None = None
     version: int
+    localized: dict[str, Any] | None = None
+    translations: dict[str, dict[str, str]] | None = None
 
 
 class UserRoleAssignmentCreate(ApiModel):
     user_id: int
     role_id: int
-    valid_from: datetime | None = None
-    valid_until: datetime | None = None
+    valid_from: AwareDatetime | None = None
+    valid_until: AwareDatetime | None = None
 
     @model_validator(mode="after")
     def validate_dates(self):
@@ -1396,8 +1415,8 @@ class UserRoleAssignmentCreate(ApiModel):
 class UserRoleAssignmentUpdate(ApiModel):
     user_id: int | None = None
     role_id: int | None = None
-    valid_from: datetime | None = None
-    valid_until: datetime | None = None
+    valid_from: AwareDatetime | None = None
+    valid_until: AwareDatetime | None = None
 
 
 class UserRoleAssignmentRead(ApiModel):

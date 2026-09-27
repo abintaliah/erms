@@ -50,14 +50,9 @@ def test_create_canonicalize_update_history_and_delete(client):
     assert page.status_code == 200
     assert page.json()["items"][0]["category"] == "Finance"
 
-    missing_reason = client.put(
-        f"/api/v1/saved-searches/{saved['id']}", json=_payload(name="Renamed"),
-        headers={"If-Match": str(saved["version"])},
-    )
-    assert missing_reason.status_code == 422
     updated = client.put(
         f"/api/v1/saved-searches/{saved['id']}", json=_payload(name="Renamed"),
-        headers={"If-Match": str(saved["version"]), "X-Change-Reason": "Clarify the name"},
+        headers={"If-Match": str(saved["version"])},
     )
     assert updated.status_code == 200, updated.text
     assert updated.json()["version"] == saved["version"] + 1
@@ -73,7 +68,7 @@ def test_create_canonicalize_update_history_and_delete(client):
             (saved["id"],),
         ).fetchall()
     assert [event["operation"] for event in events] == ["CREATE", "UPDATE"]
-    assert events[-1]["reason"] == "Clarify the name"
+    assert events[-1]["reason"] == "Updated saved search"
 
     deleted = client.delete(
         f"/api/v1/saved-searches/{saved['id']}",

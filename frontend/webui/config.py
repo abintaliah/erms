@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 
@@ -10,6 +11,19 @@ load_dotenv(PROJECT_DIR / ".env", override=False)
 
 def api_url() -> str:
     return os.getenv("WEBUI_API_URL", "http://127.0.0.1:8000").rstrip("/")
+
+
+def default_working_timezone() -> str:
+    value = os.getenv("DEFAULT_WORKING_TIMEZONE", "").strip()
+    if not value:
+        raise RuntimeError("DEFAULT_WORKING_TIMEZONE is required")
+    try:
+        zone = ZoneInfo(value)
+    except ZoneInfoNotFoundError as error:
+        raise RuntimeError("DEFAULT_WORKING_TIMEZONE must be a valid IANA timezone") from error
+    if zone.key != value:
+        raise RuntimeError("DEFAULT_WORKING_TIMEZONE must use its canonical IANA identifier")
+    return value
 
 
 def host() -> str:

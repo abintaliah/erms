@@ -3,6 +3,7 @@ from datetime import datetime
 from io import BytesIO
 import json
 import secrets
+from typing import Any
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
@@ -30,10 +31,11 @@ from .service_authentication import (
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .concurrency import expected_version
 from .continuity_lock import acquire_continuity_shared_lock
-from .config import boolean_environment, choice_environment, integer_environment
+from .config import boolean_environment, choice_environment, default_working_timezone, integer_environment
 from .content_storage import configured_storage, inspect_upload
 from .database import close_pool, get_connection, open_pool, pool
 from .document_conversion import ConversionUnavailable, UnsupportedPreview, pdf_rendition
+from .entity_localization import localized_projection, preferred_language
 from .schemas import (
     AggregationCreate,
     AggregationRead,
@@ -85,6 +87,11 @@ from .holds import router as holds_router
 from .text_indexing import router as text_indexing_router
 from .reindexing import router as reindexing_router
 from .saved_searches import router as saved_searches_router
+from .localization import (
+    localization_readiness, router as localization_router,
+    synchronize_message_definitions,
+)
+from .entity_translations import router as entity_translations_router
 from .authorization_policy import load_policy_context, require_audit_view
 
 
@@ -141,7 +148,9 @@ def _require_draft_accepts_components(draft: dict) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    default_working_timezone()
     open_pool()
+    synchronize_message_definitions()
     try:
         yield
     finally:
@@ -169,6 +178,8 @@ app.include_router(holds_router)
 app.include_router(text_indexing_router)
 app.include_router(reindexing_router)
 app.include_router(saved_searches_router)
+app.include_router(localization_router)
+app.include_router(entity_translations_router)
 
 
 @app.post("/api/v1/full-text-search", response_model=None, tags=["search"])
@@ -418,7 +429,7 @@ async def database_error_handler(_, exception: psycopg.Error):
 
 
 @app.get("/health", tags=["system"])
-def health(connection: Connection = Depends(get_connection, scope="function")) -> dict[str, str | bool]:
+def health(connection: Connection = Depends(get_connection, scope="function")) -> dict[str, Any]:
     connection.execute("SELECT 1")
     return {
         "status": "ok",
@@ -426,6 +437,7 @@ def health(connection: Connection = Depends(get_connection, scope="function")) -
         "content_indexing_scheduling_enabled": boolean_environment(
             "CONTENT_INDEXING_SCHEDULING_ENABLED", True,
         ),
+        "localization": localization_readiness(connection),
     }
 
 
@@ -503,11 +515,12 @@ def creation_role_options(
     tags=["dashboard"],
 )
 def dashboard_ownership_counts(
+    request: Request,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return list(connection.execute(
+    rows = list(connection.execute(
         """WITH eligible_units AS (
-               SELECT DISTINCT unit.id,unit.code,unit.name
+               SELECT DISTINCT unit.id,unit.code,unit.name,unit.translations
                FROM user_role_assignments assignment
                JOIN roles role ON role.id=assignment.role_id
                JOIN org_units unit ON unit.id=role.org_unit_id
@@ -517,7 +530,7 @@ def dashboard_ownership_counts(
                  AND role_effectively_active(role.id)
            )
            SELECT unit.id AS org_unit_id,unit.code AS org_unit_code,
-                  unit.name AS org_unit_name,
+                  unit.name AS org_unit_name,unit.translations,
                   (SELECT count(*) FROM aggregations aggregation
                     WHERE aggregation.owning_org_unit_id=unit.id
                       AND current_user_can_view_aggregation(aggregation.id)) AS aggregation_count,
@@ -527,6 +540,15 @@ def dashboard_ownership_counts(
            FROM eligible_units unit
            ORDER BY unit.name COLLATE "C",unit.id"""
     ).fetchall())
+    language_tag = preferred_language(connection, request)
+    for row in rows:
+        row["name"] = row["org_unit_name"]
+        row["org_unit_name"] = localized_projection(row, language_tag, "name")["name"]
+        row.pop("name", None)
+        row.pop("translations", None)
+    return sorted(rows, key=lambda row: (
+        str(row["org_unit_name"] or "").casefold(), row["org_unit_id"]
+    ))
 
 
 @app.post(
@@ -1172,6 +1194,30 @@ def _effective_closure(connection: Connection, aggregation_id: int) -> dict | No
     ).fetchone()
 
 
+@app.get("/api/v1/aggregations/{aggregation_id}/effective-closure", tags=["aggregations"])
+def get_effective_aggregation_closure(
+    aggregation_id: int,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    """Return only the nearest closure needed by collection and component UIs.
+
+    This deliberately avoids requiring clients to download the aggregation
+    hierarchy merely to determine whether one resource is effectively closed.
+    """
+    require_resource_operation(
+        connection, "aggregation", aggregation_id,
+        "aggregation.view", "aggregation.view",
+        lock=False,
+    )
+    closure = _effective_closure(connection, aggregation_id)
+    if closure is not None:
+        closure = connection.execute(
+            "SELECT id, aggregation_number, title, date_closed FROM aggregations WHERE id=%s",
+            (closure["id"],),
+        ).fetchone()
+    return {"closure": closure}
+
+
 def _governance_basis(connection: Connection, security_level_ids: list[int]) -> list[dict]:
     return list(connection.execute(
         """SELECT DISTINCT role.id,role.code,role.name,level.level_number
@@ -1804,8 +1850,18 @@ def _component_rendition_response(
             headers["Content-Range"] = f"bytes {start}-{end - 1}/{location.size_in_bytes}"
         if request.method == "HEAD":
             return Response(status_code=response_status, media_type=rendered_mime, headers=headers)
-        return StreamingResponse(
-            storage.iter_content(location, start, end), status_code=response_status,
+        # The web viewer buffers renditions before passing them to PDF.js or a
+        # native media control. Finish the database read before the response is
+        # sent so an interrupted browser request cannot strand a server-side
+        # cursor, poison its pooled connection, or terminate a fixed-length
+        # response early.
+        content = storage.read(connection, component_id)
+        if content is None:
+            raise HTTPException(status_code=404, detail="digital component content not found")
+        if len(content) != location.size_in_bytes:
+            raise HTTPException(status_code=500, detail="digital component content size mismatch")
+        return Response(
+            content=content[start:end], status_code=response_status,
             media_type=rendered_mime, headers=headers,
         )
     maximum_source = integer_environment("MAX_RENDITION_SIZE_BYTES", 100 * 1024 * 1024, minimum=1)
