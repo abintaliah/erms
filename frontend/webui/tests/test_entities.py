@@ -1357,9 +1357,43 @@ def test_forced_password_change_precedes_authenticated_data_loading():
         source.index('login_submit.on("click", submit_login)')
     ]
     assert "await reload_favourites()" not in login_flow
-    assert login_flow.index('if principal["must_change_password"]:') < login_flow.index(
-        "await select_dashboard()"
+    forced_change_gate = login_flow.index('if principal["must_change_password"]:')
+    assert forced_change_gate < login_flow.index(
+        "await prepare_authenticated_workspace(principal)"
     )
+    assert forced_change_gate < login_flow.index("await select_dashboard()")
+    assert "await load_localization_context()" not in login_flow
+    assert "await refresh_hold_navigation()" not in login_flow
+
+    restored_flow = source[
+        source.index("async def initialize_authenticated_ui()"):
+        source.index("background_tasks.create(load_login_animation())")
+    ]
+    restored_gate = restored_flow.index('if principal["must_change_password"]:')
+    assert restored_gate < restored_flow.index(
+        "await prepare_authenticated_workspace(principal)"
+    )
+
+    workspace_setup = source[
+        source.index("async def prepare_authenticated_workspace("):
+        source.index("async def load_login_animation()")
+    ]
+    assert "await load_localization_context()" in workspace_setup
+    assert "await refresh_hold_navigation()" in workspace_setup
+
+    password_flow = source[
+        source.index("async def show_change_password()"):
+        source.index("async def sign_out()")
+    ]
+    password_changed = password_flow.index(
+        'await api.change_password(current.value or "", new.value or "")'
+    )
+    principal_refreshed = password_flow.index("principal = await api.me()")
+    workspace_prepared = password_flow.index(
+        "await prepare_authenticated_workspace(principal)"
+    )
+    dashboard_selected = password_flow.index("await select_dashboard()")
+    assert password_changed < principal_refreshed < workspace_prepared < dashboard_selected
     assert "Your temporary password must be replaced before you can continue." in source
     assert '"Set new password" if forced_change else "Change password"' in source
     assert '"Back to sign in", icon="arrow_back"' in source

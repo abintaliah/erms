@@ -11076,7 +11076,9 @@ def index(q: str = "") -> None:
                     await api.change_password(current.value or "", new.value or "")
                     dialog.close()
                     ui.notify(render_message("webui.save_password.notify.password_changed_9140fb7f"), color="positive")
-                    populate_user_menu(await api.me())
+                    principal = await api.me()
+                    if not await prepare_authenticated_workspace(principal):
+                        return
                     await select_dashboard()
                 except ApiError as error:
                     ui.notify(error_message(error), color="negative", close_button=True)
@@ -20445,11 +20447,6 @@ def index(q: str = "") -> None:
                 )
                 app.storage.user["session_token"] = token
                 api.set_session_token(token)
-                if await load_localization_context():
-                    return
-                populate_user_menu(principal)
-                background_tasks.create(load_authenticated_client_assets())
-                await refresh_hold_navigation()
                 navigation_state["trail"] = []
                 app.storage.user.pop("navigation_trail", None)
                 login_password.value = ""
@@ -20459,11 +20456,14 @@ def index(q: str = "") -> None:
                     # rejects every endpoint except /auth/me, change-password,
                     # and logout.  Do not make ordinary application requests
                     # (such as favourites) before showing this dialog.
+                    auth_state["principal"] = principal
                     drawer.hide()
                     with table_container:
                         await show_change_password()
-                else:
-                    await select_dashboard()
+                    return
+                if not await prepare_authenticated_workspace(principal):
+                    return
+                await select_dashboard()
             except ApiError as error:
                 login_error.text = error_message(error)
 
@@ -20494,6 +20494,15 @@ def index(q: str = "") -> None:
             # The PDF viewer reports its own load failure when invoked.
             pass
 
+    async def prepare_authenticated_workspace(principal: dict[str, Any]) -> bool:
+        """Load ordinary application state only after password restrictions end."""
+        if await load_localization_context():
+            return False
+        populate_user_menu(principal)
+        background_tasks.create(load_authenticated_client_assets())
+        await refresh_hold_navigation()
+        return True
+
     async def load_login_animation() -> None:
         """Load and start the decorative sign-in animation off the critical path."""
         try:
@@ -20520,16 +20529,13 @@ def index(q: str = "") -> None:
             api.set_session_token(token)
             try:
                 principal = await api.me()
-                if await load_localization_context():
-                    return
-                populate_user_menu(principal)
-                background_tasks.create(load_authenticated_client_assets())
-                await refresh_hold_navigation()
                 if principal["must_change_password"]:
+                    auth_state["principal"] = principal
                     drawer.hide()
                     with table_container:
                         await show_change_password()
-                if principal["must_change_password"]:
+                    return
+                if not await prepare_authenticated_workspace(principal):
                     return
                 if q.strip():
                     navigation_state["trail"] = []

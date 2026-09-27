@@ -186,17 +186,27 @@ def test_catalogue_revision_refresh_does_not_force_a_full_page_reload():
 
 def test_dashboard_startup_defers_optional_assets_and_avoids_duplicate_favourites_call():
     source = inspect.getsource(index)
+    workspace_setup = source[
+        source.index("async def prepare_authenticated_workspace("):
+        source.index("async def load_login_animation()")
+    ]
+    assert "background_tasks.create(load_authenticated_client_assets())" in workspace_setup
     initialization = source[
         source.index("async def initialize_authenticated_ui()"):
         source.index("ui.timer(0.05, initialize_authenticated_ui")
     ]
-    assert "background_tasks.create(load_authenticated_client_assets())" in initialization
     assert "await reload_favourites()" not in initialization
+    assert initialization.index('if principal["must_change_password"]:') < initialization.index(
+        "await prepare_authenticated_workspace(principal)"
+    )
     login_flow = source[
         source.index("async def submit_login()"):
         source.index('login_submit.on("click", submit_login)')
     ]
     assert "await reload_favourites()" not in login_flow
+    assert login_flow.index('if principal["must_change_password"]:') < login_flow.index(
+        "await prepare_authenticated_workspace(principal)"
+    )
 
 
 def test_dashboard_navigation_renders_cached_data_then_refreshes_in_background():

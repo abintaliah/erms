@@ -14639,18 +14639,6 @@
       }
     },
     {
-      "message_key": "webui.render_compact_resource_result.accessible_name.open_parent_aggregation_42880433",
-      "translated_text": "فتح الملف الحاوي",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
       "message_key": "webui.render_compact_resource_result.accessible_name.preview_digital_component_f8b12cac",
       "translated_text": "معاينة المكوّن الرقمي",
       "quality_flags": [],
@@ -14677,18 +14665,6 @@
     {
       "message_key": "webui.render_compact_resource_result.accessible_name.show_digital_components_08467816",
       "translated_text": "عرض المكوّنات الرقمية",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_compact_resource_result.button.open_parent_aggregation_a38da378",
-      "translated_text": "فتح الملف الحاوي",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",
@@ -14809,18 +14785,6 @@
     {
       "message_key": "webui.render_compact_resource_result.tooltip.open_aggregation_2f0f3e73",
       "translated_text": "فتح الملف",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_compact_resource_result.tooltip.open_parent_aggregation_parent_label_2d8be084",
-      "translated_text": "فتح الملف الحاوي: {parent_label}",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",
