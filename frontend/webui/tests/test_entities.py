@@ -1,5 +1,6 @@
 from io import BytesIO
 import inspect
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -128,6 +129,16 @@ def test_phase1_preview_controls_and_entry_points_are_present():
     )[0]
     assert "ui.run_javascript(" not in viewer_source
     assert "viewer_client.run_javascript(" in viewer_source
+
+
+def test_pdf_preview_is_isolated_from_the_arabic_ui_direction():
+    assert 'ui.element("canvas").props(f"id={canvas_id} dir=ltr")' in APP_SOURCE
+    viewer_source = (
+        Path(__file__).parents[1] / "static" / "pdfjs" / "erms-viewer.mjs"
+    ).read_text(encoding="utf-8")
+    assert "canvas.dir = 'ltr';" in viewer_source
+    assert "context.direction = 'ltr';" in viewer_source
+    assert "page.render({canvasContext: context" in viewer_source
 
 
 @pytest.mark.parametrize("extension", ("md", "msg", "eml", "html", "txt", "xml"))

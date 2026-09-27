@@ -5092,7 +5092,7 @@ def index(q: str = "") -> None:
                 with ui.element("div").classes(
                     "w-full h-full overflow-auto flex justify-center items-start p-5"
                 ):
-                    ui.element("canvas").props(f"id={canvas_id}").classes("bg-white shadow-lg")
+                    ui.element("canvas").props(f"id={canvas_id} dir=ltr").classes("bg-white shadow-lg")
             encoded = base64.b64encode(preview).decode("ascii")
             try:
                 await viewer_client.run_javascript(

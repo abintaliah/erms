@@ -24,7 +24,14 @@ async function render(id) {
   canvas.height = Math.floor(viewport.height * ratio);
   canvas.style.width = `${Math.floor(viewport.width)}px`;
   canvas.style.height = `${Math.floor(viewport.height)}px`;
-  await page.render({canvasContext: canvas.getContext('2d'), viewport, transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0]}).promise;
+  // The surrounding Wathiq UI may be RTL, but a PDF canvas must not inherit
+  // that direction. PDF pages already carry their own glyph positioning and
+  // bidi layout; inherited RTL changes Canvas 2D text shaping and corrupts the
+  // rendered page.
+  canvas.dir = 'ltr';
+  const context = canvas.getContext('2d');
+  context.direction = 'ltr';
+  await page.render({canvasContext: context, viewport, transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0]}).promise;
   const status = document.getElementById(`${id}-status`);
   if (status) status.textContent = `Page ${state.page} of ${state.document.numPages} · ${Math.round(state.scale * 100)}%`;
 }
