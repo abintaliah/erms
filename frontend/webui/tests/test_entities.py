@@ -217,6 +217,15 @@ def test_classification_tree_rtl_grid_does_not_double_mirror_expanders():
     assert 'icon=tree_expander_icon(item["id"] in workspace["expanded"])' in APP_SOURCE
 
 
+def test_aggregation_browser_tree_keeps_expanders_at_rtl_inline_start():
+    assert 'html[dir="rtl"] #aggregation-browser-tree .aggregation-browser-tree-row' in APP_SOURCE
+    assert "direction: rtl;" in APP_SOURCE
+    assert "flex-direction: row !important;" in APP_SOURCE
+    assert APP_SOURCE.count('"aggregation-browser-tree-row w-full items-center no-wrap') == 3
+    assert 'py-1 pe-2 hover:bg-blue-50' in APP_SOURCE
+    assert 'py-2 pe-2 hover:bg-blue-50 cursor-pointer' in APP_SOURCE
+
+
 def test_classification_scheme_master_detail_uses_logical_rtl_order():
     assert '.classification-scheme-selector-panel { border-inline-end:' in APP_SOURCE
     assert 'html[dir="rtl"] .classification-scheme-master-detail' in APP_SOURCE
@@ -1518,6 +1527,16 @@ def test_organization_browser_localizes_statuses_summary_and_rtl_disclosures():
     assert "organization-browser-summary-field" in source
     assert "organization-browser-summary-label" in source
     assert "organization-browser-summary-value" in source
+
+
+def test_organization_browser_places_tree_on_the_leading_side_in_rtl():
+    source = inspect.getsource(index)
+    assert 'page_layout_class = "" if is_selector else "organization-browser-page-layout"' in source
+    assert "organization-browser-page-tree w-1/2" in source
+    assert 'html[dir="rtl"] .organization-browser-page-layout' in source
+    assert "flex-direction: row !important;" in source
+    assert 'html[dir="rtl"] .organization-browser-page-tree' in source
+    assert "border-left-width: 1px !important;" in source
 
 
 def test_browsed_relationship_selection_adds_option_and_value_atomically():
