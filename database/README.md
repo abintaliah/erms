@@ -71,6 +71,10 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/025_allow_text_indexer_role_translations.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/026_allow_text_indexer_profile_translations.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/027_simplify_translation_publication.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/028_disallow_non_source_copy_publication.sql
 ```
 
 Migration 004 makes lifecycle timestamps authoritative. Organization units and

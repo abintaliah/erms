@@ -12,6 +12,8 @@ def test_translation_screen_uses_governed_bulk_publication_api():
     assert "bulk_review_publish_dialog" in APP_SOURCE
     assert 'bulk_publish_all.on(' in APP_SOURCE
     assert "localization.bulk.dialog.guidance" in APP_SOURCE
+    assert 'preview.get("source_copy_excluded") or 0' in APP_SOURCE
+    assert "localization.bulk.dialog.source_copies_excluded" in APP_SOURCE
 
 
 def test_language_cards_select_the_administration_language_for_bulk_publication():

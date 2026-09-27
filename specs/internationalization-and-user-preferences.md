@@ -116,12 +116,14 @@ from English, including every named placeholder and escaped brace. These rows
 use `origin = source_copy` and `status = draft`.
 
 A source copy is a working aid and is visibly labelled **English source copy**
-in administration. Its `source_copy` origin records provenance; it is not a
-publication restriction. Until a system administrator deliberately publishes
-it, the runtime uses the ordinary fallback rules. An administrator may publish
-it as supplied, including through the bulk workflow, or replace it with an
-actual translation one contextual key at a time. Saving edited wording changes
-its origin to `manual`.
+in administration. For every non-source language, `source_copy` means that no
+translation decision has been made and is therefore a publication restriction.
+It cannot be published individually, through the bulk workflow, through a
+direct API request, or by bypassing the application and writing to the database.
+The runtime uses the ordinary fallback rules until the value is replaced by an
+actual translation. Saving wording deliberately, including intentionally
+unchanged proper names or acronyms, changes its origin to `manual` and makes the
+valid draft eligible for review and publication.
 
 If an approved machine-translation seed is chosen instead, generated drafts
 use `origin = generated` and retain their generation metadata for audit and
@@ -492,8 +494,9 @@ definition, the template compiles, and disallowed markup is absent. The API and
 database enforce the same nonblank rule even if a client bypasses the WebUI. A
 failed publication leaves the previously published catalogue and revision
 unchanged; invalid text cannot enter caches or become visible through a partial
-publish. Origin records provenance only and does not determine publication
-eligibility. Publishing is itself an explicit system-administrator review
+publish. Origin records provenance and determines one narrow eligibility rule:
+a non-source-language `source_copy` is not a translation and cannot be
+published. Publishing an eligible draft is itself an explicit system-administrator review
 action and records the reviewer and review time. Every successful change produces
 immutable event history with before/after values and a mandatory nonblank
 change reason.
@@ -506,19 +509,25 @@ The workflow uses the same rules for every supported language:
    English wording, a machine-generated translation, an imported translation,
    or wording entered by an administrator.
 2. `source_copy`, `generated`, `imported`, and `manual` describe where the text
-   came from. They are audit information only. None of them prevents a valid
-   draft from being published.
+   came from. For a non-source language, `source_copy` is an untranslated
+   fallback and cannot be published. Generated, imported, and manual drafts are
+   eligible when otherwise valid. English source baselines remain publishable
+   as English, and a deliberately unchanged non-English value becomes eligible
+   after an administrator saves it as `manual` with a reason.
 3. Publishing is an explicit review action performed by a user with the
    `localization.administer` privilege. The system records that user and time
-   as both reviewer and publisher. Publication is rejected only when the text
-   is blank or fails template, placeholder, or markup validation.
+   as both reviewer and publisher. Publication is rejected when the text is a
+   non-source-language `source_copy`, is blank, or fails template, placeholder,
+   or markup validation.
 4. The supported-language cards at the top of Translation Administration are
    the explicit language selector for administration work. The selected card
    controls the keys being listed and every language-specific action. There is
    no separate language filter among the key filters and no second language
    selector inside Export or **Review and Publish All**. After confirmation,
-   all valid drafts for the selected language and scope are reviewed and
-   published together. If any selected draft is invalid, nothing is published.
+   all eligible valid drafts for the selected language and scope are reviewed
+   and published together. Non-source-language source copies are excluded and
+   reported as awaiting translation. If any selected eligible draft is invalid,
+   nothing is published.
 5. Context-level bulk actions apply to the language and context visibly being
    viewed. They use the same validation and all-or-nothing behavior.
 6. English definitions are the original application wording and may be
@@ -534,9 +543,11 @@ The workflow uses the same rules for every supported language:
    overriding it with the selected card. Importing stores validated values as
    drafts and publishes nothing automatically.
 
-There is no special publication ban for English starter text. Wathiq may show
-its `source_copy` origin so an administrator understands that it still matches
-the English source, but a deliberate administrator publication is permitted.
+English definitions are the source language, so the non-source publication ban
+does not apply to their baseline. English-to-English editorial revisions remain
+supported as manual drafts. For other languages, an administrator who
+deliberately retains identical wording must save that value as `manual` before
+review and publication.
 
 ### 7.5 Translation keys during active WebUI development
 

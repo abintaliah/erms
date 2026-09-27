@@ -5693,6 +5693,9 @@ CREATE TABLE ui_message_translations (
  published_by_user_id bigint REFERENCES users(id) ON DELETE SET NULL,date_published timestamptz,
  date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,date_updated timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,version bigint NOT NULL DEFAULT 1 CHECK(version>0),
  PRIMARY KEY(message_key,language_tag),
+ CONSTRAINT ui_message_translations_source_copy_not_published
+   CHECK(lower(language_tag)='en' OR origin<>'source_copy' OR
+         (status='draft' AND published_text IS NULL AND published_by_user_id IS NULL AND date_published IS NULL)),
  CHECK(origin<>'generated' OR published_text IS NULL OR (reviewed_by_user_id IS NOT NULL AND date_reviewed IS NOT NULL)),
  CHECK((reviewed_by_user_id IS NULL)=(date_reviewed IS NULL)),CHECK((published_by_user_id IS NULL)=(date_published IS NULL))
 );

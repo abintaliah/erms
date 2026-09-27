@@ -79,9 +79,11 @@ successful transaction records review and publication identity
 on every key, produces immutable per-key event history, and increments the
 language catalogue revision and clears its cache once for the complete batch.
 
-Source-copy, generated, imported, and manual drafts use the same preview,
-validation, atomic review, audit, and publication contract. Import itself does
-not count as review and cannot publish a translation. The supported-language
+Generated, imported, and manual drafts use the same preview, validation, atomic
+review, audit, and publication contract. Non-source-language source copies are
+excluded from bulk selection, reported as awaiting translation, and rejected
+if submitted directly for publication. Import itself does not count as review
+and cannot publish a translation. The supported-language
 cards select the language being administered. Key filters never select an
 action target. Page-level and context actions use the selected card, while an
 import always uses the language declared by its JSON file.
