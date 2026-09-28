@@ -5408,6 +5408,15 @@ def index(q: str = "") -> None:
             owner_resource.get("owning_org_unit_name")
             if owner_resource else "this resource's organizational unit"
         )
+        if owner_resource and owner_resource.get("owning_org_unit_id") is not None:
+            try:
+                owner_unit = await api.get("org-units", int(owner_resource["owning_org_unit_id"]))
+                owner_name = (
+                    (owner_unit.get("localized") or {}).get("name")
+                    or owner_unit.get("name") or owner_name
+                )
+            except ApiError:
+                pass  # Retain the resource's owner name if the unit cannot be read.
         source_aggregation_id = acl.get("source_resource_id") or acl.get("effective_acl_source_id")
         if source_aggregation_id:
             try:
