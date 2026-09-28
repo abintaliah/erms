@@ -4867,7 +4867,7 @@ def index(q: str = "") -> None:
                             {"name": "before", "label": "Before", "field": "before", "align": "left"},
                             {"name": "after", "label": "After", "field": "after", "align": "left"},
                         ], rows=change_rows, row_key="field",
-                    ).props("flat bordered wrap-cells hide-pagination").classes("w-full")
+                    ).props("flat bordered wrap-cells hide-pagination").classes("w-full shrink-0")
                     for key in ("before", "after"):
                         change_table.add_slot(f"body-cell-{key}", f'<q-td :props="props"><div class="audit-value">{{{{ props.row.{key} }}}}</div></q-td>')
                 with ui.grid(columns=2).classes("w-full gap-3"):
@@ -9558,7 +9558,14 @@ def index(q: str = "") -> None:
                         show_ownership_correction_action = (
                             closure is None and capabilities.get("correct_ownership")
                         )
-                        show_acl_defaults = capabilities.get("manage_acl")
+                        # Default ACL endpoints also require authorization administration;
+                        # ordinary resource ACL management alone is insufficient.
+                        show_acl_defaults = bool(
+                            capabilities.get("manage_acl")
+                            and "authorization.administer" in set(
+                                (auth_state.get("principal") or {}).get("global_privileges", [])
+                            )
+                        )
                         if (
                             show_aggregation_move
                             or show_ownership_correction_action
