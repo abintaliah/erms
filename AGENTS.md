@@ -47,6 +47,22 @@
 - Event-history rows created by seed scripts or seed utilities must use source
   `seeding`; source `migration` is reserved for actual database upgrades.
 
+## WebUI layout and RTL troubleshooting
+
+- Start layout and RTL troubleshooting with standard NiceGUI components,
+  documented configuration, layout APIs, and supported direction settings.
+  Explore and exhaust applicable NiceGUI solutions before using lower-level
+  Quasar primitives or custom/bare CSS overrides.
+- For tricky or persistent layout/RTL problems, use the in-app browser to
+  reproduce and inspect the rendered UI before changing layout code. Inspect
+  component structure, effective direction, computed styles, and dimensions;
+  do not randomly change CSS to see whether it works.
+- Base each fix on an observed cause. If a Quasar or CSS fallback is necessary,
+  document the NiceGUI options investigated and why they cannot solve it, keep
+  the fallback narrowly scoped, and verify the result in both LTR and RTL.
+- Follow the detailed troubleshooting order in
+  `docs/webui-design-language.md` section 19.1.
+
 ## Frontend table design
 
 - Never introduce a raw or default-styled NiceGUI `ui.table`.

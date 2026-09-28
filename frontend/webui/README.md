@@ -3,6 +3,16 @@
 The frontend is an independently deployable NiceGUI service. It communicates
 with the FastAPI service over HTTP and does not access PostgreSQL directly.
 
+## Layout and RTL troubleshooting
+
+Start with standard NiceGUI components and documented layout/direction
+configuration. Exhaust applicable NiceGUI solutions before using lower-level
+Quasar primitives or custom CSS. For tricky problems, inspect the rendered UI
+in the in-app browser before changing layout code; do not use speculative CSS
+changes as a diagnostic method. Follow the required workflow in
+[Design Language section 19.1](../../docs/webui-design-language.md#191-nicegui-first-layout-and-rtl-troubleshooting),
+including documenting necessary fallbacks and verifying both LTR and RTL.
+
 ## Run locally
 
 Start the API first, then run:

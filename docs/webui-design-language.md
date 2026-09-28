@@ -4,7 +4,7 @@
 **Applies to:** `frontend/webui` only  
 **Audience:** Wathiq developers, reviewers, and agentic implementation tools  
 **Prepared:** 26 September 2026  
-**Revision:** 1.3 — canonical administrator/agent translation-artifact merge
+**Revision:** 1.4 — NiceGUI-first layout and RTL troubleshooting
 
 ## 1. Purpose and authority
 
@@ -705,8 +705,9 @@ does not fit the existing palette, define it once in a shared mapping.
 
 Desktop density is not permission to break narrow screens.
 
-- Use CSS grid/flex with `minmax(0, 1fr)` and `min-width: 0` so long content can
-  shrink safely.
+- Prefer standard NiceGUI layout configuration. Where custom CSS is necessary
+  under section 19.1, use grid/flex with `minmax(0, 1fr)` and `min-width: 0` so
+  long content can shrink safely.
 - Major two-column layouts collapse to one column at an intentional breakpoint,
   generally around the established 760–900 pixel range.
 - Controls wrap as groups; related action buttons stay together.
@@ -726,7 +727,9 @@ All new components must work with root `lang` and `dir` changes. Follow the
 internationalization specification for message keys, templates, user language,
 timezone, translated entity values, and administrative translation screens.
 
-- Use CSS logical properties and logical start/end alignment.
+- Prefer supported NiceGUI direction and alignment configuration; follow
+  section 19.1 when troubleshooting. When CSS is necessary, use logical
+  properties and logical start/end alignment.
 - Mirror navigation, spatial chevrons, indentation, and directional layout.
 - Do not mirror semantic icons.
 - Propagated/portal content such as menus, dropdowns, dialogs, and tooltips must
@@ -807,6 +810,10 @@ must remain visible in the page or dialog.
 
 ## 19. CSS and styling rules
 
+Layout and RTL troubleshooting must follow section 19.1 before introducing
+custom CSS or lower-level Quasar primitives. The styling rules below govern
+necessary styling; they do not authorize bypassing NiceGUI configuration.
+
 - Prefer shared semantic classes over repeated long utility strings for a
   component pattern.
 - Utility classes are appropriate for local layout and small one-off alignment.
@@ -826,6 +833,33 @@ The long inline stylesheet in `app.py` is the current source of truth. New work
 should avoid making it less maintainable. When a component is extracted into a
 module, move its cohesive styles to an appropriately loaded static stylesheet
 or documented style surface rather than duplicating them.
+
+### 19.1 NiceGUI-first layout and RTL troubleshooting
+
+For developers and agents, the required troubleshooting order is:
+
+1. Reproduce the issue and inspect the existing shared component and its
+   NiceGUI configuration. Start with standard NiceGUI components, documented
+   configuration, layout APIs, and supported language/direction settings.
+2. Explore and exhaust applicable NiceGUI solutions before reaching for
+   lower-level Quasar primitives or custom/bare CSS overrides. Merely applying
+   a CSS override through a NiceGUI method does not satisfy this requirement.
+3. For tricky, persistent, or unclear layout/RTL problems, use the in-app
+   browser to inspect the rendered UI before changing layout code. Inspect the
+   component/DOM structure, effective direction, computed styles, dimensions,
+   overflow, and alignment in the affected state. Compare with a working
+   Wathiq component where applicable. If inspection is unavailable, report
+   that limitation rather than proceeding with speculative CSS changes.
+4. Identify the observed cause and make a targeted correction. Do not randomly
+   alter CSS, stack overrides, or repeatedly change alignment/direction rules
+   merely to see whether the screen appears to work.
+5. If NiceGUI cannot express the required correction, document the applicable
+   NiceGUI options investigated and why they are insufficient in the
+   implementation notes. Use the smallest supported Quasar or narrowly scoped
+   CSS fallback, with its reason recorded beside the code.
+6. Verify the rendered correction in English LTR and Arabic RTL, at the
+   affected viewport and supported narrow width, including relevant menus,
+   dialogs, or other portal content. Remove superseded experimental overrides.
 
 ## 20. Testing and review standard
 
