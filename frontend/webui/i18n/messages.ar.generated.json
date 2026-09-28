@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "e2683f8fe7242d3c27346309d10da80985972f908364842aece5a3d49ff7b9c7",
+  "catalogue_sha256": "f0a944e38470a8152089ff43857cdd80650345b562979c6d674a7220bb2f3f62",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260928143018",
   "generated_at": "2026-09-28T14:30:18.648812+04:00",
@@ -12974,6 +12974,41 @@
         "date_reviewed": "2026-09-26T17:44:17.672002+04:00",
         "date_published": "2026-09-26T17:44:17.672002+04:00"
       }
+    },
+    {
+      "message_key": "webui.number_conflict.close",
+      "translated_text": "إغلاق",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.number_conflict.duplicate",
+      "translated_text": "الرقم {number} مستخدم بالفعل.",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.number_conflict.not_reserved",
+      "translated_text": "هذا الرقم غير محجوز. يُتحقق من توفره مجدداً عند الحفظ.",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.number_conflict.select_context",
+      "translated_text": "اختر أولاً تصنيفاً نهائياً للملف الجذري، أو ملفاً حاوياً.",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.number_conflict.suggest",
+      "translated_text": "اقتراح الرقم التالي",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.number_conflict.suggestion",
+      "translated_text": "الرقم التالي المتاح: {number}",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.number_conflict.use",
+      "translated_text": "استخدام الرقم المقترح",
+      "quality_flags": []
     },
     {
       "message_key": "webui.open_aggregation.badge.closed_30c24826",

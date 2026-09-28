@@ -36,6 +36,7 @@ from .config import boolean_environment, choice_environment, default_working_tim
 from .content_storage import configured_storage, inspect_upload
 from .database import close_pool, get_connection, open_pool, pool
 from .document_conversion import ConversionUnavailable, UnsupportedPreview, pdf_rendition
+from .number_suggestions import router as number_suggestions_router
 from .entity_localization import localized_projection, preferred_language
 from .schemas import (
     AggregationCreate,
@@ -164,6 +165,7 @@ app = FastAPI(
     description="REST API for the Electronic Records Management System.",
     lifespan=lifespan,
 )
+app.include_router(number_suggestions_router)
 app.include_router(user_management_router)
 app.include_router(authentication_router)
 app.include_router(classification_management_router)
@@ -392,6 +394,13 @@ async def database_error_handler(_, exception: psycopg.Error):
                 )
         except psycopg.Error:
             pass
+    if sqlstate == "23505" and constraint_name in {
+        "aggregations_aggregation_number_key", "records_record_number_key",
+    }:
+        return JSONResponse(status_code=409, content={"detail": {
+            "code": "duplicate_resource_number",
+            "resource": "aggregations" if constraint_name.startswith("aggregations_") else "records",
+        }})
     friendly_constraint = constraint_messages.get(constraint_name or "")
     if isinstance(exception, PoolTimeout):
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE

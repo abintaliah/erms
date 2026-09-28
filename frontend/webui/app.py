@@ -4040,6 +4040,16 @@ def index(q: str = "") -> None:
         await open_aggregation(aggregation)
 
     async def run_global_search(query: str, *, load_more: bool = False) -> None:
+        if not auth_state.get("principal"):
+            return
+        revision = state.get("global_search_revision", 0) + 1
+        state["global_search_revision"] = revision
+
+        def is_current() -> bool:
+            return (state.get("global_search_revision") == revision
+                    and bool(auth_state.get("principal"))
+                    and state["resource"] == "full-text-search")
+
         query = query.strip()
         if not query:
             ui.notify(render_message("webui.run_global_search.notify.enter_words_to_search_for_317e3f34"), color="warning")
@@ -4059,6 +4069,8 @@ def index(q: str = "") -> None:
                 f"history.replaceState(null, '', '/?q=' + encodeURIComponent({json.dumps(query)})); true",
                 timeout=5,
             )
+        if not is_current():
+            return
         payload = global_search_payload(query, cursor=state.get("global_search_cursor") if load_more else None)
         if state["search_diagnostics_enabled"]:
             state["search_diagnostics_sent"] = payload
@@ -4072,6 +4084,8 @@ def index(q: str = "") -> None:
         render_global_search_results()
         try:
             result = await api.full_text_search(payload)
+            if not is_current():
+                return
             result_items = list(result.get("items", []))
             record_items = [item for item in result_items if item.get("type") == "record"]
             async def load_global_matching_component_details(
@@ -4089,6 +4103,8 @@ def index(q: str = "") -> None:
             component_contexts = await asyncio.gather(*(
                 load_global_matching_component_details(result_item) for result_item in record_items
             )) if record_items else []
+            if not is_current():
+                return
             component_details = {
                 record_id: components for record_id, _, components in component_contexts
             }
@@ -4104,10 +4120,12 @@ def index(q: str = "") -> None:
             state["global_search_pending"] = bool(result.get("index_freshness", {}).get("has_pending_content"))
             state["search_diagnostics_accepted"] = result.get("_debug")
         except ApiError as error:
-            state["global_search_error"] = error_message(error)
+            if is_current():
+                state["global_search_error"] = error_message(error)
         finally:
-            state["global_search_loading"] = False
-            render_global_search_results()
+            if is_current():
+                state["global_search_loading"] = False
+                render_global_search_results()
 
     def persist_navigation_trail() -> None:
         app.storage.user["navigation_trail"] = navigation_state["trail"]
@@ -4365,14 +4383,32 @@ def index(q: str = "") -> None:
         content_card.set_visibility(False)
         breadcrumb_host.set_visibility(False)
 
+    def clear_global_search_session() -> None:
+        """Discard private query state and invalidate outstanding search responses."""
+        state.update(
+            global_search_revision=state.get("global_search_revision", 0) + 1,
+            global_search_query="", global_search_items=[], global_search_cursor=None,
+            global_search_filter="all", global_search_page=1,
+            global_search_return_anchor=None, global_search_expanded_results=set(),
+            global_search_loading=False, global_search_error=None, global_search_pending=False,
+            search_diagnostics_enabled=False, search_diagnostics_sent=None,
+            search_diagnostics_accepted=None, search_diagnostics_error=None,
+            entity_result_states={},
+        )
+        global_search_input.value = ""
+        global_search_input.update()
+
     async def clear_translation_inspector_session() -> None:
         """Clear browser diagnostics without pre-creating an awaitable response."""
         await page_client.run_javascript(
-            "window.wathiqTranslationInspector?.clearSession(); true", timeout=5,
+            "window.wathiqTranslationInspector?.clearSession(); "
+            "history.replaceState(null, '', '/'); true", timeout=5,
         )
 
     def clear_signed_in_identity() -> None:
         """Remove account identity and overlays before presenting sign-in again."""
+        clear_global_search_session()
+        api.cancel_pending_reads()
         drawer.hide()
         user_menu.close()
         diagnostics_separator.set_visibility(False)
@@ -5383,6 +5419,62 @@ def index(q: str = "") -> None:
                 await render_component_section(standalone=False)
         if dialog is not None:
             dialog.open()
+
+    def add_number_suggestion(control: Any, resource: str, controls: dict[str, Any]) -> None:
+        def selected_context() -> dict[str, Any]:
+            parent_field = "aggregation_id" if resource == "records" else "parent_aggregation_id"
+            parent = controls.get(parent_field)
+            parent_id = parent.value if parent is not None else None
+            if parent_id is not None:
+                return {"parent_aggregation_id": parent_id}
+            classification = controls.get("classification_id")
+            if resource == "aggregations" and classification is not None and classification.value is not None:
+                return {"classification_id": classification.value}
+            return {}
+
+        async def suggest() -> None:
+            context = selected_context()
+            if not context:
+                ui.notify(render_message("webui.number_conflict.select_context"), color="warning")
+                return
+            button.disable()
+            original = control.value
+            try:
+                result = await api.request("GET", f"/api/v1/number-suggestions/{resource}", params=context)
+                if selected_context() == context and control.value == original and result.get("suggested_number"):
+                    control.set_value(result["suggested_number"])
+            except ApiError as error:
+                show_api_error(error)
+            finally:
+                button.enable()
+
+        with control.add_slot("append"):
+            button = ui.button(render_message("webui.number_conflict.suggest"), icon="auto_fix_high", on_click=suggest).props("flat dense no-caps")
+
+    async def show_number_conflict(error: ApiError, resource: str, control: Any, *, root: bool = False) -> bool:
+        if not isinstance(error.detail, dict) or error.detail.get("code") != "duplicate_resource_number":
+            return False
+        attempted = str(control.value or "")
+        suggestion = None
+        try:
+            result = await api.request("GET", f"/api/v1/number-suggestions/{resource}", params={"number": attempted, "root": root})
+            suggestion = result.get("suggested_number")
+        except ApiError:
+            pass  # The duplicate message remains useful if suggestion lookup fails.
+        with ui.dialog() as conflict_dialog, ui.card().classes("w-[520px] max-w-full"):
+            ui.label(render_message("webui.number_conflict.duplicate", number=attempted)).classes("text-lg font-semibold")
+            if suggestion:
+                ui.label(render_message("webui.number_conflict.suggestion", number=suggestion))
+                ui.label(render_message("webui.number_conflict.not_reserved")).classes("text-sm text-slate-500")
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button(render_message("webui.number_conflict.close"), on_click=conflict_dialog.close).props("flat")
+                if suggestion:
+                    def use_suggestion() -> None:
+                        control.set_value(suggestion)
+                        conflict_dialog.close()
+                    ui.button(render_message("webui.number_conflict.use"), on_click=use_suggestion).props("unelevated")
+        conflict_dialog.open()
+        return True
 
     async def show_acl_editor(
         resource: str, entity_id: int, *, scope: str = "resource",
@@ -7245,6 +7337,8 @@ def index(q: str = "") -> None:
             except ValueError as error:
                 ui.notify(validation_error_message(error), color="warning")
             except ApiError as error:
+                if await show_number_conflict(error, "records", controls["record_number"]):
+                    return
                 ui.notify(error_message(error), color="negative", close_button=True)
 
         with dialog, ui.card().classes("max-h-[calc(100vh-32px)] p-0").style("width: 1050px; max-width: calc(100vw - 32px)"):
@@ -7343,6 +7437,8 @@ def index(q: str = "") -> None:
                             parent = aggregations_by_id.get(controls["aggregation_id"].value)
                             initial_value = parent.get("medium", "mixed") if parent else "mixed"
                         controls[field.name] = field_input(field, value=initial_value, options=options)
+                        if field.name == "record_number":
+                            add_number_suggestion(controls[field.name], "records", controls)
                         if field.name == "security_level_id":
                             bind_remote_relationship_select(
                                 controls[field.name],
@@ -7889,6 +7985,8 @@ def index(q: str = "") -> None:
                         initial_value,
                         lookup_options.get(field.name),
                     )
+                    if creating and field.name in {"aggregation_number", "record_number"}:
+                        add_number_suggestion(controls[field.name], spec.key, controls)
                     if field.lookup_resource:
                         bind_remote_relationship_select(
                             controls[field.name], field.lookup_resource,
@@ -8371,7 +8469,7 @@ def index(q: str = "") -> None:
                         ui.notify(
                             render_message(
                                 "webui.save.notify.capitalize_saved_c660b8b4",
-                                capitalize=spec.singular.capitalize(),
+                                capitalize=strip_diagnostic_metadata(editor_entity).capitalize(),
                             ),
                             color="positive",
                         )
@@ -8451,7 +8549,7 @@ def index(q: str = "") -> None:
                             saved["version"] = saved_translation["version"]
                             row["version"] = saved_translation["version"]
                     dialog.close()
-                    ui.notify(render_message("webui.save.notify.capitalize_saved_c660b8b4", capitalize=spec.singular.capitalize()), color="positive")
+                    ui.notify(render_message("webui.save.notify.capitalize_saved_c660b8b4", capitalize=strip_diagnostic_metadata(editor_entity).capitalize()), color="positive")
                     if on_saved is not None:
                         if spec.search_first:
                             await load_recent(spec)
@@ -8479,6 +8577,10 @@ def index(q: str = "") -> None:
                 except ValueError as error:
                     ui.notify(validation_error_message(error), color="warning")
                 except ApiError as error:
+                    if creating and spec.key in {"aggregations", "records"}:
+                        number_field = "aggregation_number" if spec.key == "aggregations" else "record_number"
+                        if await show_number_conflict(error, spec.key, controls[number_field], root=spec.key == "aggregations" and controls["parent_aggregation_id"].value is None):
+                            return
                     show_api_error(error)
 
             with ui.row().classes("w-full justify-end gap-2"):
@@ -20729,6 +20831,8 @@ def index(q: str = "") -> None:
                     login_email.value or "", login_password.value or "",
                     user_agent=context.client.request.headers.get("user-agent"),
                 )
+                clear_global_search_session()
+                await clear_translation_inspector_session()
                 app.storage.user["session_token"] = token
                 api.set_session_token(token)
                 navigation_state["trail"] = []
@@ -20844,7 +20948,7 @@ def index(q: str = "") -> None:
             except ApiError:
                 app.storage.user.pop("session_token", None)
                 api.set_session_token(None)
-        clear_authenticated_view()
+        clear_signed_in_identity()
         set_connection_status(True)
         drawer.hide()
         login_dialog.open()

@@ -16174,6 +16174,108 @@
     "is_html": false
   },
   {
+    "message_key": "webui.number_conflict.close",
+    "context_group": "webui.number_conflict",
+    "default_text": "Close",
+    "semantic_meaning": "Duplicate record or aggregation number recovery during creation.",
+    "common_locations": [
+      "WebUI: new record and aggregation forms"
+    ],
+    "translator_guidance": "The proposed number is not reserved and applying it does not save the form. Preserve number placeholder.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Close",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.number_conflict.duplicate",
+    "context_group": "webui.number_conflict",
+    "default_text": "Number {number} already exists.",
+    "semantic_meaning": "Duplicate record or aggregation number recovery during creation.",
+    "common_locations": [
+      "WebUI: new record and aggregation forms"
+    ],
+    "translator_guidance": "The proposed number is not reserved and applying it does not save the form. Preserve number placeholder.",
+    "grammatical_role": "label",
+    "parameter_schema": {
+      "number": "text"
+    },
+    "rendered_example": "Number 3110/2026/2 already exists.",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.number_conflict.not_reserved",
+    "context_group": "webui.number_conflict",
+    "default_text": "This number is not reserved. Availability is checked again when you save.",
+    "semantic_meaning": "Duplicate record or aggregation number recovery during creation.",
+    "common_locations": [
+      "WebUI: new record and aggregation forms"
+    ],
+    "translator_guidance": "The proposed number is not reserved and applying it does not save the form. Preserve number placeholder.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "This number is not reserved. Availability is checked again when you save.",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.number_conflict.select_context",
+    "context_group": "webui.number_conflict",
+    "default_text": "Select a terminal classification for a root aggregation, or a parent aggregation, first.",
+    "semantic_meaning": "Request a number before saving a new record or aggregation.",
+    "common_locations": [
+      "WebUI: creation number fields"
+    ],
+    "translator_guidance": "Suggestion fills the editable number without saving or reserving it.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Select a terminal classification for a root aggregation, or a parent aggregation, first.",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.number_conflict.suggest",
+    "context_group": "webui.number_conflict",
+    "default_text": "Suggest next number",
+    "semantic_meaning": "Request a number before saving a new record or aggregation.",
+    "common_locations": [
+      "WebUI: creation number fields"
+    ],
+    "translator_guidance": "Suggestion fills the editable number without saving or reserving it.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Suggest next number",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.number_conflict.suggestion",
+    "context_group": "webui.number_conflict",
+    "default_text": "Next available number: {number}",
+    "semantic_meaning": "Duplicate record or aggregation number recovery during creation.",
+    "common_locations": [
+      "WebUI: new record and aggregation forms"
+    ],
+    "translator_guidance": "The proposed number is not reserved and applying it does not save the form. Preserve number placeholder.",
+    "grammatical_role": "label",
+    "parameter_schema": {
+      "number": "text"
+    },
+    "rendered_example": "Next available number: 3110/2026/2",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.number_conflict.use",
+    "context_group": "webui.number_conflict",
+    "default_text": "Use suggested number",
+    "semantic_meaning": "Duplicate record or aggregation number recovery during creation.",
+    "common_locations": [
+      "WebUI: new record and aggregation forms"
+    ],
+    "translator_guidance": "The proposed number is not reserved and applying it does not save the form. Preserve number placeholder.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Use suggested number",
+    "is_html": false
+  },
+  {
     "message_key": "webui.open_aggregation.badge.closed_30c24826",
     "context_group": "webui.open_aggregation",
     "default_text": "Closed",
