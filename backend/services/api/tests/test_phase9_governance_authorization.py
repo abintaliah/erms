@@ -273,3 +273,19 @@ def test_governance_explanation_and_operation_preserve_closure_integrity(
         f"/api/v1/records/{record['id']}", json={"title": "Still frozen"},
         headers={"If-Match": str(current["version"])},
     ).status_code == 409
+
+
+def test_explainable_users_searches_translated_names_and_pages(client):
+    _login_admin(client)
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        connection.execute("SELECT set_config('app.change_reason','Verify localized picker',true)")
+        connection.execute("UPDATE users SET translations=%s::jsonb WHERE id=1", ('{"ar":{"name":"مستخدم التشخيص"}}',))
+        connection.execute("""INSERT INTO user_preferences(user_id,language_tag,working_timezone)
+            VALUES(1,'ar','Asia/Dubai') ON CONFLICT(user_id)
+            DO UPDATE SET language_tag='ar'""")
+    url = '/api/v1/authorization/explainable-users'
+    result = client.get(url, params={'q': 'التشخيص', 'limit': 1})
+    assert result.status_code == 200, result.text
+    assert result.json()[0]['name'] == 'مستخدم التشخيص'
+    assert client.get(url, params={'q': 'التشخيص', 'limit': 1, 'offset': 1}).json() == []
+    assert client.get(url, params={'limit': 51}).status_code == 422

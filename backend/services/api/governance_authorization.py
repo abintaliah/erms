@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel
@@ -314,12 +314,28 @@ def explain_access(
 
 
 @router.get("/explainable-users", response_model=list[ExplainableUserRead], dependencies=[Depends(require_authorization_explain)])
-def explainable_users(connection: Connection = Depends(get_connection, scope="function")):
-    """Expose only the identity fields needed by the audited access-explanation UI."""
-    return list(connection.execute(
-        """SELECT id,name,email,status FROM users
-           WHERE account_type='person' ORDER BY name,email"""
+def explainable_users(
+    request: Request,
+    q: str = Query("", max_length=120),
+    limit: int = Query(25, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    """Bounded identity search, including inactive people for access diagnosis."""
+    language = preferred_language(connection, request)
+    rows = list(connection.execute(
+        """SELECT id,name,email,status,translations FROM users
+           WHERE account_type='person' AND
+             (%s='' OR name ILIKE '%%'||%s||'%%' OR email ILIKE '%%'||%s||'%%'
+              OR COALESCE(translations->%s->>'name','') ILIKE '%%'||%s||'%%')
+           ORDER BY lower(COALESCE(NULLIF(translations->%s->>'name',''),name)),id
+           LIMIT %s OFFSET %s""",
+        (q.strip(), q.strip(), q.strip(), language, q.strip(), language, limit, offset),
     ).fetchall())
+    for row in rows:
+        row['name'] = localized_projection(row, language, 'name')['name']
+        row.pop('translations', None)
+    return rows
 
 
 @router.get("/governance-custody", response_model=GovernanceCustodyRead, dependencies=[Depends(require_authorization_admin)])

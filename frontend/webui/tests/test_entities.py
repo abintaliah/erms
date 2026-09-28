@@ -685,11 +685,28 @@ def test_saved_search_audiences_and_memberships_use_bounded_enriched_pages():
     source = inspect.getsource(index)
     assert 'def bind_remote_saved_audience_select(' in source
     assert 'if len(term) < 2:' in source
-    assert 'api.saved_search_audience_options(\n                    audience_kind, query=term, limit=25, offset=0,' in source
+    assert 'api.saved_search_audience_options(\n                    audience_kind, query=term, limit=25, offset=offset,' in source
     assert 'await api.saved_search_audience_options()' not in source
     assert 'api.user_roles(\n                        entity["id"], limit=assignment_page["limit"]' in source
     assert 'counterpart = assignment.get("counterpart") or {}' in source
     assert 'counterpart_rows = await asyncio.gather' not in source
+
+
+def test_saved_search_audience_controls_accept_typed_remote_queries():
+    import ast
+
+    tree = ast.parse(inspect.getsource(index))
+    save_search = next(node for node in ast.walk(tree)
+                       if isinstance(node, ast.AsyncFunctionDef) and node.name == "save_search")
+    controls = [node for node in ast.walk(save_search)
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "select"
+                and any(keyword.arg == "multiple" and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value is True for keyword in node.keywords)]
+    assert len(controls) == 2
+    for control in controls:
+        assert any(keyword.arg == "with_input" and isinstance(keyword.value, ast.Constant)
+                   and keyword.value.value is True for keyword in control.keywords)
 
 
 def test_org_unit_details_show_dedicated_holdings_summary_and_card_style_labels():

@@ -708,8 +708,8 @@ class ErmsApiClient:
         return await self.request("DELETE", f"/api/v1/{resource_type}s/{resource_id}/holds",
                                   headers={"X-Change-Reason": reason})
 
-    async def explainable_users(self) -> list[dict[str, Any]]:
-        return await self.request("GET", "/api/v1/authorization/explainable-users")
+    async def explainable_users(self, *, query: str = "", limit: int = 25, offset: int = 0) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/authorization/explainable-users", params={"q": query, "limit": limit, "offset": offset})
 
     async def governance_custody(self) -> dict[str, Any]:
         return await self.request("GET", "/api/v1/authorization/governance-custody")

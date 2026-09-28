@@ -187,7 +187,7 @@ def privilege_matches_search(privilege: dict[str, Any], query: str) -> bool:
 def decision_code_label(code: str | None) -> str:
     if not code:
         return "—"
-    return DECISION_CODE_LABELS.get(code, code.replace("_", " ").title())
+    return localized_decision_label(code)
 
 
 PERMISSION_MESSAGE_KEYS = {
@@ -254,10 +254,12 @@ def authorization_code_label(code: str) -> str:
 
 def security_level_label(level: dict[str, Any] | None) -> str:
     if not level:
-        return "None"
-    return (
-        f"{level.get('code') or '—'} — {level.get('name') or 'Unnamed'} "
-        f"(level {level.get('level_number', '—')})"
+        return render_message("authorization.explanation.no_clearance")
+    return render_message(
+        "authorization.explanation.security_level",
+        code=level.get("code") or "—",
+        name=(level.get("localized") or {}).get("name") or level.get("name") or "—",
+        level=level.get("level_number", "—"),
     )
 
 
@@ -286,12 +288,46 @@ def aggregation_reference_label(aggregation: dict[str, Any]) -> str:
 def gate_detail(gate: dict[str, Any]) -> str:
     if gate.get("gate") == "operation_integrity":
         if gate.get("passed"):
-            return "The resource's current state permits this operation."
+            return render_message('authorization.explanation.state_allowed')
         if gate.get("detail") == "resource_is_effectively_closed":
-            return "The aggregation, or one of its ancestors, is closed and does not permit this operation."
-        return "A business-state rule prevents this operation."
-    return str(gate.get("detail") or gate.get("code") or "").replace("_", " ").capitalize()
+            return render_message('authorization.explanation.state_closed')
+        return render_message('authorization.explanation.state_denied')
+    if gate.get("detail") == "information_governance_bypass":
+        return render_message('authorization.explanation.bypass')
+    if gate.get("gate") == "resource_acl" and gate.get("detail"):
+        return "، ".join(operation_label(code.strip()) for code in gate["detail"].split(","))
+    return decision_code_label(gate.get("code"))
 
 
 def denied_gate(explanation: dict[str, Any]) -> dict[str, Any] | None:
     return next((gate for gate in explanation.get("gates", []) if not gate.get("passed")), None)
+
+
+def gate_label(code: str) -> str:
+    return {
+        'authentication': render_message('authorization.explanation.gate.authentication'),
+        'effective_roles': render_message('authorization.explanation.gate.effective_roles'),
+        'operation_integrity': render_message('authorization.explanation.gate.operation_integrity'),
+        'global_privilege': render_message('authorization.explanation.gate.global_privilege'),
+        'security_clearance': render_message('authorization.explanation.gate.security_clearance'),
+        'resource_acl': render_message('authorization.explanation.gate.resource_acl'),
+    }.get(code, code)
+
+
+def localized_decision_label(code: str) -> str:
+    return {
+        'allowed': render_message('authorization.explanation.decision.allowed'),
+        'authentication_required': render_message('authorization.explanation.decision.authentication_required'),
+        'session_revoked': render_message('authorization.explanation.decision.session_revoked'),
+        'session_expired': render_message('authorization.explanation.decision.session_expired'),
+        'user_inactive': render_message('authorization.explanation.decision.user_inactive'),
+        'user_suspended': render_message('authorization.explanation.decision.user_suspended'),
+        'user_locked': render_message('authorization.explanation.decision.user_locked'),
+        'no_effective_role': render_message('authorization.explanation.decision.no_effective_role'),
+        'insufficient_privilege': render_message('authorization.explanation.decision.insufficient_privilege'),
+        'insufficient_clearance': render_message('authorization.explanation.decision.insufficient_clearance'),
+        'insufficient_resource_permission': render_message('authorization.explanation.decision.insufficient_resource_permission'),
+        'operation_not_allowed': render_message('authorization.explanation.decision.operation_not_allowed'),
+        'resource_not_found': render_message('authorization.explanation.decision.resource_not_found'),
+        'unspecified': render_message('authorization.explanation.decision.unspecified'),
+    }.get(code, code)

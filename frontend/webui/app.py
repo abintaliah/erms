@@ -24,7 +24,7 @@ from .capabilities import (
 )
 from .acl_editor import acl_grants_payload, dependents_of, permission_closure
 from .authorization_ui import (
-    GATE_LABELS, OPERATIONS, acl_source_label, aggregation_reference_label,
+    gate_label, OPERATIONS, acl_source_label, aggregation_reference_label,
     authorization_code_label, decision_code_label, operation_label, gate_detail, ordered_permission_catalogue,
     privilege_help_text, privilege_matches_search, security_level_label,
 )
@@ -1651,28 +1651,36 @@ def index(q: str = "") -> None:
         return load_options
 
     def bind_remote_saved_audience_select(
-        control: Any, audience_kind: str,
+        control: Any, audience_kind: str, more_button: Any,
     ) -> tuple[Callable[..., Any], Callable[..., Any]]:
         """Attach a bounded typeahead to a saved-search role or unit selector."""
-        request_state: dict[str, Any] = {"revision": 0, "task": None}
+        request_state: dict[str, Any] = {"revision": 0, "task": None, "query": "", "offset": 0}
+
+        def selected_values() -> list[int]:
+            if control.multiple:
+                return list(control.value or [])
+            return [control.value] if control.value is not None else []
 
         def option_label(item: dict[str, Any]) -> str:
             name = (item.get("localized") or {}).get("name") or item.get("name") or item["id"]
             return f"{name} ({item['code']})" if item.get("code") else str(name)
 
-        async def load_options(query: str = "") -> None:
+        async def load_options(query: str = "", *, append: bool = False) -> None:
             request_state["revision"] += 1
             revision = request_state["revision"]
-            selected = set(control.value or [])
+            selected = set(selected_values())
             retained = {key: value for key, value in dict(control.options).items() if key in selected}
-            term = query.strip()
+            term = strip_diagnostic_metadata(query).strip()
+            offset = request_state["offset"] if append else 0
+            if not append:
+                more_button.set_visibility(False)
             if len(term) < 2:
                 control.options = retained
                 control.update()
                 return
             try:
                 page = await api.saved_search_audience_options(
-                    audience_kind, query=term, limit=25, offset=0,
+                    audience_kind, query=term, limit=25, offset=offset,
                 )
             except asyncio.CancelledError:
                 return
@@ -1681,6 +1689,9 @@ def index(q: str = "") -> None:
                 return
             if revision != request_state["revision"]:
                 return
+            retained = dict(control.options) if append else {key: value for key, value in dict(control.options).items() if key in set(selected_values())}
+            request_state.update(query=term, offset=offset + len(page.get("items", [])))
+            more_button.set_visibility(request_state["offset"] < page["total"])
             control.options = {
                 **retained,
                 **{int(item["id"]): option_label(item) for item in page.get("items", [])},
@@ -1706,10 +1717,13 @@ def index(q: str = "") -> None:
                 **dict(control.options),
                 **{int(item["id"]): option_label(item) for item in items},
             }
-            control.value = [value for value in ids if value in control.options]
+            resolved = [value for value in ids if value in control.options]
+            control.value = resolved if control.multiple else (resolved[0] if resolved else None)
             control.update()
 
         def schedule(event: Any) -> None:
+            request_state["revision"] += 1
+            more_button.set_visibility(False)
             previous = request_state.get("task")
             if previous is not None and not previous.done():
                 previous.cancel()
@@ -1718,7 +1732,13 @@ def index(q: str = "") -> None:
                 await load_options(str(event.args or ""))
             request_state["task"] = asyncio.create_task(delayed())
 
+        more_button.set_visibility(False)
+        more_button.on("click", lambda: load_options(request_state["query"], append=True))
         control.on("input-value", schedule)
+        if control.multiple:
+            # NiceGUI exposes no separate input-text setter. Clear the QSelect
+            # search buffer through its public method, leaving selected IDs intact.
+            control.on_value_change(lambda: control.run_method("updateInputValue", ""))
         return load_options, load_selected
 
     def bind_remote_people_select(
@@ -5828,12 +5848,6 @@ def index(q: str = "") -> None:
         """Explain every authorization gate without treating the UI as an enforcement boundary."""
         privileges = set((auth_state.get("principal") or {}).get("global_privileges", []))
         can_examine_others = "authorization.explain" in privileges
-        users: list[dict[str, Any]] = []
-        if can_examine_others:
-            try:
-                users = await api.explainable_users()
-            except ApiError:
-                can_examine_others = False
         operations = {code: operation_label(code) for code in OPERATIONS[resource_type]}
         dialog = ui.dialog()
         result_host: Any = None
@@ -5849,10 +5863,50 @@ def index(q: str = "") -> None:
                 operation = ui.select(operations, value=OPERATIONS[resource_type][0], label=render_message("webui.show_access_explanation.select.operation_709c7c46")).props("outlined").classes("grow")
                 user = None
                 if can_examine_others:
-                    user = ui.select(
-                        {item["id"]: f"{item['name']} — {item.get('email') or 'no email'}" for item in users},
-                        label=render_message("webui.show_access_explanation.select.explain_for_another_user_optional_c0131ea6"), clearable=True,
-                    ).props("outlined use-input").classes("grow")
+                    with ui.column().classes("grow gap-1"):
+                        user = ui.select(
+                            {}, label=render_message("webui.show_access_explanation.select.explain_for_another_user_optional_c0131ea6"),
+                            clearable=True, with_input=True,
+                        ).props("outlined input-debounce=0").classes("w-full")
+                        more_users = ui.button(render_message("webui.render_collection.button.load_more_755f4879"), icon="more_horiz").props("flat dense no-caps")
+                        more_users.set_visibility(False)
+                    picker = {"revision": 0, "query": "", "offset": 0, "task": None}
+
+                    async def load_users(query: str = "", *, append: bool = False) -> None:
+                        picker["revision"] += 1
+                        revision = picker["revision"]
+                        offset = picker["offset"] if append else 0
+                        try:
+                            rows = await api.explainable_users(query=query, limit=26, offset=offset)
+                        except ApiError as error:
+                            ui.notify(error_message(error), color="negative", close_button=True)
+                            return
+                        if revision != picker["revision"] or not dialog.value:
+                            return
+                        retained = dict(user.options) if append else {
+                            key: label for key, label in user.options.items() if key == user.value
+                        }
+                        user.set_options({**retained, **{
+                            item["id"]: f"{item['name']} — {item.get('email') or '—'}" for item in rows[:25]
+                        }})
+                        picker.update(query=query, offset=offset + len(rows[:25]))
+                        more_users.set_visibility(len(rows) > 25)
+
+                    def search_users(event: Any) -> None:
+                        query = relationship_search_query(user, event.args)
+                        if query is None:
+                            return
+                        picker["revision"] += 1
+                        more_users.set_visibility(False)
+                        if picker["task"] is not None:
+                            picker["task"].cancel()
+                        async def delayed() -> None:
+                            await asyncio.sleep(0.2)
+                            await load_users(strip_diagnostic_metadata(query).strip())
+                        picker["task"] = background_tasks.create(delayed())
+                    user.on("input-value", search_users)
+                    user.on("popup-show", lambda: load_users() if not user.options else None)
+                    more_users.on("click", lambda: load_users(picker["query"], append=True))
                 run = ui.button(render_message("webui.show_access_explanation.button.explain_46823543"), icon="play_arrow").props("unelevated no-caps")
             result_host = ui.scroll_area().classes("w-full h-[520px] px-5 py-4")
 
@@ -5882,8 +5936,31 @@ def index(q: str = "") -> None:
                         # A source ancestor can legitimately be hidden by the same
                         # authorization policy this dialog is explaining.
                         source_aggregation = None
+                async def localize_explanation_entity(resource: str, identifier: int) -> dict[str, Any]:
+                    try:
+                        return await api.get(resource, identifier)
+                    except ApiError:
+                        return {}
+
+                roles = {item["role_id"]: dict(item) for item in result["subject"]["effective_roles"]}
+                references = [("roles", role_id) for role_id in roles]
+                level_fields = [name for name in ("effective_security_level", "required_security_level")
+                                if (result.get(name) or {}).get("id") is not None]
+                references.extend(("security-levels", result[name]["id"]) for name in level_fields)
+                localized_rows = await asyncio.gather(*(
+                    localize_explanation_entity(kind, identifier) for kind, identifier in references
+                ))
+                for role_id, localized in zip(roles, localized_rows):
+                    roles[role_id]["role_name"] = (
+                        (localized.get("localized") or {}).get("name")
+                        or localized.get("name") or roles[role_id].get("role_name")
+                    )
+                for name, localized in zip(level_fields, localized_rows[len(roles):]):
+                    if localized:
+                        result[name] = localized
+                if request_sequence != explanation_request["sequence"] or selected_operation != operation.value:
+                    return
                 result_host.clear()
-                roles = {item["role_id"]: item for item in result["subject"]["effective_roles"]}
                 with result_host:
                     with ui.row().classes(
                         "w-full items-center gap-3 rounded-xl border p-4 " +
@@ -5892,32 +5969,46 @@ def index(q: str = "") -> None:
                         ui.icon("check_circle" if result["allowed"] else "cancel", color="positive" if result["allowed"] else "negative", size="28px")
                         with ui.column().classes("gap-0 grow"):
                             ui.label(render_message("webui.load_explanation.label.allowed_4d6e5631") if result["allowed"] else render_message("webui.load_explanation.label.denied_c4e96002")).classes("text-lg font-semibold")
-                            ui.label(str(result["decision_code"]).replace("_", " ").title()).classes("text-sm text-slate-600")
+                            ui.label(decision_code_label(result["decision_code"])).classes("text-sm text-slate-600")
                     ui.label(render_message("webui.load_explanation.label.decision_gates_1847ec0e")).classes("text-base font-semibold mt-4")
                     for gate in result["gates"]:
                         with ui.row().classes("w-full items-start gap-3 py-2 border-b border-slate-100"):
                             ui.icon("check_circle" if gate["passed"] else "cancel", color="positive" if gate["passed"] else "negative")
                             with ui.column().classes("gap-0 grow"):
-                                ui.label(GATE_LABELS.get(gate["gate"], gate["gate"].replace("_", " ").title())).classes("font-medium")
+                                ui.label(gate_label(gate["gate"])).classes("font-medium")
                                 ui.label(gate_detail(gate)).classes("text-xs text-slate-500")
+                    constraint_labels = {
+                        "deletion": render_message("authorization.explanation.constraint.deletion"),
+                        "metadata_change": render_message("authorization.explanation.constraint.metadata_change"),
+                        "movement": render_message("authorization.explanation.constraint.movement"),
+                        "addition": render_message("authorization.explanation.constraint.addition"),
+                        "removal": render_message("authorization.explanation.constraint.removal"),
+                        "replacement": render_message("authorization.explanation.constraint.replacement"),
+                        "reordering": render_message("authorization.explanation.constraint.reordering"),
+                        "change": render_message("authorization.explanation.constraint.change"),
+                        "direct": render_message("authorization.explanation.constraint.direct"),
+                        "inherited": render_message("authorization.explanation.constraint.inherited"),
+                        "both": render_message("authorization.explanation.constraint.both"),
+                        "unknown": render_message("authorization.explanation.constraint.unknown"),
+                    }
                     constraints = result.get("resource_state_constraints", [])
                     if constraints:
                         ui.label(render_message("webui.load_explanation.label.resource_state_restrictions_2f05b5a7")).classes("text-base font-semibold mt-4")
                         for constraint in constraints:
-                            effect = str(constraint.get("effect", "change")).replace("_", " ")
+                            effect = constraint_labels.get(constraint.get("effect"), constraint_labels["change"])
                             with ui.column().classes("w-full gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3"):
                                 with ui.row().classes("items-center gap-2"):
                                     ui.icon("gavel", color="warning")
                                     ui.label(
-                                        render_message("webui.load_explanation.label.an_effective_legal_hold_prevents_this_reso_bc46e497", resource_type=resource_type, effect=effect)
+                                        render_message("webui.load_explanation.label.an_effective_legal_hold_prevents_this_reso_bc46e497", resource_type=localized_editor_entity("aggregations" if resource_type == "aggregation" else "records", resource_type), effect=effect)
                                     ).classes("font-medium text-amber-900")
                                 ui.label(
-                                    render_message("webui.load_explanation.label.coverage_get_get_2_effective_hold_s_7dc8ce69", get=constraint.get('source', 'unknown'), get_2=constraint.get('effective_hold_count', 0))
+                                    render_message("webui.load_explanation.label.coverage_get_get_2_effective_hold_s_7dc8ce69", get=constraint_labels.get(constraint.get('source'), constraint_labels['unknown']), get_2=constraint.get('effective_hold_count', 0))
                                 ).classes("text-xs text-amber-800")
                                 for hold in constraint.get("holds", []):
-                                    preservation = " — preserves metadata and state" if hold.get("preserve_resource_state") else ""
+                                    preservation = render_message("authorization.explanation.preservation") if hold.get("preserve_resource_state") else ""
                                     ui.label(
-                                        render_message("webui.load_explanation.label.get_get_2_get_3_preservation_8736fc35", get=hold.get('code', ''), get_2=hold.get('name', ''), get_3=hold.get('source', 'unknown'), preservation=preservation)
+                                        render_message("webui.load_explanation.label.get_get_2_get_3_preservation_8736fc35", get=hold.get('code', ''), get_2=hold.get('name', ''), get_3=constraint_labels.get(hold.get('source'), constraint_labels['unknown']), preservation=preservation)
                                     ).classes("text-sm text-amber-900")
                     ui.label(render_message("webui.load_explanation.label.contributing_context_eeadfa0a")).classes("text-base font-semibold mt-4")
                     with ui.grid(columns=2).classes("w-full gap-3"):
@@ -5984,7 +6075,7 @@ def index(q: str = "") -> None:
                         with ui.column().classes("w-full gap-1 rounded-lg border border-slate-200 p-3"):
                             required_privilege = result["required_privilege"]
                             contributor_heading(
-                                f"Global privilege: {authorization_code_label(required_privilege)}",
+                                render_message('authorization.explanation.privilege', name=localized_privilege_name({"code": required_privilege})),
                                 required_privilege, "key",
                             )
                             for role_id in privilege_role_ids:
@@ -5994,8 +6085,8 @@ def index(q: str = "") -> None:
                     if clearance_role_ids:
                         with ui.column().classes("w-full gap-1 rounded-lg border border-slate-200 p-3"):
                             contributor_heading(
-                                f"Security clearance: level {result.get('required_clearance', '—')} required",
-                                "Maximum clearance across effective roles", "verified_user",
+                                render_message('authorization.explanation.clearance', level=result.get('required_clearance', '—')),
+                                render_message('authorization.explanation.maximum_clearance'), "verified_user",
                             )
                             for role_id in clearance_role_ids:
                                 contributor_role(role_id, clearance=True)
@@ -6022,7 +6113,7 @@ def index(q: str = "") -> None:
                             continue
                         with ui.column().classes("w-full gap-1 rounded-lg border border-slate-200 p-3"):
                             contributor_heading(
-                                f"ACL permission: {authorization_code_label(permission)}",
+                                render_message('authorization.explanation.permission', name=operation_label(permission)),
                                 permission, "policy",
                             )
                             if permission in everyone_permissions:
@@ -6045,8 +6136,8 @@ def index(q: str = "") -> None:
                     if bypass_role_ids:
                         with ui.column().classes("w-full gap-1 rounded-lg border border-amber-200 bg-amber-50 p-3"):
                             contributor_heading(
-                                "Information-governance ACL bypass",
-                                "The ACL gate was bypassed; privilege and clearance gates still apply.",
+                                render_message('authorization.explanation.bypass'),
+                                render_message('authorization.explanation.bypass_detail'),
                                 "admin_panel_settings",
                             )
                             for role_id in bypass_role_ids:
@@ -7378,10 +7469,9 @@ def index(q: str = "") -> None:
                     )
                     constrain_record_security_levels()
                     constrain_record_medium()
-                with ui.row().classes("w-full items-center mt-5 mb-2"):
-                    with ui.column().classes("gap-0"):
-                        ui.label(render_message("webui.open_record_draft_editor.label.digital_components_21c9474b")).classes("text-base font-semibold")
-                        ui.label(render_message("webui.open_record_draft_editor.label.files_remain_staged_until_you_create_the_r_ec0dd8d9")).classes("text-xs text-slate-500")
+                with ui.column().classes("w-full gap-0 mt-5 mb-2"):
+                    ui.label(render_message("webui.open_record_draft_editor.label.digital_components_21c9474b")).classes("w-full text-start text-base font-semibold")
+                    ui.label(render_message("webui.open_record_draft_editor.label.files_remain_staged_until_you_create_the_r_ec0dd8d9")).classes("w-full text-start text-xs text-slate-500")
                 with ui.column().classes("w-full") as draft_upload_area:
                     uploader_control["uploader"] = component_uploader(upload_to_draft)
                 with ui.row().classes(
@@ -7919,7 +8009,7 @@ def index(q: str = "") -> None:
                     translation_state: dict[str, Any] = {
                         "loaded_language": None,
                         "load_generation": 0,
-                        "baseline": {},
+                        "baseline": {field: "" for field in multilingual_fields[spec.key]},
                     }
                     with ui.expansion(render_message("entity_translation_editor.expansion.title"), icon="translate").props(
                         "dense header-class='text-sm font-medium'"
@@ -7970,6 +8060,9 @@ def index(q: str = "") -> None:
                             translation_state["load_generation"] += 1
                             load_generation = translation_state["load_generation"]
                             translation_state["loaded_language"] = None
+                            translation_state["baseline"] = {
+                                field: "" for field in translation_controls
+                            }
                             translation_status.set_text(translation_loading_status)
                             for control in translation_controls.values():
                                 control.value = ""
@@ -13970,15 +14063,15 @@ def index(q: str = "") -> None:
 
             def backlog_age(value: Any) -> str:
                 if value is None:
-                    return "No queued jobs"
+                    return render_message_plain("webui.backlog_age.empty")
                 seconds = max(0, int(value))
                 if seconds < 60:
-                    return f"{seconds} seconds"
+                    return render_message_plain("webui.backlog_age.seconds", count=seconds)
                 if seconds < 3600:
-                    return f"{seconds // 60} minutes"
+                    return render_message_plain("webui.backlog_age.minutes", count=seconds // 60)
                 if seconds < 86400:
-                    return f"{seconds // 3600} hours"
-                return f"{seconds // 86400} days"
+                    return render_message_plain("webui.backlog_age.hours", count=seconds // 3600)
+                return render_message_plain("webui.backlog_age.days", count=seconds // 86400)
 
             with ui.card().classes("detail-surface shadow-none p-5 w-full gap-4"):
                 with ui.row().classes("w-full items-start gap-3"):
@@ -14271,8 +14364,8 @@ def index(q: str = "") -> None:
             page_size = 10
             with ui.row().classes("w-full justify-end items-center gap-2"):
                 page_label = ui.label().classes("text-sm text-slate-500")
-                previous = ui.button(render_message("webui.select_text_indexers.button.previous_0509bae7"), icon="chevron_left").props("flat dense no-caps")
-                next_button = ui.button(render_message("webui.select_text_indexers.button.next_0e31089e"), icon="chevron_right").props("flat dense no-caps")
+                previous = ui.button(render_message("webui.select_text_indexers.button.previous_0509bae7"), icon="chevron_right" if current_direction["value"] == "rtl" else "chevron_left").props("flat dense no-caps")
+                next_button = ui.button(render_message("webui.select_text_indexers.button.next_0e31089e"), icon="chevron_left" if current_direction["value"] == "rtl" else "chevron_right").props("flat dense no-caps")
 
             def filtered() -> list[dict[str, Any]]:
                 needle = str(query.value or "").strip().lower()
@@ -14316,16 +14409,16 @@ def index(q: str = "") -> None:
                                         "text-xs text-slate-500 font-mono break-all"
                                     )
                                 ui.badge(
-                                    item["status"].title(),
+                                    localized_lifecycle_value(item["status"]),
                                     color={"active": "positive", "suspended": "warning"}.get(
                                         item["status"], "grey-7"
                                     ),
                                 ).props("outline")
                             with ui.element("div").classes("governance-list-facts"):
                                 for label, value in (
-                                    ("Active credentials", str(item["active_credential_count"])),
-                                    ("Credential history", str(item["credential_count"])),
-                                    ("Last used", format_timestamp(item["last_used_at"]) if item.get("last_used_at") else "Never"),
+                                    (render_message("webui.text_indexer_card.active_credentials"), str(item["active_credential_count"])),
+                                    (render_message("webui.text_indexer_card.credential_history"), str(item["credential_count"])),
+                                    (render_message("webui.text_indexer_card.last_used"), format_timestamp(item["last_used_at"]) if item.get("last_used_at") else render_message("webui.text_indexer_card.never")),
                                 ):
                                     with ui.column().classes("gap-0 min-w-0"):
                                         ui.label(label).classes("detail-field-label")
@@ -14394,7 +14487,7 @@ def index(q: str = "") -> None:
                         microsecond=0
                     ).isoformat(),
                 ).props("outlined").classes("w-full")
-                ui.input(render_message("webui.credential_dialog.input.allowed_route_d805736a"), value="Internal text-indexing API only").props(
+                ui.input(render_message("webui.credential_dialog.input.allowed_route_d805736a"), value=render_message("webui.select_text_indexer_details.label.internal_text_indexing_api_only_ec49ffe0")).props(
                     "outlined readonly"
                 ).classes("w-full")
                 overlap = None
@@ -14476,23 +14569,23 @@ def index(q: str = "") -> None:
                             ui.badge(render_message("webui.select_text_indexer_details.badge.non_interactive_b952cd7b"), color="blue-grey").props("outline")
                             ui.badge(render_message("webui.select_text_indexer_details.badge.text_indexer_service_b73b4bdf"), color="indigo").props("outline")
                     ui.badge(
-                        indexer["status"].title(),
+                        localized_lifecycle_value(indexer["status"]),
                         color={"active": "positive", "suspended": "warning"}.get(
                             indexer["status"], "grey-7"
                         ),
                     )
                 with ui.grid(columns=3).classes("w-full gap-4 mt-3"):
                     for label, value in (
-                        ("External ID", indexer["external_id"]),
-                        ("Created", format_timestamp(indexer["date_created"])),
-                        ("Last used", format_timestamp(indexer["last_used_at"]) if indexer.get("last_used_at") else "Never"),
+                        (render_message("webui.text_indexer_details.external_id"), indexer["external_id"]),
+                        (render_message("webui.text_indexer_details.created"), format_timestamp(indexer["date_created"])),
+                        (render_message("webui.text_indexer_card.last_used"), format_timestamp(indexer["last_used_at"]) if indexer.get("last_used_at") else render_message("webui.text_indexer_card.never")),
                     ):
                         with ui.column().classes("gap-1 border-b border-slate-100 pb-1.5"):
                             ui.label(label).classes("detail-field-label")
                             ui.label(value).classes("font-medium break-all")
                 with ui.row().classes("w-full justify-between gap-2 flex-wrap mt-2"):
                     ui.button(
-                        render_message("webui.select_text_indexer_details.button.back_to_text_indexers_34b66935"), icon="arrow_back",
+                        render_message("webui.select_text_indexer_details.button.back_to_text_indexers_34b66935"), icon="arrow_forward" if current_direction["value"] == "rtl" else "arrow_back",
                         on_click=lambda: breadcrumb_back(select_text_indexers),
                     ).props("flat no-caps")
                     with ui.row().classes("gap-2"):
@@ -14528,8 +14621,8 @@ def index(q: str = "") -> None:
             with ui.row().classes("w-full items-center justify-between gap-2"):
                 credential_summary = ui.label().classes("text-sm text-slate-500")
                 with ui.row().classes("gap-2"):
-                    credential_previous = ui.button(render_message("webui.select_text_indexer_details.button.previous_86972be8"), icon="chevron_left").props("outline dense no-caps")
-                    credential_next = ui.button(render_message("webui.select_text_indexer_details.button.next_e284c9ef"), icon="chevron_right").props("outline dense no-caps icon-right")
+                    credential_previous = ui.button(render_message("webui.select_text_indexer_details.button.previous_86972be8"), icon="chevron_right" if current_direction["value"] == "rtl" else "chevron_left").props("outline dense no-caps")
+                    credential_next = ui.button(render_message("webui.select_text_indexer_details.button.next_e284c9ef"), icon="chevron_left" if current_direction["value"] == "rtl" else "chevron_right").props("outline dense no-caps icon-right")
 
             def render_credentials() -> None:
                 page = credential_state["page"]
@@ -14551,18 +14644,18 @@ def index(q: str = "") -> None:
                                         render_message("webui.render_credentials.label.id_wti_credential_identifier_internal_text_b0627629", credential_identifier=credential['credential_identifier'])
                                     ).classes("text-xs text-slate-500 break-all")
                                 ui.badge(
-                                    credential["status"].title(),
+                                    (render_message("webui.text_indexer_details.expiring") if credential["status"] == "expiring" else localized_lifecycle_value(credential["status"])),
                                     color={"active": "positive", "expiring": "warning", "expired": "grey-7", "revoked": "negative"}.get(
                                         credential["status"], "grey-7"
                                     ),
                                 ).props("outline")
                             with ui.element("div").classes("governance-list-facts"):
                                 for label, value in (
-                                    ("Created", format_timestamp(credential["date_created"])),
-                                    ("Expires", format_timestamp(credential["expires_at"])),
-                                    ("Last used", format_timestamp(credential["last_used_at"]) if credential.get("last_used_at") else "Never"),
-                                    ("Created by", credential.get("created_by_name") or "System"),
-                                    ("Last worker", credential.get("last_worker_id") or "—"),
+                                    (render_message("webui.text_indexer_details.created"), format_timestamp(credential["date_created"])),
+                                    (render_message("webui.text_indexer_details.expires"), format_timestamp(credential["expires_at"])),
+                                    (render_message("webui.text_indexer_card.last_used"), format_timestamp(credential["last_used_at"]) if credential.get("last_used_at") else render_message("webui.text_indexer_card.never")),
+                                    (render_message("webui.text_indexer_details.created_by"), credential.get("created_by_name") or render_message("webui.text_indexer_details.system")),
+                                    (render_message("webui.text_indexer_details.last_worker"), credential.get("last_worker_id") or "—"),
                                 ):
                                     with ui.column().classes("gap-0 min-w-0"):
                                         ui.label(label).classes("detail-field-label")
@@ -15221,6 +15314,7 @@ def index(q: str = "") -> None:
 
     async def show_organization_structure(
         *, selection_mode: str | None = None, target_control: Any = None,
+        on_selection: Callable[..., Any] | None = None,
     ) -> None:
         """Shared lazy organization browser for the page and selectors."""
         is_selector = selection_mode is not None
@@ -15511,6 +15605,10 @@ def index(q: str = "") -> None:
             if is_selector and not node_selectable(node):
                 ui.notify(render_message("webui.open_selected.notify.select_an_active_item_of_the_requested_typ_2d331b9a"), color="warning")
                 return
+            if is_selector and on_selection is not None:
+                if await on_selection(node):
+                    dialog.close()
+                return
             if node["type"] == "user":
                 if is_selector:
                     target_control.set_value(node["id"]); dialog.close()
@@ -15535,6 +15633,10 @@ def index(q: str = "") -> None:
                     render_message("webui.confirm_browser_selection.notify.select_an_active_replace_first_9ad73ee2", replace=selection_mode.replace('_', ' ')),
                     color="warning",
                 )
+                return
+            if on_selection is not None:
+                if await on_selection(selected):
+                    dialog.close()
                 return
             apply_relationship_selection(
                 target_control, selected["id"], selected["label"],
@@ -16941,11 +17043,36 @@ def index(q: str = "") -> None:
                 description_control = ui.textarea(render_message("webui.save_search.textarea.description_491f6450"), value=workspace.get("search_description") or "").props("outlined maxlength=500 autogrow").classes("w-full")
                 audience_mode = ui.radio({"private": render_message("webui.save_search.radio.only_me_739a9de4"), "shared": render_message("webui.save_search.radio.roles_or_organizational_units_01b067ca")}, value="private" if save_as else workspace["audience_mode"]).props("inline")
                 audience_host = ui.column().classes("w-full gap-3")
+                async def browse_audience(control: Any, kind: str) -> None:
+                    async def choose(node: dict[str, Any]) -> bool:
+                        try:
+                            page = await api.saved_search_audience_options(kind, ids=[node["id"]], limit=1, offset=0)
+                        except ApiError as error:
+                            ui.notify(error_message(error), color="negative", close_button=True)
+                            return False
+                        if not page["items"]:
+                            ui.notify(render_message("webui.saved_audience.ineligible"), color="warning")
+                            return False
+                        item = page["items"][0]
+                        name = (item.get("localized") or {}).get("name") or item["name"]
+                        options = {**dict(control.options), item["id"]: f"{name} ({item['code']})"}
+                        control.set_options(options, value=list(dict.fromkeys([*(control.value or []), item["id"]])))
+                        return True
+                    await show_organization_structure(
+                        selection_mode="role" if kind == "roles" else "org_unit", on_selection=choose,
+                    )
+
                 with audience_host:
-                    role_control = ui.select({}, value=[], label=render_message("webui.save_search.select.roles_c2c266e1"), multiple=True).props("outlined use-chips options-dense clearable input-debounce=0").classes("w-full")
-                    unit_control = ui.select({}, value=[], label=render_message("webui.save_search.select.organizational_units_9c039bd2"), multiple=True).props("outlined use-chips options-dense clearable input-debounce=0").classes("w-full")
-                    _, load_selected_roles = bind_remote_saved_audience_select(role_control, "roles")
-                    _, load_selected_units = bind_remote_saved_audience_select(unit_control, "org-units")
+                    role_control = ui.select({}, value=[], label=render_message("webui.save_search.select.roles_c2c266e1"), multiple=True, with_input=True).props("outlined use-chips options-dense clearable input-debounce=0").classes("w-full")
+                    with ui.row():
+                        more_roles = ui.button(render_message("webui.render_collection.button.load_more_755f4879"), icon="more_horiz").props("flat dense no-caps")
+                        ui.button(render_message("webui.saved_audience.browse_roles"), icon="account_tree", on_click=lambda: browse_audience(role_control, "roles")).props("flat dense no-caps")
+                    unit_control = ui.select({}, value=[], label=render_message("webui.save_search.select.organizational_units_9c039bd2"), multiple=True, with_input=True).props("outlined use-chips options-dense clearable input-debounce=0").classes("w-full")
+                    with ui.row():
+                        more_units = ui.button(render_message("webui.render_collection.button.load_more_755f4879"), icon="more_horiz").props("flat dense no-caps")
+                        ui.button(render_message("webui.saved_audience.browse_units"), icon="account_tree", on_click=lambda: browse_audience(unit_control, "org-units")).props("flat dense no-caps")
+                    _, load_selected_roles = bind_remote_saved_audience_select(role_control, "roles", more_roles)
+                    _, load_selected_units = bind_remote_saved_audience_select(unit_control, "org-units", more_units)
                     ui.label(render_message("webui.save_search.label.recipients_can_run_this_query_but_results_c13f331f")).classes("text-xs text-slate-500")
                 error_label = ui.label().classes("text-sm text-negative")
                 with ui.row().classes("w-full justify-end gap-2"):
@@ -17006,9 +17133,9 @@ def index(q: str = "") -> None:
                     query_control = ui.input(render_message("webui.open_saved_search_dialog.input.search_saved_searches_3352fa10")).props("outlined dense clearable").classes("grow min-w-64")
                     filter_button = ui.button(render_message("webui.open_saved_search_dialog.button.filters_d413e321"), icon="tune").props("outline dense no-caps aria-expanded=false")
                 with ui.tabs(value="all").props("dense no-caps align=left") as scope_control:
-                    ui.tab(render_message("webui.open_saved_search_dialog.tab.all_4430e156"), label=render_message("webui.open_saved_search_dialog.tab.all_d9a1fa9c"))
-                    ui.tab(render_message("webui.open_saved_search_dialog.tab.owned_19e3ed8f"), label=render_message("webui.open_saved_search_dialog.tab.mine_74806472"))
-                    ui.tab(render_message("webui.open_saved_search_dialog.tab.shared_with_me_8185f488"), label=render_message("webui.open_saved_search_dialog.tab.shared_with_me_1300d28d"))
+                    ui.tab("all", label=render_message("webui.open_saved_search_dialog.tab.all_d9a1fa9c"))
+                    ui.tab("owned", label=render_message("webui.open_saved_search_dialog.tab.mine_74806472"))
+                    ui.tab("shared_with_me", label=render_message("webui.open_saved_search_dialog.tab.shared_with_me_1300d28d"))
                 advanced_filters = ui.column().classes("w-full gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3")
                 advanced_filters.set_visibility(False)
                 with advanced_filters:
@@ -17020,10 +17147,14 @@ def index(q: str = "") -> None:
                         ui.label(render_message("webui.open_saved_search_dialog.label.administrative_filters_ea190231")).classes("text-sm font-semibold text-slate-600")
                         with ui.row().classes("w-full gap-3 items-end flex-wrap"):
                             owner_filter = ui.number(render_message("webui.open_saved_search_dialog.number.owner_user_id_05651181"), min=1).props("outlined dense").classes("w-40")
-                            role_filter = ui.select({}, label=render_message("webui.open_saved_search_dialog.select.role_audience_47211c66")).props("outlined dense clearable options-dense input-debounce=0").classes("w-52")
-                            unit_filter = ui.select({}, label=render_message("webui.open_saved_search_dialog.select.unit_audience_29a50f10")).props("outlined dense clearable options-dense input-debounce=0").classes("w-52")
-                            bind_remote_saved_audience_select(role_filter, "roles")
-                            bind_remote_saved_audience_select(unit_filter, "org-units")
+                            with ui.column().classes("gap-1"):
+                                role_filter = ui.select({}, label=render_message("webui.open_saved_search_dialog.select.role_audience_47211c66"), with_input=True).props("outlined dense clearable options-dense input-debounce=0").classes("w-52")
+                                more_role_filters = ui.button(render_message("webui.render_collection.button.load_more_755f4879"), icon="more_horiz").props("flat dense no-caps")
+                            with ui.column().classes("gap-1"):
+                                unit_filter = ui.select({}, label=render_message("webui.open_saved_search_dialog.select.unit_audience_29a50f10"), with_input=True).props("outlined dense clearable options-dense input-debounce=0").classes("w-52")
+                                more_unit_filters = ui.button(render_message("webui.render_collection.button.load_more_755f4879"), icon="more_horiz").props("flat dense no-caps")
+                            bind_remote_saved_audience_select(role_filter, "roles", more_role_filters)
+                            bind_remote_saved_audience_select(unit_filter, "org-units", more_unit_filters)
                             minimum_filter = ui.number(render_message("webui.open_saved_search_dialog.number.minimum_result_cap_32191a13"), min=1, max=5000).props("outlined dense").classes("w-44")
                             maximum_filter = ui.number(render_message("webui.open_saved_search_dialog.number.maximum_result_cap_87c75dd6"), min=1, max=5000).props("outlined dense").classes("w-44")
                             updated_from = ui.input(render_message("webui.open_saved_search_dialog.input.updated_from_6262aba2")).props("outlined dense type=datetime-local").classes("w-48")

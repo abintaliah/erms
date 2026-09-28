@@ -1967,6 +1967,632 @@
     "is_html": false
   },
   {
+    "message_key": "authorization.explanation.bypass",
+    "context_group": "authorization.explanation",
+    "default_text": "Information-governance ACL bypass",
+    "semantic_meaning": "Access explanation: Information-governance ACL bypass",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Information-governance ACL bypass",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.bypass_detail",
+    "context_group": "authorization.explanation",
+    "default_text": "The ACL gate was bypassed; privilege and clearance gates still apply.",
+    "semantic_meaning": "Access explanation: The ACL gate was bypassed; privilege and clearance gates still apply.",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "The ACL gate was bypassed; privilege and clearance gates still apply.",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.clearance",
+    "context_group": "authorization.explanation",
+    "default_text": "Security clearance: level {level} required",
+    "semantic_meaning": "Access explanation: Security clearance: level {level} required",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {
+      "level": "text"
+    },
+    "rendered_example": "Security clearance: level <level> required",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.addition",
+    "context_group": "authorization.explanation",
+    "default_text": "addition",
+    "semantic_meaning": "Legal hold restriction in the access explanation: addition",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "addition",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.both",
+    "context_group": "authorization.explanation",
+    "default_text": "direct and inherited",
+    "semantic_meaning": "Legal hold restriction in the access explanation: direct and inherited",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "direct and inherited",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.change",
+    "context_group": "authorization.explanation",
+    "default_text": "change",
+    "semantic_meaning": "Legal hold restriction in the access explanation: change",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "change",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.deletion",
+    "context_group": "authorization.explanation",
+    "default_text": "deletion",
+    "semantic_meaning": "Legal hold restriction in the access explanation: deletion",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "deletion",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.direct",
+    "context_group": "authorization.explanation",
+    "default_text": "direct",
+    "semantic_meaning": "Legal hold restriction in the access explanation: direct",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "direct",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.inherited",
+    "context_group": "authorization.explanation",
+    "default_text": "inherited",
+    "semantic_meaning": "Legal hold restriction in the access explanation: inherited",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "inherited",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.metadata_change",
+    "context_group": "authorization.explanation",
+    "default_text": "metadata change",
+    "semantic_meaning": "Legal hold restriction in the access explanation: metadata change",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "metadata change",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.movement",
+    "context_group": "authorization.explanation",
+    "default_text": "movement",
+    "semantic_meaning": "Legal hold restriction in the access explanation: movement",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "movement",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.removal",
+    "context_group": "authorization.explanation",
+    "default_text": "removal",
+    "semantic_meaning": "Legal hold restriction in the access explanation: removal",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "removal",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.reordering",
+    "context_group": "authorization.explanation",
+    "default_text": "reordering",
+    "semantic_meaning": "Legal hold restriction in the access explanation: reordering",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "reordering",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.replacement",
+    "context_group": "authorization.explanation",
+    "default_text": "replacement",
+    "semantic_meaning": "Legal hold restriction in the access explanation: replacement",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "replacement",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.constraint.unknown",
+    "context_group": "authorization.explanation",
+    "default_text": "unknown",
+    "semantic_meaning": "Legal hold restriction in the access explanation: unknown",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "unknown",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.allowed",
+    "context_group": "authorization.explanation",
+    "default_text": "Allowed",
+    "semantic_meaning": "Access explanation: Allowed",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Allowed",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.authentication_required",
+    "context_group": "authorization.explanation",
+    "default_text": "Authentication is required",
+    "semantic_meaning": "Access explanation: Authentication is required",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Authentication is required",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.insufficient_clearance",
+    "context_group": "authorization.explanation",
+    "default_text": "Security clearance is too low",
+    "semantic_meaning": "Access explanation: Security clearance is too low",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Security clearance is too low",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.insufficient_privilege",
+    "context_group": "authorization.explanation",
+    "default_text": "Required system privilege is missing",
+    "semantic_meaning": "Access explanation: Required system privilege is missing",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Required system privilege is missing",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.insufficient_resource_permission",
+    "context_group": "authorization.explanation",
+    "default_text": "Resource ACL permission is missing",
+    "semantic_meaning": "Access explanation: Resource ACL permission is missing",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Resource ACL permission is missing",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.no_effective_role",
+    "context_group": "authorization.explanation",
+    "default_text": "No effective role assignment",
+    "semantic_meaning": "Access explanation: No effective role assignment",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "No effective role assignment",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.operation_not_allowed",
+    "context_group": "authorization.explanation",
+    "default_text": "Operation is not allowed in the current state",
+    "semantic_meaning": "Access explanation: Operation is not allowed in the current state",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Operation is not allowed in the current state",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.resource_not_found",
+    "context_group": "authorization.explanation",
+    "default_text": "Resource is unavailable",
+    "semantic_meaning": "Access explanation: Resource is unavailable",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Resource is unavailable",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.session_expired",
+    "context_group": "authorization.explanation",
+    "default_text": "Login session expired",
+    "semantic_meaning": "Access explanation: Login session expired",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Login session expired",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.session_revoked",
+    "context_group": "authorization.explanation",
+    "default_text": "Login session was revoked",
+    "semantic_meaning": "Access explanation: Login session was revoked",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Login session was revoked",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.unspecified",
+    "context_group": "authorization.explanation",
+    "default_text": "Reason was not recorded",
+    "semantic_meaning": "Access explanation: Reason was not recorded",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Reason was not recorded",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.user_inactive",
+    "context_group": "authorization.explanation",
+    "default_text": "Account is inactive",
+    "semantic_meaning": "Access explanation: Account is inactive",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Account is inactive",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.user_locked",
+    "context_group": "authorization.explanation",
+    "default_text": "Account is locked",
+    "semantic_meaning": "Access explanation: Account is locked",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Account is locked",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.decision.user_suspended",
+    "context_group": "authorization.explanation",
+    "default_text": "Account is suspended",
+    "semantic_meaning": "Access explanation: Account is suspended",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Account is suspended",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.gate.authentication",
+    "context_group": "authorization.explanation",
+    "default_text": "Authentication and account state",
+    "semantic_meaning": "Access explanation: Authentication and account state",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Authentication and account state",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.gate.effective_roles",
+    "context_group": "authorization.explanation",
+    "default_text": "Effective role assignment",
+    "semantic_meaning": "Access explanation: Effective role assignment",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Effective role assignment",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.gate.global_privilege",
+    "context_group": "authorization.explanation",
+    "default_text": "Global privilege",
+    "semantic_meaning": "Access explanation: Global privilege",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Global privilege",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.gate.operation_integrity",
+    "context_group": "authorization.explanation",
+    "default_text": "Resource state rules",
+    "semantic_meaning": "Access explanation: Resource state rules",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Resource state rules",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.gate.resource_acl",
+    "context_group": "authorization.explanation",
+    "default_text": "Resource ACL",
+    "semantic_meaning": "Access explanation: Resource ACL",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Resource ACL",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.gate.security_clearance",
+    "context_group": "authorization.explanation",
+    "default_text": "Security clearance",
+    "semantic_meaning": "Access explanation: Security clearance",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Security clearance",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.maximum_clearance",
+    "context_group": "authorization.explanation",
+    "default_text": "Maximum clearance across effective roles",
+    "semantic_meaning": "Access explanation: Maximum clearance across effective roles",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Maximum clearance across effective roles",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.no_clearance",
+    "context_group": "authorization.explanation",
+    "default_text": "None",
+    "semantic_meaning": "Security clearance in the access explanation.",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve named placeholders and the clearance meaning.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "None",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.permission",
+    "context_group": "authorization.explanation",
+    "default_text": "ACL permission: {name}",
+    "semantic_meaning": "Access explanation: ACL permission: {name}",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {
+      "name": "text"
+    },
+    "rendered_example": "ACL permission: <name>",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.preservation",
+    "context_group": "authorization.explanation",
+    "default_text": " — preserves metadata and state",
+    "semantic_meaning": "Legal hold restriction in the access explanation:  — preserves metadata and state",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve the meaning of the hold restriction or inheritance source.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": " — preserves metadata and state",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.privilege",
+    "context_group": "authorization.explanation",
+    "default_text": "Global privilege: {name}",
+    "semantic_meaning": "Access explanation: Global privilege: {name}",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {
+      "name": "text"
+    },
+    "rendered_example": "Global privilege: <name>",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.security_level",
+    "context_group": "authorization.explanation",
+    "default_text": "{code} — {name} (level {level})",
+    "semantic_meaning": "Security clearance in the access explanation.",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Preserve named placeholders and the clearance meaning.",
+    "grammatical_role": "label",
+    "parameter_schema": {
+      "code": "text",
+      "name": "text",
+      "level": "text"
+    },
+    "rendered_example": "<code> — <name> (level <level>)",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.state_allowed",
+    "context_group": "authorization.explanation",
+    "default_text": "The resource's current state permits this operation.",
+    "semantic_meaning": "Access explanation: The resource's current state permits this operation.",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "The resource's current state permits this operation.",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.state_closed",
+    "context_group": "authorization.explanation",
+    "default_text": "The aggregation, or one of its ancestors, is closed and does not permit this operation.",
+    "semantic_meaning": "Access explanation: The aggregation, or one of its ancestors, is closed and does not permit this operation.",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "The aggregation, or one of its ancestors, is closed and does not permit this operation.",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.explanation.state_denied",
+    "context_group": "authorization.explanation",
+    "default_text": "A business-state rule prevents this operation.",
+    "semantic_meaning": "Access explanation: A business-state rule prevents this operation.",
+    "common_locations": [
+      "WebUI: Why this access?"
+    ],
+    "translator_guidance": "Explain the authorization decision without changing its security meaning. Preserve all named placeholders.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "A business-state rule prevents this operation.",
+    "is_html": false
+  },
+  {
     "message_key": "authorization.permission.aggregation.acl.manage",
     "context_group": "authorization.acl",
     "default_text": "Manage ACL",
@@ -9404,6 +10030,84 @@
       "counterpart_label": "text"
     },
     "rendered_example": "Select a <counterpart_label>",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.backlog_age.days",
+    "context_group": "webui.backlog_age",
+    "default_text": "{count} days",
+    "semantic_meaning": "Age of the oldest queued text-indexing job, or the empty queue state.",
+    "common_locations": [
+      "WebUI: Text Indexers system health"
+    ],
+    "translator_guidance": "Translate the queue state or elapsed duration; preserve the count placeholder.",
+    "grammatical_role": "status",
+    "parameter_schema": {
+      "count": "integer"
+    },
+    "rendered_example": "5 days",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.backlog_age.empty",
+    "context_group": "webui.backlog_age",
+    "default_text": "No queued jobs",
+    "semantic_meaning": "Age of the oldest queued text-indexing job, or the empty queue state.",
+    "common_locations": [
+      "WebUI: Text Indexers system health"
+    ],
+    "translator_guidance": "Translate the queue state or elapsed duration; preserve the count placeholder.",
+    "grammatical_role": "status",
+    "parameter_schema": {},
+    "rendered_example": "No queued jobs",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.backlog_age.hours",
+    "context_group": "webui.backlog_age",
+    "default_text": "{count} hours",
+    "semantic_meaning": "Age of the oldest queued text-indexing job, or the empty queue state.",
+    "common_locations": [
+      "WebUI: Text Indexers system health"
+    ],
+    "translator_guidance": "Translate the queue state or elapsed duration; preserve the count placeholder.",
+    "grammatical_role": "status",
+    "parameter_schema": {
+      "count": "integer"
+    },
+    "rendered_example": "5 hours",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.backlog_age.minutes",
+    "context_group": "webui.backlog_age",
+    "default_text": "{count} minutes",
+    "semantic_meaning": "Age of the oldest queued text-indexing job, or the empty queue state.",
+    "common_locations": [
+      "WebUI: Text Indexers system health"
+    ],
+    "translator_guidance": "Translate the queue state or elapsed duration; preserve the count placeholder.",
+    "grammatical_role": "status",
+    "parameter_schema": {
+      "count": "integer"
+    },
+    "rendered_example": "5 minutes",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.backlog_age.seconds",
+    "context_group": "webui.backlog_age",
+    "default_text": "{count} seconds",
+    "semantic_meaning": "Age of the oldest queued text-indexing job, or the empty queue state.",
+    "common_locations": [
+      "WebUI: Text Indexers system health"
+    ],
+    "translator_guidance": "Translate the queue state or elapsed duration; preserve the count placeholder.",
+    "grammatical_role": "status",
+    "parameter_schema": {
+      "count": "integer"
+    },
+    "rendered_example": "5 seconds",
     "is_html": false
   },
   {
@@ -17742,20 +18446,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.open_saved_search_dialog.tab.all_4430e156",
-    "context_group": "webui.open_saved_search_dialog",
-    "default_text": "all",
-    "semantic_meaning": "Navigation label in the open saved search dialog workflow.",
-    "common_locations": [
-      "WebUI: open saved search dialog"
-    ],
-    "translator_guidance": "Translate as a concise navigation label; preserve the intent used in this workflow.",
-    "grammatical_role": "navigation label",
-    "parameter_schema": {},
-    "rendered_example": "all",
-    "is_html": false
-  },
-  {
     "message_key": "webui.open_saved_search_dialog.tab.all_d9a1fa9c",
     "context_group": "webui.open_saved_search_dialog",
     "default_text": "All",
@@ -17784,20 +18474,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.open_saved_search_dialog.tab.owned_19e3ed8f",
-    "context_group": "webui.open_saved_search_dialog",
-    "default_text": "owned",
-    "semantic_meaning": "Navigation label in the open saved search dialog workflow.",
-    "common_locations": [
-      "WebUI: open saved search dialog"
-    ],
-    "translator_guidance": "Translate as a concise navigation label; preserve the intent used in this workflow.",
-    "grammatical_role": "navigation label",
-    "parameter_schema": {},
-    "rendered_example": "owned",
-    "is_html": false
-  },
-  {
     "message_key": "webui.open_saved_search_dialog.tab.shared_with_me_1300d28d",
     "context_group": "webui.open_saved_search_dialog",
     "default_text": "Shared with me",
@@ -17809,20 +18485,6 @@
     "grammatical_role": "navigation label",
     "parameter_schema": {},
     "rendered_example": "Shared with me",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.open_saved_search_dialog.tab.shared_with_me_8185f488",
-    "context_group": "webui.open_saved_search_dialog",
-    "default_text": "shared_with_me",
-    "semantic_meaning": "Navigation label in the open saved search dialog workflow.",
-    "common_locations": [
-      "WebUI: open saved search dialog"
-    ],
-    "translator_guidance": "Translate as a concise navigation label; preserve the intent used in this workflow.",
-    "grammatical_role": "navigation label",
-    "parameter_schema": {},
-    "rendered_example": "shared_with_me",
     "is_html": false
   },
   {
@@ -26137,6 +26799,48 @@
     "grammatical_role": "field label",
     "parameter_schema": {},
     "rendered_example": "Description",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_audience.browse_roles",
+    "context_group": "webui.saved_audience",
+    "default_text": "Browse roles",
+    "semantic_meaning": "Saved search audience browser control or eligibility feedback.",
+    "common_locations": [
+      "WebUI: Save Search dialog"
+    ],
+    "translator_guidance": "Audience recipients can run the saved search but retain their own resource access restrictions.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Browse roles",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_audience.browse_units",
+    "context_group": "webui.saved_audience",
+    "default_text": "Browse organization units",
+    "semantic_meaning": "Saved search audience browser control or eligibility feedback.",
+    "common_locations": [
+      "WebUI: Save Search dialog"
+    ],
+    "translator_guidance": "Audience recipients can run the saved search but retain their own resource access restrictions.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Browse organization units",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_audience.ineligible",
+    "context_group": "webui.saved_audience",
+    "default_text": "This item is not eligible for this saved-search audience.",
+    "semantic_meaning": "Saved search audience browser control or eligibility feedback.",
+    "common_locations": [
+      "WebUI: Save Search dialog"
+    ],
+    "translator_guidance": "Audience recipients can run the saved search but retain their own resource access restrictions.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "This item is not eligible for this saved-search audience.",
     "is_html": false
   },
   {
@@ -35771,6 +36475,160 @@
       "queued": "text"
     },
     "rendered_example": "Examined <examined> failed documents; queued <queued> retries",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.text_indexer_card.active_credentials",
+    "context_group": "webui.text_indexer_card",
+    "default_text": "Active credentials",
+    "semantic_meaning": "Text indexer identity card credential summary: Active credentials",
+    "common_locations": [
+      "WebUI: Text Indexers identity cards"
+    ],
+    "translator_guidance": "Describe API credentials or their last-use timestamp, not queued indexing jobs.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Active credentials",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.text_indexer_card.credential_history",
+    "context_group": "webui.text_indexer_card",
+    "default_text": "Credential history",
+    "semantic_meaning": "Text indexer identity card credential summary: Credential history",
+    "common_locations": [
+      "WebUI: Text Indexers identity cards"
+    ],
+    "translator_guidance": "Describe API credentials or their last-use timestamp, not queued indexing jobs.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Credential history",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.text_indexer_card.last_used",
+    "context_group": "webui.text_indexer_card",
+    "default_text": "Last used",
+    "semantic_meaning": "Text indexer identity card credential summary: Last used",
+    "common_locations": [
+      "WebUI: Text Indexers identity cards"
+    ],
+    "translator_guidance": "Describe API credentials or their last-use timestamp, not queued indexing jobs.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Last used",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.text_indexer_card.never",
+    "context_group": "webui.text_indexer_card",
+    "default_text": "Never",
+    "semantic_meaning": "Text indexer identity card credential summary: Never",
+    "common_locations": [
+      "WebUI: Text Indexers identity cards"
+    ],
+    "translator_guidance": "Describe API credentials or their last-use timestamp, not queued indexing jobs.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Never",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.text_indexer_details.created",
+    "context_group": "webui.text_indexer_details",
+    "default_text": "Created",
+    "semantic_meaning": "Text indexer identity or API credential detail: Created",
+    "common_locations": [
+      "WebUI: Text Indexer details"
+    ],
+    "translator_guidance": "Use account and API credential terminology; expiring means approaching expiry, not expired.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Created",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.text_indexer_details.created_by",
+    "context_group": "webui.text_indexer_details",
+    "default_text": "Created by",
+    "semantic_meaning": "Text indexer identity or API credential detail: Created by",
+    "common_locations": [
+      "WebUI: Text Indexer details"
+    ],
+    "translator_guidance": "Use account and API credential terminology; expiring means approaching expiry, not expired.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Created by",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.text_indexer_details.expires",
+    "context_group": "webui.text_indexer_details",
+    "default_text": "Expires",
+    "semantic_meaning": "Text indexer identity or API credential detail: Expires",
+    "common_locations": [
+      "WebUI: Text Indexer details"
+    ],
+    "translator_guidance": "Use account and API credential terminology; expiring means approaching expiry, not expired.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Expires",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.text_indexer_details.expiring",
+    "context_group": "webui.text_indexer_details",
+    "default_text": "Expiring",
+    "semantic_meaning": "Text indexer identity or API credential detail: Expiring",
+    "common_locations": [
+      "WebUI: Text Indexer details"
+    ],
+    "translator_guidance": "Use account and API credential terminology; expiring means approaching expiry, not expired.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Expiring",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.text_indexer_details.external_id",
+    "context_group": "webui.text_indexer_details",
+    "default_text": "External ID",
+    "semantic_meaning": "Text indexer identity or API credential detail: External ID",
+    "common_locations": [
+      "WebUI: Text Indexer details"
+    ],
+    "translator_guidance": "Use account and API credential terminology; expiring means approaching expiry, not expired.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "External ID",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.text_indexer_details.last_worker",
+    "context_group": "webui.text_indexer_details",
+    "default_text": "Last worker",
+    "semantic_meaning": "Text indexer identity or API credential detail: Last worker",
+    "common_locations": [
+      "WebUI: Text Indexer details"
+    ],
+    "translator_guidance": "Use account and API credential terminology; expiring means approaching expiry, not expired.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Last worker",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.text_indexer_details.system",
+    "context_group": "webui.text_indexer_details",
+    "default_text": "System",
+    "semantic_meaning": "Text indexer identity or API credential detail: System",
+    "common_locations": [
+      "WebUI: Text Indexer details"
+    ],
+    "translator_guidance": "Use account and API credential terminology; expiring means approaching expiry, not expired.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "System",
     "is_html": false
   },
   {

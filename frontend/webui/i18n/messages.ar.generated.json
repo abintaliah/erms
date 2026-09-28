@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "946e6319114f4aba906d6474a7beb53e17962e33dd06a342c19c93b69f337319",
+  "catalogue_sha256": "e2683f8fe7242d3c27346309d10da80985972f908364842aece5a3d49ff7b9c7",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260928143018",
   "generated_at": "2026-09-28T14:30:18.648812+04:00",
@@ -1677,6 +1677,226 @@
         "date_reviewed": "2026-09-26T17:44:17.672002+04:00",
         "date_published": "2026-09-26T17:44:17.672002+04:00"
       }
+    },
+    {
+      "message_key": "authorization.explanation.bypass",
+      "translated_text": "تجاوز قائمة التحكم في الوصول لحوكمة المعلومات",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.bypass_detail",
+      "translated_text": "تم تجاوز شرط قائمة التحكم في الوصول؛ وتظل شروط الصلاحية العامة والتصريح الأمني سارية.",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.clearance",
+      "translated_text": "التصريح الأمني: المستوى المطلوب {level}",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.addition",
+      "translated_text": "الإضافة",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.both",
+      "translated_text": "مباشر وموروث",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.change",
+      "translated_text": "التغيير",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.deletion",
+      "translated_text": "الحذف",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.direct",
+      "translated_text": "مباشر",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.inherited",
+      "translated_text": "موروث",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.metadata_change",
+      "translated_text": "تعديل البيانات الوصفية",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.movement",
+      "translated_text": "النقل",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.removal",
+      "translated_text": "الإزالة",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.reordering",
+      "translated_text": "إعادة الترتيب",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.replacement",
+      "translated_text": "الاستبدال",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.constraint.unknown",
+      "translated_text": "غير معروف",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.allowed",
+      "translated_text": "مسموح",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.authentication_required",
+      "translated_text": "المصادقة مطلوبة",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.insufficient_clearance",
+      "translated_text": "درجة التصريح الأمني غير كافية",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.insufficient_privilege",
+      "translated_text": "الصلاحية العامة المطلوبة غير متاحة",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.insufficient_resource_permission",
+      "translated_text": "صلاحية قائمة التحكم في الوصول المطلوبة غير متاحة",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.no_effective_role",
+      "translated_text": "لا يوجد تكليف دور فعلي",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.operation_not_allowed",
+      "translated_text": "العملية غير مسموحة في الحالة الحالية",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.resource_not_found",
+      "translated_text": "المورد غير متاح",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.session_expired",
+      "translated_text": "انتهت صلاحية جلسة تسجيل الدخول",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.session_revoked",
+      "translated_text": "أُلغيت جلسة تسجيل الدخول",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.unspecified",
+      "translated_text": "لم يُسجّل السبب",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.user_inactive",
+      "translated_text": "الحساب غير نشط",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.user_locked",
+      "translated_text": "الحساب مقفل",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.decision.user_suspended",
+      "translated_text": "الحساب معلّق",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.gate.authentication",
+      "translated_text": "المصادقة وحالة الحساب",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.gate.effective_roles",
+      "translated_text": "تكليف الدور الفعلي",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.gate.global_privilege",
+      "translated_text": "الصلاحية العامة",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.gate.operation_integrity",
+      "translated_text": "قواعد حالة المورد",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.gate.resource_acl",
+      "translated_text": "قائمة التحكم في وصول المورد",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.gate.security_clearance",
+      "translated_text": "درجة التصريح الأمني",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.maximum_clearance",
+      "translated_text": "أعلى درجة تصريح أمني عبر الأدوار الفعلية",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.no_clearance",
+      "translated_text": "لا توجد",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.permission",
+      "translated_text": "صلاحية قائمة التحكم في الوصول: {name}",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.preservation",
+      "translated_text": " — يحافظ على البيانات الوصفية والحالة",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.privilege",
+      "translated_text": "الصلاحية العامة: {name}",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.security_level",
+      "translated_text": "{code} — {name} (المستوى {level})",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.state_allowed",
+      "translated_text": "تسمح الحالة الحالية للمورد بهذه العملية.",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.state_closed",
+      "translated_text": "الملف أو أحد ملفاته الحاوية مغلق ولا يسمح بهذه العملية.",
+      "quality_flags": []
+    },
+    {
+      "message_key": "authorization.explanation.state_denied",
+      "translated_text": "تمنع إحدى قواعد حالة المورد هذه العملية.",
+      "quality_flags": []
     },
     {
       "message_key": "authorization.permission.aggregation.acl.manage",
@@ -7665,6 +7885,31 @@
         "date_reviewed": "2026-09-26T20:20:14.562571+04:00",
         "date_published": "2026-09-26T20:20:14.562571+04:00"
       }
+    },
+    {
+      "message_key": "webui.backlog_age.days",
+      "translated_text": "{count} يوم",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.backlog_age.empty",
+      "translated_text": "لا توجد مهام في قائمة الانتظار",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.backlog_age.hours",
+      "translated_text": "{count} ساعة",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.backlog_age.minutes",
+      "translated_text": "{count} دقيقة",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.backlog_age.seconds",
+      "translated_text": "{count} ثانية",
+      "quality_flags": []
     },
     {
       "message_key": "webui.browse_advanced_aggregation.label.browse_classification_and_aggregation_hier_26704b25",
@@ -14651,18 +14896,6 @@
       }
     },
     {
-      "message_key": "webui.open_saved_search_dialog.tab.all_4430e156",
-      "translated_text": "الكل",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T17:44:17.672002+04:00",
-        "date_published": "2026-09-26T17:44:17.672002+04:00"
-      }
-    },
-    {
       "message_key": "webui.open_saved_search_dialog.tab.all_d9a1fa9c",
       "translated_text": "الكل",
       "quality_flags": [],
@@ -14687,31 +14920,7 @@
       }
     },
     {
-      "message_key": "webui.open_saved_search_dialog.tab.owned_19e3ed8f",
-      "translated_text": "المملوكة",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T17:44:17.672002+04:00",
-        "date_published": "2026-09-26T17:44:17.672002+04:00"
-      }
-    },
-    {
       "message_key": "webui.open_saved_search_dialog.tab.shared_with_me_1300d28d",
-      "translated_text": "المشتركة معي",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T17:44:17.672002+04:00",
-        "date_published": "2026-09-26T17:44:17.672002+04:00"
-      }
-    },
-    {
-      "message_key": "webui.open_saved_search_dialog.tab.shared_with_me_8185f488",
       "translated_text": "المشتركة معي",
       "quality_flags": [],
       "provenance": {
@@ -21645,6 +21854,21 @@
         "date_reviewed": "2026-09-26T17:44:17.672002+04:00",
         "date_published": "2026-09-26T17:44:17.672002+04:00"
       }
+    },
+    {
+      "message_key": "webui.saved_audience.browse_roles",
+      "translated_text": "استعراض الأدوار",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.saved_audience.browse_units",
+      "translated_text": "استعراض الوحدات التنظيمية",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.saved_audience.ineligible",
+      "translated_text": "لا يمكن إضافة هذا العنصر إلى الجهات المستفيدة من هذا البحث المحفوظ.",
+      "quality_flags": []
     },
     {
       "message_key": "webui.security_level_remedy.description.downgrade_subtree",
@@ -29760,6 +29984,61 @@
         "date_reviewed": "2026-09-26T20:20:14.562571+04:00",
         "date_published": "2026-09-26T20:20:14.562571+04:00"
       }
+    },
+    {
+      "message_key": "webui.text_indexer_card.active_credentials",
+      "translated_text": "بيانات الاعتماد النشطة",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.text_indexer_card.credential_history",
+      "translated_text": "سجل بيانات الاعتماد",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.text_indexer_card.last_used",
+      "translated_text": "آخر استخدام",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.text_indexer_card.never",
+      "translated_text": "لم يُستخدم بعد",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.text_indexer_details.created",
+      "translated_text": "تاريخ الإنشاء",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.text_indexer_details.created_by",
+      "translated_text": "أنشأه",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.text_indexer_details.expires",
+      "translated_text": "تاريخ انتهاء الصلاحية",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.text_indexer_details.expiring",
+      "translated_text": "قريب الانتهاء",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.text_indexer_details.external_id",
+      "translated_text": "المعرّف الخارجي",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.text_indexer_details.last_worker",
+      "translated_text": "آخر عامل",
+      "quality_flags": []
+    },
+    {
+      "message_key": "webui.text_indexer_details.system",
+      "translated_text": "النظام",
+      "quality_flags": []
     },
     {
       "message_key": "webui.toggle_diagnostics.notify.diagnostics_will_apply_to_the_next_explici_286f12ab",
