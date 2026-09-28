@@ -1,6 +1,8 @@
 import os
 
 import psycopg
+import pytest
+from psycopg import sql
 from psycopg.types.json import Jsonb
 
 
@@ -331,3 +333,65 @@ def test_paginated_identity_searches_sort_by_displayed_preferred_language_name(c
         assert response.json()["total"] == 2
         assert response.json()["items"][0]["name"].startswith("Zulu")
         assert response.json()["items"][0]["localized"]["name"].startswith("ال")
+
+
+@pytest.mark.parametrize(('resource', 'table', 'entity_type', 'primary'), [
+    ('roles', 'roles', 'role', 'name'),
+    ('users', 'users', 'user', 'name'),
+    ('org-units', 'org_units', 'org_unit', 'name'),
+    ('profiles', 'profiles', 'profile', 'name'),
+    ('security-levels', 'security_levels', 'security_level', 'name'),
+    ('classifications', 'classifications', 'classification', 'title'),
+    ('classification-schemes', 'classification_schemes', 'classification_scheme', 'title'),
+])
+def test_entity_translation_audit_preserves_before_after_for_all_entities(client, resource, table, entity_type, primary):
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        entity_id, previous = connection.execute(sql.SQL(
+            'SELECT id, translations FROM {} ORDER BY id LIMIT 1'
+        ).format(sql.Identifier(table))).fetchone()
+    path = f'/api/v1/entity-translations/{resource}/{entity_id}/ar'
+    current = client.get(path)
+    assert current.status_code == 200, current.text
+    version = current.json()['version']
+    for phase, values in [
+        ('add', {primary: 'الاسم التجريبي الأول', 'description': 'الوصف التجريبي الأول'}),
+        ('edit', {primary: 'الاسم التجريبي المعدل', 'description': 'الوصف التجريبي المعدل'}),
+        ('remove', {primary: None, 'description': None}),
+    ]:
+        reason = f'Audit verification: {resource} {phase}'
+        response = client.patch(path, json=values, headers={
+            'If-Match': str(version), 'X-Change-Reason': reason,
+            'X-Event-Source': 'web_ui',
+        })
+        assert response.status_code == 200, response.text
+        version = response.json()['version']
+        expected = dict(previous or {})
+        if phase == 'remove':
+            expected.pop('ar', None)
+        else:
+            expected['ar'] = values
+        expected = expected or None
+        with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+            row = connection.execute(
+                '''SELECT id,before_state,after_state,changed_fields,reason,source
+                   FROM event_history WHERE entity_type=%s AND entity_id=%s AND operation='UPDATE'
+                   ORDER BY id DESC LIMIT 1''', (entity_type, entity_id),
+            ).fetchone()
+        assert row is not None
+        event_id, before, after, changed, saved_reason, source = row
+        assert before['translations'] == previous
+        assert after['translations'] == expected
+        assert 'translations' in changed
+        assert saved_reason == reason
+        assert source == 'web_ui'
+        # Verify the API used by history screens retains the same snapshots.
+        events = client.get('/api/v1/event-history', params={
+            'entity_type': entity_type, 'entity_id': entity_id, 'operation': 'UPDATE',
+        })
+        assert events.status_code == 200, events.text
+        event = next(item for item in events.json() if item['id'] == event_id)
+        assert event['before_state']['translations'] == previous
+        assert event['after_state']['translations'] == expected
+        assert 'translations' in event['changed_fields']
+        print(f'{resource}: {phase}: database and API snapshots preserved (event {event_id})')
+        previous = expected

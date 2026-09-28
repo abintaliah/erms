@@ -2216,7 +2216,8 @@ def index(q: str = "") -> None:
         html[dir="rtl"] .erms-brand {
             direction: rtl; flex-direction: row !important;
         }
-        html[dir="rtl"] .erms-brand-name {
+        html[dir="rtl"] .erms-brand-name,
+        html[lang|="ar"] .wathiq-login-word {
             font-family: Changa, Tahoma, Arial, "Segoe UI", sans-serif;
             font-weight: 600; letter-spacing: 0;
         }
