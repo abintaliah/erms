@@ -96,7 +96,7 @@ def test_hold_listing_localizes_card_labels_states_and_open_ended_validity():
 
 def test_hold_api_projects_owner_and_contributor_names_in_preferred_language():
     source = HOLDS_API.read_text(encoding="utf-8")
-    assert "from .entity_localization import localize_rows, preferred_language" in source
+    assert "from .entity_localization import localize_rows, localized_projection, preferred_language" in source
     assert "localized: dict[str, Any] | None = None" in source
     assert "user_account.status,user_account.translations" in source
     assert "u.status,u.translations FROM hold_contributors" in source

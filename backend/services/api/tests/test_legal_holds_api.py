@@ -28,6 +28,8 @@ def test_hold_lifecycle_held_items_capabilities_and_explainer(
     assert hold["state"] == "active"
     assert hold["owner"] == {
         "id": 1, "name": "Test Administrator", "email": "admin@test.invalid", "status": "active",
+        "localized": {"language_tag": "en", "name": "Test Administrator",
+                      "description": None, "used_canonical_fallback": True},
     }
     assert hold["is_effective"] is True
     assert hold["capabilities"]["manage_held_items"] is True
@@ -226,3 +228,56 @@ def test_information_governance_profile_can_manage_held_items_without_hold_admin
         "owner_user_id":user_id,
     })
     assert denied.status_code==403
+
+
+def test_held_item_names_follow_language_and_translation_updates(client, aggregation, record):
+    """Both card types resolve related names without stale locale/entity caches."""
+    hold = _create_hold(client)
+    response = client.post(
+        f"/api/v1/holds/{hold['id']}/held-items/bulk",
+        json={"held_items": [
+            {"resource_type": "aggregation", "resource_id": aggregation["id"]},
+            {"resource_type": "record", "resource_id": record["id"]},
+        ]}, headers={"X-Change-Reason": "Test translated hold cards"},
+    )
+    assert response.status_code == 201, response.text
+    url = f"/api/v1/holds/{hold['id']}/held-items"
+    canonical = client.get(url).json()["items"]
+    level_ids = {row["security_level_id"] for row in canonical}
+    for resource, identifier, name in [
+        ("users", 1, "مدير الاختبار"),
+        *(("security-levels", identifier, "عام") for identifier in level_ids),
+    ]:
+        entity = client.get(f"/api/v1/{resource}/{identifier}").json()
+        saved = client.patch(
+            f"/api/v1/entity-translations/{resource}/{identifier}/ar",
+            json={"name": name},
+            headers={"If-Match": str(entity["version"]), "X-Change-Reason": "Translate related name"},
+        )
+        assert saved.status_code == 200, saved.text
+
+    def language(tag):
+        preference = client.get("/api/v1/preferences").json()
+        saved = client.put("/api/v1/preferences", json={
+            "language_tag": tag, "working_timezone": "Asia/Dubai",
+        }, headers={"If-Match": str(preference["version"])})
+        assert saved.status_code == 200, saved.text
+
+    language("ar")
+    for _ in range(2):
+        page = client.get(url, params={"limit": 1, "offset": 1}).json()
+        assert page["total"] == 2 and page["returned"] == 1
+        rows = client.get(url).json()["items"]
+        assert {row["resource_type"] for row in rows} == {"record", "aggregation"}
+        assert all(row["assigned_by_name"] == "مدير الاختبار" for row in rows)
+        assert all(row["security_level_name"] == "عام" for row in rows)
+    user = client.get("/api/v1/users/1").json()
+    updated = client.patch("/api/v1/entity-translations/users/1/ar", json={"name": "مدير محدث"},
+        headers={"If-Match": str(user["version"]), "X-Change-Reason": "Update translated name"})
+    assert updated.status_code == 200, updated.text
+    assert all(row["assigned_by_name"] == "مدير محدث" for row in client.get(url).json()["items"])
+    language("en")
+    restored = client.get(url).json()["items"]
+    assert [(r["assigned_by_name"], r["security_level_name"]) for r in restored] == [
+        (r["assigned_by_name"], r["security_level_name"]) for r in canonical
+    ]

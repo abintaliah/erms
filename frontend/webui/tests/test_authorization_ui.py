@@ -8,7 +8,7 @@ from frontend.webui.authorization_ui import (
 def test_operation_catalogue_covers_resource_and_component_actions():
     assert "aggregation.security_level.change" in OPERATIONS["aggregation"]
     assert "record.component.replace" in OPERATIONS["record"]
-    assert operation_label("record.component.download") == "Component · Download"
+    assert operation_label("record.component.download") == "Download Digital Component"
     assert authorization_code_label("aggregation.add_record") == "Add Record"
     assert authorization_code_label("record.create") == "Create Records"
     assert authorization_code_label("record.component.replace") == "Replace Digital Component"
@@ -86,3 +86,21 @@ def test_profile_privilege_search_covers_code_name_and_guidance():
     assert privilege_matches_search(privilege, "recorded events")
     assert privilege_matches_search(privilege, "Security operations")
     assert not privilege_matches_search(privilege, "create records")
+
+
+def test_acl_permission_and_source_labels_use_arabic_catalogue():
+    import json
+    from pathlib import Path
+    from frontend.webui.i18n_catalogue import set_active_messages
+    from frontend.webui.authorization_ui import PERMISSION_DISPLAY_ORDER
+    artifact = json.loads((Path(__file__).parents[1] / "i18n/messages.ar.generated.json").read_text())
+    messages = {item["message_key"]: item["translated_text"] for item in artifact["items"]}
+    set_active_messages(messages)
+    try:
+        for codes in PERMISSION_DISPLAY_ORDER.values():
+            for code in codes:
+                assert operation_label(code) == messages["authorization.permission." + code]
+        assert acl_source_label({"source": "resource_override"}) == "تجاوز محلي"
+        assert acl_source_label({"source": "parent_mirror:resource_override"}) == messages["authorization.acl_source.parent_mirror"]
+    finally:
+        set_active_messages({})

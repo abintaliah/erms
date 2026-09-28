@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from frontend.webui.event_labels import event_label
+
 import asyncio
 import base64
 import copy
@@ -440,27 +442,6 @@ def advanced_search_node_from_expression(expression: dict[str, Any]) -> dict[str
         "type": "group", "operator": operator,
         "children": [advanced_search_node_from_expression(child) for child in expression[operator]],
     }
-
-SECURITY_EVENT_HELP = {
-    "AUTHORIZATION_DENIED": render_message("webui.module.text.an_operation_was_refused_because_one_or_mo_8a8c328d"),
-    "AUTHENTICATION_FAILED": render_message("webui.module.text.a_sign_in_attempt_failed_repeated_failures_9063b5ad"),
-    "ACCOUNT_LOCKED": render_message("webui.module.text.an_account_was_locked_after_reaching_the_c_9b0a2ea9"),
-    "INFORMATION_GOVERNANCE_BYPASS_USED": render_message("webui.module.text.a_qualifying_governance_role_bypassed_the_b9e69c3c"),
-    "ACCESS_EXPLANATION_VIEWED": render_message("webui.module.text.an_authorized_examiner_inspected_why_anoth_ff54a75d"),
-    "SECURITY_LEVEL_CHANGED": render_message("webui.module.text.a_resource_security_level_changed_45527425"),
-    "SECURITY_LEVEL_UPGRADED": render_message("webui.module.text.a_resource_was_raised_to_a_more_restrictiv_267fec56"),
-    "SECURITY_LEVEL_DOWNGRADED": render_message("webui.module.text.a_resource_was_lowered_to_a_less_restricti_33c49609"),
-    "ACL_REPLACED": render_message("webui.module.text.a_resource_s_local_access_control_list_was_9401ad98"),
-    "DEFAULT_CHILD_AGGREGATION_ACL_REPLACED": render_message("webui.module.text.the_default_acl_inherited_by_child_aggrega_f12c6a28"),
-    "DEFAULT_CHILD_RECORD_ACL_REPLACED": render_message("webui.module.text.the_default_acl_inherited_by_child_records_b8435ae9"),
-    "PROFILE_PRIVILEGES_REPLACED": render_message("webui.module.text.the_complete_privilege_set_attached_to_a_p_8355d82e"),
-    "PROFILE_ASSIGNED": render_message("webui.module.text.a_role_was_assigned_a_different_authorizat_a7a05cad"),
-    "GOVERNANCE_ROLE_CHANGED": render_message("webui.module.text.a_role_s_information_governance_designatio_118a4087"),
-}
-
-AUTHORIZATION_DENIAL_HELP = (
-    render_message("webui.module.text.these_are_operations_refused_by_the_author_9f71f790")
-)
 
 LAST_CUSTODIAN_TITLE = render_message("webui.module.text.this_change_can_t_be_made_yet_54b54067")
 LAST_CUSTODIAN_MESSAGE = (
@@ -4760,7 +4741,7 @@ def index(q: str = "") -> None:
             with ui.row().classes("w-full items-center px-5 pt-5"):
                 ui.avatar(icon="history", color="blue-1", text_color="primary")
                 with ui.column().classes("gap-0 grow"):
-                    ui.label(event["operation"].replace("_", " ").title()).classes("text-xl font-semibold")
+                    ui.label(event_label(event["operation"])).classes("text-xl font-semibold").tooltip(event["operation"])
                     ui.label(entity_heading).classes("text-sm text-slate-500")
                     if entity_identity:
                         ui.label(entity_identity).classes("text-sm font-medium text-slate-700 line-clamp-1")
@@ -4838,13 +4819,13 @@ def index(q: str = "") -> None:
                         "text-xs text-slate-400 font-medium mt-2"
                     ).tooltip(render_message("webui.render_event_timeline.tooltip.events_sharing_this_correlation_id_belong_6351adea"))
                 previous_correlation = correlation
-                operation = event["operation"].replace("_", " ").title()
+                operation = event_label(event["operation"])
                 entity_heading, entity_identity = event_entity_identity(event)
                 with ui.card().classes("audit-event w-full px-4 py-3"):
                     with ui.row().classes("w-full items-center no-wrap gap-3"):
                         ui.avatar(icon={"CREATE": "add", "UPDATE": "edit", "DELETE": "delete"}.get(event["operation"], "bolt"), color="blue-1", text_color="primary", size="36px")
                         with ui.column().classes("gap-0 grow min-w-0"):
-                            ui.label(operation).classes("font-semibold")
+                            ui.label(operation).classes("font-semibold").tooltip(event["operation"])
                             ui.label(entity_heading).classes("text-xs text-slate-500")
                             if entity_identity:
                                 ui.label(entity_identity).classes("text-sm font-medium text-slate-700 line-clamp-1")
@@ -5408,7 +5389,7 @@ def index(q: str = "") -> None:
                 source_aggregation = None
 
         options = {
-            item["code"]: item["name"]
+            item["code"]: operation_label(item["code"])
             for item in ordered_permission_catalogue(catalogue, resource_type)
         }
         role_options = {item["id"]: f"{item['code']} — {item['name']}" for item in roles}
@@ -5452,7 +5433,7 @@ def index(q: str = "") -> None:
                             ui.button(render_message("webui.show_acl_editor.button.open_81b1e6e8"), icon="open_in_new", on_click=open_editor_acl_source).props(
                                 "flat dense no-caps"
                             )
-                    inherit = ui.switch("Inherit ACL from parent", value=acl["inherit_acl_from_parent"])
+                    inherit = ui.switch(render_message("authorization.acl.inherit_from_parent"), value=acl["inherit_acl_from_parent"])
                     if edited_aggregation is not None and edited_aggregation.get("parent_aggregation_id") is None:
                         inherit.set_enabled(False)
                         inherit.tooltip(render_message("webui.show_acl_editor.tooltip.a_root_aggregation_has_no_parent_acl_to_in_8d57d004"))
@@ -5618,7 +5599,7 @@ def index(q: str = "") -> None:
                                         with ui.element("div").classes(
                                             "w-[132px] shrink-0 self-stretch px-2 py-3 border-r border-slate-200 text-center"
                                         ):
-                                            ui.label(operation_label(code)).classes(
+                                            ui.label(name).classes(
                                                 "text-xs font-semibold leading-tight text-slate-600"
                                             ).tooltip(name)
 
@@ -12474,7 +12455,7 @@ def index(q: str = "") -> None:
                 value: value.replace("_", " ").title()
                 for value in filter_options["entity_types"]
             }
-            operation_filter.options = filter_options["operations"]
+            operation_filter.options = {code: event_label(code) for code in filter_options["operations"]}
             source_filter.options = filter_options["sources"]
             actor_filter.options = filter_options["actor_types"]
             for control in (
@@ -16255,6 +16236,31 @@ def index(q: str = "") -> None:
             return parsed.isoformat()
 
         async def load_security_operations() -> None:
+            with page_client:
+                await render_security_operations()
+
+        async def render_security_operations() -> None:
+            # Resolve explanations in the current session language, never at import time.
+            security_event_help = {
+                "AUTHORIZATION_DENIED": render_message("webui.module.text.an_operation_was_refused_because_one_or_mo_8a8c328d"),
+                "AUTHENTICATION_FAILED": render_message("webui.module.text.a_sign_in_attempt_failed_repeated_failures_9063b5ad"),
+                "ACCOUNT_LOCKED": render_message("webui.module.text.an_account_was_locked_after_reaching_the_c_9b0a2ea9"),
+                "INFORMATION_GOVERNANCE_BYPASS_USED": render_message("webui.module.text.a_qualifying_governance_role_bypassed_the_b9e69c3c"),
+                "ACCESS_EXPLANATION_VIEWED": render_message("webui.module.text.an_authorized_examiner_inspected_why_anoth_ff54a75d"),
+                "SECURITY_LEVEL_CHANGED": render_message("webui.module.text.a_resource_security_level_changed_45527425"),
+                "SECURITY_LEVEL_UPGRADED": render_message("webui.module.text.a_resource_was_raised_to_a_more_restrictiv_267fec56"),
+                "SECURITY_LEVEL_DOWNGRADED": render_message("webui.module.text.a_resource_was_lowered_to_a_less_restricti_33c49609"),
+                "ACL_REPLACED": render_message("webui.module.text.a_resource_s_local_access_control_list_was_9401ad98"),
+                "DEFAULT_CHILD_AGGREGATION_ACL_REPLACED": render_message("webui.module.text.the_default_acl_inherited_by_child_aggrega_f12c6a28"),
+                "DEFAULT_CHILD_RECORD_ACL_REPLACED": render_message("webui.module.text.the_default_acl_inherited_by_child_records_b8435ae9"),
+                "PROFILE_PRIVILEGES_REPLACED": render_message("webui.module.text.the_complete_privilege_set_attached_to_a_p_8355d82e"),
+                "PROFILE_ASSIGNED": render_message("webui.module.text.a_role_was_assigned_a_different_authorizat_a7a05cad"),
+                "GOVERNANCE_ROLE_CHANGED": render_message("webui.module.text.a_role_s_information_governance_designatio_118a4087"),
+            }
+
+            authorization_denial_help = (
+                render_message("webui.module.text.these_are_operations_refused_by_the_author_9f71f790")
+            )
             mode = period.value or "24h"
             hours = {"24h": 24, "week": 24 * 7, "month": 24 * 30}.get(mode, 24)
             if mode == "custom" and (not range_start.value or not range_end.value):
@@ -16268,6 +16274,8 @@ def index(q: str = "") -> None:
             reconciliation = None
             if "authorization.administer" in privileges:
                 reconciliation = await api.security_reconciliation()
+            if state.get("resource") != "security-operations" or period.value != mode:
+                return
             window_title.text = {
                 "24h": render_message("webui.load_security_operations.text.last_24_hours_42c47f2c"), "week": render_message("webui.load_security_operations.text.last_week_0f602f5d"), "month": render_message("webui.load_security_operations.text.last_month_1df4669b"),
                 "custom": render_message("webui.load_security_operations.text.value_through_value_2_8da1ebd6", value=range_start.value, value_2=range_end.value),
@@ -16321,7 +16329,7 @@ def index(q: str = "") -> None:
                     denial_icon = "gpp_bad"
                     security_operation_facts = (
                         (summary["total_security_events"], render_message("webui.load_security_operations.text.security_events_a38a6da1"), security_icon, render_message("webui.load_security_operations.text.recognized_authentication_authorization_cl_b866a4b5")),
-                        (summary["total_denials"], render_message("webui.load_security_operations.text.authorization_denials_09e48996"), denial_icon, AUTHORIZATION_DENIAL_HELP),
+                        (summary["total_denials"], render_message("webui.load_security_operations.text.authorization_denials_09e48996"), denial_icon, authorization_denial_help),
                     )
                     for value, label, icon, help_text in security_operation_facts:
                         with ui.card().classes("shadow-none border border-slate-200 p-4 gap-1"):
@@ -16337,8 +16345,8 @@ def index(q: str = "") -> None:
                     ui.label(render_message("webui.load_security_operations.label.no_security_events_in_this_period_c672277b")).classes("text-sm text-slate-400")
                 for item in summary["event_counts"]:
                     with ui.grid(columns="minmax(220px, 1fr) minmax(320px, 2fr) 80px 170px").classes("w-full items-center gap-3 border-b border-slate-100 py-3"):
-                        ui.label(item["operation"].replace("_", " ").title()).classes("font-medium")
-                        ui.label(SECURITY_EVENT_HELP.get(item["operation"], render_message("webui.load_security_operations.label.security_relevant_activity_recorded_in_the_993f1e3d"))).classes("text-sm text-slate-500")
+                        ui.label(event_label(item["operation"])).classes("font-medium").tooltip(item["operation"])
+                        ui.label(security_event_help.get(item["operation"], render_message("webui.load_security_operations.label.security_relevant_activity_recorded_in_the_993f1e3d"))).classes("text-sm text-slate-500")
                         with ui.row().classes("w-full justify-center"):
                             ui.badge(str(item["count"]), color="primary").props("outline")
                         ui.label(format_timestamp(item["last_seen_at"])).classes("text-xs text-slate-500 text-right")
@@ -16351,7 +16359,7 @@ def index(q: str = "") -> None:
                     **item,
                     "actor": item.get("actor_name") or item.get("actor_email") or item.get("actor_type"),
                     "when": format_timestamp(item["occurred_at"]),
-                    "signal": item["operation"].replace("_", " ").title(),
+                    "signal": event_label(item["operation"]),
                     "decision": decision_code_label(item.get("decision_code")),
                 } for item in summary.get("recent_events", [])]
                 security_event_page = {"offset": 0}
@@ -16419,7 +16427,7 @@ def index(q: str = "") -> None:
                                         ui.icon("security", size="18px")
                                     ui.label(row["signal"]).classes(
                                         "font-semibold grow min-w-0"
-                                    )
+                                    ).tooltip(row["operation"])
                                     ui.label(row["when"]).classes(
                                         "text-xs text-slate-500 whitespace-nowrap"
                                     )
@@ -16519,7 +16527,7 @@ def index(q: str = "") -> None:
                 render_security_event_cards()
 
                 ui.label(render_message("webui.load_security_operations.label.denial_monitoring_9ac48ee1")).classes("text-lg font-semibold mt-2")
-                ui.label(AUTHORIZATION_DENIAL_HELP).classes("text-sm text-slate-500 -mt-4")
+                ui.label(authorization_denial_help).classes("text-sm text-slate-500 -mt-4")
                 if not summary["denial_groups"]:
                     ui.label(render_message("webui.load_security_operations.label.no_authorization_denials_occurred_in_this_3d7c10a2")).classes("text-sm text-positive")
                 for item in summary["denial_groups"]:
@@ -19498,7 +19506,7 @@ def index(q: str = "") -> None:
                         row["assigned_at_display"] = format_timestamp(row["assigned_at"])
                         row["assigned_by_avatar"] = user_avatar({
                             "id": row.get("assigned_by_user_id"),
-                            "name": row.get("assigned_by_name") or "System",
+                            "name": row.get("assigned_by_name") or render_message("webui.load_held_items.value.system"),
                         })
                     async def open_held_item(row: dict[str, Any]) -> None:
                         if row["resource_type"]=="aggregation": await open_aggregation(await api.get("aggregations",row["resource_id"]))
@@ -19529,15 +19537,15 @@ def index(q: str = "") -> None:
                                         ui.label(row.get("description") or render_message("webui.load_held_items.label.no_description_provided_db263706")).classes("text-xs text-slate-500 mt-1 leading-5")
                                     ui.badge(render_message("webui.load_held_items.badge.aggregation_4d7e0b4c") if row["resource_type"] == "aggregation" else render_message("webui.load_held_items.badge.record_58fed782"), color="blue-grey").props("outline")
                                 with ui.element("div").classes("governance-list-facts w-full"):
-                                    for label, value in (
-                                        ("Security level", row["security_level_display"]),
-                                        ("Assigned", row["assigned_at_display"]),
-                                        ("Assigned by", row.get("assigned_by_name") or "System"),
-                                        ("Direct assignment", "Yes"),
+                                    for field, label, value in (
+                                        ("security_level", render_message("webui.load_held_items.field.security_level"), row["security_level_display"]),
+                                        ("assigned", render_message("webui.load_held_items.field.assigned"), row["assigned_at_display"]),
+                                        ("assigned_by", render_message("webui.load_held_items.field.assigned_by"), row.get("assigned_by_name") or render_message("webui.load_held_items.value.system")),
+                                        ("direct_assignment", render_message("webui.load_held_items.field.direct_assignment"), render_message("webui.load_held_items.value.yes")),
                                     ):
                                         with ui.column().classes("gap-0 min-w-0"):
                                             ui.label(label).classes("detail-field-label")
-                                            if label == "Assigned by" and row.get("assigned_by_user_id"):
+                                            if field == "assigned_by" and row.get("assigned_by_user_id"):
                                                 with ui.button(on_click=lambda _, user_id=row["assigned_by_user_id"]: select_user_details(user_id)).props("flat dense no-caps color=blue-grey-9").classes("self-start -ml-2"):
                                                     render_user_avatar({"id":row["assigned_by_user_id"],"name":value}, size="26px").style("margin-inline-end:7px !important")
                                                     ui.label(value).classes("text-sm")
@@ -19558,17 +19566,24 @@ def index(q: str = "") -> None:
             async def show_add_held_item() -> None:
                 page_size = 50
                 picker = {"offset": 0, "total": 0, "selected": {}}
-                dialog=ui.dialog().props("persistent")
+                dialog=ui.dialog()
                 with dialog,ui.card().style(
                     "width:1280px;max-width:calc(100vw - 48px)"
                 ).classes("max-h-[94vh]"):
-                    ui.label(render_message("webui.show_add_held_item.label.add_resources_to_hold_59f543cf")).classes("text-xl font-semibold")
+                    with ui.row().classes("w-full items-center justify-between no-wrap"):
+                        ui.label(render_message("webui.show_add_held_item.label.add_resources_to_hold_59f543cf")).classes("text-xl font-semibold")
+                        ui.button(icon="close", on_click=dialog.close).props(
+                            "flat round dense aria-label='" + render_message("webui.show_add_held_item.button.cancel_93656897") + "'"
+                        ).tooltip(render_message("webui.show_add_held_item.button.cancel_93656897"))
                     ui.label(render_message("webui.show_add_held_item.label.search_the_resources_you_can_view_select_a_a096d995")).classes("text-sm text-slate-600")
                     with ui.row().classes("w-full items-end gap-3"):
                         candidate_query=ui.input(render_message("webui.show_add_held_item.input.search_number_title_or_description_f135a521"),placeholder=render_message("webui.show_add_held_item.input.for_example_case_2026_or_contract_83e77270")).props("outlined clearable debounce=350").classes("grow")
                         candidate_type=ui.select({None:render_message("webui.show_add_held_item.select.aggregations_and_records_0c33d8e9"),"aggregation":render_message("webui.show_add_held_item.select.aggregations_only_e3ca93ce"),"record":render_message("webui.show_add_held_item.select.records_only_f985a7d3")},value="aggregation",label=render_message("webui.show_add_held_item.select.resource_type_186980bb")).props("outlined").classes("w-56")
                     selection_summary=ui.label(render_message("webui.show_add_held_item.label.no_resources_selected_c1ee3075")).classes("text-sm font-medium text-primary")
-                    candidate_host=ui.column().classes("w-full min-h-[360px]")
+                    # Contain the paginated cards: an ordinary flex column shrinks
+                    # while its visible overflow paints behind the reason/footer.
+                    with ui.scroll_area().classes("w-full h-64 max-h-[30vh] shrink-0"):
+                        candidate_host=ui.column().classes("w-full")
                     with ui.row().classes("w-full items-center justify-between"):
                         page_status=ui.label().classes("text-sm text-slate-600")
                         with ui.row().classes("gap-1"):

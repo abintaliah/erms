@@ -386,3 +386,20 @@ Domain events will be appended through controlled database functions rather
 than direct client writes. Activity events such as `VIEW` and `DOWNLOAD` must be
 recorded explicitly because they do not modify an entity row and therefore
 cannot be detected by row triggers.
+
+## Localized operation names
+
+`frontend/webui/event_labels.py::EVENT_MESSAGE_KEYS` is the shared WebUI
+presentation catalogue for the 52 event codes currently emitted by the API and
+canonical schema. Audit Trail filters, timelines, event details, resource
+history, and Security Operations resolve those keys in the current session's
+language. The friendly text is maintained in the standard English and Arabic
+translation catalogues and Translation Administration.
+
+Operation codes remain unchanged in stored events, API payloads, filter values,
+and diagnostic tooltips. Unrecognized historical or integration codes are
+shown verbatim rather than assigned a potentially misleading translation.
+When adding an event emitter, add its display key and maintained-language
+translations to this catalogue. The emitter-coverage test checks literal SQL
+and Python event emitters and the Security Operations subset; dynamically
+selected operation names must also be reviewed when their emitter changes.

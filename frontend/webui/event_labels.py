@@ -1,0 +1,66 @@
+"""Shared presentation catalogue for immutable audit operation codes.
+
+Keep technical codes as keys. Resolve labels only in the current UI context.
+Unknown historical/integration codes remain visible verbatim.
+"""
+from .i18n_catalogue import render_message
+
+EVENT_MESSAGE_KEYS = {
+    "ACCESS_EXPLANATION_VIEWED": "audit.event.access_explanation_viewed",
+    "ACCOUNT_LOCKED": "audit.event.account_locked",
+    "ACL_REPLACED": "audit.event.acl_replaced",
+    "ALL_DIRECT_HOLDS_REMOVED": "audit.event.all_direct_holds_removed",
+    "AUTHENTICATION_FAILED": "security_operations.event.authentication_failed",
+    "AUTHENTICATION_SUCCEEDED": "audit.event.authentication_succeeded",
+    "AUTHORIZATION_DENIED": "audit.event.authorization_denied",
+    "CLOSED_AGGREGATION_RECORD_CORRECTED": "audit.event.closed_aggregation_record_corrected",
+    "CONTENT_CLEANUP": "audit.event.content_cleanup",
+    "CONTENT_DELETED": "audit.event.content_deleted",
+    "CONTENT_DOWNLOADED": "audit.event.content_downloaded",
+    "CONTENT_REINDEX_REQUESTED": "audit.event.content_reindex_requested",
+    "CONTENT_REPLACED": "audit.event.content_replaced",
+    "CONTENT_UPLOADED": "audit.event.content_uploaded",
+    "CONTENT_VIEWED": "audit.event.content_viewed",
+    "CREATE": "audit.event.create",
+    "DEFAULT_CHILD_AGGREGATION_ACL_REPLACED": "audit.event.default_child_aggregation_acl_replaced",
+    "DEFAULT_CHILD_RECORD_ACL_REPLACED": "audit.event.default_child_record_acl_replaced",
+    "DELETE": "audit.event.delete",
+    "GOVERNANCE_ROLE_CHANGED": "audit.event.governance_role_changed",
+    "HELD_RESOURCE_MOVED": "audit.event.held_resource_moved",
+    "HOLD_CONTRIBUTORS_REPLACED": "audit.event.hold_contributors_replaced",
+    "HOLD_CREATED": "audit.event.hold_created",
+    "HOLD_DELETED": "audit.event.hold_deleted",
+    "HOLD_OPERATION_BLOCKED": "audit.event.hold_operation_blocked",
+    "HOLD_UPDATED": "audit.event.hold_updated",
+    "INFORMATION_GOVERNANCE_BYPASS_USED": "security_operations.event.information_governance_bypass_used",
+    "MEDIUM_CHANGED": "audit.event.medium_changed",
+    "MOVED_WITH_ACL_POLICY": "audit.event.moved_with_acl_policy",
+    "OWNERSHIP_CORRECTED": "audit.event.ownership_corrected",
+    "PASSWORD_CHANGED": "audit.event.password_changed",
+    "PASSWORD_RESET": "audit.event.password_reset",
+    "PROFILE_ASSIGNED": "audit.event.profile_assigned",
+    "PROFILE_PRIVILEGES_REPLACED": "audit.event.profile_privileges_replaced",
+    "RECORD_CONTENT_REINDEX_REQUESTED": "audit.event.record_content_reindex_requested",
+    "RESOURCE_ADDED_TO_HOLD": "audit.event.resource_added_to_hold",
+    "RESOURCE_LOCATION_CHANGED": "audit.event.resource_location_changed",
+    "RESOURCE_REMOVED_FROM_HOLD": "audit.event.resource_removed_from_hold",
+    "REVIEW_DATE_CHANGED": "audit.event.review_date_changed",
+    "ROLE_PROFILE_BACKFILL_COMPLETED": "audit.event.role_profile_backfill_completed",
+    "ROLE_SECURITY_CLEARANCE_CHANGED": "audit.event.role_security_clearance_changed",
+    "SECURITY_LEVEL_CHANGED": "audit.event.security_level_changed",
+    "SECURITY_LEVEL_DOWNGRADED": "audit.event.security_level_downgraded",
+    "SECURITY_LEVEL_UPGRADED": "audit.event.security_level_upgraded",
+    "SERVICE_API_CREDENTIAL_CREATED": "audit.event.service_api_credential_created",
+    "SERVICE_API_CREDENTIAL_REVOKED": "audit.event.service_api_credential_revoked",
+    "SERVICE_API_CREDENTIAL_ROTATED": "audit.event.service_api_credential_rotated",
+    "SESSION_EXPIRED": "audit.event.session_expired",
+    "SESSION_REVOKED": "audit.event.session_revoked",
+    "TRANSIENT_USER_DATA_REMOVED": "audit.event.transient_user_data_removed",
+    "UPDATE": "audit.event.update",
+    "VITAL_STATUS_CHANGED": "audit.event.vital_status_changed",
+}
+
+
+def event_label(code: str) -> str:
+    key = EVENT_MESSAGE_KEYS.get(code)
+    return render_message(key) if key else code

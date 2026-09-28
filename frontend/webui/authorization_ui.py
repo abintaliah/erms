@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .i18n_catalogue import render_message
+
 
 OPERATIONS = {
     "aggregation": (
@@ -188,7 +190,57 @@ def decision_code_label(code: str | None) -> str:
     return DECISION_CODE_LABELS.get(code, code.replace("_", " ").title())
 
 
+PERMISSION_MESSAGE_KEYS = {
+    "aggregation.acl.manage": "authorization.permission.aggregation.acl.manage",
+    "aggregation.add_child": "authorization.permission.aggregation.add_child",
+    "aggregation.add_record": "authorization.permission.aggregation.add_record",
+    "aggregation.close": "authorization.permission.aggregation.close",
+    "aggregation.delete": "authorization.permission.aggregation.delete",
+    "aggregation.history.view": "authorization.permission.aggregation.history.view",
+    "aggregation.location.change": "authorization.permission.aggregation.location.change",
+    "aggregation.modify_metadata": "authorization.permission.aggregation.modify_metadata",
+    "aggregation.move": "authorization.permission.aggregation.move",
+    "aggregation.receive_child": "authorization.permission.aggregation.receive_child",
+    "aggregation.receive_record": "authorization.permission.aggregation.receive_record",
+    "aggregation.reclassify": "authorization.permission.aggregation.reclassify",
+    "aggregation.reopen": "authorization.permission.aggregation.reopen",
+    "aggregation.review_date.change": "authorization.permission.aggregation.review_date.change",
+    "aggregation.security_level.change": "authorization.permission.aggregation.security_level.change",
+    "aggregation.view": "authorization.permission.aggregation.view",
+    "aggregation.vital_status.change": "authorization.permission.aggregation.vital_status.change",
+    "record.acl.manage": "authorization.permission.record.acl.manage",
+    "record.component.add": "authorization.permission.record.component.add",
+    "record.component.download": "authorization.permission.record.component.download",
+    "record.component.list": "authorization.permission.record.component.list",
+    "record.component.print": "authorization.permission.record.component.print",
+    "record.component.remove": "authorization.permission.record.component.remove",
+    "record.component.reorder": "authorization.permission.record.component.reorder",
+    "record.component.replace": "authorization.permission.record.component.replace",
+    "record.component.share": "authorization.permission.record.component.share",
+    "record.component.view": "authorization.permission.record.component.view",
+    "record.delete": "authorization.permission.record.delete",
+    "record.history.view": "authorization.permission.record.history.view",
+    "record.modify_metadata": "authorization.permission.record.modify_metadata",
+    "record.move": "authorization.permission.record.move",
+    "record.review_date.change": "authorization.permission.record.review_date.change",
+    "record.security_level.change": "authorization.permission.record.security_level.change",
+    "record.view": "authorization.permission.record.view",
+    "record.vital_status.change": "authorization.permission.record.vital_status.change",
+}
+
+ACL_SOURCE_MESSAGE_KEYS = {
+    "resource_override": "authorization.acl_source.resource_override",
+    "parent_custom_default": "authorization.acl_source.parent_custom_default",
+    "parent_default": "authorization.acl_source.parent_default",
+    "mirror_resource_acl": "authorization.acl_source.mirror_resource_acl",
+    "custom": "authorization.acl_source.custom",
+    "local": "authorization.acl_source.local",
+    "parent_mirror": "authorization.acl_source.parent_mirror",
+}
+
 def operation_label(code: str) -> str:
+    if code in PERMISSION_MESSAGE_KEYS:
+        return render_message(PERMISSION_MESSAGE_KEYS[code])
     return code.split(".", 1)[-1].replace("_", " ").replace(".", " · ").title()
 
 
@@ -219,15 +271,10 @@ def ordered_permission_catalogue(
 def acl_source_label(acl: dict[str, Any]) -> str:
     source = str(acl.get("source") or acl.get("effective_acl_source") or "local")
     if source.startswith("parent_mirror:"):
-        return "Parent Mirrored ACL"
-    return {
-        "resource_override": "Local Override",
-        "parent_custom_default": "Parent Custom Default",
-        "parent_default": "Parent Default",
-        "mirror_resource_acl": "Mirrored Resource ACL",
-        "custom": "Custom Template",
-        "local": "Local",
-    }.get(source, source.replace("_", " ").title())
+        source = "parent_mirror"
+    if source in ACL_SOURCE_MESSAGE_KEYS:
+        return render_message(ACL_SOURCE_MESSAGE_KEYS[source])
+    return source.replace("_", " ").title()
 
 
 def aggregation_reference_label(aggregation: dict[str, Any]) -> str:

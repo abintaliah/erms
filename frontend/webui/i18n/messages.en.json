@@ -1002,6 +1002,926 @@
     "is_html": false
   },
   {
+    "message_key": "audit.event.access_explanation_viewed",
+    "context_group": "audit.events",
+    "default_text": "Access Explanation Viewed",
+    "semantic_meaning": "Display label for the immutable audit operation ACCESS_EXPLANATION_VIEWED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Access Explanation Viewed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.account_locked",
+    "context_group": "audit.events",
+    "default_text": "Account Locked",
+    "semantic_meaning": "Display label for the immutable audit operation ACCOUNT_LOCKED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Account Locked",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.acl_replaced",
+    "context_group": "audit.events",
+    "default_text": "ACL Replaced",
+    "semantic_meaning": "Display label for the immutable audit operation ACL_REPLACED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "ACL Replaced",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.all_direct_holds_removed",
+    "context_group": "audit.events",
+    "default_text": "All Direct Holds Removed",
+    "semantic_meaning": "Display label for the immutable audit operation ALL_DIRECT_HOLDS_REMOVED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "All Direct Holds Removed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.authentication_succeeded",
+    "context_group": "audit.events",
+    "default_text": "Authentication Succeeded",
+    "semantic_meaning": "Display label for the immutable audit operation AUTHENTICATION_SUCCEEDED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Authentication Succeeded",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.authorization_denied",
+    "context_group": "audit.events",
+    "default_text": "Authorization Denied",
+    "semantic_meaning": "Display label for the immutable audit operation AUTHORIZATION_DENIED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Authorization Denied",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.closed_aggregation_record_corrected",
+    "context_group": "audit.events",
+    "default_text": "Closed Aggregation Record Corrected",
+    "semantic_meaning": "Display label for the immutable audit operation CLOSED_AGGREGATION_RECORD_CORRECTED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Closed Aggregation Record Corrected",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.content_cleanup",
+    "context_group": "audit.events",
+    "default_text": "Content Cleanup",
+    "semantic_meaning": "Display label for the immutable audit operation CONTENT_CLEANUP.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Content Cleanup",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.content_deleted",
+    "context_group": "audit.events",
+    "default_text": "Content Deleted",
+    "semantic_meaning": "Display label for the immutable audit operation CONTENT_DELETED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Content Deleted",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.content_downloaded",
+    "context_group": "audit.events",
+    "default_text": "Content Downloaded",
+    "semantic_meaning": "Display label for the immutable audit operation CONTENT_DOWNLOADED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Content Downloaded",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.content_reindex_requested",
+    "context_group": "audit.events",
+    "default_text": "Content Reindex Requested",
+    "semantic_meaning": "Display label for the immutable audit operation CONTENT_REINDEX_REQUESTED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Content Reindex Requested",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.content_replaced",
+    "context_group": "audit.events",
+    "default_text": "Content Replaced",
+    "semantic_meaning": "Display label for the immutable audit operation CONTENT_REPLACED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Content Replaced",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.content_uploaded",
+    "context_group": "audit.events",
+    "default_text": "Content Uploaded",
+    "semantic_meaning": "Display label for the immutable audit operation CONTENT_UPLOADED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Content Uploaded",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.content_viewed",
+    "context_group": "audit.events",
+    "default_text": "Content Viewed",
+    "semantic_meaning": "Display label for the immutable audit operation CONTENT_VIEWED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Content Viewed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.create",
+    "context_group": "audit.events",
+    "default_text": "Create",
+    "semantic_meaning": "Display label for the immutable audit operation CREATE.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Create",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.default_child_aggregation_acl_replaced",
+    "context_group": "audit.events",
+    "default_text": "Default Child Aggregation ACL Replaced",
+    "semantic_meaning": "Display label for the immutable audit operation DEFAULT_CHILD_AGGREGATION_ACL_REPLACED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Default Child Aggregation ACL Replaced",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.default_child_record_acl_replaced",
+    "context_group": "audit.events",
+    "default_text": "Default Child Record ACL Replaced",
+    "semantic_meaning": "Display label for the immutable audit operation DEFAULT_CHILD_RECORD_ACL_REPLACED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Default Child Record ACL Replaced",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.delete",
+    "context_group": "audit.events",
+    "default_text": "Delete",
+    "semantic_meaning": "Display label for the immutable audit operation DELETE.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Delete",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.governance_role_changed",
+    "context_group": "audit.events",
+    "default_text": "Governance Role Changed",
+    "semantic_meaning": "Display label for the immutable audit operation GOVERNANCE_ROLE_CHANGED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Governance Role Changed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.held_resource_moved",
+    "context_group": "audit.events",
+    "default_text": "Held Resource Moved",
+    "semantic_meaning": "Display label for the immutable audit operation HELD_RESOURCE_MOVED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Held Resource Moved",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.hold_contributors_replaced",
+    "context_group": "audit.events",
+    "default_text": "Hold Contributors Replaced",
+    "semantic_meaning": "Display label for the immutable audit operation HOLD_CONTRIBUTORS_REPLACED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Hold Contributors Replaced",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.hold_created",
+    "context_group": "audit.events",
+    "default_text": "Hold Created",
+    "semantic_meaning": "Display label for the immutable audit operation HOLD_CREATED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Hold Created",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.hold_deleted",
+    "context_group": "audit.events",
+    "default_text": "Hold Deleted",
+    "semantic_meaning": "Display label for the immutable audit operation HOLD_DELETED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Hold Deleted",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.hold_operation_blocked",
+    "context_group": "audit.events",
+    "default_text": "Hold Operation Blocked",
+    "semantic_meaning": "Display label for the immutable audit operation HOLD_OPERATION_BLOCKED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Hold Operation Blocked",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.hold_updated",
+    "context_group": "audit.events",
+    "default_text": "Hold Updated",
+    "semantic_meaning": "Display label for the immutable audit operation HOLD_UPDATED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Hold Updated",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.medium_changed",
+    "context_group": "audit.events",
+    "default_text": "Medium Changed",
+    "semantic_meaning": "Display label for the immutable audit operation MEDIUM_CHANGED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Medium Changed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.moved_with_acl_policy",
+    "context_group": "audit.events",
+    "default_text": "Moved With ACL Policy",
+    "semantic_meaning": "Display label for the immutable audit operation MOVED_WITH_ACL_POLICY.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Moved With ACL Policy",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.ownership_corrected",
+    "context_group": "audit.events",
+    "default_text": "Ownership Corrected",
+    "semantic_meaning": "Display label for the immutable audit operation OWNERSHIP_CORRECTED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Ownership Corrected",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.password_changed",
+    "context_group": "audit.events",
+    "default_text": "Password Changed",
+    "semantic_meaning": "Display label for the immutable audit operation PASSWORD_CHANGED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Password Changed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.password_reset",
+    "context_group": "audit.events",
+    "default_text": "Password Reset",
+    "semantic_meaning": "Display label for the immutable audit operation PASSWORD_RESET.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Password Reset",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.profile_assigned",
+    "context_group": "audit.events",
+    "default_text": "Profile Assigned",
+    "semantic_meaning": "Display label for the immutable audit operation PROFILE_ASSIGNED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Profile Assigned",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.profile_privileges_replaced",
+    "context_group": "audit.events",
+    "default_text": "Profile Privileges Replaced",
+    "semantic_meaning": "Display label for the immutable audit operation PROFILE_PRIVILEGES_REPLACED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Profile Privileges Replaced",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.record_content_reindex_requested",
+    "context_group": "audit.events",
+    "default_text": "Record Content Reindex Requested",
+    "semantic_meaning": "Display label for the immutable audit operation RECORD_CONTENT_REINDEX_REQUESTED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record Content Reindex Requested",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.resource_added_to_hold",
+    "context_group": "audit.events",
+    "default_text": "Resource Added To Hold",
+    "semantic_meaning": "Display label for the immutable audit operation RESOURCE_ADDED_TO_HOLD.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Resource Added To Hold",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.resource_location_changed",
+    "context_group": "audit.events",
+    "default_text": "Resource Location Changed",
+    "semantic_meaning": "Display label for the immutable audit operation RESOURCE_LOCATION_CHANGED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Resource Location Changed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.resource_removed_from_hold",
+    "context_group": "audit.events",
+    "default_text": "Resource Removed From Hold",
+    "semantic_meaning": "Display label for the immutable audit operation RESOURCE_REMOVED_FROM_HOLD.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Resource Removed From Hold",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.review_date_changed",
+    "context_group": "audit.events",
+    "default_text": "Review Date Changed",
+    "semantic_meaning": "Display label for the immutable audit operation REVIEW_DATE_CHANGED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Review Date Changed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.role_profile_backfill_completed",
+    "context_group": "audit.events",
+    "default_text": "Role Profile Backfill Completed",
+    "semantic_meaning": "Display label for the immutable audit operation ROLE_PROFILE_BACKFILL_COMPLETED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Role Profile Backfill Completed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.role_security_clearance_changed",
+    "context_group": "audit.events",
+    "default_text": "Role Security Clearance Changed",
+    "semantic_meaning": "Display label for the immutable audit operation ROLE_SECURITY_CLEARANCE_CHANGED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Role Security Clearance Changed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.security_level_changed",
+    "context_group": "audit.events",
+    "default_text": "Security Level Changed",
+    "semantic_meaning": "Display label for the immutable audit operation SECURITY_LEVEL_CHANGED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Security Level Changed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.security_level_downgraded",
+    "context_group": "audit.events",
+    "default_text": "Security Level Downgraded",
+    "semantic_meaning": "Display label for the immutable audit operation SECURITY_LEVEL_DOWNGRADED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Security Level Downgraded",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.security_level_upgraded",
+    "context_group": "audit.events",
+    "default_text": "Security Level Upgraded",
+    "semantic_meaning": "Display label for the immutable audit operation SECURITY_LEVEL_UPGRADED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Security Level Upgraded",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.service_api_credential_created",
+    "context_group": "audit.events",
+    "default_text": "Service API Credential Created",
+    "semantic_meaning": "Display label for the immutable audit operation SERVICE_API_CREDENTIAL_CREATED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Service API Credential Created",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.service_api_credential_revoked",
+    "context_group": "audit.events",
+    "default_text": "Service API Credential Revoked",
+    "semantic_meaning": "Display label for the immutable audit operation SERVICE_API_CREDENTIAL_REVOKED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Service API Credential Revoked",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.service_api_credential_rotated",
+    "context_group": "audit.events",
+    "default_text": "Service API Credential Rotated",
+    "semantic_meaning": "Display label for the immutable audit operation SERVICE_API_CREDENTIAL_ROTATED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Service API Credential Rotated",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.session_expired",
+    "context_group": "audit.events",
+    "default_text": "Session Expired",
+    "semantic_meaning": "Display label for the immutable audit operation SESSION_EXPIRED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Session Expired",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.session_revoked",
+    "context_group": "audit.events",
+    "default_text": "Session Revoked",
+    "semantic_meaning": "Display label for the immutable audit operation SESSION_REVOKED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Session Revoked",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.transient_user_data_removed",
+    "context_group": "audit.events",
+    "default_text": "Transient User Data Removed",
+    "semantic_meaning": "Display label for the immutable audit operation TRANSIENT_USER_DATA_REMOVED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Transient User Data Removed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.update",
+    "context_group": "audit.events",
+    "default_text": "Update",
+    "semantic_meaning": "Display label for the immutable audit operation UPDATE.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Update",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.vital_status_changed",
+    "context_group": "audit.events",
+    "default_text": "Vital Status Changed",
+    "semantic_meaning": "Display label for the immutable audit operation VITAL_STATUS_CHANGED.",
+    "common_locations": [
+      "Audit Trail filters, timeline and event details",
+      "Resource event history",
+      "Security Operations"
+    ],
+    "translator_guidance": "Translate the label only; the technical operation code is immutable. Follow the approved records-management terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Vital Status Changed",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.acl.inherit_from_parent",
+    "context_group": "authorization.acl",
+    "default_text": "Inherit ACL from parent",
+    "semantic_meaning": "Switch to inherit the containing aggregation ACL.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Inherit ACL from parent",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.acl_source.custom",
+    "context_group": "authorization.acl",
+    "default_text": "Custom Template",
+    "semantic_meaning": "Effective source of the ACL.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Custom Template",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.acl_source.local",
+    "context_group": "authorization.acl",
+    "default_text": "Local",
+    "semantic_meaning": "Effective source of the ACL.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Local",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.acl_source.mirror_resource_acl",
+    "context_group": "authorization.acl",
+    "default_text": "Mirrored Resource ACL",
+    "semantic_meaning": "Effective source of the ACL.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Mirrored Resource ACL",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.acl_source.parent_custom_default",
+    "context_group": "authorization.acl",
+    "default_text": "Parent Custom Default",
+    "semantic_meaning": "Effective source of the ACL.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Parent Custom Default",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.acl_source.parent_default",
+    "context_group": "authorization.acl",
+    "default_text": "Parent Default",
+    "semantic_meaning": "Effective source of the ACL.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Parent Default",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.acl_source.parent_mirror",
+    "context_group": "authorization.acl",
+    "default_text": "Parent Mirrored ACL",
+    "semantic_meaning": "Effective source of the ACL.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Parent Mirrored ACL",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.acl_source.resource_override",
+    "context_group": "authorization.acl",
+    "default_text": "Local Override",
+    "semantic_meaning": "Effective source of the ACL.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Local Override",
+    "is_html": false
+  },
+  {
     "message_key": "authorization.error.insufficient_clearance",
     "context_group": "authorization.error",
     "default_text": "Your active roles do not have sufficient security clearance.",
@@ -1044,6 +1964,531 @@
     "grammatical_role": "complete sentence",
     "parameter_schema": {},
     "rendered_example": "Your roles do not grant this action on the selected item.",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.acl.manage",
+    "context_group": "authorization.acl",
+    "default_text": "Manage ACL",
+    "semantic_meaning": "Friendly name of the aggregation.acl.manage ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Manage ACL",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.add_child",
+    "context_group": "authorization.acl",
+    "default_text": "Add Child Aggregation",
+    "semantic_meaning": "Friendly name of the aggregation.add_child ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Add Child Aggregation",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.add_record",
+    "context_group": "authorization.acl",
+    "default_text": "Add Record",
+    "semantic_meaning": "Friendly name of the aggregation.add_record ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Add Record",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.close",
+    "context_group": "authorization.acl",
+    "default_text": "Close Aggregation",
+    "semantic_meaning": "Friendly name of the aggregation.close ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Close Aggregation",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.delete",
+    "context_group": "authorization.acl",
+    "default_text": "Delete Aggregation",
+    "semantic_meaning": "Friendly name of the aggregation.delete ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Delete Aggregation",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.history.view",
+    "context_group": "authorization.acl",
+    "default_text": "View Event History",
+    "semantic_meaning": "Friendly name of the aggregation.history.view ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "View Event History",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.location.change",
+    "context_group": "authorization.acl",
+    "default_text": "Change Location",
+    "semantic_meaning": "Friendly name of the aggregation.location.change ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Location",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.modify_metadata",
+    "context_group": "authorization.acl",
+    "default_text": "Modify Metadata",
+    "semantic_meaning": "Friendly name of the aggregation.modify_metadata ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Modify Metadata",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.move",
+    "context_group": "authorization.acl",
+    "default_text": "Move Aggregation",
+    "semantic_meaning": "Friendly name of the aggregation.move ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Move Aggregation",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.receive_child",
+    "context_group": "authorization.acl",
+    "default_text": "Receive Child Aggregation",
+    "semantic_meaning": "Friendly name of the aggregation.receive_child ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Receive Child Aggregation",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.receive_record",
+    "context_group": "authorization.acl",
+    "default_text": "Receive Record",
+    "semantic_meaning": "Friendly name of the aggregation.receive_record ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Receive Record",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.reclassify",
+    "context_group": "authorization.acl",
+    "default_text": "Reclassify Aggregation",
+    "semantic_meaning": "Friendly name of the aggregation.reclassify ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Reclassify Aggregation",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.reopen",
+    "context_group": "authorization.acl",
+    "default_text": "Reopen Aggregation",
+    "semantic_meaning": "Friendly name of the aggregation.reopen ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Reopen Aggregation",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.review_date.change",
+    "context_group": "authorization.acl",
+    "default_text": "Change Next Review",
+    "semantic_meaning": "Friendly name of the aggregation.review_date.change ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Next Review",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.security_level.change",
+    "context_group": "authorization.acl",
+    "default_text": "Change Security Level",
+    "semantic_meaning": "Friendly name of the aggregation.security_level.change ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Security Level",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.view",
+    "context_group": "authorization.acl",
+    "default_text": "View Aggregation",
+    "semantic_meaning": "Friendly name of the aggregation.view ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "View Aggregation",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.aggregation.vital_status.change",
+    "context_group": "authorization.acl",
+    "default_text": "Change Vital Status",
+    "semantic_meaning": "Friendly name of the aggregation.vital_status.change ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Vital Status",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.acl.manage",
+    "context_group": "authorization.acl",
+    "default_text": "Manage ACL",
+    "semantic_meaning": "Friendly name of the record.acl.manage ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Manage ACL",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.component.add",
+    "context_group": "authorization.acl",
+    "default_text": "Add Digital Component",
+    "semantic_meaning": "Friendly name of the record.component.add ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Add Digital Component",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.component.download",
+    "context_group": "authorization.acl",
+    "default_text": "Download Digital Component",
+    "semantic_meaning": "Friendly name of the record.component.download ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Download Digital Component",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.component.list",
+    "context_group": "authorization.acl",
+    "default_text": "List Digital Components",
+    "semantic_meaning": "Friendly name of the record.component.list ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "List Digital Components",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.component.print",
+    "context_group": "authorization.acl",
+    "default_text": "Print Digital Component",
+    "semantic_meaning": "Friendly name of the record.component.print ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Print Digital Component",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.component.remove",
+    "context_group": "authorization.acl",
+    "default_text": "Remove Digital Component",
+    "semantic_meaning": "Friendly name of the record.component.remove ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Remove Digital Component",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.component.reorder",
+    "context_group": "authorization.acl",
+    "default_text": "Reorder Digital Components",
+    "semantic_meaning": "Friendly name of the record.component.reorder ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Reorder Digital Components",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.component.replace",
+    "context_group": "authorization.acl",
+    "default_text": "Replace Digital Component",
+    "semantic_meaning": "Friendly name of the record.component.replace ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Replace Digital Component",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.component.share",
+    "context_group": "authorization.acl",
+    "default_text": "Share Digital Component",
+    "semantic_meaning": "Friendly name of the record.component.share ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Share Digital Component",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.component.view",
+    "context_group": "authorization.acl",
+    "default_text": "View Digital Component",
+    "semantic_meaning": "Friendly name of the record.component.view ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "View Digital Component",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.delete",
+    "context_group": "authorization.acl",
+    "default_text": "Delete Record",
+    "semantic_meaning": "Friendly name of the record.delete ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Delete Record",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.history.view",
+    "context_group": "authorization.acl",
+    "default_text": "View Event History",
+    "semantic_meaning": "Friendly name of the record.history.view ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "View Event History",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.modify_metadata",
+    "context_group": "authorization.acl",
+    "default_text": "Modify Metadata",
+    "semantic_meaning": "Friendly name of the record.modify_metadata ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Modify Metadata",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.move",
+    "context_group": "authorization.acl",
+    "default_text": "Move Record",
+    "semantic_meaning": "Friendly name of the record.move ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Move Record",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.review_date.change",
+    "context_group": "authorization.acl",
+    "default_text": "Change Next Review",
+    "semantic_meaning": "Friendly name of the record.review_date.change ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Next Review",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.security_level.change",
+    "context_group": "authorization.acl",
+    "default_text": "Change Security Level",
+    "semantic_meaning": "Friendly name of the record.security_level.change ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Security Level",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.view",
+    "context_group": "authorization.acl",
+    "default_text": "View Record",
+    "semantic_meaning": "Friendly name of the record.view ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "View Record",
+    "is_html": false
+  },
+  {
+    "message_key": "authorization.permission.record.vital_status.change",
+    "context_group": "authorization.acl",
+    "default_text": "Change Vital Status",
+    "semantic_meaning": "Friendly name of the record.vital_status.change ACL permission.",
+    "common_locations": [
+      "Aggregation and record ACL editor",
+      "Access explanation operation selector"
+    ],
+    "translator_guidance": "Use the approved records-management terminology. ACL means access control list.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change Vital Status",
     "is_html": false
   },
   {
@@ -7371,6 +8816,36 @@
     "is_html": false
   },
   {
+    "message_key": "security_operations.event.authentication_failed",
+    "context_group": "security_operations.events",
+    "default_text": "Authentication Failed",
+    "semantic_meaning": "Display name for the AUTHENTICATION_FAILED security event; the technical event code is unchanged.",
+    "common_locations": [
+      "Security Operations event signals",
+      "Security Operations recent events"
+    ],
+    "translator_guidance": "Translate the user-facing event name, not the underlying technical code.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Authentication Failed",
+    "is_html": false
+  },
+  {
+    "message_key": "security_operations.event.information_governance_bypass_used",
+    "context_group": "security_operations.events",
+    "default_text": "Information Governance Bypass Used",
+    "semantic_meaning": "Display name for the INFORMATION_GOVERNANCE_BYPASS_USED security event; the technical event code is unchanged.",
+    "common_locations": [
+      "Security Operations event signals",
+      "Security Operations recent events"
+    ],
+    "translator_guidance": "Translate the user-facing event name, not the underlying technical code.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Information Governance Bypass Used",
+    "is_html": false
+  },
+  {
     "message_key": "shared.errors.unexpected",
     "context_group": "shared",
     "default_text": "Something went wrong. Try again or contact your system administrator.",
@@ -12350,6 +13825,62 @@
     "is_html": false
   },
   {
+    "message_key": "webui.load_held_items.field.assigned",
+    "context_group": "webui.load_held_items",
+    "default_text": "Assigned",
+    "semantic_meaning": "Date and time the item was assigned to this legal hold.",
+    "common_locations": [
+      "Legal Hold details: held aggregation and record cards"
+    ],
+    "translator_guidance": "Translate the legal-hold card field or value; preserve named placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Assigned",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.load_held_items.field.assigned_by",
+    "context_group": "webui.load_held_items",
+    "default_text": "Assigned by",
+    "semantic_meaning": "User who assigned the item to this legal hold.",
+    "common_locations": [
+      "Legal Hold details: held aggregation and record cards"
+    ],
+    "translator_guidance": "Translate the legal-hold card field or value; preserve named placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Assigned by",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.load_held_items.field.direct_assignment",
+    "context_group": "webui.load_held_items",
+    "default_text": "Direct assignment",
+    "semantic_meaning": "Whether the item is directly assigned to this legal hold.",
+    "common_locations": [
+      "Legal Hold details: held aggregation and record cards"
+    ],
+    "translator_guidance": "Translate the legal-hold card field or value; preserve named placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Direct assignment",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.load_held_items.field.security_level",
+    "context_group": "webui.load_held_items",
+    "default_text": "Security level",
+    "semantic_meaning": "Security classification of the held aggregation or record.",
+    "common_locations": [
+      "Legal Hold details: held aggregation and record cards"
+    ],
+    "translator_guidance": "Translate the legal-hold card field or value; preserve named placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Security level",
+    "is_html": false
+  },
+  {
     "message_key": "webui.load_held_items.label.no_description_provided_db263706",
     "context_group": "webui.load_held_items",
     "default_text": "No description provided",
@@ -12435,6 +13966,34 @@
     "grammatical_role": "action guidance",
     "parameter_schema": {},
     "rendered_example": "Remove from this hold",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.load_held_items.value.system",
+    "context_group": "webui.load_held_items",
+    "default_text": "System",
+    "semantic_meaning": "Fallback actor when no assigning user is available.",
+    "common_locations": [
+      "Legal Hold details: held aggregation and record cards"
+    ],
+    "translator_guidance": "Translate the legal-hold card field or value; preserve named placeholders.",
+    "grammatical_role": "value",
+    "parameter_schema": {},
+    "rendered_example": "System",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.load_held_items.value.yes",
+    "context_group": "webui.load_held_items",
+    "default_text": "Yes",
+    "semantic_meaning": "Affirmative value for direct assignment to a legal hold.",
+    "common_locations": [
+      "Legal Hold details: held aggregation and record cards"
+    ],
+    "translator_guidance": "Translate the legal-hold card field or value; preserve named placeholders.",
+    "grammatical_role": "value",
+    "parameter_schema": {},
+    "rendered_example": "Yes",
     "is_html": false
   },
   {

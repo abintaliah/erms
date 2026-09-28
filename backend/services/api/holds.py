@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .concurrency import expected_version
 from .database import get_connection
-from .entity_localization import localize_rows, preferred_language
+from .entity_localization import localize_rows, localized_projection, preferred_language
 from .resource_authorization import require_resource_operation
 from .authorization_policy import require_global_privilege
 
@@ -531,7 +531,7 @@ def list_hold_held_item_candidates(
 
 @router.get("/holds/{hold_id}/held-items", response_model=HoldHeldItemPage)
 def list_hold_held_items(
-    hold_id: int, q: str | None = None,
+    hold_id: int, request: Request, q: str | None = None,
     resource_type: Literal["aggregation","record"] | None = None,
     assigned_by_user_id: int | None = None,
     assigned_from: datetime | None = None, assigned_before: datetime | None = None,
@@ -551,7 +551,8 @@ def list_hold_held_items(
       SELECT x.id,x.version,'record',r.id,r.record_number,r.title,r.description,r.security_level_id,x.assigned_at,x.assigned_by_user_id
       FROM hold_record_assignments x JOIN records r ON r.id=x.record_id
       WHERE x.hold_id=%s AND current_user_can_view_record(r.id)), enriched AS (
-      SELECT held_items.*,u.name assigned_by_name,sl.code security_level_code,
+      SELECT held_items.*,u.name assigned_by_name,u.translations assigned_by_translations,
+             sl.code security_level_code,sl.translations security_level_translations,
              sl.name security_level_name,sl.level_number security_level_number
       FROM held_items LEFT JOIN users u ON u.id=assigned_by_user_id JOIN security_levels sl ON sl.id=security_level_id)"""
     where = """ WHERE (%s::text IS NULL OR resource_type=%s)
@@ -567,6 +568,13 @@ def list_hold_held_items(
         + f" ORDER BY {order} {'DESC' if descending else 'ASC'},resource_type,resource_id LIMIT %s OFFSET %s",
         (*parameters,limit,offset),
     ).fetchall()
+    language_tag = preferred_language(connection, request)
+    for row in rows:
+        for field in ("assigned_by", "security_level"):
+            row[f"{field}_name"] = localized_projection({
+                "name": row[f"{field}_name"],
+                "translations": row.pop(f"{field}_translations", None),
+            }, language_tag, "name")["name"]
     return {"items": list(rows), "total": total, "limit": limit, "offset": offset, "returned": len(rows)}
 
 
