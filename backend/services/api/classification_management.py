@@ -300,12 +300,14 @@ def list_classifications(
 @router.post("/classifications/search", response_model=None, tags=["classifications"])
 def search_classifications(
     request: Request, payload: SearchRequest,
+    eligible: bool = False,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     return localize_search_result(
         search_rows(
             connection, "classifications", payload,
             endpoint="/api/v1/classifications/search",
+            eligible_classifications=eligible,
         ),
         preferred_language(connection, request), "title",
     )

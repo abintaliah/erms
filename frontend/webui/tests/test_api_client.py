@@ -1093,3 +1093,30 @@ def test_translation_change_reason_round_trips_as_utf8(reason):
 def test_change_reason_decoder_preserves_supported_inputs(wire, expected):
     from backend.services.api.audit_context import decode_change_reason
     assert decode_change_reason(wire) == expected
+
+
+def test_classification_relationship_search_requests_eligible_partial_matches():
+    captured = {}
+
+    async def handler(request):
+        captured['params'] = dict(request.url.params)
+        captured['payload'] = __import__('json').loads(request.content)
+        return httpx.Response(200, json={'items': [], 'total': 0})
+
+    async def exercise():
+        client = ErmsApiClient('http://api.test', transport=httpx.MockTransport(handler))
+        try:
+            await client.relationship_page(
+                'classifications', ('code', 'title', 'description', 'keywords'),
+                'part', eligible_classifications=True,
+            )
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured['params'] == {'eligible': 'true'}
+    assert captured['payload']['limit'] == 25
+    assert captured['payload']['where']['and'] == [{'or': [
+        {'field': field, 'operator': 'contains_ci', 'value': 'part'}
+        for field in ('code', 'title', 'description', 'keywords')
+    ]}]

@@ -6,6 +6,48 @@ from psycopg import sql
 from psycopg.types.json import Jsonb
 
 
+@pytest.mark.parametrize(
+    "language,translate_unit,translate_role,expected_unit,expected_role",
+    [
+        ("ar", True, True, "وحدة الاختبار", "مدير النظام"),
+        ("ar", True, False, "وحدة الاختبار", "System Administrator"),
+        ("ar", False, True, "Test Root", "مدير النظام"),
+        ("en", True, True, "Test Root", "System Administrator"),
+    ],
+)
+def test_creation_role_options_use_entity_translations(
+    client, language, translate_unit, translate_role, expected_unit, expected_role,
+):
+    before = client.get("/api/v1/creation-role-options").json()
+    for resource, enabled, name in (
+        ("org-units", translate_unit, "وحدة الاختبار"),
+        ("roles", translate_role, "مدير النظام"),
+    ):
+        if enabled:
+            entity = client.get(f"/api/v1/{resource}/1").json()
+            response = client.patch(
+                f"/api/v1/entity-translations/{resource}/1/ar",
+                json={"name": name},
+                headers={"If-Match": str(entity["version"]),
+                         "X-Change-Reason": "Verify creation role labels"},
+            )
+            assert response.status_code == 200, response.text
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        connection.execute(
+            """INSERT INTO user_preferences(user_id,language_tag,working_timezone)
+               VALUES (1,%s,'Asia/Dubai')
+               ON CONFLICT (user_id) DO UPDATE SET language_tag=EXCLUDED.language_tag""",
+            (language,),
+        )
+    response = client.get("/api/v1/creation-role-options")
+    assert response.status_code == 200, response.text
+    options = response.json()
+    assert [row["role_id"] for row in options] == [row["role_id"] for row in before]
+    assert options[0]["org_unit_name"] == expected_unit
+    assert options[0]["role_name"] == expected_role
+    assert options[0]["label"] == f"{expected_unit} — {expected_role}"
+
+
 def test_entity_translation_patch_merges_locales_and_uses_entity_version(client):
     user = client.get("/api/v1/users/1").json()
     saved = client.patch(

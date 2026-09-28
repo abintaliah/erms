@@ -46,7 +46,7 @@ from .config import (
 from .entities import ENTITIES, EntitySpec, FieldSpec
 from .i18n_catalogue import (
     clear_active_messages, disable_diagnostic_metadata, enable_diagnostic_metadata, render_message,
-    render_message_plain, set_active_messages,
+    render_message_plain, set_active_messages, strip_diagnostic_metadata,
 )
 from .locale_services import (
     clear_locale_context, current_locale_context, format_instant, format_local_date,
@@ -570,6 +570,14 @@ def display_value(value: Any) -> str:
     return str(value)
 
 
+def medium_options() -> dict[str, str]:
+    return {
+        "digital": render_message("webui.field_input.select.digital_a8c0d87b"),
+        "physical": render_message("webui.field_input.select.physical_c583106a"),
+        "mixed": render_message("webui.field_input.select.mixed_3c647345"),
+    }
+
+
 def medium_label(value: Any) -> str:
     return {
         "digital": render_message("advanced_search.value.digital"),
@@ -1076,7 +1084,7 @@ def relationship_options(
         ]
         values = [value for value in values if value]
         code = values[0] if len(values) > 1 else ""
-        name = values[-1] if values else render_message("webui.relationship_options.text.item_id_0e84a7f9", id=item['id'])
+        name = values[-1] if values else render_message_plain("webui.relationship_options.text.item_id_0e84a7f9", id=item['id'])
         label = (
             f"{code} · {name}"
             if code else name
@@ -1084,11 +1092,21 @@ def relationship_options(
         if include_level_number and item.get("level_number") is not None:
             label = (
                 f"{label} · "
-                f"{level_label or render_message('webui.render_table.text.level_167db239')} "
+                f"{level_label or render_message_plain('webui.render_table.text.level_167db239')} "
                 f"{item['level_number']}"
             )
         options[item["id"]] = label
     return options
+
+
+def relationship_search_query(control: Any, raw_query: object) -> str | None:
+    """Ignore the select's display-label echo, but preserve typed/cleared input."""
+    query = str(raw_query or "")
+    if not control.multiple and control.value is not None and query:
+        selected_label = dict(control.options or {}).get(control.value)
+        if selected_label is not None and query == str(selected_label):
+            return None
+    return query
 
 
 def apply_relationship_selection(control: Any, value: int, label: str) -> None:
@@ -1320,9 +1338,7 @@ def field_input(field: FieldSpec, value: Any = None, options: dict[int, str] | N
             "retain_as_local_archives": render_message("webui.field_input.select.retain_as_local_archives_8d22b8ed"),
         }, label=display_label, value=value, clearable=True).props("outlined").classes("w-full")
     if field.kind == "medium":
-        control = ui.select({
-            "digital": render_message("webui.field_input.select.digital_a8c0d87b"), "physical": render_message("webui.field_input.select.physical_c583106a"), "mixed": render_message("webui.field_input.select.mixed_3c647345"),
-        }, label=display_label, value=value).props("outlined options-dense").classes("w-full")
+        control = ui.select(medium_options(), label=display_label, value=value).props("outlined options-dense").classes("w-full")
         control.tooltip(render_message("webui.field_input.tooltip.how_the_resource_is_held_digital_files_phy_317d9b8b"))
         return control
     if field.kind == "textarea":
@@ -1504,13 +1520,16 @@ def index(q: str = "") -> None:
         exclude_id: int | None = None,
         item_filter: Callable[[dict[str, Any]], bool] | None = None,
         on_options_resolved: Callable[[dict[int, str]], None] | None = None,
+        eligible_classifications: bool = False,
     ) -> Callable[..., Any]:
         """Load a bounded relationship page as the user filters a selector."""
         request_state: dict[str, Any] = {"revision": 0, "task": None, "loaded": False}
         # Capture localized static labels while rendering the page. The remote
         # typeahead later runs in a background task, where falling back to the
         # process-level English catalogue would leak English into an RTL menu.
-        security_level_label = render_message(
+        # Option labels also enter the select's input-value events; inspector
+        # diagnostics belong on rendered UI text, never in searchable values.
+        security_level_label = render_message_plain(
             "webui.render_table.text.level_167db239"
         )
 
@@ -1572,6 +1591,7 @@ def index(q: str = "") -> None:
                     if resource in {"profiles", "security-levels"}
                     else await api.relationship_page(
                         resource, search_fields, query, limit=25, filters=filters,
+                        eligible_classifications=eligible_classifications,
                     )
                 )
             except asyncio.CancelledError:
@@ -1606,10 +1626,16 @@ def index(q: str = "") -> None:
             previous = request_state.get("task")
             if previous is not None and not previous.done():
                 previous.cancel()
-            query = str(event.args or "")
+            query = relationship_search_query(control, event.args)
+            request_state["revision"] += 1
+            if query is None:
+                return
 
             async def delayed() -> None:
                 await asyncio.sleep(0.2)
+                # Selection may settle after input-value was emitted.
+                if relationship_search_query(control, query) is None:
+                    return
                 await load_options(query)
 
             request_state["task"] = asyncio.create_task(delayed())
@@ -6240,10 +6266,9 @@ def index(q: str = "") -> None:
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
             return
-        options = {
-            item["id"]: f"{item['code']} — {item['name']}"
-            for item in levels
-        }
+        options = relationship_options(
+            levels, ("code", "name"), include_level_number=True,
+        )
         dialog = ui.dialog().props("persistent")
         preview_state: dict[str, Any] = {}
         with dialog, ui.card().classes("w-[620px] max-w-[calc(100vw-32px)]"):
@@ -6251,9 +6276,10 @@ def index(q: str = "") -> None:
             ui.label(
                 render_message("webui.show_security_level_change.label.this_governed_action_remains_available_whe_7b7f9891")
             ).classes("text-sm text-slate-500")
-            target = ui.select(
-                options, value=resource["security_level_id"], label=render_message("webui.show_security_level_change.select.security_level_2a839288"),
-            ).props("outlined options-dense").classes("w-full")
+            target = relationship_select(
+                render_message_plain("webui.show_security_level_change.select.security_level_2a839288"),
+                options, value=resource["security_level_id"], required=True,
+            )
             bind_remote_relationship_select(
                 target,
                 resource="security-levels",
@@ -6266,19 +6292,9 @@ def index(q: str = "") -> None:
                 "downgrade_subtree": render_message("webui.show_security_level_change.text.also_lower_contained_resources_as_needed_e69b8640"),
             }
             remedy_descriptions = {
-                "none": (
-                    "Changes only this resource. If that would violate the hierarchy’s security "
-                    "rules, the review rejects the change and nothing is updated."
-                ),
-                "raise_ancestors": (
-                    "If this resource is being raised, Wathiq also raises any parent aggregations "
-                    "whose security levels are too low. It never lowers anything."
-                ),
-                "downgrade_subtree": (
-                    "If an aggregation is being lowered, Wathiq also lowers child aggregations "
-                    "and records whose security levels would otherwise be too high. This can "
-                    "affect many resources and is therefore shown during review."
-                ),
+                "none": render_message_plain("webui.security_level_remedy.description.none"),
+                "raise_ancestors": render_message_plain("webui.security_level_remedy.description.raise_ancestors"),
+                "downgrade_subtree": render_message_plain("webui.security_level_remedy.description.downgrade_subtree"),
             }
             remedy = ui.select(
                 remedy_options, value="none", label=render_message("webui.show_security_level_change.select.hierarchy_remedy_925ecf92"),
@@ -6291,15 +6307,11 @@ def index(q: str = "") -> None:
                   <q-item-section style="min-width:0; max-width:100%;">
                     <q-item-label class="text-weight-medium" style="white-space:normal; overflow-wrap:anywhere;">{{ props.opt.label }}</q-item-label>
                     <q-item-label caption style="white-space:normal; overflow-wrap:anywhere; line-height:1.35;">
-                      {{ props.opt.value === 0
-                          ? 'Changes only this resource. If that would violate the hierarchy’s security rules, the review rejects the change and nothing is updated.'
-                          : props.opt.value === 1
-                            ? 'If this resource is being raised, Wathiq also raises any parent aggregations whose security levels are too low. It never lowers anything.'
-                            : 'If an aggregation is being lowered, Wathiq also lowers child aggregations and records whose security levels would otherwise be too high. This can affect many resources and is therefore shown during review.' }}
+                      {{ __REMEDY_DESCRIPTIONS__[props.opt.value] }}
                     </q-item-label>
                   </q-item-section>
                 </q-item>
-            """)
+            """.replace("__REMEDY_DESCRIPTIONS__", html_escape(json.dumps(list(remedy_descriptions.values()), ensure_ascii=False), quote=True)))
             remedy_description = ui.label(remedy_descriptions["none"]).classes(
                 "-mt-2 px-3 text-xs leading-relaxed text-slate-500"
             )
@@ -7268,13 +7280,13 @@ def index(q: str = "") -> None:
                         parent_medium = parent.get("medium", "mixed")
                         if parent_medium == "mixed":
                             medium_control.set_options(
-                                {"digital": "Digital", "physical": "Physical", "mixed": "Mixed"},
+                                medium_options(),
                                 value=medium_control.value or "mixed",
                             )
                             medium_control.enable()
                         else:
                             medium_control.set_options(
-                                {parent_medium: parent_medium.capitalize()}, value=parent_medium,
+                                {parent_medium: medium_options()[parent_medium]}, value=parent_medium,
                             )
                             medium_control.disable()
                         medium_control.update()
@@ -7604,8 +7616,10 @@ def index(q: str = "") -> None:
                     for classification in rows:
                         async def choose(item=classification) -> None:
                             if item["is_terminal"]:
-                                target_control.value = item["id"]
-                                target_control.update()
+                                apply_relationship_selection(
+                                    target_control, item["id"],
+                                    relationship_options([item], ("code", "title"))[item["id"]],
+                                )
                                 browser.close()
                             else:
                                 await show_level(
@@ -7776,11 +7790,14 @@ def index(q: str = "") -> None:
                         initial_value,
                         lookup_options.get(field.name),
                     )
-                    if field.lookup_resource and field.kind != "classification":
+                    if field.lookup_resource:
                         bind_remote_relationship_select(
                             controls[field.name], field.lookup_resource,
+                            CLASSIFICATION_SELECTOR_SEARCH_FIELDS
+                            if field.kind == "classification"
+                            else field.lookup_label_fields or ("name",),
                             field.lookup_label_fields or ("name",),
-                            field.lookup_label_fields or ("name",),
+                            eligible_classifications=field.kind == "classification",
                             exclude_id=(
                                 row["id"]
                                 if row and field.lookup_resource == spec.key else None
@@ -8089,11 +8106,11 @@ def index(q: str = "") -> None:
                     medium_control = controls["medium"]
                     if parent:
                         medium = parent.get("medium", "mixed")
-                        medium_control.set_options({medium: medium.capitalize()}, value=medium)
+                        medium_control.set_options({medium: medium_options()[medium]}, value=medium)
                         medium_control.disable()
                     else:
                         medium_control.set_options(
-                            {"digital": "Digital", "physical": "Physical", "mixed": "Mixed"},
+                            medium_options(),
                             value=medium_control.value or default_root_aggregation_medium(),
                         )
                         medium_control.enable()
@@ -8186,13 +8203,13 @@ def index(q: str = "") -> None:
                         return
                     parent_medium = parent.get("medium", "mixed")
                     if parent_medium == "mixed":
-                        medium_control.set_options({
-                            "digital": "Digital", "physical": "Physical", "mixed": "Mixed",
-                        }, value=medium_control.value or "mixed")
+                        medium_control.set_options(
+                            medium_options(), value=medium_control.value or "mixed",
+                        )
                         medium_control.enable()
                     else:
                         medium_control.set_options(
-                            {parent_medium: parent_medium.capitalize()}, value=parent_medium,
+                            {parent_medium: medium_options()[parent_medium]}, value=parent_medium,
                         )
                         medium_control.disable()
                     medium_control.update()
@@ -20218,8 +20235,10 @@ def index(q: str = "") -> None:
             state["translation_language"]=administration_language["value"];state["translation_offset"]=page["offset"]
             try:
                 request_params = dict(
-                    language_tag=administration_language["value"],key=key_filter.value or "",
-                    translated_text=text_filter.value or "",semantic_meaning=meaning_filter.value or "",
+                    language_tag=administration_language["value"],
+                    key=strip_diagnostic_metadata(key_filter.value or ""),
+                    translated_text=strip_diagnostic_metadata(text_filter.value or ""),
+                    semantic_meaning=strip_diagnostic_metadata(meaning_filter.value or ""),
                     status=status_filter.value,origin=origin_filter.value,
                     review_state=review_filter.value,
                     needs_attention=True if attention_filter.value else None,

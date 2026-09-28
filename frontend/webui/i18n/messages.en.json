@@ -26140,6 +26140,48 @@
     "is_html": false
   },
   {
+    "message_key": "webui.security_level_remedy.description.downgrade_subtree",
+    "context_group": "webui.security_level_remedy.description",
+    "default_text": "If an aggregation is being lowered, Wathiq also lowers child aggregations and records whose security levels would otherwise be too high. This can affect many resources and is therefore shown during review.",
+    "semantic_meaning": "Explains the downgrade_subtree security-level hierarchy remedy and its effects.",
+    "common_locations": [
+      "WebUI: security-level change dialog"
+    ],
+    "translator_guidance": "Preserve the distinction between raising ancestor security levels and lowering contained resources. Review applies before any change.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "If an aggregation is being lowered, Wathiq also lowers child aggregations and records whose security levels would otherwise be too high. This can affect many resources and is therefore shown during review.",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.security_level_remedy.description.none",
+    "context_group": "webui.security_level_remedy.description",
+    "default_text": "Changes only this resource. If that would violate the hierarchy’s security rules, the review rejects the change and nothing is updated.",
+    "semantic_meaning": "Explains the none security-level hierarchy remedy and its effects.",
+    "common_locations": [
+      "WebUI: security-level change dialog"
+    ],
+    "translator_guidance": "Preserve the distinction between raising ancestor security levels and lowering contained resources. Review applies before any change.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Changes only this resource. If that would violate the hierarchy’s security rules, the review rejects the change and nothing is updated.",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.security_level_remedy.description.raise_ancestors",
+    "context_group": "webui.security_level_remedy.description",
+    "default_text": "If this resource is being raised, Wathiq also raises any parent aggregations whose security levels are too low. It never lowers anything.",
+    "semantic_meaning": "Explains the raise_ancestors security-level hierarchy remedy and its effects.",
+    "common_locations": [
+      "WebUI: security-level change dialog"
+    ],
+    "translator_guidance": "Preserve the distinction between raising ancestor security levels and lowering contained resources. Review applies before any change.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "If this resource is being raised, Wathiq also raises any parent aggregations whose security levels are too low. It never lowers anything.",
+    "is_html": false
+  },
+  {
     "message_key": "webui.select_advanced_search.accessible_name.first_page_8dfd5626",
     "context_group": "webui.select_advanced_search",
     "default_text": "First page",

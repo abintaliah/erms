@@ -697,6 +697,7 @@ def search_rows(
     *, endpoint: str | None = None,
     include_system_roles: bool = False,
     localized_sort_language: str | None = None,
+    eligible_classifications: bool = False,
 ) -> dict[str, Any]:
     if _full_text_leaves(request.where) and not boolean_environment("FULL_TEXT_SEARCH_ENABLED", True):
         raise HTTPException(status_code=503, detail={
@@ -714,6 +715,15 @@ def search_rows(
         "roles": None if include_system_roles else sql.SQL("NOT is_system"),
     }.get(table)
     clauses: list[sql.Composable] = []
+    if eligible_classifications:
+        if table != "classifications":
+            raise ValueError("classification eligibility requires classifications")
+        clauses.append(sql.SQL(
+            "resource.is_terminal AND "
+            "classification_scheme_is_eligible(resource.classification_scheme_id) AND "
+            "classification_is_effectively_active(resource.id) AND "
+            "EXISTS (SELECT 1 FROM effective_classification_retention_rule(resource.id))"
+        ))
     parameters: list[Any] = []
     positive_leaves = _full_text_leaves(request.where)
     all_leaves = _full_text_leaves(request.where, positive=True) + _full_text_leaves(request.where, positive=False)

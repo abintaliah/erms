@@ -444,6 +444,7 @@ def health(connection: Connection = Depends(get_connection, scope="function")) -
 
 def _creation_role_options(
     connection: Connection, parent_aggregation_id: int | None = None,
+    *, language_tag: str | None = None,
 ) -> list[dict]:
     parameters: list[int] = []
     owner_clause = ""
@@ -459,7 +460,9 @@ def _creation_role_options(
     rows = connection.execute(
         """SELECT DISTINCT role.id AS role_id,role.code AS role_code,
                   role.name AS role_name,unit.id AS org_unit_id,
-                  unit.code AS org_unit_code,unit.name AS org_unit_name
+                  unit.code AS org_unit_code,unit.name AS org_unit_name,
+                  role.translations AS role_translations,
+                  unit.translations AS org_unit_translations
              FROM user_role_assignments assignment
              JOIN roles role ON role.id=assignment.role_id
              JOIN org_units unit ON unit.id=role.org_unit_id
@@ -470,7 +473,16 @@ def _creation_role_options(
         " ORDER BY org_unit_name,role_name,role_id",
         parameters,
     ).fetchall()
-    return [{**row, "label": f"{row['org_unit_name']} — {row['role_name']}"} for row in rows]
+    for row in rows:
+        for entity in ("role", "org_unit"):
+            translations = row.pop(f"{entity}_translations")
+            if language_tag is not None:
+                row[f"{entity}_name"] = localized_projection(
+                    {"name": row[f"{entity}_name"], "translations": translations},
+                    language_tag, "name",
+                )["name"]
+        row["label"] = f"{row['org_unit_name']} — {row['role_name']}"
+    return rows
 
 
 def _select_creator_role(
@@ -504,10 +516,14 @@ def _select_creator_role(
     response_model=list[CreationRoleOption], tags=["authorization"],
 )
 def creation_role_options(
+    request: Request,
     parent_aggregation_id: int | None = None,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return _creation_role_options(connection, parent_aggregation_id)
+    return _creation_role_options(
+        connection, parent_aggregation_id,
+        language_tag=preferred_language(connection, request),
+    )
 
 
 @app.get(

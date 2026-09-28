@@ -420,3 +420,36 @@ def test_classification_first_use_and_inherited_deactivation(client: TestClient)
         params={"classification_scheme_id": scheme["id"], "eligible": True},
     )
     assert terminal["id"] in [row["id"] for row in eligible.json()]
+
+
+def test_selector_search_filters_eligibility_before_pagination(client):
+    import os
+    import psycopg
+
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        connection.execute("""UPDATE classifications SET description='Quarterly correspondence',
+            keywords='finance budget', translations='{"ar":{"title":"المراسلات","description":"التقارير الدورية"}}'
+            WHERE id=1""")
+        connection.execute("""INSERT INTO classifications(classification_scheme_id,code,title,is_terminal)
+            SELECT 1,'AAA-' || n,'Test Classification ineligible branch',false
+            FROM generate_series(1,30) n""")
+    fields = ('code', 'title', 'description', 'keywords')
+    for term in ('test-0', 'classification', 'correspond', 'budget', 'المراس', 'الدورية'):
+        response = client.post('/api/v1/classifications/search?eligible=true', json={
+            'where': {'or': [
+                {'field': field, 'operator': 'contains_ci', 'value': term}
+                for field in fields
+            ]},
+            'sort': [{'field': 'code', 'direction': 'asc'}], 'limit': 1, 'offset': 0,
+        })
+        assert response.status_code == 200, response.text
+        assert response.json()['total'] == 1
+        assert [row['id'] for row in response.json()['items']] == [1]
+    response = client.post('/api/v1/classifications/search?eligible=true', json={
+        'limit': 1, 'offset': 1,
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()['items'] == []
+    ordinary = client.post('/api/v1/classifications/search', json={'limit': 1})
+    assert ordinary.status_code == 200, ordinary.text
+    assert ordinary.json()['total'] == 31

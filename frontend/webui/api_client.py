@@ -849,6 +849,7 @@ class ErmsApiClient:
         self, resource: str, search_fields: tuple[str, ...], query: str = "", *,
         limit: int = 25, offset: int = 0,
         filters: dict[str, Any] | None = None,
+        eligible_classifications: bool = False,
     ) -> dict[str, Any]:
         conditions: list[dict[str, Any]] = [
             {"field": field, "operator": "eq", "value": value}
@@ -868,7 +869,10 @@ class ErmsApiClient:
         }
         if conditions:
             payload["where"] = {"and": conditions}
-        return await self.search_request(resource, payload)
+        return await self.search_request(
+            resource, payload,
+            **({"eligible": True} if eligible_classifications else {}),
+        )
 
     async def administration_reference_page(
         self, resource: str, *, query: str = "", sort: str = "name",

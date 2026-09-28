@@ -25,6 +25,16 @@ ISOLATE_END = "\u2069"
 INSPECTOR_START = "\u2063"
 INSPECTOR_SEPARATOR = "\u2064"
 VARIATION_SELECTOR_BASE = 0xFE00
+INSPECTOR_MARKER_PATTERN = re.compile(
+    r"\u2063[\uFE00-\uFE0F]+\u2064[\uFE00-\uFE01]\u2064[\uFE00-\uFE0F]+\u2064"
+)
+
+
+def strip_diagnostic_metadata(text: str) -> str:
+    """Remove framed inspector metadata from copied text, preserving visible text."""
+    return INSPECTOR_MARKER_PATTERN.sub("", text)
+
+
 _active_messages: ContextVar[dict[str, str]] = ContextVar(
     "wathiq_active_messages", default={},
 )
