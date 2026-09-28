@@ -5475,6 +5475,16 @@ def index(q: str = "") -> None:
                 editor = ui.column().classes("w-full gap-3 mt-4")
                 editor_controls: list[Any] = []
                 permission_controls: dict[int, dict[str, Any]] = {}
+                matrix_control: dict[str, Any] = {}
+
+                def reset_matrix_scroll() -> None:
+                    matrix_control["area"].scroll_to(
+                        percent=1 if current_direction["value"] == "rtl" else 0,
+                        axis="horizontal",
+                    )
+
+                # Measure after the dialog is shown, not while its width is zero.
+                dialog.on("show", reset_matrix_scroll)
 
                 def is_dormant() -> bool:
                     if inherit is not None:
@@ -5578,15 +5588,28 @@ def index(q: str = "") -> None:
                         ui.label(
                             render_message("webui.render_principals.label.select_permissions_by_principal_required_p_9d029dd3")
                         ).classes("text-xs text-slate-500 mb-2")
-                        matrix = ui.element("div").classes(
-                            "w-full overflow-auto rounded-xl border border-slate-200 bg-white"
-                        ).style("height: 300px")
+                        # Use NiceGUI's scroll area, as in the dashboard lists,
+                        # so horizontal scrolling remains discoverable on systems
+                        # that hide native scrollbars.
+                        matrix = ui.scroll_area().classes(
+                            "w-full rounded-xl border border-slate-200 bg-white"
+                        ).props("visible dir=ltr").style("height: 300px")
+                        matrix_control["area"] = matrix
                         matrix_width = 310 + (len(options) * 132)
                         with matrix:
-                            with ui.column().classes("gap-0").style(f"min-width: {matrix_width}px"):
+                            # The scroll widget uses the framework's LTR scroll
+                            # coordinates; document RTL alone does not switch its
+                            # drag calculations. Keep that viewport LTR and give
+                            # the content its actual direction via public props.
+                            with ui.column().classes("gap-0").props(
+                                f'dir={current_direction["value"]}'
+                            ).style(f"min-width: {matrix_width}px"):
+                                # ui.row has no direction argument. Its inherited
+                                # RTL direction already mirrors the cells; bypass
+                                # the global .row reversal to avoid mirroring twice.
                                 with ui.row().classes(
                                     "w-full gap-0 no-wrap border-b border-slate-200 bg-slate-50"
-                                ).style("position: sticky; top: 0; z-index: 30"):
+                                ).style("position: sticky; top: 0; z-index: 30; flex-direction: row"):
                                     with ui.element("div").classes(
                                         "w-[310px] shrink-0 self-stretch px-3 py-3 bg-slate-50 border-r border-slate-200"
                                     ).style("position: sticky; inset-inline-start: 0; z-index: 35"):
@@ -5610,7 +5633,7 @@ def index(q: str = "") -> None:
                                     permission_controls[id(principal)] = row_controls
                                     with ui.row().classes(
                                         "w-full gap-0 no-wrap border-b border-slate-100 last:border-b-0 hover:bg-blue-50/30"
-                                    ):
+                                    ).style("flex-direction: row"):
                                         with ui.element("div").classes(
                                             "w-[310px] shrink-0 min-h-[62px] bg-white border-r border-slate-200 px-2 py-1"
                                         ).style("position: sticky; inset-inline-start: 0; z-index: 20"):
@@ -5700,6 +5723,9 @@ def index(q: str = "") -> None:
                                                             control.update()
 
                                                 checkbox.on_value_change(update_permission)
+
+                        if dialog.value:
+                            reset_matrix_scroll()
 
                 def add_role() -> None:
                     if any(
