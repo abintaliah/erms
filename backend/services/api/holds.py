@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from psycopg import Connection
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .audit_context import decode_change_reason
 from .concurrency import expected_version
 from .database import get_connection
 from .entity_localization import localize_rows, localized_projection, preferred_language
@@ -188,7 +189,7 @@ class EffectiveHoldResponse(BaseModel):
 
 
 def _reason(request: Request) -> str:
-    value = request.headers.get("X-Change-Reason", "").strip()
+    value = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
     if not value:
         raise HTTPException(status_code=422, detail={"code": "hold_change_reason_required"})
     return value

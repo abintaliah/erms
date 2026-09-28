@@ -1059,3 +1059,37 @@ def test_effective_closure_uses_narrow_resource_endpoint():
 
     assert asyncio.run(exercise())["id"] == 9
     assert seen == ["/api/v1/aggregations/42/effective-closure"]
+
+
+@pytest.mark.parametrize('reason', ['تصحيح الترجمة العربية', 'Arabic العربية — café 100%', 'Plain ASCII reason'])
+def test_translation_change_reason_round_trips_as_utf8(reason):
+    from starlette.datastructures import Headers
+    from backend.services.api.audit_context import decode_change_reason
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        received = Headers(raw=[(name.lower(), value) for name, value in request.headers.raw])['x-change-reason']
+        assert decode_change_reason(received) == reason
+        assert request.headers['if-match'] == '3'
+        return httpx.Response(200, json={'version': 4})
+
+    async def exercise():
+        client = ErmsApiClient('http://api.test', transport=httpx.MockTransport(handler))
+        try:
+            await client.update_localization_translation('test.key', 'ar', {'translated_text': 'ترجمة'}, 3, reason)
+            await client.publish_localization_translation('test.key', 'ar', 3, reason)
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(('wire', 'expected'), [
+    (None, ''),
+    ('Plain ASCII', 'Plain ASCII'),
+    ('café', 'café'),
+    ('تصحيح عربي', 'تصحيح عربي'),
+    ('تصحيح عربي'.encode('utf-8').decode('latin-1'), 'تصحيح عربي'),
+])
+def test_change_reason_decoder_preserves_supported_inputs(wire, expected):
+    from backend.services.api.audit_context import decode_change_reason
+    assert decode_change_reason(wire) == expected

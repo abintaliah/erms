@@ -9,6 +9,7 @@ from psycopg import Connection, sql
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict
 
+from .audit_context import decode_change_reason
 from .authentication import Principal, principal_from_request
 from .authorization_policy import require_global_privilege
 from .concurrency import expected_version
@@ -129,7 +130,7 @@ def _patch_entity_translation(
     connection: Connection,
 ):
     configuration = _configuration(entity_type)
-    reason = (change_reason or "").strip()
+    reason = decode_change_reason(change_reason).strip()
     if not reason:
         raise _error(422, "change_reason_required", "entity_translation.validation.change_reason.required")
     language = _language(connection, language_tag)

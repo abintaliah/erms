@@ -10,6 +10,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from typing_extensions import Annotated
 
+from .audit_context import decode_change_reason
 from .concurrency import expected_version
 from .database import get_connection
 from .authorization_policy import require_global_privilege
@@ -88,7 +89,7 @@ def _has(connection: Connection, code: str) -> bool:
 
 
 def _reason(request: Request, *, default: str | None = None) -> str:
-    value = request.headers.get("X-Change-Reason", "").strip()
+    value = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
     if not value and default is not None:
         return default
     if not value:
