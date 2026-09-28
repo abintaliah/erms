@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from psycopg import Connection
 
+from .audit_context import decode_change_reason
 from .concurrency import expected_version
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .database import get_connection
@@ -44,7 +45,7 @@ CUSTODY_PRIVILEGE_CODES = (
 
 
 def _reason(request: Request) -> str:
-    reason = request.headers.get("X-Change-Reason", "").strip()
+    reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
     if not reason:
         raise HTTPException(status_code=422, detail="X-Change-Reason is required")
     return reason

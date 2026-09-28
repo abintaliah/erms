@@ -765,3 +765,36 @@ def test_generation_batch_reports_invalid_placeholders_without_writing(client):
         "parameters": {"missing": ["language"], "unexpected": []},
     }]
     assert _translation(client)["origin"] == "source_copy"
+
+
+def test_arabic_change_reason_survives_translation_save_publish_and_audit(client):
+    reason = 'تصحيح الترجمة العربية — مراجعة المصطلحات'
+    current = _translation(client)
+    path = f'/api/v1/admin/i18n/messages/{MESSAGE_KEY}/translations/ar'
+    updated = client.put(path, headers={
+        'If-Match': str(current['translation_version']),
+        'X-Change-Reason': reason.encode('utf-8'),
+    }, json={'translated_text': 'اللغة {language} غير مدعومة.', 'origin': 'manual', 'reviewed': True})
+    assert updated.status_code == 200, updated.text
+    published = client.post(path + '/publish', headers={
+        'If-Match': str(updated.json()['version']),
+        'X-Change-Reason': reason.encode('utf-8'),
+    })
+    assert published.status_code == 200, published.text
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        events = connection.execute(
+            "SELECT reason FROM event_history WHERE entity_type='ui_message_translation' ORDER BY id DESC LIMIT 2"
+        ).fetchall()
+    assert events == [(reason,), (reason,)]
+
+
+def test_arabic_change_reason_limit_counts_characters_not_utf8_bytes(client):
+    current = _translation(client)
+    path = f'/api/v1/admin/i18n/messages/{MESSAGE_KEY}/translations/ar'
+    payload = {'translated_text': 'اللغة {language} غير مدعومة.', 'origin': 'manual', 'reviewed': True}
+    headers = {'If-Match': str(current['translation_version']), 'X-Change-Reason': ('ع' * 2001).encode('utf-8')}
+    rejected = client.put(path, headers=headers, json=payload)
+    assert rejected.status_code == 400
+    headers['X-Change-Reason'] = ('ع' * 2000).encode('utf-8')
+    accepted = client.put(path, headers=headers, json=payload)
+    assert accepted.status_code == 200, accepted.text

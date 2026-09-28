@@ -7,6 +7,7 @@ from typing import Any, Literal
 from fastapi import HTTPException, Request
 from psycopg import Connection
 
+from .audit_context import decode_change_reason
 from .authorization_admin import (
     CUSTODY_PRIVILEGE_CODES,
     _effective_people_for_privilege,
@@ -190,7 +191,7 @@ def analyze_deletion(
 def permanently_delete(
     connection: Connection, request: Request, kind: EntityKind, entity_id: int, version: int,
 ) -> dict[str, Any]:
-    reason = request.headers.get("X-Change-Reason", "").strip()
+    reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
     if not reason:
         raise HTTPException(status_code=422, detail="X-Change-Reason is required")
     principal = getattr(request.state, "principal", None)

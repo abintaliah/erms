@@ -20,6 +20,7 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
+from .audit_context import decode_change_reason
 from .authentication import Principal, principal_from_request
 from .authorization_policy import require_global_privilege
 from .config import default_working_timezone
@@ -206,7 +207,7 @@ def _stale_version(expected: int, actual: int, current: dict | None = None) -> H
 
 
 def _required_reason(change_reason: str | None) -> str:
-    reason = (change_reason or "").strip()
+    reason = decode_change_reason(change_reason).strip()
     if not reason:
         raise _error(400, "change_reason_required", "localization.validation.change_reason.required")
     if len(reason) > 2000:

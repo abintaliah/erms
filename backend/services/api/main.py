@@ -15,6 +15,7 @@ from psycopg_pool import PoolTimeout
 from psycopg.types.json import Jsonb
 
 from .audit_context import (
+    decode_change_reason,
     actor_email_context,
     actor_name_context,
     actor_user_id_context,
@@ -218,7 +219,7 @@ async def audit_request_context(request: Request, call_next):
     except ValueError as exception:
         return JSONResponse(status_code=400, content={"detail": str(exception)})
 
-    change_reason = request.headers.get("X-Change-Reason", "")
+    change_reason = decode_change_reason(request.headers.get("X-Change-Reason", ""))
     if len(change_reason) > 2000:
         return JSONResponse(
             status_code=400,
@@ -780,7 +781,7 @@ def update_aggregation(
                     "A child aggregation must use the same medium as its parent.",
                     parent_medium=parent["medium"], requested_medium=payload.medium,
                 )
-        medium_change_reason = request.headers.get("X-Change-Reason", "").strip()
+        medium_change_reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
         if not medium_change_reason:
             raise _medium_error(
                 "medium_change_reason_required",
@@ -794,7 +795,7 @@ def update_aggregation(
         privilege = "aggregation.close" if payload.date_closed is not None else "aggregation.reopen"
         require_resource_operation(connection, "aggregation", aggregation_id, privilege, privilege)
         if payload.date_closed is None and existing["date_closed"] is not None:
-            reopen_reason = request.headers.get("X-Change-Reason", "").strip()
+            reopen_reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
             if not reopen_reason:
                 raise HTTPException(
                     status_code=422,
@@ -824,7 +825,7 @@ def update_aggregation(
         require_resource_operation(connection, "aggregation", aggregation_id,
                                    "aggregation.security_level.change", "aggregation.security_level.change")
         require_clearance_for_level(connection, payload.security_level_id)
-        if not request.headers.get("X-Change-Reason", "").strip():
+        if not decode_change_reason(request.headers.get("X-Change-Reason", "")).strip():
             raise HTTPException(status_code=422, detail="X-Change-Reason is required when changing a security level")
     new_level_id = payload.security_level_id if "security_level_id" in payload.model_fields_set else None
     reason, old_number, new_number = validate_security_level_change(
@@ -1111,7 +1112,7 @@ def update_record(
                 "physical_record_has_digital_components",
                 "Remove all digital components before changing this record to physical.",
             )
-        medium_change_reason = request.headers.get("X-Change-Reason", "").strip()
+        medium_change_reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
         if not medium_change_reason:
             raise _medium_error(
                 "medium_change_reason_required",
@@ -1131,7 +1132,7 @@ def update_record(
         require_resource_operation(connection, "record", record_id,
                                    "record.security_level.change", "record.security_level.change")
         require_clearance_for_level(connection, payload.security_level_id)
-        if not request.headers.get("X-Change-Reason", "").strip():
+        if not decode_change_reason(request.headers.get("X-Change-Reason", "")).strip():
             raise HTTPException(status_code=422, detail="X-Change-Reason is required when changing a security level")
     new_level_id = payload.security_level_id if "security_level_id" in payload.model_fields_set else None
     reason, old_number, new_number = validate_security_level_change(
@@ -1239,7 +1240,7 @@ def correct_record_placement(
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     source = require_resource_operation(connection, "record", record_id, "record.move", "record.move")
-    reason = request.headers.get("X-Change-Reason", "").strip()
+    reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
     if not reason:
         raise HTTPException(status_code=422, detail="X-Change-Reason is required")
     destination = require_closed_placement_correction(
@@ -1527,7 +1528,7 @@ def commit_record_draft_placement_correction(
         security_level_id = connection.execute(
             "SELECT id FROM security_levels ORDER BY level_number,id LIMIT 1"
         ).fetchone()["id"]
-    reason = request.headers.get("X-Change-Reason", "").strip()
+    reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
     if not reason:
         raise HTTPException(status_code=422, detail="X-Change-Reason is required")
     destination = require_closed_placement_correction(

@@ -71,6 +71,11 @@ class ErmsApiClient:
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
         with_metadata = bool(kwargs.pop("_with_metadata", False))
         headers = dict(kwargs.pop("headers", {}))
+        # httpx defaults string header values to ASCII. Reasons are human text;
+        # send their UTF-8 bytes while leaving ordinary ASCII headers unchanged.
+        for name, value in list(headers.items()):
+            if name.lower() == "x-change-reason" and isinstance(value, str):
+                headers[name] = value.encode("utf-8")
         headers.setdefault("X-Event-Source", "web_ui")
         if self._session_token:
             headers.setdefault("Authorization", f"Bearer {self._session_token}")

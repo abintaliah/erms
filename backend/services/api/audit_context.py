@@ -10,3 +10,17 @@ actor_type_context: ContextVar[str] = ContextVar("actor_type", default="anonymou
 event_source_context: ContextVar[str] = ContextVar("event_source", default="api")
 change_reason_context: ContextVar[str] = ContextVar("change_reason", default="")
 event_metadata_context: ContextVar[str] = ContextVar("event_metadata", default="{}")
+
+
+def decode_change_reason(value: str | None) -> str:
+    """Decode UTF-8 header bytes exposed by ASGI as Latin-1 text.
+
+    ASCII is unchanged; non-UTF-8 input falls back to Latin-1. Call this
+    only at the header boundary, not on JSON bodies or already-decoded reasons.
+    """
+    if value is None:
+        return ""
+    try:
+        return value.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return value
