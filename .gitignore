@@ -60,6 +60,8 @@ nicegui_storage/
 *.sql.gz
 *.sql.bz2
 *.sql.xz
+database/local-backups/
+database/backups/
 
 # Environment variables and local secrets
 .env

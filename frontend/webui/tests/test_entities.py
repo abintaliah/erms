@@ -141,6 +141,18 @@ def test_pdf_preview_is_isolated_from_the_arabic_ui_direction():
     assert "page.render({canvasContext: context" in viewer_source
 
 
+def test_pdf_print_does_not_wait_for_animation_frames_in_the_background_viewer():
+    viewer_source = (
+        Path(__file__).parents[1] / "static" / "pdfjs" / "erms-viewer.mjs"
+    ).read_text(encoding="utf-8")
+    print_source = viewer_source.split("async function printDocument(", 1)[1].split(
+        "window.ermsPdfViewer =", 1
+    )[0]
+    # PDF.js defaults to display intent, which schedules rendering using the
+    # opener's requestAnimationFrame. A focused print tab can suspend it.
+    assert "viewport, intent: 'print'" in print_source
+
+
 @pytest.mark.parametrize("extension", ("md", "msg", "eml", "html", "txt", "xml"))
 def test_additional_document_formats_show_conversion_progress(extension):
     assert requires_document_conversion({
