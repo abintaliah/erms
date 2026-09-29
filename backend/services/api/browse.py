@@ -5,7 +5,7 @@ import json
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from psycopg import Connection
+from psycopg import Connection, sql
 
 from .saved_searches import audience_eligibility_sql
 from .database import get_connection
@@ -441,7 +441,7 @@ def browse_organization_roots(
     unit_source, role_source = audience_tree_sources(connection, audience)
     rows = list(connection.execute(
         f"SELECT * FROM ({unit_source}) source "
-        "WHERE parent_org_unit_id IS NULL ORDER BY code COLLATE \"C\", id LIMIT %s OFFSET %s",
+        "WHERE parent_org_unit_id IS NULL ORDER BY code COLLATE erms_code_natural, id LIMIT %s OFFSET %s",
         (limit, offset),
     ).fetchall())
     language_tag = preferred_language(connection, request)
@@ -466,15 +466,16 @@ def browse_organization_children(
         raise HTTPException(status_code=404, detail="organization unit not found")
     units = list(connection.execute(
         f"SELECT * FROM ({unit_source}) source "
-        "WHERE parent_org_unit_id=%s ORDER BY code COLLATE \"C\", id LIMIT %s OFFSET %s",
+        "WHERE parent_org_unit_id=%s ORDER BY code COLLATE erms_code_natural, id LIMIT %s OFFSET %s",
         (org_unit_id, limit + 1, unit_offset),
     ).fetchall())
+    more_units = len(units) > limit
     roles = []
     if include_roles:
         roles = list(connection.execute(
             f"SELECT * FROM ({role_source}) source "
-            "WHERE org_unit_id=%s ORDER BY code COLLATE \"C\", id LIMIT %s OFFSET %s",
-            (org_unit_id, limit + 1, role_offset),
+            "WHERE org_unit_id=%s ORDER BY code COLLATE erms_code_natural, id LIMIT %s OFFSET %s",
+            (org_unit_id, 1 if more_units else limit + 1, role_offset),
         ).fetchall())
     language_tag = preferred_language(connection, request)
     for row in [*units, *roles]:
@@ -482,9 +483,9 @@ def browse_organization_children(
         row["name"] = localized["name"]
         row["description"] = localized["description"]
     return {
-        "org_units": units[:limit], "roles": roles[:limit],
-        "more_org_units": len(units) > limit,
-        "more_roles": len(roles) > limit,
+        "org_units": units[:limit], "roles": [] if more_units else roles[:limit],
+        "more_org_units": more_units,
+        "more_roles": bool(roles) if more_units else len(roles) > limit,
     }
 
 
@@ -505,8 +506,24 @@ def browse_role_users(
         "future": "assignment.valid_from > CURRENT_TIMESTAMP",
         "expired": "assignment.valid_until IS NOT NULL AND assignment.valid_until <= CURRENT_TIMESTAMP",
     }[validity]
+    language_tag = preferred_language(connection, request)
+    # Resolve only installed ICU collations; quote the identifier separately from SQL.
+    parts = language_tag.split("-")
+    candidates = ["-".join(parts[:length]) + "-x-icu" for length in range(len(parts), 0, -1)]
+    candidates.append("und-x-icu")
+    collation = connection.execute(
+        "SELECT collname FROM pg_catalog.pg_collation "
+        "WHERE collnamespace='pg_catalog'::regnamespace AND collprovider='i' "
+        "AND collname=ANY(%s) ORDER BY array_position(%s, collname::text) LIMIT 1",
+        (candidates, candidates),
+    ).fetchone()["collname"]
+    # Match localized_projection: choose a nonempty exact/base locale object,
+    # then fall back to the canonical name if that object has no name.
+    display_name = """COALESCE(NULLIF(COALESCE(
+        NULLIF(NULLIF(person.translations -> %s, '{}'::jsonb), 'null'::jsonb),
+        person.translations -> %s, '{}'::jsonb) ->> 'name', ''), person.name)"""
     rows = list(connection.execute(
-        f"""SELECT assignment.id AS assignment_id, assignment.role_id,
+        sql.SQL(f"""SELECT assignment.id AS assignment_id, assignment.role_id,
                    assignment.valid_from, assignment.valid_until,
                    assignment.version AS assignment_version,
                    CASE WHEN assignment.valid_from > CURRENT_TIMESTAMP THEN 'future'
@@ -522,11 +539,10 @@ def browse_role_users(
               JOIN users person ON person.id=assignment.user_id
               JOIN roles role ON role.id=assignment.role_id
              WHERE assignment.role_id=%s AND {validity_sql}
-             ORDER BY person.name COLLATE "C", person.id, assignment.id
-             LIMIT %s OFFSET %s""",
-        (role_id, limit, offset),
+             ORDER BY {{display_name}} COLLATE {{collation}}, person.id, assignment.id
+             LIMIT %s OFFSET %s""").format(display_name=sql.SQL(display_name), collation=sql.Identifier("pg_catalog", collation)),
+        (role_id, language_tag, language_tag.split("-", 1)[0], limit, offset),
     ).fetchall())
-    language_tag = preferred_language(connection, request)
     for row in rows:
         row["name"] = localized_projection(row, language_tag, "name")["name"]
         row["role_name"] = localized_projection(

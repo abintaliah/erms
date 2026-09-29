@@ -1974,16 +1974,12 @@ def index(q: str = "") -> None:
         html[dir="rtl"] .organization-browser-summary-value {
             direction: rtl; text-align: left;
         }
-        html[dir="rtl"] .organization-browser-disclosure {
-            transform: scaleX(-1);
-        }
-        html[dir="rtl"] .organization-browser-page-layout {
-            direction: rtl;
+        /* As in the classification workspace, NiceGUI Row has no direction
+           option. The global RTL row-reverse rule double-reverses these rows;
+           keep logical RTL order only within the full-page browser. */
+        html[dir="rtl"] .organization-browser-workspace .nicegui-row,
+        html[dir="rtl"] .organization-browser-workspace .q-btn__content {
             flex-direction: row !important;
-        }
-        html[dir="rtl"] .organization-browser-page-tree {
-            border-right-width: 0 !important;
-            border-left-width: 1px !important;
         }
         .translation-card-heading { order: 1; }
         .translation-card-actions { order: 2; }
@@ -13733,16 +13729,16 @@ def index(q: str = "") -> None:
                     "detail-surface identity-command-metadata shadow-none p-5 gap-4"
                 )
                 organization_metadata_panel.__enter__()
-                with ui.row().classes("w-full items-start gap-4"):
+                with ui.grid(columns="auto minmax(0, 1fr) auto").classes("identity-detail-header w-full items-start gap-4"):
                     ui.avatar(icon="corporate_fare", color="blue-1", text_color="primary", size="58px")
-                    with ui.column().classes("gap-1 grow"):
+                    with ui.column().classes("gap-1 min-w-0 break-words"):
                         ui.label(unit["name"]).classes("text-xl font-semibold")
                         ui.label(unit["code"]).classes("text-primary")
                         if unit.get("description"): ui.label(unit["description"]).classes("text-slate-600")
                     ui.button(
-                        render_message("webui.select_organization_unit_details.button.back_534197f5"), icon="arrow_back",
+                        render_message("webui.select_organization_unit_details.button.back_534197f5"), icon=None if current_direction["value"] == "rtl" else "arrow_back",
                         on_click=lambda: breadcrumb_back(lambda: select_entity("org-units")),
-                    ).props("flat no-caps")
+                    ).props("flat no-caps" + (" icon-right=arrow_forward" if current_direction["value"] == "rtl" else ""))
                 with ui.grid(columns=3).classes("identity-detail-facts w-full gap-4"):
                     for label, value, value_kind in (
                         (entity_metadata_label("Status"), unit.get("status"), "status"),
@@ -13983,18 +13979,18 @@ def index(q: str = "") -> None:
                     "detail-surface identity-command-metadata shadow-none p-5 gap-4"
                 )
                 role_metadata_panel.__enter__()
-                with ui.row().classes("w-full items-start gap-4"):
+                with ui.grid(columns="auto minmax(0, 1fr) auto").classes("identity-detail-header w-full items-start gap-4"):
                     ui.avatar(icon="badge", color="blue-1", text_color="primary", size="58px")
-                    with ui.column().classes("gap-1 grow"):
+                    with ui.column().classes("gap-1 min-w-0 break-words"):
                         ui.label(role["name"]).classes("text-xl font-semibold")
                         ui.label(role["code"]).classes("text-primary")
                         if is_builtin:
                             ui.badge(render_message("webui.select_role_details.badge.built_in_13c676c0"), color="blue-grey").props("outline")
                         if role.get("description"): ui.label(role["description"]).classes("text-slate-600")
                     ui.button(
-                        render_message("webui.select_role_details.button.back_26071a1c"), icon="arrow_back",
+                        render_message("webui.select_role_details.button.back_26071a1c"), icon=None if current_direction["value"] == "rtl" else "arrow_back",
                         on_click=lambda: breadcrumb_back(lambda: select_entity("roles")),
-                    ).props("flat no-caps")
+                    ).props("flat no-caps" + (" icon-right=arrow_forward" if current_direction["value"] == "rtl" else ""))
                 with ui.grid(columns=3).classes("identity-detail-facts w-full gap-4"):
                     assignment_label = render_message("webui.show_organization_structure.select.all_assignments_1a3e1480")
                     for label, value, value_kind in (
@@ -15202,9 +15198,9 @@ def index(q: str = "") -> None:
                         "detail-surface identity-command-metadata shadow-none p-5"
                     )
                     user_metadata_panel.__enter__()
-                    with ui.row().classes("w-full items-start gap-4"):
+                    with ui.grid(columns="auto minmax(0, 1fr) auto").classes("identity-detail-header w-full items-start gap-4"):
                         render_user_avatar(person, size="64px")
-                        with ui.column().classes("gap-1 grow"):
+                        with ui.column().classes("gap-1 min-w-0 break-words"):
                             ui.label(person["name"]).classes("text-xl font-semibold")
                             ui.label(
                                 render_message(
@@ -15219,9 +15215,9 @@ def index(q: str = "") -> None:
                                     ui.badge(render_message("webui.select_user_details.badge.non_interactive_bcf1ef6e"), color="blue-grey").props("outline")
                         with ui.row().classes("gap-1"):
                             ui.button(
-                                render_message("webui.select_user_details.button.back_fd96364b"), icon="arrow_back",
+                                render_message("webui.select_user_details.button.back_fd96364b"), icon=None if current_direction["value"] == "rtl" else "arrow_back",
                                 on_click=lambda: breadcrumb_back(lambda: select_entity("users")),
-                            ).props("flat no-caps")
+                            ).props("flat no-caps" + (" icon-right=arrow_forward" if current_direction["value"] == "rtl" else ""))
                     with ui.grid(columns=3).classes("w-full gap-4 mt-3"):
                         with ui.column().classes("gap-1 border-b border-slate-100 pb-1.5"):
                             ui.label(render_message("webui.select_user_details.label.email_address_db7b1f8d")).classes("detail-field-label")
@@ -15633,20 +15629,32 @@ def index(q: str = "") -> None:
         browser: dict[str, Any] = {
             "roots": [], "root_more": False, "children": {}, "pages": {},
             "selected": saved_state["selected"],
+            "scroll_top": saved_state.get("scroll_top", 0),
+            "pending": {}, "revision": 0, "search_revision": 0,
+            "refreshing": False,
         }
         tree_host: Any = None
         summary_host: Any = None
         search_results_host: Any = None
         selection_confirm_button: Any = None
 
+        def browser_active() -> bool:
+            return (
+                not card_context.is_deleted
+                and (is_selector or state.get("resource") == "organization-browser")
+            )
+
         def persist() -> None:
-            if is_selector:
+            if is_selector or not browser_active():
                 return
             app.storage.user["organization_browser_state"] = {
                 "expanded": sorted(expanded), "selected": browser["selected"],
                 "query": query_input.value or "", "validity": validity_filter.value,
                 "entity_type": entity_type_filter.value, "status": status_filter.value,
                 "scroll_top": browser.get("scroll_top", 0),
+                "root_count": len(browser["roots"]),
+                "branch_counts": {key: len(rows) for key, rows in browser["children"].items()},
+                "filters_visible": advanced_filters.visible,
             }
 
         def selection_label(node: dict[str, Any]) -> str:
@@ -15666,18 +15674,28 @@ def index(q: str = "") -> None:
                 **({"assignment_id": node.get("assignment_id"), "role_id": node.get("role_id")} if node["type"] == "user" else {}),
             }
             persist()
+            if not is_selector:
+                return
             await page_client.run_javascript(
                 "document.querySelectorAll('#organization-browser-tree .organization-browser-selected')"
                 ".forEach(item => item.classList.remove('organization-browser-selected', 'bg-blue-50')); "
                 f"document.getElementById('{organization_node_dom_id(node)}')"
                 "?.classList.add('organization-browser-selected', 'bg-blue-50');"
             )
-            await render_summary(node)
+            if is_selector:
+                await render_summary(node)
             if is_selector and selection_confirm_button is not None:
                 if node_selectable(node):
                     selection_confirm_button.enable()
                 else:
                     selection_confirm_button.disable()
+
+        async def activate_node(node: dict[str, Any]) -> None:
+            if not browser_active():
+                return
+            await select_node(node)
+            if not is_selector and browser_active():
+                await open_selected(node)
 
         async def load_node_children(
             node: dict[str, Any], *, append: bool = False,
@@ -15685,6 +15703,21 @@ def index(q: str = "") -> None:
             key = f"{node['type']}:{node['id']}"
             if key in browser["children"] and not append:
                 return browser["children"][key]
+            if key in browser["pending"]:
+                return await asyncio.shield(browser["pending"][key])
+            task = asyncio.create_task(read_node_children(node, append=append))
+            browser["pending"][key] = task
+            try:
+                return await task
+            finally:
+                if browser["pending"].get(key) is task:
+                    browser["pending"].pop(key, None)
+
+        async def read_node_children(
+            node: dict[str, Any], *, append: bool = False,
+        ) -> list[dict[str, Any]]:
+            key = f"{node['type']}:{node['id']}"
+            revision = browser["revision"]
             current = browser["children"].get(key, []) if append else []
             page = browser["pages"].setdefault(
                 key, {"unit_offset": 0, "role_offset": 0, "user_offset": 0, "more": False},
@@ -15711,6 +15744,8 @@ def index(q: str = "") -> None:
                 children = [{**item, "type": "user"} for item in page_rows[:25]]
                 page["user_offset"] += len(children)
                 page["more"] = len(page_rows) > 25
+            if not browser_active() or revision != browser["revision"]:
+                return []
             browser["children"][key] = [*current, *children]
             return browser["children"][key]
 
@@ -15721,8 +15756,14 @@ def index(q: str = "") -> None:
             else:
                 expanded.add(key)
                 if key not in browser["children"]:
-                    await load_node_children(node)
-            persist(); render_tree()
+                    try:
+                        await load_node_children(node)
+                    except ApiError as error:
+                        expanded.discard(key)
+                        if browser_active() and error.status_code != 401:
+                            ui.notify(error_message(error), color="negative", close_button=True)
+            if browser_active():
+                persist(); render_tree()
 
         def node_selectable(node: dict[str, Any]) -> bool:
             if not is_selector or node["type"] != selection_mode:
@@ -15754,30 +15795,50 @@ def index(q: str = "") -> None:
                 with tree_row:
                     with ui.element("div").classes("organization-browser-expander w-8 h-8 shrink-0 flex items-center justify-center"):
                         if can_expand:
-                            ui.button(
-                                icon="expand_more" if key in expanded else "chevron_right",
+                            disclosure = ui.button(
+                                icon=tree_expander_icon(key in expanded),
                                 on_click=lambda _, item=node: toggle_node(item),
                             ).props("flat round dense size=sm color=blue-grey").classes(
                                 "organization-browser-disclosure"
-                            )
+                            ).props(
+                                f'aria-expanded={str(key in expanded).lower()}'
+                            ).tooltip(selection_label(node))
+                            disclosure.props["aria-label"] = selection_label(node)
                     ui.icon(
                         {"org_unit": "corporate_fare", "role": "badge", "user": "person"}[node["type"]],
                         color="primary", size="20px",
                     ).classes("organization-browser-icon w-6 shrink-0")
-                    node_content = ui.column().classes(
-                        "organization-browser-content min-w-0 gap-0 py-1 "
-                        + ("cursor-pointer" if node_selectable(node) else "")
+                    privileges = set(
+                        (auth_state.get("principal") or {}).get("global_privileges", [])
                     )
-                    if node_selectable(node):
-                        node_content.on("click", lambda _, item=node: select_node(item))
+                    clickable = (
+                        node_selectable(node) if is_selector
+                        else can_open_organization_detail(node["type"], privileges)
+                    )
+                    if clickable:
+                        node_content = ui.button(
+                            on_click=lambda _, item=node: activate_node(item),
+                        ).props("flat dense no-caps align=left").classes(
+                            "organization-browser-content min-w-0 w-full text-start py-1"
+                        )
+                        node_content.props["aria-label"] = selection_label(node)
+                        node_content.tooltip(node.get("name") or selection_label(node))
                         if is_selector:
                             tree_row.on(
                                 "dblclick", lambda _, item=node: confirm_node_selection(item),
                             )
-                    with node_content:
-                        ui.label(node.get("name") or str(node["id"])).classes("text-sm font-semibold line-clamp-1")
+                    else:
+                        node_content = ui.column().classes(
+                            "organization-browser-content min-w-0 gap-0 py-1"
+                        )
+                    with node_content, ui.column().classes("w-full min-w-0 gap-0 items-start"):
+                        inactive = node.get("effective_status", node.get("status")) == "inactive"
+                        ui.label(node.get("name") or str(node["id"])).props("dir=auto").classes(
+                            "text-sm font-semibold max-w-full truncate "
+                            + ("text-slate-400" if inactive else "text-slate-800")
+                        )
                         if node.get("code"):
-                            ui.label(node["code"]).classes("text-xs text-slate-400")
+                            ui.label(node["code"]).props("dir=auto").classes("text-xs text-slate-400 max-w-full truncate")
                     status_value = node.get("effective_status", node.get("status"))
                     if node["type"] == "user":
                         ui.badge(
@@ -15799,6 +15860,7 @@ def index(q: str = "") -> None:
                         async def load_more(item: dict[str, Any] = node) -> None:
                             await load_node_children(item, append=True)
                             render_tree()
+                            persist()
                         ui.button(
                             render_message("webui.render_collection.button.load_more_755f4879"),
                             icon="more_horiz", on_click=load_more,
@@ -15807,6 +15869,8 @@ def index(q: str = "") -> None:
                         )
 
         def render_tree() -> None:
+            if not browser_active():
+                return
             tree_host.clear()
             with tree_host:
                 if not browser["roots"]:
@@ -15814,14 +15878,24 @@ def index(q: str = "") -> None:
                 render_nodes(browser["roots"])
                 if browser.get("root_more"):
                     async def load_more_roots() -> None:
-                        page_rows = await api.organization_roots(
-                            limit=26, offset=len(browser["roots"]), audience=saved_audience,
-                        )
+                        if browser.get("root_loading"):
+                            return
+                        browser["root_loading"] = True
+                        revision = browser["revision"]
+                        try:
+                            page_rows = await api.organization_roots(
+                                limit=26, offset=len(browser["roots"]), audience=saved_audience,
+                            )
+                        finally:
+                            browser["root_loading"] = False
+                        if not browser_active() or revision != browser["revision"]:
+                            return
                         browser["roots"].extend(
                             {**item, "type": "org_unit"} for item in page_rows[:25]
                         )
                         browser["root_more"] = len(page_rows) > 25
                         render_tree()
+                        persist()
                     ui.button(
                         render_message("webui.render_collection.button.load_more_755f4879"),
                         icon="more_horiz", on_click=load_more_roots,
@@ -15883,13 +15957,19 @@ def index(q: str = "") -> None:
             if target is None:
                 target = result
             render_tree()
-            await select_node({**target, "type": result["type"]})
+            await activate_node({**target, "type": result["type"]})
+            if not is_selector:
+                return
             await ui.run_javascript(
                 "document.querySelector('#organization-browser-tree .bg-blue-50')?.scrollIntoView({block:'center'})"
             )
 
         async def open_selected(node: dict[str, Any]) -> None:
             persist()
+            if not is_selector and not can_open_organization_detail(
+                node["type"], set((auth_state.get("principal") or {}).get("global_privileges", [])),
+            ):
+                return
             if is_selector and not node_selectable(node):
                 ui.notify(render_message("webui.open_selected.notify.select_an_active_item_of_the_requested_typ_2d331b9a"), color="warning")
                 return
@@ -15937,6 +16017,8 @@ def index(q: str = "") -> None:
             await confirm_browser_selection()
 
         async def render_summary(node: dict[str, Any]) -> None:
+            if not is_selector:
+                return
             summary_host.clear()
             if node["type"] in {"org_unit", "role"}:
                 item = await api.organization_summary(
@@ -16011,6 +16093,8 @@ def index(q: str = "") -> None:
                         ).props("unelevated no-caps").classes("self-end")
 
         async def run_search() -> None:
+            browser["search_revision"] += 1
+            revision = browser["search_revision"]
             search_results_host.clear()
             query = (query_input.value or "").strip()
             persist()
@@ -16020,14 +16104,24 @@ def index(q: str = "") -> None:
             results = await api.search_organization(
                 query, entity_type=type_filter, status=status_filter.value, audience=saved_audience,
             )
+            if not browser_active() or revision != browser["search_revision"]:
+                return
             with search_results_host:
                 if not results:
                     ui.label(render_message("webui.run_search.label.no_matching_organization_units_roles_or_us_29cce504")).classes("px-2 py-3 text-slate-400")
                 for result in results:
                     with ui.card().classes("w-full shadow-none border border-slate-200 p-0"):
-                        result_row = ui.row().classes(
-                            "w-full items-start gap-3 px-3 py-2 cursor-pointer no-wrap"
-                        ).on("click", lambda _, item=result: reveal_result(item))
+                        result_clickable = is_selector or can_open_organization_detail(
+                            result["type"], set((auth_state.get("principal") or {}).get("global_privileges", [])),
+                        )
+                        result_row = ui.button(
+                            on_click=lambda _, item=result: reveal_result(item),
+                        ).props("flat no-caps align=left").classes(
+                            "w-full text-start"
+                        )
+                        result_row.props["aria-label"] = selection_label(result)
+                        if not result_clickable:
+                            result_row.disable()
                         if is_selector:
                             async def confirm_search_result(item: dict[str, Any] = result) -> None:
                                 await reveal_result(item)
@@ -16035,19 +16129,19 @@ def index(q: str = "") -> None:
                             result_row.on(
                                 "dblclick", lambda _, action=confirm_search_result: action()
                             )
-                        with result_row:
+                        with result_row, ui.row(wrap=False).classes("w-full items-start gap-3"):
                             ui.avatar(
                                 icon={"org_unit": "corporate_fare", "role": "badge", "user": "person"}[result["type"]],
                                 color="blue-1", text_color="primary", size="36px",
                             ).classes("shrink-0")
-                            with ui.column().classes("grow min-w-0 gap-0 items-start text-left"):
-                                ui.label(result.get("name") or result.get("code")).classes("font-medium text-left")
+                            with ui.column().classes("grow min-w-0 gap-0 items-start text-start"):
+                                ui.label(result.get("name") or result.get("code")).classes("font-medium text-start")
                                 if result.get("code"):
-                                    ui.label(result["code"]).classes("text-xs text-primary text-left")
+                                    ui.label(result["code"]).classes("text-xs text-primary text-start")
                                 if result.get("email"):
-                                    ui.label(result["email"]).classes("text-xs text-slate-500 text-left")
+                                    ui.label(result["email"]).classes("text-xs text-slate-500 text-start")
                                 if result.get("role_name"):
-                                    ui.label(render_message("webui.run_search.label.via_role_get_role_name_5576a5f2", get=result.get('role_code'), role_name=result['role_name'])).classes("text-xs text-slate-500 text-left")
+                                    ui.label(render_message("webui.run_search.label.via_role_get_role_name_5576a5f2", get=result.get('role_code'), role_name=result['role_name'])).classes("text-xs text-slate-500 text-start")
 
         if is_selector:
             with dialog:
@@ -16056,7 +16150,7 @@ def index(q: str = "") -> None:
                 )
         else:
             with table_container:
-                card_context = ui.column().classes("w-full p-4 gap-3")
+                card_context = ui.column().classes("organization-browser-workspace w-full p-4 gap-3")
         with card_context:
             if is_selector:
                 ui.label(render_message("webui.show_organization_structure.label.browse_replace_s_06870755", replace=selection_entity_label)).classes("text-xl font-semibold")
@@ -16072,7 +16166,20 @@ def index(q: str = "") -> None:
                 query_input.on("keydown.enter", run_search)
                 filters_button = ui.button(render_message("webui.show_organization_structure.button.filters_c7ccc610"), icon="filter_list").props("flat dense no-caps")
                 async def refresh_browser() -> None:
-                    browser["children"].clear()
+                    if browser["refreshing"]:
+                        return
+                    browser["refreshing"] = True
+                    try:
+                        await refresh_tree()
+                    finally:
+                        browser["refreshing"] = False
+
+                async def refresh_tree() -> None:
+                    persist()
+                    if not is_selector:
+                        saved_state.update(app.storage.user["organization_browser_state"])
+                    browser["revision"] += 1
+                    browser["pending"].clear()
                     try:
                         roots = await api.organization_roots(limit=26, audience=saved_audience)
                     except ApiError as error:
@@ -16081,12 +16188,19 @@ def index(q: str = "") -> None:
                         # this page or surface a redundant event-handler traceback.
                         if error.status_code == 401:
                             return
-                        raise
+                        if browser_active():
+                            ui.notify(error_message(error), color="negative", close_button=True)
+                        return
+                    if not browser_active():
+                        return
+                    browser["children"].clear()
+                    browser["pages"].clear()
                     browser["roots"] = [{**item, "type": "org_unit"} for item in roots[:25]]
                     browser["root_more"] = len(roots) > 25
+                    await restore_root_pages()
                     await restore_expanded(browser["roots"])
                     render_tree()
-                    if browser.get("selected"):
+                    if is_selector and browser.get("selected"):
                         selected = browser["selected"]
                         try:
                             if selected["type"] == "user" and selected.get("role_id"):
@@ -16098,7 +16212,9 @@ def index(q: str = "") -> None:
                                 await render_summary({**refreshed, "type": selected["type"]})
                         except ApiError:
                             browser["selected"] = None; persist()
-                    ui.notify(render_message("webui.refresh_browser.notify.organization_structure_refreshed_c53f2b77"), color="positive")
+                    if browser_active():
+                        await run_search()
+                        ui.notify(render_message("webui.refresh_browser.notify.organization_structure_refreshed_c53f2b77"), color="positive")
                 ui.button(render_message("webui.show_organization_structure.button.refresh_7f802034"), icon="refresh", on_click=refresh_browser).props("flat dense no-caps")
             with ui.row().classes("w-full items-end gap-2 rounded bg-slate-50 p-2") as advanced_filters:
                 entity_type_filter = ui.select(
@@ -16115,22 +16231,20 @@ def index(q: str = "") -> None:
                     entity_type_filter.set_value(selection_mode or "all"),
                     status_filter.set_value("all"), validity_filter.set_value("all"),
                 )).props("flat dense no-caps")
-            advanced_filters.set_visibility(False)
+            advanced_filters.set_visibility(saved_state.get("filters_visible", False))
             filters_button.on("click", lambda: advanced_filters.set_visibility(not advanced_filters.visible))
             search_results_host = ui.column().classes("w-full gap-0")
-            layout_direction = "flex-col" if is_selector else "no-wrap"
+            layout_direction = "flex-col"
             browser_height = "h-[520px]" if is_selector else "h-[720px]"
             page_layout_class = "" if is_selector else "organization-browser-page-layout"
             with ui.row().classes(f"w-full {browser_height} gap-0 border border-slate-200 rounded-lg overflow-hidden {layout_direction} {page_layout_class}"):
                 tree_classes = (
                     "w-full h-[340px] overflow-auto border-b"
-                    if is_selector else "organization-browser-page-tree w-1/2 min-w-[360px] h-full overflow-auto border-r"
+                    if is_selector else "organization-browser-page-tree w-full min-w-0 h-full overflow-auto"
                 )
                 tree_host = ui.column().classes(f"{tree_classes} p-2 gap-0 border-slate-200").props("id=organization-browser-tree")
-                summary_host = ui.column().classes(
-                    "w-full h-[180px] overflow-auto min-w-0"
-                    if is_selector else "grow min-w-0 h-full overflow-y-auto"
-                )
+                if is_selector:
+                    summary_host = ui.column().classes("w-full h-[180px] overflow-auto min-w-0")
             if is_selector:
                 with ui.row().classes("w-full justify-end"):
                     ui.button(render_message("webui.show_organization_structure.button.cancel_6938b29c"), on_click=dialog.close).props("flat no-caps")
@@ -16146,7 +16260,21 @@ def index(q: str = "") -> None:
             # click. The API client has already presented sign-in for a 401.
             if error.status_code == 401:
                 return
-            raise
+            if browser_active():
+                with tree_host:
+                    ui.label(error_message(error)).classes("text-negative p-3")
+                    ui.button(
+                        render_message("classification_browser.retry"), icon="refresh",
+                        on_click=lambda: show_organization_structure(
+                            selection_mode=selection_mode, target_control=target_control,
+                            on_selection=on_selection, saved_audience=saved_audience,
+                        ),
+                    ).props("flat no-caps")
+                if is_selector:
+                    dialog.open()
+            return
+        if not browser_active():
+            return
         browser["roots"] = [{**item, "type": "org_unit"} for item in roots[:25]]
         browser["root_more"] = len(roots) > 25
         def remember_scroll(event: Any) -> None:
@@ -16164,16 +16292,49 @@ def index(q: str = "") -> None:
             render_tree()
         validity_filter.on_value_change(change_validity)
         async def restore_expanded(nodes: list[dict[str, Any]]) -> None:
-            for node in nodes:
+            async def restore_branch(node: dict[str, Any]) -> None:
                 key = f"{node['type']}:{node['id']}"
-                if key in expanded and node["type"] != "user":
-                    await restore_expanded(await load_node_children(node))
+                if key in expanded and node["type"] != "user" and browser_active():
+                    children = await load_node_children(node)
+                    wanted = (saved_state.get("branch_counts") or {}).get(key, 0)
+                    while (browser_active() and len(children) < wanted
+                           and browser["pages"].get(key, {}).get("more")):
+                        children = await load_node_children(node, append=True)
+                    await restore_expanded(children)
+            await asyncio.gather(*(restore_branch(node) for node in nodes))
+        async def restore_root_pages() -> None:
+            while (browser_active() and browser["root_more"]
+                   and len(browser["roots"]) < saved_state.get("root_count", 0)):
+                page_rows = await api.organization_roots(
+                    limit=26, offset=len(browser["roots"]), audience=saved_audience,
+                )
+                if not browser_active():
+                    return
+                browser["roots"].extend({**item, "type": "org_unit"} for item in page_rows[:25])
+                browser["root_more"] = len(page_rows) > 25
+
+        await restore_root_pages()
         await restore_expanded(browser["roots"])
+        if not browser_active():
+            return
+        if not is_selector and browser["selected"]:
+            selected = browser["selected"]
+            loaded_nodes = [*browser["roots"], *(
+                node for children in browser["children"].values() for node in children
+            )]
+            if not any(organization_node_dom_id(node) == organization_node_dom_id(selected)
+                       for node in loaded_nodes):
+                browser["selected"] = None
+                persist()
         render_tree()
         if saved_state.get("scroll_top"):
             await ui.run_javascript(
                 f"const tree=document.getElementById('organization-browser-tree'); if(tree) tree.scrollTop={float(saved_state['scroll_top'])}"
             )
+        if not is_selector:
+            if saved_state.get("query"):
+                await run_search()
+            return
         if browser["selected"]:
             selected = browser["selected"]
             try:

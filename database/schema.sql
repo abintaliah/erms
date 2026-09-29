@@ -1,5 +1,8 @@
 BEGIN;
 
+-- Natural numeric ordering for organization-unit and role codes.
+CREATE COLLATION erms_code_natural (provider = icu, locale = 'und-u-kn-true');
+
 CREATE TABLE security_levels (
     id                   bigserial PRIMARY KEY,
     code                 text NOT NULL,

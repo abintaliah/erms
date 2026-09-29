@@ -95,6 +95,6 @@ def test_saved_audience_scope_survives_every_browser_page_and_search():
     calls = [n for n in ast.walk(browser) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Attribute) and n.func.attr in
              {'organization_roots', 'organization_children', 'search_organization'}]
-    assert len(calls) == 6
+    assert len(calls) == 7
     assert all(any(k.arg == 'audience' and isinstance(k.value, ast.Name)
                    and k.value.id == 'saved_audience' for k in call.keywords) for call in calls)

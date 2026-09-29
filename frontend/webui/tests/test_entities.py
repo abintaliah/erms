@@ -1535,7 +1535,7 @@ def test_aggregation_browser_load_more_preserves_the_previous_last_child_anchor(
 def test_organization_browser_selectors_have_persistent_confirmation_action():
     source = with_english_messages(inspect.getsource(index))
     assert '"Clear selection"' not in source
-    assert 'f"Select {selection_mode.replace(\'_\', \' \')}"' in source
+    assert 'f"Select {selection_entity_label}"' in source
     assert "selection_confirm_button.disable()" in source
     assert "selection_confirm_button.enable()" in source
     assert "apply_relationship_selection(" in source
@@ -1579,14 +1579,13 @@ def test_organization_browser_localizes_statuses_summary_and_rtl_disclosures():
     assert "organization-browser-summary-value" in source
 
 
-def test_organization_browser_places_tree_on_the_leading_side_in_rtl():
+def test_organization_browser_has_one_full_width_tree_and_explicit_directional_icons():
     source = inspect.getsource(index)
-    assert 'page_layout_class = "" if is_selector else "organization-browser-page-layout"' in source
-    assert "organization-browser-page-tree w-1/2" in source
-    assert 'html[dir="rtl"] .organization-browser-page-layout' in source
-    assert "flex-direction: row !important;" in source
-    assert 'html[dir="rtl"] .organization-browser-page-tree' in source
-    assert "border-left-width: 1px !important;" in source
+    assert "organization-browser-page-tree w-full min-w-0 h-full overflow-auto" in source
+    assert "organization-browser-page-tree w-1/2" not in source
+    assert "icon=tree_expander_icon(key in expanded)" in source
+    assert 'html[dir="rtl"] .organization-browser-disclosure' not in source
+    assert 'html[dir="rtl"] .organization-browser-page-tree' not in source
 
 
 def test_browsed_relationship_selection_adds_option_and_value_atomically():
