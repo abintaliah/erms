@@ -1,0 +1,538 @@
+{
+  "type": "object",
+  "properties": {
+    "package_type": {
+      "const": "classification_scheme_export"
+    },
+    "format_version": {
+      "const": "1.0"
+    },
+    "manifest": {
+      "type": "object",
+      "properties": {
+        "export_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "exported_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+        },
+        "exported_by": {
+          "type": "object",
+          "properties": {
+            "source_user_id": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$"
+            },
+            "username": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "display_name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "source_user_id",
+            "username",
+            "display_name"
+          ],
+          "additionalProperties": false
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "application": {
+              "const": "Wathiq"
+            },
+            "application_revision": {
+              "type": "string",
+              "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+            },
+            "database_name": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "schema_version": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "application",
+            "application_revision",
+            "database_name",
+            "schema_version"
+          ],
+          "additionalProperties": false
+        },
+        "counts": {
+          "type": "object",
+          "properties": {
+            "classifications": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "retention_rules": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "classifications",
+            "retention_rules"
+          ],
+          "additionalProperties": false
+        },
+        "checksum": {
+          "type": "object",
+          "properties": {
+            "algorithm": {
+              "const": "SHA-256"
+            },
+            "canonicalization": {
+              "const": "RFC8785"
+            },
+            "scope": {
+              "const": "package_excluding_checksum"
+            },
+            "encoding": {
+              "const": "hex"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "algorithm",
+            "canonicalization",
+            "scope",
+            "encoding",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "export_id",
+        "exported_at",
+        "exported_by",
+        "source",
+        "counts",
+        "checksum"
+      ],
+      "additionalProperties": false
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "scheme": {
+          "type": "object",
+          "properties": {
+            "source_id": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$"
+            },
+            "code": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "title": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "authority": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "scope_note": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "date_created": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+            },
+            "date_updated": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+            },
+            "date_deactivated": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "date_first_used": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$"
+            },
+            "translations": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "propertyNames": {
+                    "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "properties": {
+                      "title": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      },
+                      "description": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "edition": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "date_published": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "classifications": {
+              "type": "array",
+              "maxItems": 10000,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source_id": {
+                    "type": "string",
+                    "pattern": "^[1-9][0-9]{0,18}$"
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "title": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "description": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "authority": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "scope_note": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "date_created": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+                  },
+                  "date_updated": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+                  },
+                  "date_deactivated": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "date_first_used": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "version": {
+                    "type": "string",
+                    "pattern": "^[1-9][0-9]{0,18}$"
+                  },
+                  "translations": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+                        },
+                        "additionalProperties": {
+                          "type": "object",
+                          "minProperties": 1,
+                          "properties": {
+                            "title": {
+                              "type": "string",
+                              "pattern": "\\S"
+                            },
+                            "description": {
+                              "type": "string",
+                              "pattern": "\\S"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "parent_code": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "\\S"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "keywords": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "is_terminal": {
+                    "type": "boolean"
+                  },
+                  "retention_rule": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "source_id": {
+                            "type": "string",
+                            "pattern": "^[1-9][0-9]{0,18}$"
+                          },
+                          "current_period_years": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 2147483647
+                          },
+                          "intermediate_period_years": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 2147483647
+                          },
+                          "final_disposition": {
+                            "enum": [
+                              "destruction",
+                              "transfer_to_external_archive",
+                              "selective_preservation",
+                              "retain_as_local_archives"
+                            ]
+                          },
+                          "instructions": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "date_created": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+                          },
+                          "date_updated": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{6}Z$"
+                          },
+                          "version": {
+                            "type": "string",
+                            "pattern": "^[1-9][0-9]{0,18}$"
+                          }
+                        },
+                        "required": [
+                          "source_id",
+                          "current_period_years",
+                          "intermediate_period_years",
+                          "final_disposition",
+                          "instructions",
+                          "date_created",
+                          "date_updated",
+                          "version"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "source_id",
+                  "code",
+                  "title",
+                  "description",
+                  "authority",
+                  "scope_note",
+                  "date_created",
+                  "date_updated",
+                  "date_deactivated",
+                  "date_first_used",
+                  "version",
+                  "translations",
+                  "parent_code",
+                  "keywords",
+                  "is_terminal",
+                  "retention_rule"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_id",
+            "code",
+            "title",
+            "description",
+            "authority",
+            "scope_note",
+            "date_created",
+            "date_updated",
+            "date_deactivated",
+            "date_first_used",
+            "version",
+            "translations",
+            "edition",
+            "date_published",
+            "classifications"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "scheme"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "package_type",
+    "format_version",
+    "manifest",
+    "data"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

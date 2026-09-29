@@ -21,6 +21,7 @@ async def classification_workspace(
     display_value: Callable, error_message: Callable, entity_metadata_label: Callable,
     localized_disposition_value: Callable, register_page: Callable,
     active: Callable, preferences: dict[str, Any], direction: Callable,
+    can_transfer: bool = False,
     initial_scheme_id: int | None = None,
     initial_classification_id: int | None = None,
 ) -> None:
@@ -395,6 +396,12 @@ async def classification_workspace(
         with browser_host:
             with ui.row().classes("w-full items-center gap-2"):
                 ui.label(render_message("webui.render_workspace_right.label.classification_tree_69593539")).classes("text-lg font-semibold grow")
+                if can_transfer:
+                    from .classification_transfer import import_dialog
+                    def open_import():
+                        revision = workspace["tree_revision"]
+                        import_dialog(api, lambda: current(revision) and workspace["view"] == "tree", refresh_browser, error_message)
+                    ui.button(render_message("classification_transfer.import"), icon="upload", on_click=open_import).props("outline no-caps")
                 ui.button(render_message("webui.select_classification_workspace.button.add_scheme_ff7a6bd6"), icon="add", on_click=create_scheme).props("unelevated no-caps")
                 icon_action("refresh", render_message("webui.render_workspace_right.tooltip.refresh_tree_e83ccdf0"), refresh_browser)
             with ui.row().classes("w-full items-center gap-2 flex-wrap"):
@@ -506,6 +513,10 @@ async def classification_workspace(
                     ui.button(render_message("classification_browser.add_child") if selected else render_message("classification_browser.add_root"), icon="add", on_click=lambda: create_classification(selected, scheme=scheme)).props("outline dense no-caps")
                 if selected is None:
                     ui.button(render_message("webui.render_workspace_right.input.search_this_scheme_8fc08483"), icon="search", on_click=lambda: search_in_scheme(scheme)).props("outline dense no-caps")
+            if selected is None and can_transfer:
+                from .classification_transfer import export_control
+                revision = workspace["tree_revision"]
+                export_control(api, scheme, lambda: current(revision) and workspace["view"] == "scheme" and (workspace["scheme"] or {}).get("id") == scheme["id"], error_message)
             ui.label(render_message("classification_details.actions.lifecycle")).classes("aggregation-action-group-label")
             with ui.row().classes("aggregation-overview-actions w-full"):
                 if selected is None:

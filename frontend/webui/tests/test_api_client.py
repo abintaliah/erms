@@ -1120,3 +1120,19 @@ def test_classification_relationship_search_requests_eligible_partial_matches():
         {'field': field, 'operator': 'contains_ci', 'value': 'part'}
         for field in ('code', 'title', 'description', 'keywords')
     ]}]
+
+
+def test_json_attachment_remains_download_bytes():
+    payload = b'{"package_type":"classification_scheme_export"}'
+    async def handler(request):
+        return httpx.Response(200, content=payload, headers={
+            'Content-Type':'application/json',
+            'Content-Disposition':'attachment; filename="scheme.json"',
+        })
+    async def exercise():
+        client = ErmsApiClient('http://api.test', transport=httpx.MockTransport(handler))
+        try:
+            return await client.request('GET','/api/v1/classification-schemes/1/export', params={'format':'json'})
+        finally:
+            await client.close()
+    assert asyncio.run(exercise()) == payload

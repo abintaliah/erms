@@ -148,7 +148,8 @@ class ErmsApiClient:
             payload = None
         else:
             content_type = response.headers.get("content-type", "")
-            payload = response.json() if "json" in content_type else response.content
+            is_attachment = response.headers.get("content-disposition", "").lower().startswith("attachment")
+            payload = response.json() if "json" in content_type and not is_attachment else response.content
         if with_metadata:
             return {
                 "status_code": response.status_code,
