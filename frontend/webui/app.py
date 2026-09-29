@@ -1894,7 +1894,7 @@ def index(q: str = "") -> None:
         html[dir="rtl"] .q-btn__content { flex-direction: row-reverse; }
         html[dir="rtl"] .erms-nav-link { justify-content: flex-start; text-align: right; }
         html[dir="rtl"] .erms-nav-link .q-btn__content {
-            direction: rtl; flex-direction: row; justify-content: flex-start;
+            direction: rtl; flex-direction: row;
             text-align: right;
         }
         html[dir="rtl"] .erms-nav-link .q-btn__content .block {
@@ -3697,7 +3697,7 @@ def index(q: str = "") -> None:
         drawer_collapsed = not drawer_collapsed
         if drawer_collapsed:
             drawer.props(add="mini")
-            drawer.classes(add="erms-drawer--collapsed")
+            drawer.classes(add="erms-drawer--collapsed p-0")
             drawer_toggle_button.props(
                 remove="aria-label icon",
                 add="aria-label='Expand navigation' icon=chevron_right",
@@ -3711,7 +3711,7 @@ def index(q: str = "") -> None:
                 button.update()
         else:
             drawer.props(remove="mini")
-            drawer.classes(remove="erms-drawer--collapsed")
+            drawer.classes(remove="erms-drawer--collapsed p-0")
             drawer_toggle_button.props(
                 remove="aria-label icon",
                 add="aria-label='Collapse navigation' icon=chevron_left",
