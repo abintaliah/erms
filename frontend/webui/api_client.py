@@ -855,6 +855,10 @@ class ErmsApiClient:
         filters: dict[str, Any] | None = None,
         eligible_classifications: bool = False,
     ) -> dict[str, Any]:
+        # All record/aggregation relationship pickers also match description.
+        # Preserve the caller's primary field for sorting and avoid duplicates.
+        if resource in {"aggregations", "records"}:
+            search_fields = tuple(dict.fromkeys((*search_fields, "description")))
         conditions: list[dict[str, Any]] = [
             {"field": field, "operator": "eq", "value": value}
             for field, value in (filters or {}).items()

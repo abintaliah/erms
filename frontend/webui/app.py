@@ -7198,6 +7198,143 @@ def index(q: str = "") -> None:
         state["recent_created"] = await decorate_for_spec(spec, created)
         state["recent_updated"] = await decorate_for_spec(spec, updated)
 
+    async def browse_advanced_aggregation(target_control: Any) -> None:
+        dialog = ui.dialog()
+        content: Any = None
+        scheme_control: Any = None
+        browser = {"collections": {}, "expanded": set(), "scheme_id": None}
+
+        async def load_collection(path: str, *, append: bool = False) -> None:
+            current = browser["collections"].setdefault(path, {"items": [], "next_cursor": None})
+            page = await api.browse_page(
+                path, cursor=current["next_cursor"] if append else None, limit=50,
+            )
+            current["items"] = [*current["items"], *page["items"]] if append else list(page["items"])
+            current["next_cursor"] = page.get("next_cursor")
+
+        async def toggle_node(kind: str, item: dict[str, Any]) -> None:
+            node = (kind, int(item["id"]))
+            if node in browser["expanded"]:
+                browser["expanded"].remove(node)
+                render_tree()
+                return
+            browser["expanded"].add(node)
+            if kind == "classification":
+                path = (
+                    f"classifications/{item['id']}/aggregations"
+                    if item["is_terminal"] else f"classifications/{item['id']}/children"
+                )
+            else:
+                path = f"aggregations/{item['id']}/children"
+            if path not in browser["collections"]:
+                await load_collection(path)
+            render_tree()
+
+        def select_aggregation(item: dict[str, Any]) -> None:
+            apply_relationship_selection(
+                target_control, item["id"],
+                f"{item['aggregation_number']} · {item['title']}",
+            )
+            dialog.close()
+
+        def render_collection(path: str, kind: str, depth: int) -> None:
+            collection = browser["collections"].get(path, {"items": [], "next_cursor": None})
+            for item in collection["items"]:
+                node_kind = "classification" if kind == "classification" else "aggregation"
+                node = (node_kind, int(item["id"]))
+                expanded = node in browser["expanded"]
+                with ui.column().classes("advanced-relationship-tree-node gap-0"):
+                    with ui.row().classes(
+                        "advanced-relationship-tree-row w-full rounded-lg py-1 pe-2 hover:bg-blue-50"
+                    ):
+                        ui.button(
+                            icon=tree_expander_icon(expanded),
+                            on_click=lambda _, selected=item, selected_kind=node_kind: toggle_node(selected_kind, selected),
+                        ).props("flat round dense size=sm color=blue-grey").classes(
+                            "advanced-relationship-tree-expander"
+                        )
+                        ui.icon(
+                            "schema" if node_kind == "classification" and not item.get("is_terminal")
+                            else "label" if node_kind == "classification" else "folder",
+                            color="primary",
+                        ).classes("advanced-relationship-tree-icon")
+                        with ui.column().classes(
+                            "advanced-relationship-tree-content min-w-0 gap-0"
+                        ):
+                            ui.label(item["title"]).classes("text-sm font-semibold")
+                            ui.label(item.get("code") or item.get("aggregation_number")).classes(
+                                "text-xs text-slate-500"
+                            )
+                        if node_kind == "aggregation":
+                            ui.button(
+                                render_message("webui.render_collection.button.select_c2c58965"), icon="check",
+                                on_click=lambda _, selected=item: select_aggregation(selected),
+                            ).props("flat dense no-caps").classes(
+                                "advanced-relationship-tree-action"
+                            )
+                    if expanded:
+                        child_path = (
+                            f"classifications/{item['id']}/aggregations"
+                            if node_kind == "classification" and item["is_terminal"] else
+                            f"classifications/{item['id']}/children"
+                            if node_kind == "classification" else
+                            f"aggregations/{item['id']}/children"
+                        )
+                        with ui.column().classes(
+                            "advanced-relationship-tree-children w-auto gap-0"
+                        ):
+                            render_collection(
+                                child_path,
+                                "aggregation" if node_kind == "aggregation" or item.get("is_terminal") else "classification",
+                                depth + 1,
+                            )
+            if collection.get("next_cursor"):
+                async def load_more(collection_path: str = path) -> None:
+                    await load_collection(collection_path, append=True)
+                    render_tree()
+                ui.button(
+                    render_message("webui.render_collection.button.load_more_755f4879"),
+                    icon="more_horiz", on_click=load_more,
+                ).props("flat dense no-caps").classes("self-start ms-8")
+
+        def render_tree() -> None:
+            content.clear()
+            with content:
+                scheme_id = browser.get("scheme_id")
+                if scheme_id is None:
+                    ui.label(render_message("webui.render_tree.label.choose_a_classification_scheme_20386596")).classes("text-sm text-slate-500 py-6 self-center")
+                    return
+                render_collection(f"classification-schemes/{scheme_id}/roots", "classification", 0)
+
+        async def select_scheme(scheme_id: int | None) -> None:
+            if scheme_id is None:
+                return
+            browser.update(scheme_id=int(scheme_id), collections={}, expanded=set())
+            await load_collection(f"classification-schemes/{scheme_id}/roots")
+            render_tree()
+
+        with dialog, ui.card().classes("w-[760px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)]"):
+            with ui.row().classes("w-full items-center"):
+                ui.label(render_message("webui.browse_advanced_aggregation.label.browse_classification_and_aggregation_hier_26704b25")).classes("text-xl font-semibold")
+                ui.space(); ui.button(icon="close", on_click=dialog.close).props("flat round")
+            scheme_control = ui.select({}, label=render_message("webui.browse_advanced_aggregation.select.classification_scheme_84f93d50")).props("outlined dense options-dense use-input input-debounce=0").classes("w-full")
+            bind_remote_scheme_select(scheme_control)
+            content = ui.column().classes("w-full gap-2 overflow-y-auto max-h-[calc(100vh-150px)]")
+        dialog.open()
+        try:
+            schemes = await api.browse_schemes()
+            scheme_control.options = {item["id"]: f"{item['code']} — {item['title']}" for item in schemes}
+            scheme_control.update()
+            if schemes:
+                scheme_control.value = schemes[0]["id"]
+                scheme_control.update()
+                await select_scheme(schemes[0]["id"])
+            else:
+                render_tree()
+        except ApiError as error:
+            dialog.close(); ui.notify(error_message(error), color="negative", close_button=True)
+        scheme_control.on_value_change(lambda event: select_scheme(event.value))
+
     async def open_record_draft_editor(
         target_aggregation_id: int | None = None, on_committed=None,
     ) -> None:
@@ -7389,6 +7526,11 @@ def index(q: str = "") -> None:
                             ("aggregation_number", "title"),
                             aggregation_field.lookup_label_fields,
                         )
+                        ui.button(
+                            render_message("webui.show_memberships.button.browse_aed12689"),
+                            icon="account_tree",
+                            on_click=lambda: browse_advanced_aggregation(controls["aggregation_id"]),
+                        ).props("flat dense no-caps").classes("col-span-2 justify-self-start")
                     if target_aggregation_id is not None:
                         # Read-only keeps the selected parent visible in the
                         # form. Saving is independently guarded by binding the
@@ -17612,143 +17754,6 @@ def index(q: str = "") -> None:
                 await show_schemes()
             except ApiError as error:
                 dialog.close(); ui.notify(error_message(error), color="negative", close_button=True)
-
-        async def browse_advanced_aggregation(target_control: Any) -> None:
-            dialog = ui.dialog()
-            content: Any = None
-            scheme_control: Any = None
-            browser = {"collections": {}, "expanded": set(), "scheme_id": None}
-
-            async def load_collection(path: str, *, append: bool = False) -> None:
-                current = browser["collections"].setdefault(path, {"items": [], "next_cursor": None})
-                page = await api.browse_page(
-                    path, cursor=current["next_cursor"] if append else None, limit=50,
-                )
-                current["items"] = [*current["items"], *page["items"]] if append else list(page["items"])
-                current["next_cursor"] = page.get("next_cursor")
-
-            async def toggle_node(kind: str, item: dict[str, Any]) -> None:
-                node = (kind, int(item["id"]))
-                if node in browser["expanded"]:
-                    browser["expanded"].remove(node)
-                    render_tree()
-                    return
-                browser["expanded"].add(node)
-                if kind == "classification":
-                    path = (
-                        f"classifications/{item['id']}/aggregations"
-                        if item["is_terminal"] else f"classifications/{item['id']}/children"
-                    )
-                else:
-                    path = f"aggregations/{item['id']}/children"
-                if path not in browser["collections"]:
-                    await load_collection(path)
-                render_tree()
-
-            def select_aggregation(item: dict[str, Any]) -> None:
-                apply_relationship_selection(
-                    target_control, item["id"],
-                    f"{item['aggregation_number']} · {item['title']}",
-                )
-                dialog.close()
-
-            def render_collection(path: str, kind: str, depth: int) -> None:
-                collection = browser["collections"].get(path, {"items": [], "next_cursor": None})
-                for item in collection["items"]:
-                    node_kind = "classification" if kind == "classification" else "aggregation"
-                    node = (node_kind, int(item["id"]))
-                    expanded = node in browser["expanded"]
-                    with ui.column().classes("advanced-relationship-tree-node gap-0"):
-                        with ui.row().classes(
-                            "advanced-relationship-tree-row w-full rounded-lg py-1 pe-2 hover:bg-blue-50"
-                        ):
-                            ui.button(
-                                icon=tree_expander_icon(expanded),
-                                on_click=lambda _, selected=item, selected_kind=node_kind: toggle_node(selected_kind, selected),
-                            ).props("flat round dense size=sm color=blue-grey").classes(
-                                "advanced-relationship-tree-expander"
-                            )
-                            ui.icon(
-                                "schema" if node_kind == "classification" and not item.get("is_terminal")
-                                else "label" if node_kind == "classification" else "folder",
-                                color="primary",
-                            ).classes("advanced-relationship-tree-icon")
-                            with ui.column().classes(
-                                "advanced-relationship-tree-content min-w-0 gap-0"
-                            ):
-                                ui.label(item["title"]).classes("text-sm font-semibold")
-                                ui.label(item.get("code") or item.get("aggregation_number")).classes(
-                                    "text-xs text-slate-500"
-                                )
-                            if node_kind == "aggregation":
-                                ui.button(
-                                    render_message("webui.render_collection.button.select_c2c58965"), icon="check",
-                                    on_click=lambda _, selected=item: select_aggregation(selected),
-                                ).props("flat dense no-caps").classes(
-                                    "advanced-relationship-tree-action"
-                                )
-                        if expanded:
-                            child_path = (
-                                f"classifications/{item['id']}/aggregations"
-                                if node_kind == "classification" and item["is_terminal"] else
-                                f"classifications/{item['id']}/children"
-                                if node_kind == "classification" else
-                                f"aggregations/{item['id']}/children"
-                            )
-                            with ui.column().classes(
-                                "advanced-relationship-tree-children w-auto gap-0"
-                            ):
-                                render_collection(
-                                    child_path,
-                                    "aggregation" if node_kind == "aggregation" or item.get("is_terminal") else "classification",
-                                    depth + 1,
-                                )
-                if collection.get("next_cursor"):
-                    async def load_more(collection_path: str = path) -> None:
-                        await load_collection(collection_path, append=True)
-                        render_tree()
-                    ui.button(
-                        render_message("webui.render_collection.button.load_more_755f4879"),
-                        icon="more_horiz", on_click=load_more,
-                    ).props("flat dense no-caps").classes("self-start ms-8")
-
-            def render_tree() -> None:
-                content.clear()
-                with content:
-                    scheme_id = browser.get("scheme_id")
-                    if scheme_id is None:
-                        ui.label(render_message("webui.render_tree.label.choose_a_classification_scheme_20386596")).classes("text-sm text-slate-500 py-6 self-center")
-                        return
-                    render_collection(f"classification-schemes/{scheme_id}/roots", "classification", 0)
-
-            async def select_scheme(scheme_id: int | None) -> None:
-                if scheme_id is None:
-                    return
-                browser.update(scheme_id=int(scheme_id), collections={}, expanded=set())
-                await load_collection(f"classification-schemes/{scheme_id}/roots")
-                render_tree()
-
-            with dialog, ui.card().classes("w-[760px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)]"):
-                with ui.row().classes("w-full items-center"):
-                    ui.label(render_message("webui.browse_advanced_aggregation.label.browse_classification_and_aggregation_hier_26704b25")).classes("text-xl font-semibold")
-                    ui.space(); ui.button(icon="close", on_click=dialog.close).props("flat round")
-                scheme_control = ui.select({}, label=render_message("webui.browse_advanced_aggregation.select.classification_scheme_84f93d50")).props("outlined dense options-dense use-input input-debounce=0").classes("w-full")
-                bind_remote_scheme_select(scheme_control)
-                content = ui.column().classes("w-full gap-2 overflow-y-auto max-h-[calc(100vh-150px)]")
-            dialog.open()
-            try:
-                schemes = await api.browse_schemes()
-                scheme_control.options = {item["id"]: f"{item['code']} — {item['title']}" for item in schemes}
-                scheme_control.update()
-                if schemes:
-                    scheme_control.value = schemes[0]["id"]
-                    scheme_control.update()
-                    await select_scheme(schemes[0]["id"])
-                else:
-                    render_tree()
-            except ApiError as error:
-                dialog.close(); ui.notify(error_message(error), color="negative", close_button=True)
-            scheme_control.on_value_change(lambda event: select_scheme(event.value))
 
         async def browse_advanced_relationship(field_name: str, target_control: Any) -> None:
             if field_name == "classification_id":
