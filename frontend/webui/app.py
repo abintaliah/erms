@@ -1900,6 +1900,32 @@ def index(q: str = "") -> None:
             left: auto; right: 0; transform-origin: right top;
         }
         html[dir="rtl"] .q-btn__content { flex-direction: row-reverse; }
+        /* Detail action groups must wrap from the reading start. NiceGUI Row
+           offers wrap/align_items, not direction; grids cannot preserve these
+           variable-width, wrapping groups. Live RTL inspection confirmed that
+           the legacy .row rule double-reverses the inherited direction. Scope
+           this correction to action panels, including their button contents;
+           identity-header Back/Favourite/Preview groups remain independent. */
+        html[dir="rtl"] :is(.record-command-controls, .identity-command-actions,
+            .aggregation-actions-panel, .aggregation-hold-controls) .nicegui-row,
+        html[dir="rtl"] .detail-action-row,
+        html[dir="rtl"] :is(.record-command-controls, .identity-command-actions,
+            .aggregation-actions-panel, .aggregation-hold-controls,
+            .hold-command-actions, .detail-action-row) .q-btn__content {
+            flex-direction: row;
+        }
+        /* Quasar's on-left/on-right icon spacing is physical in this build.
+           Preserve its 6px separation at the logical end/start after mirroring. */
+        html[dir="rtl"] :is(.record-command-controls, .identity-command-actions,
+            .aggregation-actions-panel, .aggregation-hold-controls,
+            .hold-command-actions, .detail-action-row) .q-btn__content > .q-icon.on-left {
+            margin-right: 0; margin-left: 6px;
+        }
+        html[dir="rtl"] :is(.record-command-controls, .identity-command-actions,
+            .aggregation-actions-panel, .aggregation-hold-controls,
+            .hold-command-actions, .detail-action-row) .q-btn__content > .q-icon.on-right {
+            margin-left: 0; margin-right: 6px;
+        }
         html[dir="rtl"] .erms-nav-link { justify-content: flex-start; text-align: right; }
         html[dir="rtl"] .erms-nav-link .q-btn__content {
             direction: rtl; flex-direction: row;
@@ -2794,30 +2820,6 @@ def index(q: str = "") -> None:
             white-space: nowrap; border-radius: 8px; background: rgba(255,255,255,.62);
             padding: 7px 9px; color: #536b7f; font-size: .75rem;
         }
-        .aggregation-browser-retention-source {
-            display: flex; align-items: center; gap: 6px; color: #4f46e5;
-            font-size: .75rem; font-weight: 650;
-        }
-        .aggregation-browser-retention-facts {
-            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px; width: 100%;
-        }
-        .aggregation-browser-retention-fact {
-            min-width: 0; padding: 10px; border: 1px solid #dbe8f2;
-            border-radius: 10px; background: #f8fbfd; text-align: start;
-        }
-        .aggregation-browser-retention-fact-icon {
-            width: 26px; height: 26px; flex: 0 0 26px; border-radius: 999px;
-            background: #e2f2fc; color: var(--erms-blue);
-        }
-        .aggregation-browser-retention-fact-label {
-            color: #7b899a; font-size: .64rem; font-weight: 750;
-            letter-spacing: .035em; line-height: 1.2;
-        }
-        .aggregation-browser-retention-fact-value {
-            color: #243247; font-size: .9rem; font-weight: 700;
-            line-height: 1.35; overflow-wrap: anywhere;
-        }
         .record-command-layout {
             display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(330px, .72fr);
             align-items: start; gap: 12px;
@@ -2878,7 +2880,6 @@ def index(q: str = "") -> None:
             .hold-held-item-filter-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 600px) {
-            .aggregation-browser-retention-facts { grid-template-columns: minmax(0, 1fr); }
             .hold-summary-facts { grid-template-columns: minmax(0, 1fr); }
             .hold-held-item-filter-primary,
             .hold-held-item-filter-secondary { grid-template-columns: minmax(0, 1fr); }
@@ -6803,18 +6804,23 @@ def index(q: str = "") -> None:
                 with ui.row().classes("w-full items-center px-5 py-3 border-b border-slate-100"):
                     ui.icon("description", color="primary", size="21px")
                     ui.label(render_message("webui.select_record_details.label.record_details_4a7ba94d")).classes("font-semibold")
-                with ui.row().classes(f"w-full {RECORD_DETAIL_HEADER_CLASSES} gap-3 px-5 py-5"):
+                record_preview_available = (
+                    record.get("medium") != "physical"
+                    and capabilities.get("view_component")
+                    and any(component_is_previewable(item) for item in record_components)
+                )
+                with ui.grid(columns="auto minmax(0, 1fr) auto").classes(
+                    f"record-detail-identity-header w-full {RECORD_DETAIL_HEADER_CLASSES} gap-3 px-5 py-5"
+                ):
                     ui.avatar(icon="description", color="blue-1", text_color="primary", size="52px")
                     with ui.column().classes(RECORD_DETAIL_TITLE_CLASSES):
                         ui.label(record["record_number"]).classes("text-xs text-primary font-semibold")
                         ui.label(record["title"]).classes("text-lg font-semibold break-words")
-                    with ui.row().classes("items-center no-wrap gap-2 flex-none"):
+                    with ui.grid(
+                        columns=f"repeat({3 if record_preview_available else 2}, max-content)"
+                    ).classes("record-detail-header-actions items-center gap-2"):
                         favourite_button("records", record["id"])
-                        if (
-                            record.get("medium") != "physical"
-                            and capabilities.get("view_component")
-                            and any(component_is_previewable(item) for item in record_components)
-                        ):
+                        if record_preview_available:
                             ui.button(
                                 icon="visibility",
                                 on_click=lambda: preview_record_components(record),
@@ -6822,8 +6828,13 @@ def index(q: str = "") -> None:
                                 "flat round dense color=primary aria-label='" + render_message("webui.select_record_details.accessible_name.preview_digital_components_d68f8cab") + "'"
                             ).tooltip(render_message("webui.select_record_details.tooltip.preview_digital_components_b4905386"))
                         ui.button(
-                            render_message("webui.select_record_details.button.back_f6cea7ff"), icon="arrow_back", on_click=leave_record_page,
-                        ).props("flat no-caps color=blue-grey-8")
+                            render_message("webui.select_record_details.button.back_f6cea7ff"),
+                            icon=None if current_direction["value"] == "rtl" else "arrow_back",
+                            on_click=leave_record_page,
+                        ).props(
+                            "flat no-caps color=blue-grey-8"
+                            + (" icon-right=arrow_forward" if current_direction["value"] == "rtl" else "")
+                        )
                     if capabilities.get("change_security_level"):
                         with record_security_actions:
                             ui.button(
@@ -9385,15 +9396,25 @@ def index(q: str = "") -> None:
                             ui.label(render_message("webui.open_aggregation.label.aggregation_overview_bb8398e3"))
                             ui.space()
                             ui.badge(render_message("webui.open_aggregation.badge.closed_30c24826") if closure else render_message("webui.open_aggregation.badge.open_88407b0f"), color="amber-8" if closure else "positive").props("outline")
-                        with ui.row().classes("w-full items-center gap-3 no-wrap"):
+                        with ui.grid(columns="auto minmax(0, 1fr) auto").classes(
+                            "aggregation-detail-identity-header w-full items-center gap-3"
+                        ):
                             ui.avatar(icon="folder", color="primary", text_color="white")
                             with ui.column().classes("gap-0 grow min-w-0"):
                                 ui.label(current["aggregation_number"]).classes("text-xs text-primary font-semibold")
                                 ui.label(current["title"]).classes("text-lg font-semibold break-words")
-                            favourite_button("aggregations", current["id"])
-                            ui.button(
-                                render_message("webui.open_aggregation.button.back_4d496e53"), icon="arrow_back", on_click=leave_aggregation_page,
-                            ).props("flat dense no-caps")
+                            with ui.grid(columns="repeat(2, max-content)").classes(
+                                "aggregation-detail-header-actions items-center gap-2"
+                            ):
+                                favourite_button("aggregations", current["id"])
+                                ui.button(
+                                    render_message("webui.open_aggregation.button.back_4d496e53"),
+                                    icon=None if current_direction["value"] == "rtl" else "arrow_back",
+                                    on_click=leave_aggregation_page,
+                                ).props(
+                                    "flat dense no-caps"
+                                    + (" icon-right=arrow_forward" if current_direction["value"] == "rtl" else "")
+                                )
                         if closure:
                             with ui.row().classes(
                                 "detail-status-notice w-full items-center gap-3 rounded-xl border border-amber-200 "
@@ -13030,7 +13051,7 @@ def index(q: str = "") -> None:
 
         browse: dict[str, Any] = state.setdefault("aggregation_browse", {
             "schemes": [], "scheme_id": None, "collections": {},
-            "expanded": set(), "selected": None, "selected_item": None,
+            "expanded": set(), "selected": None,
             "revision": 0,
         })
 
@@ -13044,8 +13065,21 @@ def index(q: str = "") -> None:
                 "request_version": 0,
             })
 
+        # Data belongs to this authenticated page invocation. Keep expansion,
+        # filters and page lengths for return, but re-read rows after navigation.
+        invocation = object()
+        browse["invocation"] = invocation
+        browse["opening"] = False
+
+        def browser_active() -> bool:
+            return (
+                browse.get("invocation") is invocation
+                and state.get("resource") == "aggregations"
+                and state.get("aggregation_mode") == "browse"
+                and tree_panel is not None and not tree_panel.is_deleted
+            )
+
         tree_panel: Any = None
-        detail_panel: Any = None
         scheme_select: Any = None
 
         async def render_tree_preserving_scroll(*, anchor_id: str | None = None) -> None:
@@ -13053,11 +13087,15 @@ def index(q: str = "") -> None:
                 f"document.getElementById('{anchor_id}')?.getBoundingClientRect().top ?? null"
                 if anchor_id else "null"
             )
+            if not browser_active():
+                return
             scroll_position = await page_client.run_javascript(
                 "({ page: window.scrollY || 0, "
                 "tree: document.getElementById('aggregation-browser-tree')?.scrollTop || 0, "
                 f"anchor: {anchor_expression} }})"
             )
+            if not browser_active():
+                return
             render_tree()
             anchor_top = (scroll_position or {}).get("anchor")
             anchor_top_javascript = "null" if anchor_top is None else str(float(anchor_top))
@@ -13076,174 +13114,30 @@ def index(q: str = "") -> None:
                 "}));"
             )
 
-        async def restore_page_scroll(scroll_top: float | int | None) -> None:
-            await page_client.run_javascript(
-                "requestAnimationFrame(() => requestAnimationFrame(() => "
-                f"window.scrollTo(0, {float(scroll_top or 0)})));"
-            )
-
-        def render_detail_content(
-            item: dict[str, Any] | None, retention: dict[str, Any] | None = None,
-            *, loading_retention: bool = False,
-        ) -> None:
-            detail_panel.clear()
-            with detail_panel:
-                def detail_value(label: str, value: Any, *, timestamp: bool = False) -> None:
-                    with ui.column().classes("gap-0 min-w-0"):
-                        ui.label(label.upper()).classes("component-meta-label")
-                        ui.label(
-                            format_timestamp(value) if timestamp else display_value(value)
-                        ).classes("text-sm text-slate-700")
-
-                if item is None:
-                    with ui.column().classes("w-full h-full items-center justify-center gap-2 text-slate-400"):
-                        ui.icon("touch_app", size="42px")
-                        ui.label(render_message("webui.render_detail_content.label.select_an_aggregation_or_record_to_see_its_357a0fb1"))
-                    return
-                is_aggregation = item["type"] == "aggregation"
-                icon = "folder" if is_aggregation else "description"
-                number = item["aggregation_number"] if is_aggregation else item["record_number"]
-                with ui.row().classes("w-full items-start gap-3 no-wrap"):
-                    ui.avatar(icon=icon, color="blue-1", text_color="primary")
-                    with ui.column().classes("grow min-w-0 gap-0"):
-                        ui.label(item["title"]).classes("text-xl font-semibold whitespace-normal")
-                        ui.label(number).classes("text-sm font-medium text-primary")
-                    if is_aggregation and item.get("date_closed"):
-                        ui.badge(render_message("webui.render_detail_content.badge.closed_a5e8b91f"), color="amber-8").props("outline")
-                if item.get("description"):
-                    ui.label(item["description"]).classes(
-                        "w-full max-h-28 overflow-y-auto rounded-lg bg-slate-50 p-3 "
-                        "text-sm leading-6 text-slate-600 whitespace-pre-wrap"
-                    )
-                with ui.element("div").classes("hold-held-item-filter-secondary w-full"):
-                    detail_value("Medium", medium_label(item.get("medium")))
-                    detail_value("Vital status", "Vital" if item.get("is_vital") else "Contains vital resources" if item.get("has_vital_descendants") else "Not vital")
-                    detail_value("Review", review_display(item.get("date_of_next_review")))
-                    for location_kind, label in (("assigned", "Assigned location"), ("current", "Current location")):
-                        value = item.get(f"effective_{location_kind}_location") or render_message("webui.render_detail_content.text.unknown_d3c1ce73")
-                        source_id = item.get(f"effective_{location_kind}_location_source_aggregation_id")
-                        source = (item.get("_location_sources") or {}).get(source_id)
-                        source_text = ""
-                        if source_id == item.get("id") and is_aggregation:
-                            source_text = render_message("webui.render_detail_content.text.set_here_1d585734")
-                        elif source:
-                            source_text = render_message("webui.render_detail_content.text.inherited_from_aggregation_number_title_00829b69", aggregation_number=source['aggregation_number'], title=source['title'])
-                        elif source_id:
-                            source_text = render_message("webui.render_detail_content.text.inherited_from_aggregation_source_id_ed94bee8", source_id=source_id)
-                        visible_label = label if is_aggregation else f"Inherited {label.lower()}"
-                        detail_value(visible_label, f"{value}{source_text}")
-                    if is_aggregation:
-                        detail_value("Created", item.get("date_created"), timestamp=True)
-                        detail_value("Opened", item.get("date_opened"), timestamp=True)
-                        detail_value("Child aggregations", item.get("child_aggregation_count", 0))
-                        detail_value("Records", item.get("record_count", 0))
-                        if item.get("classification_code"):
-                            detail_value(
-                                "Classification",
-                                f"{item['classification_code']} — {item['classification_title']}",
-                            )
-                    else:
-                        detail_value("Originated", item.get("date_originated"), timestamp=True)
-                        detail_value("Created", item.get("date_created"), timestamp=True)
-                        detail_value("Digital components", item.get("digital_component_count", 0))
-                        detail_value(
-                            "Containing aggregation",
-                            f"{item['aggregation_number']} — {item['aggregation_title']}",
-                        )
-                if is_aggregation:
-                    ui.separator()
-                    ui.label(render_message("webui.render_detail_content.label.effective_retention_rule_d14a3565")).classes("font-semibold")
-                    if loading_retention:
-                        with ui.row().classes("items-center gap-2 text-sm text-slate-500"):
-                            ui.spinner("dots", size="20px")
-                            ui.label(render_message("webui.render_detail_content.label.loading_retention_information_0c61089c"))
-                    elif retention:
-                        source = render_message("webui.render_detail_content.text.local_aggregation_override_7185c566") if retention.get("rule_source") == "aggregation" else render_message("webui.render_detail_content.text.inherited_from_classification_1708e778")
-                        with ui.row().classes("aggregation-browser-retention-source w-full no-wrap"):
-                            ui.icon("account_tree", size="15px")
-                            ui.label(source)
-                        with ui.element("div").classes("aggregation-browser-retention-facts"):
-                            retention_facts = (
-                                (
-                                    "schedule",
-                                    entity_metadata_label("Current retention (years)"),
-                                    render_message("common.duration.years", count=retention["current_period_years"]),
-                                ),
-                                (
-                                    "inventory_2",
-                                    entity_metadata_label("Intermediate retention (years)"),
-                                    render_message("common.duration.years", count=retention["intermediate_period_years"]),
-                                ),
-                                (
-                                    "outlined_flag",
-                                    entity_metadata_label("Final disposition"),
-                                    localized_disposition_value(retention["final_disposition"]),
-                                ),
-                            )
-                            for fact_icon, fact_label, fact_value in retention_facts:
-                                with ui.column().classes("aggregation-browser-retention-fact gap-2"):
-                                    with ui.row().classes("items-center gap-2 no-wrap"):
-                                        with ui.element("span").classes(
-                                            "aggregation-browser-retention-fact-icon flex items-center justify-center"
-                                        ):
-                                            ui.icon(fact_icon, size="16px")
-                                        ui.label(fact_label).classes(
-                                            "aggregation-browser-retention-fact-label"
-                                        )
-                                    ui.label(fact_value).classes(
-                                        "aggregation-browser-retention-fact-value"
-                                    )
-                    else:
-                        ui.label(render_message("webui.render_detail_content.label.no_effective_retention_rule_is_available_4d243b93")).classes("text-sm text-slate-400")
-
-                async def open_selected() -> None:
-                    try:
-                        if is_aggregation:
-                            await open_aggregation(await api.get("aggregations", item["id"]))
-                        else:
-                            await show_record_details(await api.get("records", item["id"]))
-                    except ApiError as error:
-                        ui.notify(error_message(error), color="negative", close_button=True)
-
-                with ui.row().classes("w-full justify-end mt-auto"):
-                    ui.button(
-                        render_message("webui.render_detail_content.button.open_aggregation_b78f84c7") if is_aggregation else render_message("webui.render_detail_content.button.open_record_2cdef6ca"),
-                        icon="open_in_new", on_click=open_selected,
-                    ).props("unelevated no-caps color=primary")
-
         async def select_browse_item(item: dict[str, Any]) -> None:
-            page_scroll_top = await page_client.run_javascript("window.scrollY || 0")
-            source_ids = {
-                item.get("effective_assigned_location_source_aggregation_id"),
-                item.get("effective_current_location_source_aggregation_id"),
-            } - {None, item.get("id") if item.get("type") == "aggregation" else None}
-            location_sources = {}
-            for source_id in source_ids:
-                try:
-                    location_sources[source_id] = await api.get("aggregations", source_id)
-                except ApiError:
-                    pass
-            item = {**item, "_location_sources": location_sources}
-            browse["selected"] = (item["type"], item["id"])
-            browse["selected_item"] = item
-            render_detail_content(item, loading_retention=item["type"] == "aggregation")
-            await restore_page_scroll(page_scroll_top)
-            if item["type"] == "aggregation":
-                try:
-                    retention = await api.effective_retention_rule(item["id"])
-                except ApiError as error:
-                    retention = None
-                    if error.status_code not in {404, 409}:
-                        ui.notify(error_message(error), color="negative", close_button=True)
-                if browse.get("selected") == (item["type"], item["id"]):
-                    render_detail_content(item, retention)
-                    await restore_page_scroll(page_scroll_top)
+            if not browser_active() or browse.get("opening"):
+                return
+            browse["opening"] = True
+            try:
+                browse["scroll"] = await page_client.run_javascript(
+                    "({page: window.scrollY || 0, tree: "
+                    "document.getElementById('aggregation-browser-tree')?.scrollTop || 0})"
+                )
+                if not browser_active():
+                    return
+                browse["selected"] = (item["type"], item["id"])
+                if item["type"] == "aggregation":
+                    await open_aggregation(item)
+                else:
+                    await show_record_details(item)
+            finally:
+                browse["opening"] = False
 
         async def load_collection(
             key: str, *, append: bool = False, render: bool = True,
         ) -> None:
             current = browse["collections"].get(key)
-            if current is None or current["loading"]:
+            if not browser_active() or current is None or current["loading"]:
                 return
             append_anchor_id = (
                 browse_item_dom_id(current["items"][-1])
@@ -13263,7 +13157,8 @@ def index(q: str = "") -> None:
                     query=current["query"],
                 )
                 if (
-                    current["request_version"] != request_version
+                    not browser_active()
+                    or current["request_version"] != request_version
                     or browse["collections"].get(key) is not current
                 ):
                     return
@@ -13274,10 +13169,10 @@ def index(q: str = "") -> None:
                 current["total"] = int(result["total"])
                 current["loaded"] = True
             except ApiError as error:
-                if current["request_version"] == request_version:
+                if browser_active() and current["request_version"] == request_version:
                     current["error"] = error_message(error)
             finally:
-                if current["request_version"] == request_version:
+                if browser_active() and current["request_version"] == request_version:
                     current["loading"] = False
                     if render:
                         await render_tree_preserving_scroll(anchor_id=append_anchor_id)
@@ -13403,14 +13298,19 @@ def index(q: str = "") -> None:
             with ui.row().props(f"id={browse_item_dom_id(item)}").classes(
                 "aggregation-browser-tree-row w-full items-center no-wrap rounded-lg py-1 pe-2 hover:bg-blue-50"
             ).style(f"padding-inline-start: {depth * 20 + 4}px"):
-                ui.button(
+                disclosure = ui.button(
                     icon=tree_expander_icon(expanded),
                     on_click=lambda: toggle_classification(item),
                 ).props("flat round dense size=sm color=blue-grey")
+                disclosure.props["aria-label"] = item["title"]
+                disclosure.props["aria-expanded"] = str(expanded).lower()
                 ui.icon("label" if item["is_terminal"] else "schema", color="primary").classes("w-6")
-                with ui.column().classes("grow min-w-0 gap-0"):
-                    ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
-                    ui.label(item["code"]).classes("text-xs text-slate-400")
+                with ui.button(on_click=lambda: toggle_classification(item)).props(
+                    f"flat no-caps align={'right' if current_direction['value'] == 'rtl' else 'left'}"
+                ).classes("aggregation-browser-node-link grow min-w-0"):
+                    with ui.column().classes("min-w-0 gap-0 text-start"):
+                        ui.label(item["title"]).classes("text-sm font-semibold whitespace-normal break-words")
+                        ui.label(item["code"]).classes("text-xs text-slate-400")
                 ui.badge(render_message("webui.render_classification.badge.terminal_c550b780") if item["is_terminal"] else render_message("webui.render_classification.badge.branch_dd50f161"), color="primary").props("outline")
             if not expanded:
                 return
@@ -13445,23 +13345,33 @@ def index(q: str = "") -> None:
                 has_content = item["child_aggregation_count"] or item["record_count"]
                 with ui.element("div").classes("w-8 shrink-0"):
                     if has_content:
-                        ui.button(
+                        disclosure = ui.button(
                             icon=tree_expander_icon(expanded),
                             on_click=lambda: toggle_aggregation(item),
                         ).props("flat round dense size=sm color=blue-grey")
+                        disclosure.props["aria-label"] = item["title"]
+                        disclosure.props["aria-expanded"] = str(expanded).lower()
                 ui.icon("folder", color="primary").classes("w-6")
-                with ui.column().classes("grow min-w-0 gap-0 cursor-pointer").on(
-                    "click", lambda: select_browse_item(item)
-                ):
-                    ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
-                    ui.label(item["aggregation_number"]).classes("text-xs text-slate-400")
-                if item.get("date_closed"):
-                    ui.badge(render_message("webui.render_aggregation.badge.closed_d0d85ac9"), color="amber-8").props("outline")
+                with ui.button(on_click=lambda: select_browse_item(item)).props(
+                    f"flat no-caps align={'right' if current_direction['value'] == 'rtl' else 'left'}"
+                ).classes("aggregation-browser-node-link grow min-w-0"):
+                    with ui.column().classes("min-w-0 gap-0 text-start"):
+                        ui.label(item["title"]).classes("text-sm font-semibold whitespace-normal break-words")
+                        ui.label(item["aggregation_number"]).classes("text-xs text-slate-400")
+                ui.label(render_message(
+                    "webui.render_aggregation.label.heading_count_6ad646b7",
+                    heading=render_message("navigation.item.records"), count=item["record_count"],
+                )).classes("text-xs text-slate-400 shrink-0")
+                ui.badge(
+                    render_message("webui.render_aggregation.badge.closed_d0d85ac9")
+                    if item.get("date_closed") else render_message("webui.open_aggregation.badge.open_88407b0f"),
+                    color="amber-8" if item.get("date_closed") else "positive",
+                ).props("outline")
             if not expanded:
                 return
             for collection, heading, noun, empty in (
-                ("aggregations", "CHILD AGGREGATIONS", "child aggregations", "No child aggregations"),
-                ("records", "RECORDS", "records", "No records in this aggregation"),
+                ("aggregations", render_message("webui.open_aggregation.label.child_aggregations_cd3bce3a"), "child aggregations", "No child aggregations"),
+                ("records", render_message("navigation.item.records"), "records", "No records in this aggregation"),
             ):
                 count = item["child_aggregation_count"] if collection == "aggregations" else item["record_count"]
                 if not count:
@@ -13487,13 +13397,14 @@ def index(q: str = "") -> None:
             with ui.row().props(f"id={browse_item_dom_id(item)}").classes(
                 "aggregation-browser-tree-row w-full items-center no-wrap rounded-lg py-2 pe-2 hover:bg-blue-50 cursor-pointer "
                 + ("bg-blue-50" if selected else "")
-            ).style(f"padding-inline-start: {depth * 20 + 40}px").on(
-                "click", lambda: select_browse_item(item)
-            ):
-                ui.icon("description", color="blue-grey").classes("w-6")
-                with ui.column().classes("grow min-w-0 gap-0"):
-                    ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
-                    ui.label(item["record_number"]).classes("text-xs text-slate-400")
+            ).style(f"padding-inline-start: {depth * 20 + 40}px"):
+                ui.icon("description", color="primary", size="18px").classes("w-6")
+                with ui.button(on_click=lambda: select_browse_item(item)).props(
+                    f"flat no-caps align={'right' if current_direction['value'] == 'rtl' else 'left'}"
+                ).classes("aggregation-browser-node-link grow min-w-0"):
+                    with ui.column().classes("min-w-0 gap-0 text-start"):
+                        ui.label(item["title"]).classes("text-sm font-semibold whitespace-normal break-words")
+                        ui.label(item["record_number"]).classes("text-xs text-slate-400")
                 if item["digital_component_count"]:
                     ui.badge(str(item["digital_component_count"]), color="blue-grey").props("outline")
 
@@ -13523,15 +13434,41 @@ def index(q: str = "") -> None:
             browse["revision"] += 1
             browse.update(
                 scheme_id=int(scheme_id), collections={}, expanded=set(),
-                selected=None, selected_item=None,
+                selected=None,
             )
-            render_detail_content(None)
             key = collection_key("scheme", int(scheme_id), "classifications")
             collection_state(key, f"classification-schemes/{scheme_id}/roots")
             await load_collection(key)
 
+        async def reload_visible_collections() -> None:
+            async def reload_collection(key: str, current: dict[str, Any]) -> None:
+                count = len(current["items"])
+                current["loading"] = False
+                current["request_version"] += 1
+                await load_collection(key, render=False)
+                while (
+                    browser_active() and not current["error"]
+                    and current["next_cursor"] and len(current["items"]) < count
+                ):
+                    await load_collection(key, append=True, render=False)
+            await asyncio.gather(*(
+                reload_collection(key, current)
+                for key, current in list(browse["collections"].items())
+                if current["loaded"] or current["loading"] or current["error"]
+            ))
+            if not browser_active():
+                return
+            render_tree()
+            scroll = browse.get("scroll") or {}
+            await page_client.run_javascript(
+                "requestAnimationFrame(() => { const tree = "
+                "document.getElementById('aggregation-browser-tree'); "
+                f"if (tree) tree.scrollTop = {float(scroll.get('tree', 0))}; "
+                f"window.scrollTo(0, {float(scroll.get('page', 0))}); }})"
+            )
+
         with table_container:
-            with ui.row().classes("w-full items-end gap-3 px-5 pt-5"):
+            with ui.grid(columns="minmax(0, 1fr) auto").classes("w-full items-end gap-3 px-5 pt-5"):
                 scheme_select = ui.select(
                     {}, label=render_message("webui.select_aggregation_browser.select.classification_scheme_bcbbfb3c"),
                 ).props("outlined dense options-dense use-input input-debounce=0").classes("grow")
@@ -13540,19 +13477,16 @@ def index(q: str = "") -> None:
                     icon="refresh",
                     on_click=lambda: select_browse_scheme(browse["scheme_id"]),
                 ).props("flat round color=primary").tooltip(render_message("webui.select_aggregation_browser.tooltip.refresh_the_hierarchy_3ccde65c"))
-            with ui.grid(columns=2).classes("w-full h-[680px] min-h-0 gap-0 p-5 pt-3"):
+            with ui.column().classes("w-full h-[720px] min-h-0 gap-0 p-5 pt-3"):
                 with ui.card().classes(
                     "w-full h-full min-h-0 overflow-hidden shadow-none border border-slate-200 p-0"
                 ):
-                    with ui.row().classes("w-full items-center px-4 py-3 border-b border-slate-200"):
+                    with ui.grid(columns="auto minmax(0, 1fr)").classes("w-full items-center px-4 py-3 border-b border-slate-200"):
                         ui.icon("account_tree", color="primary")
                         ui.label(render_message("webui.select_aggregation_browser.label.classification_aggregation_and_record_tree_06d28fb7")).classes("font-semibold")
                     tree_panel = ui.column().props("id=aggregation-browser-tree").classes(
                         "w-full grow min-h-0 gap-0 overflow-y-auto p-2"
                     )
-                detail_panel = ui.column().classes(
-                    "w-full h-full min-h-0 overflow-y-auto border border-l-0 border-slate-200 p-5 gap-4"
-                )
             with ui.expansion(
                 render_message("aggregation_browser.heading.recent_activity"), icon="history",
             ).classes("w-full border-t border-slate-200"):
@@ -13575,9 +13509,11 @@ def index(q: str = "") -> None:
                                         ui.label(recent["title"]).classes("text-sm font-semibold truncate")
                                         ui.label(recent["aggregation_number"]).classes("text-xs text-slate-400")
 
-        render_detail_content(None)
         try:
-            browse["schemes"] = await api.browse_schemes()
+            schemes = await api.browse_schemes()
+            if not browser_active():
+                return
+            browse["schemes"] = schemes
             scheme_select.options = {
                 item["id"]: (
                     f"{item['code']} — {item['title']}"
@@ -13596,14 +13532,16 @@ def index(q: str = "") -> None:
                 scheme_select.update()
                 root_key = collection_key("scheme", target_scheme_id, "classifications")
                 if root_key in browse["collections"] and browse["collections"][root_key]["loaded"]:
-                    render_tree()
-                    if browse.get("selected_item"):
-                        await select_browse_item(browse["selected_item"])
+                    with tree_panel:
+                        ui.spinner("dots", size="20px")
+                    await reload_visible_collections()
                 else:
                     await select_browse_scheme(target_scheme_id)
             else:
                 render_tree()
         except ApiError as error:
+            if not browser_active():
+                return
             with tree_panel:
                 ui.label(error_message(error)).classes("text-negative p-4")
         scheme_select.on_value_change(lambda event: select_browse_scheme(event.value))
@@ -14865,7 +14803,7 @@ def index(q: str = "") -> None:
                         render_message("webui.select_text_indexer_details.button.back_to_text_indexers_34b66935"), icon="arrow_forward" if current_direction["value"] == "rtl" else "arrow_back",
                         on_click=lambda: breadcrumb_back(select_text_indexers),
                     ).props("flat no-caps")
-                    with ui.row().classes("gap-2"):
+                    with ui.row().classes("detail-action-row gap-2"):
                         if indexer["status"] == "active":
                             ui.button(
                                 render_message("webui.select_text_indexer_details.button.suspend_7f5e5b10"), icon="pause_circle", on_click=lambda: change_status("suspend"),
@@ -14938,7 +14876,7 @@ def index(q: str = "") -> None:
                                         ui.label(label).classes("detail-field-label")
                                         ui.label(value).classes("text-sm break-all")
                             if credential["status"] == "active":
-                                with ui.row().classes("w-full justify-end gap-2 border-t border-slate-100 pt-2"):
+                                with ui.row().classes("detail-action-row w-full justify-start gap-2 border-t border-slate-100 pt-2"):
                                     rotate = ui.button(
                                         render_message("webui.render_credentials.button.rotate_1496c92c"), icon="sync",
                                         on_click=lambda _, item=credential: credential_dialog(item),
@@ -15291,7 +15229,7 @@ def index(q: str = "") -> None:
                                         ui.label(label).classes("detail-field-label")
                                         ui.label(value).classes("text-sm")
                             if credential["status"] == "active" and "identity.users.administer" in set((auth_state.get("principal") or {}).get("global_privileges", [])):
-                                with ui.row().classes("w-full justify-end gap-2 border-t border-slate-100 pt-2"):
+                                with ui.row().classes("detail-action-row w-full justify-start gap-2 border-t border-slate-100 pt-2"):
                                     ui.button(render_message("webui.select_user_details.button.rotate_65fa1eea"), icon="sync", on_click=lambda _, item=credential: credential_dialog(item)).props("outline dense no-caps")
                                     ui.button(render_message("webui.select_user_details.button.revoke_fd5240c0"), icon="block", color="negative", on_click=lambda _, item=credential: confirm_revoke_credential(item)).props("outline dense no-caps")
 
@@ -18996,7 +18934,7 @@ def index(q: str = "") -> None:
                 with ui.grid(columns=2).classes("w-full gap-3"):
                     held_item_assigned_from=ui.input(render_message("webui.select_hold_details.input.assignment_date_from_4569e572")).props("outlined dense clearable type=datetime-local").classes("w-full")
                     held_item_assigned_before=ui.input(render_message("webui.select_hold_details.input.assignment_date_before_45df0de5")).props("outlined dense clearable type=datetime-local").classes("w-full")
-                with ui.row().classes("w-full items-center justify-end gap-2"):
+                with ui.row().classes("detail-action-row w-full items-center justify-start gap-2"):
                     held_item_refresh=ui.button(render_message("webui.select_hold_details.button.refresh_251d4756"),icon="refresh").props("flat dense no-caps")
                     if hold["capabilities"].get("manage_held_items"):
                         add_held_item=ui.button(render_message("webui.select_hold_details.button.add_held_items_4cfdf56b"),icon="add").props("unelevated dense no-caps")

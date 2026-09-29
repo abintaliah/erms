@@ -606,7 +606,7 @@ def test_aggregation_summary_has_command_centre_layout():
     assert "min-w-[520px]" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
 
 
-def test_record_detail_header_matches_aggregation_title_and_action_alignment():
+def test_resource_detail_headers_mirror_identity_and_actions_in_rtl():
     assert "items-center" in RECORD_DETAIL_HEADER_CLASSES
     assert "no-wrap" in RECORD_DETAIL_HEADER_CLASSES
     assert "flex-wrap" not in RECORD_DETAIL_HEADER_CLASSES
@@ -615,6 +615,12 @@ def test_record_detail_header_matches_aggregation_title_and_action_alignment():
     source = with_english_messages(inspect.getsource(index))
     assert 'ui.label(record["record_number"]).classes("text-xs text-primary font-semibold")' in source
     assert 'ui.label(record["title"]).classes("text-lg font-semibold break-words")' in source
+    assert '"record-detail-identity-header w-full' in source
+    assert '"record-detail-header-actions items-center gap-2"' in source
+    assert '"aggregation-detail-identity-header w-full items-center gap-3"' in source
+    assert '"aggregation-detail-header-actions items-center gap-2"' in source
+    assert source.count('" icon-right=arrow_forward" if current_direction["value"] == "rtl"') >= 2
+    assert 'ui.icon("description", color="primary", size="18px").classes("w-6")' in source
 
 
 def test_record_details_uses_the_approved_right_hand_control_column():
@@ -970,16 +976,10 @@ def test_detail_pages_use_light_blue_metadata_and_retention_visual_system():
     assert 'primary="#268bd2"' in source
     assert ".detail-field-label" in source
     assert ".retention-card" in source
-    assert 'entity_metadata_label("Current retention (years)")' in source
+    assert "render_retention_stages(" in source
     assert 'count=rule["current_period_years"]' in TIMELINE_SOURCE
     assert 'disposition_label(rule["final_disposition"])' in TIMELINE_SOURCE
-    assert 'localized_disposition_value(retention["final_disposition"])' in source
-    assert '"aggregation-browser-retention-facts"' in source
-    assert '"aggregation-browser-retention-fact gap-2"' in source
-    assert '.aggregation-browser-retention-facts {' in source
     assert 'grid-template-columns: repeat(3, minmax(0, 1fr))' in source
-    assert 'entity_metadata_label("Intermediate retention (years)")' in source
-    assert 'entity_metadata_label("Final disposition")' in source
     assert 'ui.label(str(len(children))).classes("text-2xl font-bold text-primary")' not in source
     assert '"retention-card aggregation-retention-compact shadow-none p-4 gap-3"' in source
 
