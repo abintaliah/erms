@@ -188,6 +188,35 @@ def test_english_source_catalogue_is_a_complete_published_baseline(client):
     assert attention.json()["total"] == 0
 
 
+def test_translation_change_reason_accepts_utf8_rfc8187_header(client):
+    item = _translation(client)
+    reason = "تحديث الترجمة العربية"
+    saved = client.put(
+        f"/api/v1/admin/i18n/messages/{MESSAGE_KEY}/translations/ar",
+        headers={
+            "If-Match": str(item["translation_version"]),
+            "X-Change-Reason": (
+                "UTF-8''%D8%AA%D8%AD%D8%AF%D9%8A%D8%AB%20%D8%A7%D9%84%D8%AA%D8%B1%D8%AC%D9%85%D8%A9%20"
+                "%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9"
+            ),
+        },
+        json={
+            "translated_text": "اللغة {language} غير متاحة.",
+            "origin": "manual",
+            "reviewed": False,
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        stored_reason = connection.execute(
+            """SELECT reason FROM event_history
+                 WHERE entity_type='ui_message_translation'
+                   AND actor_email='admin@test.invalid'
+                 ORDER BY occurred_at DESC LIMIT 1"""
+        ).fetchone()[0]
+    assert stored_reason == reason
+
+
 def test_translation_draft_publication_etag_and_published_value_preservation(client):
     item = _translation(client)
     blank = client.put(

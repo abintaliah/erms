@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Existing terminal sessions may predate Homebrew installation.
+# Append standard macOS tool locations while preserving explicit PATH priority.
+if [[ "$(uname -s)" == Darwin ]]; then
+    for tool_directory in /opt/homebrew/bin /usr/local/bin; do
+        if [[ -d "${tool_directory}" && ":${PATH}:" != *":${tool_directory}:"* ]]; then
+            export PATH="${PATH}:${tool_directory}"
+        fi
+    done
+    unset tool_directory
+fi
+
 readonly PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ENV_FILE="${PROJECT_DIR}/.env"
 

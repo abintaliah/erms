@@ -8,6 +8,7 @@ import json
 import logging
 from pathlib import Path
 import re
+from urllib.parse import unquote_to_bytes
 from threading import RLock
 from time import perf_counter
 from typing import Any
@@ -207,6 +208,18 @@ def _stale_version(expected: int, actual: int, current: dict | None = None) -> H
 
 def _required_reason(change_reason: str | None) -> str:
     reason = (change_reason or "").strip()
+    if reason.lower().startswith("utf-8''"):
+        encoded_reason = reason[7:]
+        try:
+            if not re.fullmatch(r"(?:[A-Za-z0-9_.~-]|%[0-9A-Fa-f]{2})*", encoded_reason):
+                raise ValueError("invalid RFC 8187 value")
+            reason = unquote_to_bytes(encoded_reason).decode("utf-8").strip()
+        except (UnicodeDecodeError, ValueError):
+            raise _error(
+                400,
+                "change_reason_encoding_invalid",
+                "common.error.bad_request",
+            ) from None
     if not reason:
         raise _error(400, "change_reason_required", "localization.validation.change_reason.required")
     if len(reason) > 2000:

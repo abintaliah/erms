@@ -83,6 +83,27 @@ def test_api_client_does_not_coalesce_mutations():
     assert request_count == 2
 
 
+def test_localization_change_reason_is_utf8_encoded_for_http_header():
+    captured_reason = None
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal captured_reason
+        captured_reason = request.headers["X-Change-Reason"]
+        return httpx.Response(200, json={"version": 2})
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            await client.update_localization_translation(
+                "example.key", "ar", {"translated_text": "ترجمة"}, 1, "تحديث الترجمة",
+            )
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured_reason == "UTF-8''%D8%AA%D8%AD%D8%AF%D9%8A%D8%AB%20%D8%A7%D9%84%D8%AA%D8%B1%D8%AC%D9%85%D8%A9"
+
+
 def test_reference_lists_are_cached_revalidated_and_invalidated_by_mutation():
     requests: list[tuple[str, str | None]] = []
 
