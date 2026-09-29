@@ -147,3 +147,29 @@ def test_advanced_search_late_response_does_not_render_or_restore_private_result
         assert renders == []
         assert state['advanced_search_workspace'] == {'root': 'new user query'}
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('change', ['value', 'operator', 'add', 'remove', 'group', 'full_text', 'sort'])
+def test_criteria_changes_reset_later_page_before_persisting(change):
+    import copy
+    root = {'type': 'group', 'operator': 'and', 'children': [
+        {'type': 'condition', 'kind': 'structured', 'field': 'title', 'operator': 'contains_ci', 'value': 'old'},
+        {'type': 'condition', 'kind': 'full_text', 'query': 'old', 'sources': ['metadata']},
+    ]}
+    workspace = {'root': root, 'offset': 75, 'sort_field': 'id'}
+    state = {'advanced_search_workspace': copy.deepcopy(workspace)}
+    persist = load('persist_workspace', dict(state=state, workspace=workspace, copy=copy,
+                                            search_session_is_current=lambda: True))
+    if change == 'value': root['children'][0]['value'] = 'new'
+    elif change == 'operator': root['children'][0]['operator'] = 'eq'
+    elif change == 'add': root['children'].append(copy.deepcopy(root['children'][0]))
+    elif change == 'remove': root['children'].pop()
+    elif change == 'group': root['operator'] = 'or'
+    elif change == 'full_text': root['children'][1]['query'] = 'new'
+    else: workspace['sort_field'] = 'title'
+    persist()
+    assert workspace['offset'] == state['advanced_search_workspace']['offset'] == 0
+    # Normal pagination for unchanged criteria must still work.
+    workspace['offset'] = 25
+    persist()
+    assert state['advanced_search_workspace']['offset'] == 25

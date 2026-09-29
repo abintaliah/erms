@@ -131,3 +131,16 @@ UI inspection confirmed note placement, currently using English fallback until
 the new drafts are reviewed and published. The local API process still serves
 the old browse implementation and requires restart; live scoped-tree and full
 LTR/RTL verification remain pending that reload/publication.
+
+## Criteria edits reset pagination
+
+The identity-scoped Advanced Search workspace compares criteria, target, sort
+and maximum-result settings with its previous snapshot when persisting changes.
+A change resets offset to zero, including invalid intermediate criteria edits;
+unchanged criteria preserve ordinary pagination and same-session restoration.
+The existing builder callbacks all flow through this persistence boundary.
+`test_search_session_isolation.py` passed 15 tests, including later-page edits
+to values, operators, group logic, added/removed conditions, full-text queries,
+and sorting, followed by normal paging with unchanged criteria. No database or
+translation artifacts changed for this fix. Live browser verification remains
+pending.

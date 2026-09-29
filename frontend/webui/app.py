@@ -16984,6 +16984,12 @@ def index(q: str = "") -> None:
         def persist_workspace() -> None:
             # A callback from a discarded identity must never restore its cache.
             if search_session_is_current():
+                previous = state.get("advanced_search_workspace")
+                if isinstance(previous, dict) and any(
+                    previous.get(key) != workspace.get(key)
+                    for key in ("root", "resource", "sort_field", "sort_direction", "max_results")
+                ):
+                    workspace["offset"] = 0
                 state["advanced_search_workspace"] = copy.deepcopy(workspace)
 
         def set_advanced_result_expansion(identifier: int, expanded: bool) -> None:
