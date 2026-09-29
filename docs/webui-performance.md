@@ -444,3 +444,14 @@ Do not remove or weaken tests proving:
 - relationship search request limits and offsets;
 - narrow effective-closure lookup rather than hierarchy download; and
 - no Inspector MutationObserver connection while inspection is disabled.
+
+### Relationship description matching
+
+Record and aggregation relationship selectors include `description` in their
+case-insensitive server-side type-ahead match, alongside each control's existing
+search fields. They retain the same bounded page size, filters, authorization,
+primary sort field, and selected-value behavior. Other entity selectors retain
+their configured search fields. No additional cache or catalogue text is added.
+`frontend/webui/tests/test_relationship_search.py` covers English and Arabic
+queries, both resource types, duplicate-field avoidance, unchanged other entity
+fields, and preservation of pagination and filters.

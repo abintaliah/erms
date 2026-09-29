@@ -179,7 +179,7 @@ def _get(connection: Connection, saved_search_id: int, *, lock: bool = False, ad
         (saved_search_id,),
     ).fetchone()
     if row is None:
-        raise HTTPException(status_code=404, detail="saved search not found")
+        raise HTTPException(status_code=404, detail={"code": "saved_search_unavailable", "message_key": "saved_search.error.unavailable"})
     return row
 
 
@@ -274,6 +274,30 @@ def list_saved_searches(
     return {"items": items, "total": total, "limit": limit, "offset": offset, "returned": len(items)}
 
 
+def audience_eligibility_sql(audience_kind: str, *, administrator: bool) -> str:
+    """Shared eligibility predicate for typeahead and scoped organization trees."""
+    if audience_kind == "roles":
+        return (
+            "NOT target.is_system AND target.account_type_restriction IS NULL AND role_effectively_active(target.id)"
+            if administrator else
+            """EXISTS (SELECT 1 FROM user_role_assignments assignment
+                         WHERE assignment.role_id=target.id AND assignment.user_id=current_user_id()
+                           AND assignment.valid_from<=CURRENT_TIMESTAMP
+                           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP))
+                 AND NOT target.is_system AND target.account_type_restriction IS NULL
+                 AND role_effectively_active(target.id)"""
+        )
+    else:
+        return (
+            "org_unit_effectively_active(target.id)" if administrator else
+            """EXISTS (SELECT 1 FROM roles role JOIN user_role_assignments assignment ON assignment.role_id=role.id
+                         WHERE role.org_unit_id=target.id AND assignment.user_id=current_user_id()
+                           AND assignment.valid_from<=CURRENT_TIMESTAMP
+                           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+                           AND role_effectively_active(role.id))"""
+        )
+
+
 @router.get("/audience-options/{audience_kind}")
 def audience_options(
     audience_kind: Literal["roles", "org-units"],
@@ -296,28 +320,11 @@ def audience_options(
         if len(requested_ids) > 100:
             raise HTTPException(status_code=422, detail={"code": "too_many_audience_ids"})
     term = q.strip()
+    eligibility = audience_eligibility_sql(audience_kind, administrator=administrator)
     if audience_kind == "roles":
-        eligibility = (
-            "NOT target.is_system AND target.account_type_restriction IS NULL AND role_effectively_active(target.id)"
-            if administrator else
-            """EXISTS (SELECT 1 FROM user_role_assignments assignment
-                         WHERE assignment.role_id=target.id AND assignment.user_id=current_user_id()
-                           AND assignment.valid_from<=CURRENT_TIMESTAMP
-                           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP))
-                 AND NOT target.is_system AND target.account_type_restriction IS NULL
-                 AND role_effectively_active(target.id)"""
-        )
         columns = "target.id,target.code,target.name,target.description,target.org_unit_id,target.translations"
         table = "roles"
     else:
-        eligibility = (
-            "org_unit_effectively_active(target.id)" if administrator else
-            """EXISTS (SELECT 1 FROM roles role JOIN user_role_assignments assignment ON assignment.role_id=role.id
-                         WHERE role.org_unit_id=target.id AND assignment.user_id=current_user_id()
-                           AND assignment.valid_from<=CURRENT_TIMESTAMP
-                           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
-                           AND role_effectively_active(role.id))"""
-        )
         columns = "target.id,target.code,target.name,target.description,target.translations"
         table = "org_units"
     where = f"""WHERE ({eligibility})

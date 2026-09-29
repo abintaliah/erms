@@ -7,6 +7,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from psycopg import Connection
 
+from .saved_searches import audience_eligibility_sql
 from .database import get_connection
 from .entity_localization import localized_projection, preferred_language
 from .authorization_policy import require_organization_browse
@@ -396,15 +397,50 @@ def browse_record_summary(
     return row
 
 
+def audience_tree_sources(connection: Connection, audience: str | None) -> tuple[str, str]:
+    """Filter before branch pagination; retain only paths to eligible choices."""
+    if audience is None:
+        return (f"SELECT node.*, true AS audience_selectable FROM ({ORG_UNIT_NODE_SQL}) node",
+                f"SELECT node.*, true AS audience_selectable FROM ({ROLE_NODE_SQL}) node")
+    administrator = connection.execute(
+        "SELECT user_has_global_privilege(current_user_id(),'search.saved_search.administrator') AS allowed"
+    ).fetchone()["allowed"]
+    roles = audience_eligibility_sql("roles", administrator=administrator)
+    units = audience_eligibility_sql("org-units", administrator=administrator)
+    seeds = ("SELECT org_unit_id AS id FROM eligible_roles" if audience == "roles"
+             else "SELECT id FROM eligible_units")
+    cte = f"""WITH RECURSIVE eligible_roles AS (
+        SELECT target.id, target.org_unit_id FROM roles target WHERE {roles}
+    ), eligible_units AS (
+        SELECT target.id FROM org_units target WHERE {units}
+    ), visible_units(id) AS (
+        {seeds}
+        UNION
+        SELECT parent.parent_org_unit_id FROM org_units parent
+        JOIN visible_units child ON child.id=parent.id
+        WHERE parent.parent_org_unit_id IS NOT NULL
+    ) """
+    return (
+        cte + f"""SELECT node.*, (node.id IN (SELECT id FROM eligible_units)
+                      AND '{audience}'='org-units') AS audience_selectable
+                   FROM ({ORG_UNIT_NODE_SQL}) node
+                  WHERE node.id IN (SELECT id FROM visible_units)""",
+        cte + f"""SELECT node.*, true AS audience_selectable FROM ({ROLE_NODE_SQL}) node
+                  WHERE node.id IN (SELECT id FROM eligible_roles) AND '{audience}'='roles'""",
+    )
+
+
 @router.get("/organization/roots", tags=["organization browser"])
 def browse_organization_roots(
     request: Request,
     limit: int = Query(25, ge=1, le=50), offset: int = Query(0, ge=0),
+    audience: Literal["roles", "org-units"] | None = None,
     _authorization: Any = Depends(require_organization_browse),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    unit_source, role_source = audience_tree_sources(connection, audience)
     rows = list(connection.execute(
-        f"SELECT * FROM ({ORG_UNIT_NODE_SQL}) source "
+        f"SELECT * FROM ({unit_source}) source "
         "WHERE parent_org_unit_id IS NULL ORDER BY code COLLATE \"C\", id LIMIT %s OFFSET %s",
         (limit, offset),
     ).fetchall())
@@ -421,20 +457,22 @@ def browse_organization_children(
     org_unit_id: int, request: Request, include_roles: bool = True,
     limit: int = Query(25, ge=1, le=50),
     unit_offset: int = Query(0, ge=0), role_offset: int = Query(0, ge=0),
+    audience: Literal["roles", "org-units"] | None = None,
     _authorization: Any = Depends(require_organization_browse),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    unit_source, role_source = audience_tree_sources(connection, audience)
     if connection.execute("SELECT 1 FROM org_units WHERE id=%s", (org_unit_id,)).fetchone() is None:
         raise HTTPException(status_code=404, detail="organization unit not found")
     units = list(connection.execute(
-        f"SELECT * FROM ({ORG_UNIT_NODE_SQL}) source "
+        f"SELECT * FROM ({unit_source}) source "
         "WHERE parent_org_unit_id=%s ORDER BY code COLLATE \"C\", id LIMIT %s OFFSET %s",
         (org_unit_id, limit + 1, unit_offset),
     ).fetchall())
     roles = []
     if include_roles:
         roles = list(connection.execute(
-            f"SELECT * FROM ({ROLE_NODE_SQL}) source "
+            f"SELECT * FROM ({role_source}) source "
             "WHERE org_unit_id=%s ORDER BY code COLLATE \"C\", id LIMIT %s OFFSET %s",
             (org_unit_id, limit + 1, role_offset),
         ).fetchall())
@@ -661,9 +699,13 @@ def search_organization_structure(
     entity_type: Literal["all", "org_unit", "role", "user"] = "all",
     status: Literal["all", "active", "inactive", "suspended"] = "all",
     limit: int = Query(50, ge=1, le=100),
+    audience: Literal["roles", "org-units"] | None = None,
     _authorization: Any = Depends(require_organization_browse),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    unit_source, role_source = audience_tree_sources(connection, audience)
+    if audience is not None:
+        entity_type = "role" if audience == "roles" else "org_unit"
     pattern = f"%{query.strip()}%"
     status_filter = "TRUE" if status == "all" else "source.effective_status=%s"
     status_parameters: tuple[Any, ...] = () if status == "all" else (status,)
@@ -682,15 +724,15 @@ def search_organization_structure(
                 )
                 SELECT source.id, source.code, source.name, source.description,
                        source.translations, source.status,
-                       source.effective_status,
+                       source.effective_status, source.audience_selectable,
                        (SELECT array_agg(path_id ORDER BY ordinal DESC)
                           FROM unnest(path.reverse_path) WITH ORDINALITY p(path_id, ordinal)
                        ) AS org_unit_path
-                  FROM ({ORG_UNIT_NODE_SQL}) source
+                  FROM ({unit_source}) source
                   JOIN paths path ON path.id=source.id AND path.parent_org_unit_id IS NULL
                  WHERE (source.code ILIKE %s OR source.name ILIKE %s OR COALESCE(source.description,'') ILIKE %s
                         OR COALESCE(source.translations::text, '') ILIKE %s)
-                   AND {status_filter}
+                   AND {status_filter} AND source.audience_selectable
                  ORDER BY source.code LIMIT %s""",
             (pattern, pattern, pattern, pattern, *status_parameters, limit),
         ).fetchall())
@@ -708,15 +750,15 @@ def search_organization_structure(
                 )
                 SELECT source.id, source.code, source.name, source.description,
                        source.translations, source.status,
-                       source.effective_status, source.org_unit_id,
+                       source.effective_status, source.audience_selectable, source.org_unit_id,
                        (SELECT array_agg(path_id ORDER BY ordinal DESC)
                           FROM unnest(path.reverse_path) WITH ORDINALITY p(path_id, ordinal)
                        ) AS org_unit_path
-                  FROM ({ROLE_NODE_SQL}) source
+                  FROM ({role_source}) source
                   JOIN paths path ON path.id=source.org_unit_id AND path.parent_org_unit_id IS NULL
                  WHERE (source.code ILIKE %s OR source.name ILIKE %s OR COALESCE(source.description,'') ILIKE %s
                         OR COALESCE(source.translations::text, '') ILIKE %s)
-                   AND {status_filter}
+                   AND {status_filter} AND source.audience_selectable
                  ORDER BY source.code LIMIT %s""",
             (pattern, pattern, pattern, pattern, *status_parameters, limit),
         ).fetchall())

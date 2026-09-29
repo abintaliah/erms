@@ -554,21 +554,24 @@ class ErmsApiClient:
 
     async def organization_roots(
         self, *, limit: int = 25, offset: int = 0,
+        audience: str | None = None,
     ) -> list[dict[str, Any]]:
         return await self.request(
             "GET", "/api/v1/browse/organization/roots",
-            params={"limit": limit, "offset": offset},
+            params={"limit": limit, "offset": offset, **({"audience": audience} if audience else {})},
         )
 
     async def organization_children(
         self, org_unit_id: int, *, include_roles: bool = True,
         limit: int = 25, unit_offset: int = 0, role_offset: int = 0,
+        audience: str | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         return await self.request(
             "GET", f"/api/v1/browse/organization/org-units/{org_unit_id}/children",
             params={
                 "include_roles": str(include_roles).lower(), "limit": limit,
                 "unit_offset": unit_offset, "role_offset": role_offset,
+                **({"audience": audience} if audience else {}),
             },
         )
 
@@ -590,10 +593,11 @@ class ErmsApiClient:
 
     async def search_organization(
         self, query: str, *, entity_type: str = "all", status: str = "all",
+        audience: str | None = None,
     ) -> list[dict[str, Any]]:
         return await self.request(
             "GET", "/api/v1/browse/organization/search",
-            params={"query": query, "entity_type": entity_type, "status": status},
+            params={"query": query, "entity_type": entity_type, "status": status, **({"audience": audience} if audience else {})},
         )
 
     async def browse_page(
@@ -851,6 +855,10 @@ class ErmsApiClient:
         filters: dict[str, Any] | None = None,
         eligible_classifications: bool = False,
     ) -> dict[str, Any]:
+        # All record/aggregation relationship pickers also match description.
+        # Preserve the caller's primary field for sorting and avoid duplicates.
+        if resource in {"aggregations", "records"}:
+            search_fields = tuple(dict.fromkeys((*search_fields, "description")))
         conditions: list[dict[str, Any]] = [
             {"field": field, "operator": "eq", "value": value}
             for field, value in (filters or {}).items()

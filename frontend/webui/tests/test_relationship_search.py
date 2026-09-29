@@ -61,3 +61,31 @@ def test_browsed_classification_populates_empty_remote_select(title):
         assert control.value == 42
         assert control.options == {42: f'1111 · {title}'}
         assert relationship_search_query(control, control.options[42]) is None
+
+
+@pytest.mark.parametrize('resource,fields,expected', [
+    ('aggregations', ('aggregation_number', 'title'), ['aggregation_number', 'title', 'description']),
+    ('records', ('title',), ['title', 'description']),
+    ('records', ('title', 'description'), ['title', 'description']),
+    ('roles', ('code', 'name'), ['code', 'name']),
+])
+@pytest.mark.parametrize('query', ['unique description', 'وصف مميز'])
+def test_relationship_description_search_preserves_bounds_and_filters(resource, fields, expected, query):
+    import asyncio
+    from frontend.webui.api_client import ErmsApiClient
+    calls = []
+    async def search(resource, payload, **kwargs):
+        calls.append((resource, payload, kwargs))
+        return {'items': [], 'total': 0}
+    client = SimpleNamespace(search_request=search)
+    asyncio.run(ErmsApiClient.relationship_page(
+        client, resource, fields, query, limit=25, offset=25, filters={'status': 'active'},
+    ))
+    _, payload, _ = calls[0]
+    assert payload['limit'] == 25 and payload['offset'] == 25
+    assert payload['sort'] == [{'field': fields[0], 'direction': 'asc'}]
+    clauses = payload['where']['and']
+    assert clauses[0] == {'field': 'status', 'operator': 'eq', 'value': 'active'}
+    assert clauses[1]['or'] == [
+        {'field': field, 'operator': 'contains_ci', 'value': query} for field in expected
+    ]
