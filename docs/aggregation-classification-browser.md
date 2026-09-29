@@ -1,170 +1,90 @@
-# Browsing aggregations through classification schemes
+# Aggregation classification browser
 
-The Aggregations page provides two complementary ways to locate content:
+The Aggregations page's Browse classification tab now uses a single 720px-high,
+full-width scrollable tree. Aggregation and record title buttons call
+`open_aggregation` and `show_record_details` directly. Those existing functions
+perform their own authorized detail reads, avoiding the former pre-navigation
+GET and the summary's retention/location requests. Classification titles toggle
+branches. Native buttons provide keyboard access; chevrons have entity-title
+accessible names and `aria-expanded` state.
 
-- **Search** finds aggregations by number, title, or description and retains the
-  recently created and recently updated lists.
-- **Browse classification** presents published classification schemes as a
-  navigable hierarchy extending from classifications through aggregations to
-  records.
+The selector toolbar and tree heading use standard NiceGUI grids. Tree title
+buttons use NiceGUI's supported `align` setting for the current direction.
+Live Arabic inspection showed that fixed `align=left` placed labels away from
+their icons; `align=right` corrects that without adding CSS overrides. Existing
+scoped RTL row handling remains responsible for tree disclosure placement.
+Record nodes use the primary-blue outlined `description` icon at the tree's
+standard compact icon size, matching the aggregation and classification icon
+treatment.
 
-The detailed implementation contract is in
-[`../specs/aggregation-classification-browser.md`](../specs/aggregation-classification-browser.md).
+The destination detail headers use standard NiceGUI grids rather than rows.
+This avoids the application's RTL row reversal applying a second visual flip:
+in Arabic the entity icon is beside the title on the right, while Favourite,
+Preview where available, and Back sit on the left. The Arabic Back control uses
+NiceGUI's `icon-right` property with `arrow_forward`, so the arrow points toward
+the previous page and remains correctly spaced after the label. English keeps
+the left-pointing `arrow_back` before the label. No custom CSS was required.
 
-## Using Browse classification
+## State and request lifetime
 
-Open **Aggregations** from Records Management and select **Browse
-classification**. Choose a scheme from the selector above the workspace.
-Published schemes are available for browsing. A deactivated scheme remains
-visible when it explains existing aggregation governance and is marked
-inactive; deactivation prevents new assignments but does not erase history.
+`state['aggregation_browse']` belongs to the authenticated browser page. Keys
+identify the scheme/owner type, owner ID and child collection; each collection
+retains its own filter, cursor and loaded rows. It is not shared across identities
+or pages, and sign-out clears it. There is no new shared cache.
 
-The left pane is an independently scrollable tree. The right pane shows concise
-information about the selected aggregation or record without closing,
-collapsing, or navigating away from the tree.
+On return, the browser refetches previously loaded collections and enough cursor
+pages to restore their loaded lengths. It renders fresh rows, then restores tree
+and page scroll. Independent collections reload concurrently through the API
+client's existing request limit. A page-invocation token, current resource/mode,
+container lifetime and collection request version reject abandoned responses.
+Overlapping clicks cannot open multiple details. Failed branch reads retain the
+existing bounded retry/error treatment. Refresh retains its existing scheme-reset
+behavior. Language reinitialization obtains data in the new language.
 
-The hierarchy is:
+## Translation lifecycle
 
-```text
-Classification scheme
-└── Branch classification
-    └── Terminal classification
-        └── Root aggregation governed by that terminal
-            ├── Child aggregation
-            │   ├── Descendant aggregation
-            │   └── Record
-            └── Record
-```
-
-Only root aggregations appear directly beneath a terminal classification.
-Child aggregations appear beneath their actual parent, and records appear
-beneath their containing aggregation. Digital components are not tree nodes;
-the record summary shows their count and the existing record interface provides
-access to them.
-
-Opening an aggregation leads to its dedicated details page. That page provides
-a context-aware Back action consistent with the Record Detail page, returning
-to the originating Dashboard or Aggregations view.
-
-Branch classifications, terminal classifications, aggregations, and records
-use distinct hierarchy, label, folder, and document icons. Closed aggregations
-are marked in the tree.
-
-## Details pane and navigation
-
-Selecting an aggregation shows its business number, title, description,
-lifecycle dates, closed status, direct child and record counts, classification
-context where applicable, and effective retention rule. The rule states
-whether it is a local aggregation override or inherited from classification
-governance. **Open aggregation** navigates to the existing complete aggregation
-view.
-
-Selecting a record shows its number, title, description, originated and created
-dates, containing aggregation, and digital-component count. **Open record**
-opens the existing record interface.
-
-Browse state—including the selected scheme, expanded paths, loaded pages,
-selection, and collection filters—is retained when switching temporarily back
-to Search during the same signed-in browser page. Signing out clears it so
-protected information is not retained for the next user.
-
-Recently created and updated aggregations remain available in a collapsed
-**Recent aggregation activity** section below the browser.
-
-## Large collections
-
-The browser never downloads a whole scheme or aggregation subtree. It loads
-only the first 50 immediate children when a node is expanded. This applies to
-root and child classifications, governed root aggregations, child
-aggregations, and records.
-
-When more items exist, a synthetic row such as the following appears:
-
-```text
-Load 50 more records · 50 of 1,247
-```
-
-Activating it appends the next page. The API permits page sizes from 1 to 100;
-the NiceGUI client uses 50. Collections larger than one page expose a local
-filter. Filtering is executed by PostgreSQL against that immediate collection,
-not merely against rows already present in the browser.
-
-Loading and errors are shown inside the affected node. A confirmed empty
-result displays an appropriate empty message. A failed request preserves
-already loaded rows and offers **Retry**. Requests superseded by a scheme,
-filter, refresh, or navigation change cannot populate the newer tree context.
-
-## Ordering and cursors
-
-Classifications are ordered by code, aggregations by aggregation number, and
-records by record number. The entity ID is the stable final tie-breaker. The
-initial implementation uses PostgreSQL's deterministic `C` collation, so this
-is lexical rather than natural-number ordering.
-
-Pagination uses server-generated opaque cursors rather than numeric offsets.
-Each cursor is bound to its parent collection and filter. Reusing it for a
-different parent or query returns `400 invalid or mismatched browse cursor`.
-
-## REST API
-
-The read-only browser endpoints are:
-
-```http
-GET /api/v1/browse/classification-schemes
-GET /api/v1/browse/classification-schemes/{scheme_id}/roots
-GET /api/v1/browse/classifications/{classification_id}/children
-GET /api/v1/browse/classifications/{classification_id}/aggregations
-GET /api/v1/browse/aggregations/{aggregation_id}/children
-GET /api/v1/browse/aggregations/{aggregation_id}/records
-GET /api/v1/browse/aggregations/{aggregation_id}/summary
-GET /api/v1/browse/records/{record_id}/summary
-```
-
-Paged endpoints accept `limit`, `cursor`, and `query` and return:
-
-```json
-{
-  "items": [],
-  "next_cursor": null,
-  "total": 0
-}
-```
-
-Node responses include immediate-child counts. Aggregation nodes contain child
-aggregation and record counts; record nodes contain digital-component counts.
-Only terminal classifications may serve the governed-aggregation endpoint. A
-request for a branch classification returns `409`.
-
-## Database support
-
-Migration
-The canonical schema defines dedicated classification-browser indexes.
-adds compound indexes for each parent relationship and its deterministic browse
-order: classification scheme/parent and classification code; classification
-and aggregation number; parent aggregation and aggregation number; and
-containing aggregation and record number. New databases receive the same
-indexes directly from `database/schema.sql`.
-
-## Authorization boundary
-
-The current implementation uses the authenticated application session but does
-not yet apply per-record authorization because that subsystem has not been
-built. The purpose-built browse endpoints are the future enforcement boundary.
-Authorization must be incorporated into their PostgreSQL queries before totals,
-counts, ordering, and cursors are calculated. Hiding rows only in NiceGUI would
-leak inaccessible entity existence through counts and continuation state and is
-therefore not acceptable.
+No keys were added and no wording was changed. Twelve now-unreferenced
+`webui.render_detail_content.*` keys were removed from the English manifest and
+canonical Arabic artifact. The artifact catalogue hash was updated. All 2,609
+retained Arabic entries are byte-for-byte equivalent as parsed rows, including
+administrator wording and provenance. No administrator export was promoted.
+Normal message synchronization deprecates absent database definitions without
+removing translation/event history. No persistent database was changed.
 
 ## Verification
 
-API tests use a fresh temporary PostgreSQL instance and cover hierarchy
-scoping, direct relationships, counts, filters, lexical order, cursor
-continuation, cursor misuse, and rejection of aggregation browsing on a branch
-classification. The temporary instance is torn down after the suite. Frontend
-tests cover the browse client contract alongside the existing UI helpers.
+The four new interaction cases cover direct navigation, separate chevrons in
+both directions, paginated return/freshness and abandoned requests. The complete
+interaction suite passed 38 tests. Existing presentation checks for tree RTL,
+continuation anchors and retained detail-page styling pass.
 
-```bash
-database/tests/run.sh
-PYTHONPATH=. frontend/webui/.venv/bin/python -m pytest -q \
-  frontend/webui/tests --ignore=frontend/webui/tests/e2e
-```
+A disposable PostgreSQL database initialized from `database/schema.sql` supplied
+28 aggregations and a record for live checks; the API browse suite passed 8 tests.
+The live browser verified both existing detail destinations, direction-aware
+header controls, and Back restoring expanded paths. UI checks include desktop
+English/Arabic and narrow layouts.
+
+Final checks: 134 entity tests pass; four unrelated source-assertion failures
+also reproduce against HEAD (classification workspace height, application shell,
+empty navigation sections and login-session/security layout). Running interaction
+and entity suites in one process additionally exposes a NiceGUI uploader slot
+fixture conflict; the standalone entity run has only the four baseline failures.
+
+Catalogue reference/stale-key, sorted coverage, placeholder/blank/markup,
+provenance and artifact-hash checks pass for all 2,609 active keys. The terminology
+checker retains two pre-existing curated Arabic issues:
+`classification_transfer.error.checksum_mismatch` and
+`classification_transfer.retention_rule`. These unchanged entries remain for
+translation review and were not overwritten.
+
+Live computed-style and dimension checks passed at desktop and 714px in both
+languages (714px document width; 298px tree width and scroll width). The detail
+metadata and action callbacks remain unchanged; only their header layout and
+direction-aware Back icon properties changed. Reloading an
+aggregation-detail URL directly exposed an existing hidden-content-card issue;
+normal tree-to-detail and Back navigation both rendered correctly. This unrelated
+detail-page reload issue was not changed by the browser redesign.
+
+Preview services stopped; disposable database
+`erms_test_organization_9d3f6ec9d8cb` was successfully dropped. No migration is
+required for this frontend change.
