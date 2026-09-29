@@ -1860,7 +1860,7 @@ def index(q: str = "") -> None:
         }
         body {
             background: var(--erms-bg); color: var(--erms-ink);
-            font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+            font-family: Changa, ui-sans-serif, -apple-system, BlinkMacSystemFont,
                          "Segoe UI", sans-serif;
             letter-spacing: -.008em;
         }

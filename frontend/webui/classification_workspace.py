@@ -47,7 +47,7 @@ async def classification_workspace(
         "pending": set(),
     }
     with container:
-        browser_host = ui.column().classes("classification-workspace w-full gap-3")
+        browser_host = ui.column().classes("classification-workspace w-full gap-3 p-3")
         with browser_host:
             ui.spinner(size="lg")
         detail_host = ui.column().classes("classification-workspace w-full gap-4")
