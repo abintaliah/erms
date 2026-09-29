@@ -255,8 +255,15 @@ def _lock_aggregation_subtree(connection: Connection, aggregation_id: int) -> No
         connection.execute("SELECT id FROM aggregations WHERE id=ANY(%s) ORDER BY id FOR UPDATE",(ids,)).fetchall()
 
 
-@router.get("/permissions", response_model=list[PermissionRead], dependencies=[Depends(require_authorization_admin)])
+@router.get("/permissions", response_model=list[PermissionRead])
 def list_permissions(resource_type: Literal["aggregation", "record"] | None = None, limit: int=Query(500,ge=1,le=500), connection: Connection=Depends(get_connection,scope="function")):
+    allowed = connection.execute(
+        """SELECT user_has_global_privilege(current_user_id(),'authorization.administer')
+                  OR (%s::text IS NOT NULL AND user_has_global_privilege(current_user_id(),%s)) AS allowed""",
+        (resource_type, f"{resource_type}.acl.manage" if resource_type else ""),
+    ).fetchone()["allowed"]
+    if not allowed:
+        require_global(connection, "authorization.administer")
     if resource_type is None:
         return list(connection.execute(
             "SELECT * FROM permissions ORDER BY resource_type,code LIMIT %s", (limit,),
@@ -267,8 +274,13 @@ def list_permissions(resource_type: Literal["aggregation", "record"] | None = No
     ).fetchall())
 
 
-@router.get("/aggregations/{aggregation_id}/permissions", response_model=ResourceAclRead, dependencies=[Depends(require_authorization_admin)])
+@router.get("/aggregations/{aggregation_id}/permissions", response_model=ResourceAclRead)
 def aggregation_permissions(aggregation_id:int, connection:Connection=Depends(get_connection,scope="function")):
+    require_resource_operation(connection,"aggregation",aggregation_id,"aggregation.acl.manage","aggregation.acl.manage",lock=False)
+    return _aggregation_permissions(aggregation_id, connection)
+
+
+def _aggregation_permissions(aggregation_id: int, connection: Connection):
     aggregation=_resource(connection,"aggregations",aggregation_id)
     source,source_id,effective=_effective_aggregation(connection,aggregation_id)
     return {"inherit_acl_from_parent":aggregation["inherit_acl_from_parent"],"effective_acl":_group(effective),
@@ -277,7 +289,7 @@ def aggregation_permissions(aggregation_id:int, connection:Connection=Depends(ge
             "resource_acl_version":aggregation["resource_acl_version"]}
 
 
-@router.put("/aggregations/{aggregation_id}/permissions", response_model=ResourceAclRead, dependencies=[Depends(require_authorization_admin)])
+@router.put("/aggregations/{aggregation_id}/permissions", response_model=ResourceAclRead)
 def replace_aggregation_permissions(aggregation_id:int,payload:AclReplace,connection:Connection=Depends(get_connection,scope="function")):
     require_resource_operation(connection,"aggregation",aggregation_id,"aggregation.acl.manage","aggregation.acl.manage")
     aggregation=_resource(connection,"aggregations",aggregation_id)
@@ -291,7 +303,7 @@ def replace_aggregation_permissions(aggregation_id:int,payload:AclReplace,connec
     _assert_continuity(connection,aggregation["security_level_id"])
     connection.execute("UPDATE aggregations SET inherit_acl_from_parent=%s,resource_acl_version=resource_acl_version+1,version=version+1 WHERE id=%s",(inherit,aggregation_id))
     connection.execute("SELECT append_domain_event('aggregation',%s,'ACL_REPLACED',%s::jsonb,%s)",(aggregation_id,json.dumps({"inherit_acl_from_parent":inherit}),payload.reason))
-    return aggregation_permissions(aggregation_id,connection)
+    return _aggregation_permissions(aggregation_id,connection)
 
 
 @router.get("/aggregations/{aggregation_id}/default-child-aggregation-permissions", response_model=ChildAggregationAclRead, dependencies=[Depends(require_authorization_admin)])
@@ -364,15 +376,20 @@ def preview_child_record_permissions(aggregation_id:int,payload:ChildRecordAclRe
             "affected_record_count":child_record_permissions(aggregation_id,connection)["affected_record_count"],"version":payload.version}
 
 
-@router.get("/records/{record_id}/permissions", response_model=ResourceAclRead, dependencies=[Depends(require_authorization_admin)])
+@router.get("/records/{record_id}/permissions", response_model=ResourceAclRead)
 def record_permissions(record_id:int,connection:Connection=Depends(get_connection,scope="function")):
+    require_resource_operation(connection,"record",record_id,"record.acl.manage","record.acl.manage",lock=False)
+    return _record_permissions(record_id, connection)
+
+
+def _record_permissions(record_id: int, connection: Connection):
     record=_resource(connection,"records",record_id); source,source_id,effective=_effective_record(connection,record_id)
     return {"inherit_acl_from_parent":record["inherit_acl_from_parent"],"effective_acl":_group(effective),"effective_acl_source":source,
             "effective_acl_source_id":source_id,"override_acl":_group(_grant_rows(connection,"record",record_id)),
             "override_acl_is_dormant":record["inherit_acl_from_parent"],"resource_acl_version":record["resource_acl_version"]}
 
 
-@router.put("/records/{record_id}/permissions", response_model=ResourceAclRead, dependencies=[Depends(require_authorization_admin)])
+@router.put("/records/{record_id}/permissions", response_model=ResourceAclRead)
 def replace_record_permissions(record_id:int,payload:AclReplace,connection:Connection=Depends(get_connection,scope="function")):
     require_resource_operation(connection,"record",record_id,"record.acl.manage","record.acl.manage")
     record=_resource(connection,"records",record_id)
@@ -384,7 +401,7 @@ def replace_record_permissions(record_id:int,payload:AclReplace,connection:Conne
     _replace(connection,"record",record_id,grants); _assert_continuity(connection,record["security_level_id"])
     connection.execute("UPDATE records SET inherit_acl_from_parent=%s,resource_acl_version=resource_acl_version+1,version=version+1 WHERE id=%s",(inherit,record_id))
     connection.execute("SELECT append_domain_event('record',%s,'ACL_REPLACED',%s::jsonb,%s)",(record_id,json.dumps({"inherit_acl_from_parent":inherit}),payload.reason))
-    return record_permissions(record_id,connection)
+    return _record_permissions(record_id,connection)
 
 
 @router.get("/aggregations/{aggregation_id}/acl-move-preview")

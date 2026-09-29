@@ -5151,6 +5151,54 @@
     "is_html": false
   },
   {
+    "message_key": "global_search.filter.aggregations",
+    "context_group": "global_search.filter",
+    "default_text": "Aggregations · {count}",
+    "semantic_meaning": "Filter global search results by aggregations with the number of loaded matches.",
+    "common_locations": [
+      "Global search results"
+    ],
+    "translator_guidance": "Preserve {count}; use the established records and aggregations terminology.",
+    "grammatical_role": "button",
+    "parameter_schema": {
+      "count": "integer"
+    },
+    "rendered_example": "Aggregations · 3",
+    "is_html": false
+  },
+  {
+    "message_key": "global_search.filter.all",
+    "context_group": "global_search.filter",
+    "default_text": "All · {count}",
+    "semantic_meaning": "Filter global search results by all with the number of loaded matches.",
+    "common_locations": [
+      "Global search results"
+    ],
+    "translator_guidance": "Preserve {count}; use the established records and aggregations terminology.",
+    "grammatical_role": "button",
+    "parameter_schema": {
+      "count": "integer"
+    },
+    "rendered_example": "All · 3",
+    "is_html": false
+  },
+  {
+    "message_key": "global_search.filter.records",
+    "context_group": "global_search.filter",
+    "default_text": "Records · {count}",
+    "semantic_meaning": "Filter global search results by records with the number of loaded matches.",
+    "common_locations": [
+      "Global search results"
+    ],
+    "translator_guidance": "Preserve {count}; use the established records and aggregations terminology.",
+    "grammatical_role": "button",
+    "parameter_schema": {
+      "count": "integer"
+    },
+    "rendered_example": "Records · 3",
+    "is_html": false
+  },
+  {
     "message_key": "governance_custody.field.clearance",
     "context_group": "governance_custody.field",
     "default_text": "Clearance",

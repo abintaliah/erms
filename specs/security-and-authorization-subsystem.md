@@ -343,7 +343,7 @@ The initial catalogue is:
 
 | Code | Purpose |
 | --- | --- |
-| `authorization.administer` | Create and maintain profiles, profile privileges, role-profile assignments, governance-role flags, and resource ACLs |
+| `authorization.administer` | Create and maintain profiles, profile privileges, role-profile assignments, governance-role flags, and child-default ACL administration |
 | `authorization.explain` | Diagnose effective access for another user, subject to the examiner's own resource access and clearance |
 | `security_levels.administer` | Create and maintain the security-level catalogue |
 | `identity.users.administer` | Create, edit, activate, deactivate, suspend, unsuspend, issue temporary passwords for, and eventually delete users |
@@ -1035,9 +1035,18 @@ mappings are:
 | Add/replace/remove/reorder | Matching component privilege | `record.view` and matching component permission |
 | Change aggregation level | `aggregation.security_level.change` | `aggregation.security_level.change` |
 | Change record level | `record.security_level.change` | `record.security_level.change` |
-| Manage resource ACL | Matching `*.acl.manage` plus `authorization.administer` | Matching `*.acl.manage` permission |
+| Manage individual resource ACL | Matching `*.acl.manage` | Matching `*.acl.manage` permission |
+| Manage child-default ACL | `aggregation.acl.manage` plus `authorization.administer` | `aggregation.acl.manage` permission |
 | View entity history | `audit.view` | Matching `*.history.view` permission |
 | Explain another user's access | `authorization.explain` | Examiner must independently view and clear the resource |
+
+Individual aggregation and record ACL reads and replacements do not require
+`authorization.administer`. They require the matching resource ACL-management
+global privilege and effective resource permission, subject to existing visibility,
+clearance, and governance rules. The permission catalogue for a specified resource
+type is available to holders of its ACL-management global privilege; unrestricted
+catalogue access remains restricted to authorization administrators.
+
 
 Root aggregation creation has no parent ACL, so its global privilege and
 clearance/default/continuity checks are the complete resource authorization.

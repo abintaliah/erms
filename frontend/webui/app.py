@@ -3653,6 +3653,13 @@ def index(q: str = "") -> None:
 
     drawer_collapsed = False
 
+    def refresh_drawer_headings() -> None:
+        visible_links = {key for button, _, key in drawer_links if button.visible}
+        for heading, section_keys in drawer_sections:
+            heading.set_visibility(
+                not drawer_collapsed and bool(visible_links.intersection(section_keys))
+            )
+
     def refresh_drawer_visibility(privileges: set[str] | None = None) -> None:
         granted = privileges
         if granted is None:
@@ -3663,12 +3670,10 @@ def index(q: str = "") -> None:
             key: can_navigate(key, granted) for _, _, key in drawer_links
         }
         for button, _, key in drawer_links:
-            button.set_visibility(link_visibility[key])
-        for heading, section_keys in drawer_sections:
-            heading.set_visibility(
-                not drawer_collapsed
-                and any(link_visibility.get(key, False) for key in section_keys)
-            )
+            # Holds visibility is resolved separately from assigned hold access.
+            if key != "holds":
+                button.set_visibility(link_visibility[key])
+        refresh_drawer_headings()
 
     def toggle_navigation_drawer() -> None:
         nonlocal drawer_collapsed
@@ -3709,7 +3714,9 @@ def index(q: str = "") -> None:
         breadcrumb_host = ui.element("nav").props(
             "aria-label='" + render_message("webui.index.accessible_name.navigation_history_21482f31") + "'"
         ).classes("w-full min-h-7")
-        with ui.row().classes("w-full items-center no-wrap gap-4"):
+        # NiceGUI's native row follows document direction. Remove the redundant
+        # Quasar row class to avoid the legacy global RTL row-reversal rule.
+        with ui.row().classes("w-full items-center no-wrap gap-4", remove="row"):
             with ui.column().classes("gap-0 grow min-w-0"):
                 with ui.row().classes("erms-page-title-row items-center no-wrap gap-2"):
                     page_title_icon = ui.icon("dashboard").classes("erms-page-title-icon")
@@ -3903,7 +3910,11 @@ def index(q: str = "") -> None:
                         ).props("dense color=primary").classes("px-3 py-2")
                         diagnostics_toggle.on_value_change(toggle_diagnostics)
             with ui.row().classes("items-center gap-1"):
-                for key, label in (("all", f"All · {len(items)}"), ("record", f"Records · {record_count}"), ("aggregation", f"Aggregations · {aggregation_count}")):
+                for key, label in (
+                    ("all", render_message("global_search.filter.all", count=len(items))),
+                    ("record", render_message("global_search.filter.records", count=record_count)),
+                    ("aggregation", render_message("global_search.filter.aggregations", count=aggregation_count)),
+                ):
                     button = ui.button(label, on_click=lambda _, value=key: (
                         state.__setitem__("global_search_filter", value),
                         state.__setitem__("global_search_page", 1),
@@ -11294,9 +11305,9 @@ def index(q: str = "") -> None:
         header_network.set_visibility(True)
         auth_state["principal"] = principal
         privileges = set(principal.get("global_privileges", []))
+        holds_navigation.set_visibility(False)
         refresh_drawer_visibility(privileges)
         background_tasks.create(synchronize_translation_inspector(privileges))
-        holds_navigation.set_visibility(False)
         user = principal["user"]
         current_user_name.text = user["name"]
         current_user_email.text = user.get("email") or user["account_type"].title()
@@ -11326,12 +11337,16 @@ def index(q: str = "") -> None:
     async def refresh_hold_navigation() -> None:
         privileges=set((auth_state.get("principal") or {}).get("global_privileges",[]))
         if {"holds.administer", "holds.held_items.manage_all"} & privileges:
-            holds_navigation.set_visibility(True); return
+            holds_navigation.set_visibility(True)
+            refresh_drawer_headings()
+            return
         try:
             page=await api.holds_page(limit=1)
             holds_navigation.set_visibility(bool(page["total"]))
         except ApiError:
             holds_navigation.set_visibility(False)
+        finally:
+            refresh_drawer_headings()
 
     async def show_change_password() -> None:
         forced_change = bool(

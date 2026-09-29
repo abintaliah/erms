@@ -4,10 +4,10 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "f0a944e38470a8152089ff43857cdd80650345b562979c6d674a7220bb2f3f62",
+  "catalogue_sha256": "f0936e4fe2d4e3e8f0302ba3b024115d4def0a7530b33d01d526f11d8884b11b",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
-  "batch_id": "admin-export-ar-20260929000000",
-  "generated_at": "2026-09-29T00:00:00.395971+04:00",
+  "batch_id": "admin-export-ar-20260929040036",
+  "generated_at": "2026-09-29T04:00:36.438919+04:00",
   "artifact_type": "wathiq_translation_administration_export",
   "language_tag": "ar",
   "language_metadata": {
@@ -18,7 +18,7 @@
       "locale": "ar"
     }
   },
-  "catalogue_revision": 97,
+  "catalogue_revision": 99,
   "includes_reviewed_drafts": false,
   "superseded_translations": {
     "localization.bulk.action.review_publish_all": [
@@ -4208,6 +4208,42 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
         "date_published": "2026-09-26T13:44:17.672002+00:00"
+      }
+    },
+    {
+      "message_key": "global_search.filter.aggregations",
+      "translated_text": "الملفات · {count}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-28T23:55:09.318689+00:00",
+        "date_published": "2026-09-28T23:55:09.318689+00:00"
+      }
+    },
+    {
+      "message_key": "global_search.filter.all",
+      "translated_text": "الكل · {count}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-28T23:55:09.318689+00:00",
+        "date_published": "2026-09-28T23:55:09.318689+00:00"
+      }
+    },
+    {
+      "message_key": "global_search.filter.records",
+      "translated_text": "الوثائق · {count}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-28T23:55:09.318689+00:00",
+        "date_published": "2026-09-28T23:55:09.318689+00:00"
       }
     },
     {
