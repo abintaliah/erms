@@ -768,6 +768,14 @@ shows a searchable, paginated selector constrained by the server-computed
 audience choices. It explains that recipients see the saved query but only
 their own authorized matching resources.
 
+Each role and organizational-unit selector displays localized guidance explaining
+ordinary-user and Saved Search Administrator eligibility. Its browse tree uses
+the same server-computed eligibility as type-ahead search, before branch
+pagination. Unrelated ineligible branches are hidden; necessary ancestor units
+remain visible for navigation but cannot be selected unless independently
+eligible. Browser search returns eligible choices only. These constraints apply
+to audience pickers, not the general organization browser.
+
 The server supplies owner ID, schema version normalization, timestamps, version,
 and capabilities. These are not creator-editable fields. Page offset, current
 page, debug mode, results, counts, relevance scores, snippets, and index state

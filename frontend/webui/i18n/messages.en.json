@@ -26994,6 +26994,95 @@
     "is_html": false
   },
   {
+    "message_key": "webui.saved_audience.roles_help",
+    "context_group": "webui.saved_audience",
+    "default_text": "You can select your own active roles. Saved Search Administrators can select any eligible active role.",
+    "semantic_meaning": "Explains saved-search audience eligibility for ordinary users and saved-search administrators.",
+    "common_locations": [
+      "Saved Search dialog, beneath the Roles selector"
+    ],
+    "translator_guidance": "Administrator means a holder of the saved-search administrator privilege, not all organization browsers. Preserve the distinction between own memberships and administrator scope.",
+    "grammatical_role": "help_text",
+    "parameter_schema": {},
+    "rendered_example": "You can select your own active roles. Saved Search Administrators can select any eligible active role.",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_audience.units_help",
+    "context_group": "webui.saved_audience",
+    "default_text": "You can select organizational units associated with your active roles. Saved Search Administrators can select any active organizational unit.",
+    "semantic_meaning": "Explains saved-search audience eligibility for ordinary users and saved-search administrators.",
+    "common_locations": [
+      "Saved Search dialog, beneath the Organizational units selector"
+    ],
+    "translator_guidance": "Administrator means a holder of the saved-search administrator privilege, not all organization browsers. Preserve the distinction between own memberships and administrator scope.",
+    "grammatical_role": "help_text",
+    "parameter_schema": {},
+    "rendered_example": "You can select organizational units associated with your active roles. Saved Search Administrators can select any active organizational unit.",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_search_metadata.audience",
+    "context_group": "webui.saved_search_metadata",
+    "default_text": "Shared with {roles} role(s) and {units} organizational unit(s)",
+    "semantic_meaning": "Saved-search card audience metadata.",
+    "common_locations": [
+      "Saved-search browser cards"
+    ],
+    "translator_guidance": "Translate system metadata; preserve placeholders. Owner names are user content. Counts describe directly selected audience roles and units.",
+    "grammatical_role": "interface text",
+    "parameter_schema": {
+      "roles": "integer",
+      "units": "integer"
+    },
+    "rendered_example": "Shared with {roles} role(s) and {units} organizational unit(s)",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_search_metadata.owned",
+    "context_group": "webui.saved_search_metadata",
+    "default_text": "Owned by you",
+    "semantic_meaning": "Saved-search card owned metadata.",
+    "common_locations": [
+      "Saved-search browser cards"
+    ],
+    "translator_guidance": "Translate system metadata; preserve placeholders. Owner names are user content. Counts describe directly selected audience roles and units.",
+    "grammatical_role": "interface text",
+    "parameter_schema": {},
+    "rendered_example": "Owned by you",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_search_metadata.shared_by",
+    "context_group": "webui.saved_search_metadata",
+    "default_text": "Shared by {owner}",
+    "semantic_meaning": "Saved-search card shared_by metadata.",
+    "common_locations": [
+      "Saved-search browser cards"
+    ],
+    "translator_guidance": "Translate system metadata; preserve placeholders. Owner names are user content. Counts describe directly selected audience roles and units.",
+    "grammatical_role": "interface text",
+    "parameter_schema": {
+      "owner": "text"
+    },
+    "rendered_example": "Shared by {owner}",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_search_metadata.uncategorized",
+    "context_group": "webui.saved_search_metadata",
+    "default_text": "Uncategorized",
+    "semantic_meaning": "Saved-search card uncategorized metadata.",
+    "common_locations": [
+      "Saved-search browser cards"
+    ],
+    "translator_guidance": "Translate system metadata; preserve placeholders. Owner names are user content. Counts describe directly selected audience roles and units.",
+    "grammatical_role": "interface text",
+    "parameter_schema": {},
+    "rendered_example": "Uncategorized",
+    "is_html": false
+  },
+  {
     "message_key": "webui.security_level_remedy.description.downgrade_subtree",
     "context_group": "webui.security_level_remedy.description",
     "default_text": "If an aggregation is being lowered, Wathiq also lowers child aggregations and records whose security levels would otherwise be too high. This can affect many resources and is therefore shown during review.",

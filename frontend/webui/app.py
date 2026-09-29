@@ -15442,8 +15442,14 @@ def index(q: str = "") -> None:
     async def show_organization_structure(
         *, selection_mode: str | None = None, target_control: Any = None,
         on_selection: Callable[..., Any] | None = None,
+        saved_audience: str | None = None,
     ) -> None:
         """Shared lazy organization browser for the page and selectors."""
+        selection_entity_label = {
+            "role": render_message("entity_metadata.field.role"),
+            "org_unit": render_message("entity_metadata.field.organization_unit"),
+            "user": render_message("entity_metadata.field.user"),
+        }.get(selection_mode, "")
         is_selector = selection_mode is not None
         if not is_selector:
             register_navigation("organization-browser", "Browse organization structure")
@@ -15535,6 +15541,7 @@ def index(q: str = "") -> None:
                 result = await api.organization_children(
                     node["id"], include_roles=selection_mode != "org_unit", limit=25,
                     unit_offset=page["unit_offset"], role_offset=page["role_offset"],
+                    audience=saved_audience,
                 )
                 children = [{**item, "type": "org_unit"} for item in result["org_units"]]
                 if selection_mode != "org_unit":
@@ -15567,7 +15574,7 @@ def index(q: str = "") -> None:
             if not is_selector or node["type"] != selection_mode:
                 return not is_selector
             status = node.get("effective_status", node.get("status"))
-            return status == "active"
+            return status == "active" and (saved_audience is None or node.get("audience_selectable") is True)
 
         def render_nodes(nodes: list[dict[str, Any]], depth: int = 0) -> None:
             for node in nodes:
@@ -15654,7 +15661,7 @@ def index(q: str = "") -> None:
                 if browser.get("root_more"):
                     async def load_more_roots() -> None:
                         page_rows = await api.organization_roots(
-                            limit=26, offset=len(browser["roots"]),
+                            limit=26, offset=len(browser["roots"]), audience=saved_audience,
                         )
                         browser["roots"].extend(
                             {**item, "type": "org_unit"} for item in page_rows[:25]
@@ -15680,7 +15687,7 @@ def index(q: str = "") -> None:
                     target = next((item for item in nodes if item["id"] == unit_id), None)
                 while target is None and parent_node is None and browser.get("root_more"):
                     page_rows = await api.organization_roots(
-                        limit=26, offset=len(browser["roots"]),
+                        limit=26, offset=len(browser["roots"]), audience=saved_audience,
                     )
                     browser["roots"].extend(
                         {**item, "type": "org_unit"} for item in page_rows[:25]
@@ -15757,7 +15764,7 @@ def index(q: str = "") -> None:
                 or not selected.get("selectable")
             ):
                 ui.notify(
-                    render_message("webui.confirm_browser_selection.notify.select_an_active_replace_first_9ad73ee2", replace=selection_mode.replace('_', ' ')),
+                    render_message("webui.confirm_browser_selection.notify.select_an_active_replace_first_9ad73ee2", replace=selection_entity_label),
                     color="warning",
                 )
                 return
@@ -15857,7 +15864,7 @@ def index(q: str = "") -> None:
                 return
             type_filter = selection_mode or entity_type_filter.value
             results = await api.search_organization(
-                query, entity_type=type_filter, status=status_filter.value,
+                query, entity_type=type_filter, status=status_filter.value, audience=saved_audience,
             )
             with search_results_host:
                 if not results:
@@ -15898,7 +15905,7 @@ def index(q: str = "") -> None:
                 card_context = ui.column().classes("w-full p-4 gap-3")
         with card_context:
             if is_selector:
-                ui.label(render_message("webui.show_organization_structure.label.browse_replace_s_06870755", replace=selection_mode.replace('_', ' '))).classes("text-xl font-semibold")
+                ui.label(render_message("webui.show_organization_structure.label.browse_replace_s_06870755", replace=selection_entity_label)).classes("text-xl font-semibold")
             with ui.row().classes("w-full items-end gap-2"):
                 query_input = ui.input(render_message("webui.show_organization_structure.input.search_organization_structure_b22c915b"), value=saved_state.get("query", "")).props("outlined dense clearable").classes("grow")
                 validity_filter = ui.select(
@@ -15913,7 +15920,7 @@ def index(q: str = "") -> None:
                 async def refresh_browser() -> None:
                     browser["children"].clear()
                     try:
-                        roots = await api.organization_roots(limit=26)
+                        roots = await api.organization_roots(limit=26, audience=saved_audience)
                     except ApiError as error:
                         # The shared 401 handler has already cleared protected UI
                         # and opened the sign-in dialog. Do not continue rendering
@@ -15974,12 +15981,12 @@ def index(q: str = "") -> None:
                 with ui.row().classes("w-full justify-end"):
                     ui.button(render_message("webui.show_organization_structure.button.cancel_6938b29c"), on_click=dialog.close).props("flat no-caps")
                     selection_confirm_button = ui.button(
-                        render_message("webui.show_organization_structure.button.select_replace_cf383c4d", replace=selection_mode.replace('_', ' ')), icon="check",
+                        render_message("webui.show_organization_structure.button.select_replace_cf383c4d", replace=selection_entity_label), icon="check",
                         on_click=confirm_browser_selection,
                     ).props("unelevated no-caps color=primary")
                     selection_confirm_button.disable()
         try:
-            roots = await api.organization_roots(limit=26)
+            roots = await api.organization_roots(limit=26, audience=saved_audience)
         except ApiError as error:
             # Session expiry and development reloads can race with a navigation
             # click. The API client has already presented sign-in for a 401.
@@ -17206,14 +17213,17 @@ def index(q: str = "") -> None:
                         return True
                     await show_organization_structure(
                         selection_mode="role" if kind == "roles" else "org_unit", on_selection=choose,
+                        saved_audience=kind,
                     )
 
                 with audience_host:
                     role_control = ui.select({}, value=[], label=render_message("webui.save_search.select.roles_c2c266e1"), multiple=True, with_input=True).props("outlined use-chips options-dense clearable input-debounce=0").classes("w-full")
+                    ui.label(render_message("webui.saved_audience.roles_help")).classes("text-xs text-slate-500")
                     with ui.row():
                         more_roles = ui.button(render_message("webui.render_collection.button.load_more_755f4879"), icon="more_horiz").props("flat dense no-caps")
                         ui.button(render_message("webui.saved_audience.browse_roles"), icon="account_tree", on_click=lambda: browse_audience(role_control, "roles")).props("flat dense no-caps")
                     unit_control = ui.select({}, value=[], label=render_message("webui.save_search.select.organizational_units_9c039bd2"), multiple=True, with_input=True).props("outlined use-chips options-dense clearable input-debounce=0").classes("w-full")
+                    ui.label(render_message("webui.saved_audience.units_help")).classes("text-xs text-slate-500")
                     with ui.row():
                         more_units = ui.button(render_message("webui.render_collection.button.load_more_755f4879"), icon="more_horiz").props("flat dense no-caps")
                         ui.button(render_message("webui.saved_audience.browse_units"), icon="account_tree", on_click=lambda: browse_audience(unit_control, "org-units")).props("flat dense no-caps")
@@ -17317,7 +17327,12 @@ def index(q: str = "") -> None:
                     dialog.close()
                     load_saved_into_workspace(selected)
 
+                saved_page_request = {"revision": 0}
+                dialog.on("hide", lambda: saved_page_request.update(revision=saved_page_request["revision"] + 1))
+
                 async def load_saved_page() -> None:
+                    saved_page_request["revision"] += 1
+                    revision = saved_page_request["revision"]
                     params: dict[str, Any] = {"limit": 25, "offset": filters["offset"]}
                     administrative_all = administrator and scope_control.value == "all"
                     if not administrative_all:
@@ -17330,9 +17345,27 @@ def index(q: str = "") -> None:
                             if control.value not in (None, ""): params[key] = control.value
                     try:
                         page = await (api.saved_search_administration(**params) if administrative_all else api.saved_searches(**params))
+                        # Resolve only this page's audience IDs, in bounded parallel batches.
+                        audience_names: dict[str, dict[int, str]] = {"roles": {}, "org-units": {}}
+                        lookups = []
+                        for kind, field in (("roles", "role_ids"), ("org-units", "org_unit_ids")):
+                            ids = sorted({int(value) for item in page["items"] for value in item.get(field) or []})
+                            lookups.extend((kind, ids[start:start + 50]) for start in range(0, len(ids), 50))
+                        resolved_pages = await asyncio.gather(*(
+                            api.saved_search_audience_options(kind, ids=ids, limit=50, offset=0)
+                            for kind, ids in lookups
+                        ))
+                        for (kind, _), resolved_page in zip(lookups, resolved_pages):
+                            for target in resolved_page["items"]:
+                                name = (target.get("localized") or {}).get("name") or target["name"]
+                                audience_names[kind][int(target["id"])] = f"{target['code']} — {name}"
                     except ApiError as error:
+                        if revision != saved_page_request["revision"] or not search_view_is_current():
+                            return
                         list_host.clear()
                         with list_host: ui.label(error_message(error)).classes("text-negative")
+                        return
+                    if revision != saved_page_request["revision"] or not search_view_is_current():
                         return
                     list_host.clear()
                     categories = {item.get("category") for item in page["items"] if item.get("category")}
@@ -17345,9 +17378,9 @@ def index(q: str = "") -> None:
                         for item in page["items"]:
                             owner = item.get("owner") or {}
                             mine = item.get("owner_user_id") == (auth_state.get("principal") or {}).get("user", {}).get("id")
-                            audience_label = "Only me" if item.get("audience_mode") == "private" else (
-                                f"Shared with {len(item.get('role_ids') or [])} role(s) and "
-                                f"{len(item.get('org_unit_ids') or [])} organizational unit(s)"
+                            audience_label = render_message("webui.save_search.radio.only_me_739a9de4") if item.get("audience_mode") == "private" else render_message(
+                                "webui.saved_search_metadata.audience",
+                                roles=len(item.get("role_ids") or []), units=len(item.get("org_unit_ids") or []),
                             )
                             with ui.card().classes("w-full shadow-none border border-slate-200 p-4"):
                                 with ui.row().classes("w-full items-start gap-3"):
@@ -17356,11 +17389,19 @@ def index(q: str = "") -> None:
                                         ui.label(item["name"]).classes("font-semibold")
                                         ui.label(item.get("description") or render_message("webui.load_saved_page.label.no_description_e23ca0ad")).classes("text-sm text-slate-600")
                                         ui.label(
-                                            render_message("webui.load_saved_page.label.title_value_updated_format_timestamp_value_b78393c6", title=item['resource_type'].title(), value=item.get('category') or 'Uncategorized', format_timestamp=format_timestamp(item['date_updated']), value_2='owned by you' if mine else 'shared by ' + str(owner.get('name') or item['owner_user_id']))
+                                            render_message("webui.load_saved_page.label.title_value_updated_format_timestamp_value_b78393c6", title=localized_editor_entity("records" if item["resource_type"] == "record" else "aggregations", item["resource_type"]), value=item.get('category') or render_message("webui.saved_search_metadata.uncategorized"), format_timestamp=format_timestamp(item['date_updated']), value_2=render_message("webui.saved_search_metadata.owned") if mine else render_message("webui.saved_search_metadata.shared_by", owner=str(owner.get('name') or item['owner_user_id'])))
                                         ).classes("text-xs text-slate-500")
                                         ui.label(
                                             render_message("webui.load_saved_page.label.maximum_max_results_results_audience_label_1664749d", max_results=format(item['definition']['max_results'], ','), audience_label=audience_label)
                                         ).classes("text-xs text-slate-500")
+                                        for kind, field, label_key in (
+                                            ("roles", "role_ids", "webui.save_search.select.roles_c2c266e1"),
+                                            ("org-units", "org_unit_ids", "webui.save_search.select.organizational_units_9c039bd2"),
+                                        ):
+                                            names = [audience_names[kind][int(value)] for value in item.get(field) or []
+                                                     if int(value) in audience_names[kind]]
+                                            if names:
+                                                ui.label(render_message(label_key) + ": " + "; ".join(names)).classes("text-xs text-slate-500")
                                     ui.badge(render_message("webui.load_saved_page.badge.mine_47cb9b71") if mine else render_message("webui.load_saved_page.badge.shared_0a95a474"), color="blue-grey").props("outline")
                                     ui.button(
                                         render_message("webui.load_saved_page.button.open_2606a7e0"), icon="folder_open",

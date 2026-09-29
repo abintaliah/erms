@@ -67,3 +67,34 @@ def test_saved_search_tabs_use_api_scope_ids_separate_from_translated_labels():
     assert [ast.literal_eval(tab.args[0]) for tab in tabs] == ['all', 'owned', 'shared_with_me']
     assert all(any(keyword.arg == 'label' and isinstance(keyword.value, ast.Call)
                    for keyword in tab.keywords) for tab in tabs)
+
+
+def test_saved_audience_ancestor_cannot_be_selected():
+    source = ast.parse((Path(__file__).parents[1] / 'app.py').read_text())
+    browser = next(n for n in ast.walk(source) if isinstance(n, ast.AsyncFunctionDef)
+                   and n.name == 'show_organization_structure')
+    predicate = next(n for n in ast.walk(browser) if isinstance(n, ast.FunctionDef)
+                     and n.name == 'node_selectable')
+    namespace = {'Any': object, 'is_selector': True, 'selection_mode': 'org_unit',
+                 'saved_audience': 'org-units'}
+    exec(compile(ast.Module(body=[predicate], type_ignores=[]), 'predicate', 'exec'), namespace)
+    selectable = namespace['node_selectable']
+    node = {'type': 'org_unit', 'status': 'active'}
+    assert not selectable(node)
+    assert not selectable({**node, 'audience_selectable': False})
+    assert selectable({**node, 'audience_selectable': True})
+    assert not selectable({**node, 'audience_selectable': True, 'effective_status': 'inactive'})
+    namespace['saved_audience'] = None
+    assert selectable(node)
+
+
+def test_saved_audience_scope_survives_every_browser_page_and_search():
+    source = ast.parse((Path(__file__).parents[1] / 'app.py').read_text())
+    browser = next(n for n in ast.walk(source) if isinstance(n, ast.AsyncFunctionDef)
+                   and n.name == 'show_organization_structure')
+    calls = [n for n in ast.walk(browser) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Attribute) and n.func.attr in
+             {'organization_roots', 'organization_children', 'search_organization'}]
+    assert len(calls) == 6
+    assert all(any(k.arg == 'audience' and isinstance(k.value, ast.Name)
+                   and k.value.id == 'saved_audience' for k in call.keywords) for call in calls)

@@ -103,3 +103,31 @@ the WebUI performance contract's identity isolation and abandoned-response rules
 cleanup and callback functions with synthetic state: normal persistence, identity
 boundary cleanup, stale persistence, and delayed success/error/cancellation.
 These tests do not access a database. No translation keys or artifacts changed.
+
+## Saved-search audience guidance and scoped browsing
+
+Section 10 audience selectors reuse the eligibility predicate from AS-10/AS-11
+in both type-ahead and browse APIs. The optional `audience` browse scope filters
+roots, children and search before pagination; recursive ancestor paths remain
+navigable, while `audience_selectable` prevents choosing context-only units.
+The shared general organization browser retains its existing scope. No cache,
+privilege, schema or migration was added.
+
+`test_saved_audience_tree.py`, `test_browse.py` and `test_saved_searches.py` passed
+13 tests against a newly created canonical-schema disposable database, which
+was dropped afterward. Coverage includes ordinary/admin scope, hidden siblings,
+disabled ancestor metadata, branch paging, matching type-ahead choices, and fresh
+results after assignment removal. `test_saved_audience_paging.py` verifies the
+selection predicate and propagation of scope through every browse request.
+
+Two contextual keys (`webui.saved_audience.roles_help` and `.units_help`) were
+added in English and Arabic. Existing administrator-exported translations and
+provenance are preserved; the new Arabic wording is flagged for human review.
+
+The focused frontend/locale run passed 27 tests. Catalogue reference, exact-key,
+ordering, blank, placeholder, terminology, source hash and unchanged-existing-
+provenance checks passed. No new administrator export was promoted. Live Arabic
+UI inspection confirmed note placement, currently using English fallback until
+the new drafts are reviewed and published. The local API process still serves
+the old browse implementation and requires restart; live scoped-tree and full
+LTR/RTL verification remain pending that reload/publication.

@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "f0936e4fe2d4e3e8f0302ba3b024115d4def0a7530b33d01d526f11d8884b11b",
+  "catalogue_sha256": "d53a1818f77f3d719e3a56ad4c350077ec90f1b96e33f5d222f2ee080e7c15f9",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260929040036",
   "generated_at": "2026-09-29T04:00:36.438919+04:00",
@@ -22352,6 +22352,78 @@
         "source_status": "published",
         "date_reviewed": "2026-09-28T17:44:28.872011+00:00",
         "date_published": "2026-09-28T17:44:28.872011+00:00"
+      }
+    },
+    {
+      "message_key": "webui.saved_audience.roles_help",
+      "translated_text": "يمكنك اختيار أدوارك النشطة. ويمكن لمسؤولي عمليات البحث المحفوظة اختيار أي دور نشط مؤهل.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:28:37.214484+04:00",
+        "date_published": "2026-09-29T10:28:37.214484+04:00"
+      }
+    },
+    {
+      "message_key": "webui.saved_audience.units_help",
+      "translated_text": "يمكنك اختيار الوحدات التنظيمية المرتبطة بأدوارك النشطة. ويمكن لمسؤولي عمليات البحث المحفوظة اختيار أي وحدة تنظيمية نشطة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:28:37.214484+04:00",
+        "date_published": "2026-09-29T10:28:37.214484+04:00"
+      }
+    },
+    {
+      "message_key": "webui.saved_search_metadata.audience",
+      "translated_text": "مشاركة مع الأدوار: {roles}، والوحدات التنظيمية: {units}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:40:32.898819+04:00",
+        "date_published": "2026-09-29T10:40:32.898819+04:00"
+      }
+    },
+    {
+      "message_key": "webui.saved_search_metadata.owned",
+      "translated_text": "أنت المالك",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:40:32.898819+04:00",
+        "date_published": "2026-09-29T10:40:32.898819+04:00"
+      }
+    },
+    {
+      "message_key": "webui.saved_search_metadata.shared_by",
+      "translated_text": "مشاركة من {owner}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:40:32.898819+04:00",
+        "date_published": "2026-09-29T10:40:32.898819+04:00"
+      }
+    },
+    {
+      "message_key": "webui.saved_search_metadata.uncategorized",
+      "translated_text": "بلا فئة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:40:32.898819+04:00",
+        "date_published": "2026-09-29T10:40:32.898819+04:00"
       }
     },
     {
