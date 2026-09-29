@@ -189,7 +189,7 @@ must never be coalesced. This is a final safety net, not permission to leave
 known duplicate call sites in place: when one workflow uses the same response
 twice, keep it in page/workspace state and invalidate it on an explicit refresh
 or related mutation. The classification workspace follows this rule for paths
-used first to reveal a tree node and then to render its detail panel.
+used to render ancestor navigation and retention provenance on its details page.
 
 Small, deliberately complete catalogues may be cached by the API client for the
 authenticated browser-page session. Cache entries are private to that client
@@ -379,7 +379,7 @@ contract for future work.
 | Recent-resource decoration | Resolve only relationship IDs present in the 50-row activity result and query effective closure narrowly | `frontend/webui/app.py` |
 | Organization-unit decoration | Resolve the current page's direct relationships and required ancestor chains only | `frontend/webui/app.py` |
 | Concurrent duplicate reads | Coalesce identical in-flight `GET`/`HEAD` operations per page client and return isolated response copies | `frontend/webui/api_client.py` |
-| Classification path | Reuse one path response across tree reveal and detail rendering; clear it on tree/scheme refresh | `frontend/webui/app.py` |
+| Classification path | Reuse one path response for ancestors and retention provenance; clear on selection/refresh | `frontend/webui/classification_workspace.py` |
 | Reference data | Cache identity-scoped stable lists, invalidate on mutation/token change, and revalidate after 30 seconds | `frontend/webui/api_client.py` |
 | Reference ETags | Emit deterministic private ETags for schemes, org units, roles, profiles, privileges, profile references, and security levels | `backend/services/api/http_cache.py` and resource routes |
 | Abandoned navigation | Cancel unfinished reads when another page transition is committed | `frontend/webui/app.py` and `frontend/webui/api_client.py` |
@@ -455,3 +455,6 @@ their configured search fields. No additional cache or catalogue text is added.
 `frontend/webui/tests/test_relationship_search.py` covers English and Arabic
 queries, both resource types, duplicate-field avoidance, unchanged other entity
 fields, and preservation of pagination and filters.
+
+Classification workspace cache, paging, RTL evidence and regression results are
+recorded in [the redesign verification report](classification-workspace-redesign-verification.md).

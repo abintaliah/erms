@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "1d575c2d0db7d4a75b998f5f80f1bf9002d01879789085101c72ff224dd3be34",
+  "catalogue_sha256": "1098af4b11f9753f86f209ba82c9e33fb5bae5a2b862cad1d2979f145212a793",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260929040036",
   "generated_at": "2026-09-29T04:00:36.438919+04:00",
@@ -2624,6 +2624,138 @@
         "source_status": "published",
         "date_reviewed": "2026-09-28T09:31:33.877240+00:00",
         "date_published": "2026-09-28T09:31:33.877240+00:00"
+      }
+    },
+    {
+      "message_key": "classification_browser.add_child",
+      "translated_text": "تصنيف فرعي",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614640+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_browser.add_root",
+      "translated_text": "تصنيف جذري",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614637+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_browser.back_to_tree",
+      "translated_text": "العودة إلى شجرة التصنيف",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614614+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_browser.retry",
+      "translated_text": "إعادة المحاولة",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614645+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_browser.toggle_branch",
+      "translated_text": "توسيع التصنيف أو طيه",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614650+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_browser.toggle_scheme",
+      "translated_text": "توسيع نظام التصنيف أو طيه",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614648+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_details.actions.audit",
+      "translated_text": "التدقيق",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-action-panel-v1",
+        "generated_at": "2026-09-29T09:08:54.377001+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_details.actions.classification",
+      "translated_text": "إجراءات التصنيف",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-action-panel-v1",
+        "generated_at": "2026-09-29T09:08:54.376995+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_details.actions.lifecycle",
+      "translated_text": "دورة الحياة",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-action-panel-v1",
+        "generated_at": "2026-09-29T09:08:54.376999+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_details.actions.metadata",
+      "translated_text": "البيانات الوصفية والتسلسل الهرمي",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-action-panel-v1",
+        "generated_at": "2026-09-29T09:08:54.376997+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_details.actions.scheme",
+      "translated_text": "إجراءات نظام التصنيف",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-action-panel-v1",
+        "generated_at": "2026-09-29T09:08:54.376611+00:00",
+        "review_required": true
       }
     },
     {
@@ -19847,18 +19979,6 @@
       }
     },
     {
-      "message_key": "webui.render_scheme_list.label.counts_loading_1ffb90cd",
-      "translated_text": "جارٍ تحميل الأعداد…",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
       "message_key": "webui.render_scheme_list.label.no_matching_schemes_2a601365",
       "translated_text": "لا توجد نظم تصنيف مطابقة",
       "quality_flags": [],
@@ -19868,18 +19988,6 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
         "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_scheme_list.text.no_description_7f023195",
-      "translated_text": "لا يوجد وصف",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
       }
     },
     {
@@ -21203,30 +21311,6 @@
       }
     },
     {
-      "message_key": "webui.render_workspace_right.label.its_information_will_appear_here_bc4769c5",
-      "translated_text": "ستظهر معلوماته هنا.",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.label.its_metadata_and_effective_retention_rule_f231c468",
-      "translated_text": "ستظهر بياناته الوصفية وقاعدة الحفظ الفعلية هنا.",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
       "message_key": "webui.render_workspace_right.label.no_classifications_match_this_search_3e1025e9",
       "translated_text": "لا توجد تصنيفات تطابق هذا البحث.",
       "quality_flags": [],
@@ -21272,42 +21356,6 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
         "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.label.select_a_classification_192337f3",
-      "translated_text": "اختر تصنيفًا",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.label.select_a_classification_scheme_825fcd9e",
-      "translated_text": "اختر نظام تصنيف",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.label.select_a_scheme_to_browse_its_classificati_afdd23e3",
-      "translated_text": "اختر نظام تصنيف لاستعراض تصنيفاته.",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
       }
     },
     {
@@ -21565,30 +21613,6 @@
     {
       "message_key": "webui.render_workspace_right.tooltip.schemes_that_have_governed_aggregations_ca_423d00b9",
       "translated_text": "لا يمكن إلغاء نشر نظم التصنيف التي تحتوي على ملفات خاضعة للحوكمة",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.tooltip.select_a_branch_classification_before_addi_b9ec1645",
-      "translated_text": "اختر تصنيفًا فرعيًا قبل إضافة تصنيف تابع",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.tooltip.terminal_classifications_cannot_contain_ch_80c2bf31",
-      "translated_text": "لا يمكن أن تحتوي التصنيفات النهائية على تصنيفات تابعة",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",
@@ -23159,18 +23183,6 @@
       }
     },
     {
-      "message_key": "webui.select_classification_workspace.label.classification_schemes_6020e95d",
-      "translated_text": "نظم التصنيف",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
       "message_key": "webui.select_classification_workspace.select.code_d3581de2",
       "translated_text": "الرمز",
       "quality_flags": [],
@@ -23233,18 +23245,6 @@
     {
       "message_key": "webui.select_classification_workspace.text.build_and_govern_classification_hierarchie_1766e961",
       "translated_text": "إنشاء التسلسلات الهرمية للتصنيف وحوكمتها ضمن سياقها",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.select_classification_workspace.text.classification_schemes_79225ac9",
-      "translated_text": "نظم التصنيف",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",

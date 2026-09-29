@@ -87,8 +87,8 @@ The interface provides the shared application shell, local authentication,
 login-session administration, role-aware user menu, list views, search-first
 aggregation and record views, add/edit dialogs, optimistic concurrency
 handling, and record-scoped digital-component upload/listing. Classification
-schemes and classifications share a vertically stacked administration workspace
-with a fixed-height scrollable scheme browser, lazy-loaded hierarchy,
+schemes and classifications share a full-width, independently paged hierarchy
+with dedicated scheme and classification details pages,
 contextual root/child creation, classification search, and effective-rule
 provenance. See [`../../docs/classification-schemes.md`](../../docs/classification-schemes.md)
 for its behavior. The Aggregations page also provides a cursor-paginated,
@@ -111,7 +111,7 @@ responsive, RTL, testing, and review rules for new WebUI work are documented in
 It incorporates and supersedes the deprecated
 [`../../docs/ui-visual-design.md`](../../docs/ui-visual-design.md), which is
 retained only as historical context and must not be used as a design authority.
-The selected-classification pane exposes deactivate,
+The classification details page exposes deactivate,
 reactivate, and delete actions. Delete is enabled only for an unused leaf in an
 active, unpublished scheme; otherwise inline guidance explains the blocking
 condition. Direct, ancestor-derived, and scheme-derived inactivity are visibly
@@ -122,3 +122,15 @@ original format or viewed through the bundled, self-hosted PDF.js viewer. See
 [`../../docs/document-viewing.md`](../../docs/document-viewing.md). Authorization
 remains a later subsystem. Direct and inherited closure behavior is described in
 [`../../docs/aggregation-closure.md`](../../docs/aggregation-closure.md).
+
+The classification redesign's field/action parity, RTL findings, catalogue
+changes and validation evidence are recorded in
+[`../../docs/classification-workspace-redesign-verification.md`](../../docs/classification-workspace-redesign-verification.md).
+Its NiceGUI interaction tests run separately from the source/unit suite because
+the NiceGUI user plugin resets global UI state:
+
+```sh
+DATABASE_URL='' frontend/webui/.venv/bin/python -m pytest frontend/webui/interaction/tests -q -o asyncio_mode=auto
+```
+
+These interaction tests use a fake API and never connect to a database.

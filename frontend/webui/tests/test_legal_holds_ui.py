@@ -151,11 +151,11 @@ def test_aggregation_command_centre_matches_the_approved_two_column_layout():
     assert '"aggregation-child-preview-grid mx-5 mb-3"' in source
     assert 'for child in children:' in source
     assert 'f"{child[\'aggregation_number\']} · {child_status}"' in source
-    assert '"aggregation-retention-stages w-full"' in source
+    assert '"aggregation-retention-stages w-full"' in (APP.parent / "retention_timeline.py").read_text()
     assert '"aggregation-retention-footer w-full"' in source
     assert 'grid-column: 1 / -1; grid-row: 2' in source
-    assert '"w-full text-sm font-semibold text-slate-800"' in source
-    assert "localized_disposition_value(final_disposition)" in source
+    assert '"w-full text-sm font-semibold text-slate-800"' in (APP.parent / "retention_timeline.py").read_text()
+    assert 'disposition_label(rule["final_disposition"])' in (APP.parent / "retention_timeline.py").read_text()
     assert '.aggregation-retention-stage:not(:last-child)::after' in source
     assert 'padding-inline-start: 30px' in source
     assert 'html[dir="rtl"] .aggregation-retention-stage:not(:last-child)::after' in source
