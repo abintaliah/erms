@@ -179,7 +179,7 @@ def _get(connection: Connection, saved_search_id: int, *, lock: bool = False, ad
         (saved_search_id,),
     ).fetchone()
     if row is None:
-        raise HTTPException(status_code=404, detail="saved search not found")
+        raise HTTPException(status_code=404, detail={"code": "saved_search_unavailable", "message_key": "saved_search.error.unavailable"})
     return row
 
 

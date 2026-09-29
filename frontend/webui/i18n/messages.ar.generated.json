@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "d53a1818f77f3d719e3a56ad4c350077ec90f1b96e33f5d222f2ee080e7c15f9",
+  "catalogue_sha256": "1d575c2d0db7d4a75b998f5f80f1bf9002d01879789085101c72ff224dd3be34",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260929040036",
   "generated_at": "2026-09-29T04:00:36.438919+04:00",
@@ -7712,6 +7712,18 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
         "date_published": "2026-09-26T13:44:17.672002+00:00"
+      }
+    },
+    {
+      "message_key": "saved_search.error.unavailable",
+      "translated_text": "لم يعد هذا البحث المحفوظ موجودًا، أو لم تعد لديك صلاحية الوصول إليه.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T11:11:50.290555+04:00",
+        "date_published": "2026-09-29T11:11:50.290555+04:00"
       }
     },
     {

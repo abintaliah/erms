@@ -966,19 +966,21 @@ def add_timestamp_slots(table: Any, column_names: list[str]) -> None:
 
 
 def error_message(error: ApiError) -> str:
+    if error.status_code == 404 and error.message == "saved search not found":
+        return render_message_plain("saved_search.error.unavailable")
     if error.status_code == 412:
-        return render_message("common.error.stale_version")
+        return render_message_plain("common.error.stale_version")
     if error.status_code == 428:
-        return render_message("common.error.precondition_required")
+        return render_message_plain("common.error.precondition_required")
     if error.message == "X-Change-Reason is required when lowering a security level":
-        return render_message("security_level.error.lower_reason_required")
+        return render_message_plain("security_level.error.lower_reason_required")
     if error.message == "X-Change-Reason is required when changing a security level":
-        return render_message("security_level.error.change_reason_required")
+        return render_message_plain("security_level.error.change_reason_required")
     if "saved_searches_owner_name_ci_unique" in error.message:
-        return render_message("saved_search.error.name_exists")
+        return render_message_plain("saved_search.error.name_exists")
     if isinstance(error.detail, dict):
         if error.detail.get("message_key"):
-            return render_message(
+            return render_message_plain(
                 error.detail["message_key"], **(error.detail.get("parameters") or {}),
             )
         messages = {
@@ -987,7 +989,7 @@ def error_message(error: ApiError) -> str:
             "insufficient_clearance": "authorization.error.insufficient_clearance",
         }
         if error.detail.get("code") in messages:
-            return render_message(messages[error.detail["code"]])
+            return render_message_plain(messages[error.detail["code"]])
     status_messages = {
         400: "common.error.bad_request",
         401: "common.error.authentication_required",
@@ -999,7 +1001,7 @@ def error_message(error: ApiError) -> str:
         429: "common.error.too_many_requests",
         503: "common.error.service_unavailable",
     }
-    return render_message(status_messages.get(error.status_code, "shared.errors.unexpected"))
+    return render_message_plain(status_messages.get(error.status_code, "shared.errors.unexpected"))
 
 
 def show_api_error(error: ApiError) -> None:
@@ -3930,7 +3932,7 @@ def index(q: str = "") -> None:
             if state.get("global_search_error"):
                 with ui.card().classes("w-full shadow-none border border-red-200 bg-red-50 p-5"):
                     ui.icon("error_outline", color="negative", size="30px")
-                    ui.label(render_message("webui.render_global_search_results.label.search_could_not_be_completed_14ef74f3")).classes("font-semibold")
+                    ui.label(render_message_plain("webui.render_global_search_results.label.search_could_not_be_completed_14ef74f3")).classes("font-semibold")
                     ui.label(state["global_search_error"]).classes("text-sm text-slate-600")
                     ui.button(render_message("webui.render_global_search_results.button.try_again_75a7aeea"), icon="refresh", on_click=lambda: run_global_search(query)).props("outline no-caps color=negative")
                 return
@@ -18030,7 +18032,7 @@ def index(q: str = "") -> None:
                     return
                 results_host.clear()
                 with results_host, ui.card().classes("w-full border border-red-200 bg-red-50 p-4 shadow-none"):
-                    ui.label(render_message("webui.execute_search.label.the_search_could_not_be_completed_f959e209")).classes("font-semibold text-red-800")
+                    ui.label(render_message_plain("webui.execute_search.label.the_search_could_not_be_completed_f959e209")).classes("font-semibold text-red-800")
                     ui.label(error_message(api_error)).classes("text-sm text-red-700")
                 status_label.text = render_message("webui.execute_search.text.search_failed_e44b669e")
             finally:
