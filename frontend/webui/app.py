@@ -1900,6 +1900,32 @@ def index(q: str = "") -> None:
             left: auto; right: 0; transform-origin: right top;
         }
         html[dir="rtl"] .q-btn__content { flex-direction: row-reverse; }
+        /* Detail action groups must wrap from the reading start. NiceGUI Row
+           offers wrap/align_items, not direction; grids cannot preserve these
+           variable-width, wrapping groups. Live RTL inspection confirmed that
+           the legacy .row rule double-reverses the inherited direction. Scope
+           this correction to action panels, including their button contents;
+           identity-header Back/Favourite/Preview groups remain independent. */
+        html[dir="rtl"] :is(.record-command-controls, .identity-command-actions,
+            .aggregation-actions-panel, .aggregation-hold-controls) .nicegui-row,
+        html[dir="rtl"] .detail-action-row,
+        html[dir="rtl"] :is(.record-command-controls, .identity-command-actions,
+            .aggregation-actions-panel, .aggregation-hold-controls,
+            .hold-command-actions, .detail-action-row) .q-btn__content {
+            flex-direction: row;
+        }
+        /* Quasar's on-left/on-right icon spacing is physical in this build.
+           Preserve its 6px separation at the logical end/start after mirroring. */
+        html[dir="rtl"] :is(.record-command-controls, .identity-command-actions,
+            .aggregation-actions-panel, .aggregation-hold-controls,
+            .hold-command-actions, .detail-action-row) .q-btn__content > .q-icon.on-left {
+            margin-right: 0; margin-left: 6px;
+        }
+        html[dir="rtl"] :is(.record-command-controls, .identity-command-actions,
+            .aggregation-actions-panel, .aggregation-hold-controls,
+            .hold-command-actions, .detail-action-row) .q-btn__content > .q-icon.on-right {
+            margin-left: 0; margin-right: 6px;
+        }
         html[dir="rtl"] .erms-nav-link { justify-content: flex-start; text-align: right; }
         html[dir="rtl"] .erms-nav-link .q-btn__content {
             direction: rtl; flex-direction: row;
@@ -14777,7 +14803,7 @@ def index(q: str = "") -> None:
                         render_message("webui.select_text_indexer_details.button.back_to_text_indexers_34b66935"), icon="arrow_forward" if current_direction["value"] == "rtl" else "arrow_back",
                         on_click=lambda: breadcrumb_back(select_text_indexers),
                     ).props("flat no-caps")
-                    with ui.row().classes("gap-2"):
+                    with ui.row().classes("detail-action-row gap-2"):
                         if indexer["status"] == "active":
                             ui.button(
                                 render_message("webui.select_text_indexer_details.button.suspend_7f5e5b10"), icon="pause_circle", on_click=lambda: change_status("suspend"),
@@ -14850,7 +14876,7 @@ def index(q: str = "") -> None:
                                         ui.label(label).classes("detail-field-label")
                                         ui.label(value).classes("text-sm break-all")
                             if credential["status"] == "active":
-                                with ui.row().classes("w-full justify-end gap-2 border-t border-slate-100 pt-2"):
+                                with ui.row().classes("detail-action-row w-full justify-start gap-2 border-t border-slate-100 pt-2"):
                                     rotate = ui.button(
                                         render_message("webui.render_credentials.button.rotate_1496c92c"), icon="sync",
                                         on_click=lambda _, item=credential: credential_dialog(item),
@@ -15203,7 +15229,7 @@ def index(q: str = "") -> None:
                                         ui.label(label).classes("detail-field-label")
                                         ui.label(value).classes("text-sm")
                             if credential["status"] == "active" and "identity.users.administer" in set((auth_state.get("principal") or {}).get("global_privileges", [])):
-                                with ui.row().classes("w-full justify-end gap-2 border-t border-slate-100 pt-2"):
+                                with ui.row().classes("detail-action-row w-full justify-start gap-2 border-t border-slate-100 pt-2"):
                                     ui.button(render_message("webui.select_user_details.button.rotate_65fa1eea"), icon="sync", on_click=lambda _, item=credential: credential_dialog(item)).props("outline dense no-caps")
                                     ui.button(render_message("webui.select_user_details.button.revoke_fd5240c0"), icon="block", color="negative", on_click=lambda _, item=credential: confirm_revoke_credential(item)).props("outline dense no-caps")
 
@@ -18908,7 +18934,7 @@ def index(q: str = "") -> None:
                 with ui.grid(columns=2).classes("w-full gap-3"):
                     held_item_assigned_from=ui.input(render_message("webui.select_hold_details.input.assignment_date_from_4569e572")).props("outlined dense clearable type=datetime-local").classes("w-full")
                     held_item_assigned_before=ui.input(render_message("webui.select_hold_details.input.assignment_date_before_45df0de5")).props("outlined dense clearable type=datetime-local").classes("w-full")
-                with ui.row().classes("w-full items-center justify-end gap-2"):
+                with ui.row().classes("detail-action-row w-full items-center justify-start gap-2"):
                     held_item_refresh=ui.button(render_message("webui.select_hold_details.button.refresh_251d4756"),icon="refresh").props("flat dense no-caps")
                     if hold["capabilities"].get("manage_held_items"):
                         add_held_item=ui.button(render_message("webui.select_hold_details.button.add_held_items_4cfdf56b"),icon="add").props("unelevated dense no-caps")
