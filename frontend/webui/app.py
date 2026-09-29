@@ -11483,9 +11483,10 @@ def index(q: str = "") -> None:
         refresh_drawer_visibility(privileges)
         background_tasks.create(synchronize_translation_inspector(privileges))
         user = principal["user"]
-        current_user_name.text = user["name"]
+        display_user = {**user, "name": (user.get("localized") or {}).get("name") or user["name"]}
+        current_user_name.text = display_user["name"]
         current_user_email.text = user.get("email") or user["account_type"].title()
-        avatar = user_avatar(user)
+        avatar = user_avatar(display_user)
         current_user_avatar_initials.text = avatar["initials"]
         current_user_avatar.style(
             replace=(
@@ -11505,8 +11506,9 @@ def index(q: str = "") -> None:
                 with ui.row().classes("erms-profile-role-row w-full items-center gap-2 no-wrap"):
                     ui.icon("badge", size="18px").classes("text-primary")
                     with ui.column().classes("erms-profile-role-copy gap-0 min-w-0"):
-                        ui.label(role["name"]).classes("text-sm font-medium line-clamp-1")
-                        ui.label(role["org_unit"]["name"]).classes("text-xs text-slate-400 line-clamp-1")
+                        ui.label((role.get("localized") or {}).get("name") or role["name"]).classes("text-sm font-medium line-clamp-1")
+                        unit = role["org_unit"]
+                        ui.label((unit.get("localized") or {}).get("name") or unit["name"]).classes("text-xs text-slate-400 line-clamp-1")
 
     async def refresh_hold_navigation() -> None:
         privileges=set((auth_state.get("principal") or {}).get("global_privileges",[]))
