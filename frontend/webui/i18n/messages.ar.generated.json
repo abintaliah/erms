@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "1098af4b11f9753f86f209ba82c9e33fb5bae5a2b862cad1d2979f145212a793",
+  "catalogue_sha256": "ff673a1ef2619b6f3422609ed5cd2de467d5e030bcee6445eeadf004c0c03552",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260929040036",
   "generated_at": "2026-09-29T04:00:36.438919+04:00",
@@ -91,6 +91,47 @@
     ],
     "webui.select_governance_custody.label.custodian_count_active_value_currently_qua_5dd0d9d6": [
       "يتأهل حالياً {custodian_count} من {value} النشطين عبر {qualifying_role_count} من {value_2} الحوكمة و{qualifying_assignment_count} من {value_3} الحالية."
+    ],
+    "classification_transfer.error.duplicate_code": [
+      "رمز خطة التصنيف أو التصنيف موجود بالفعل. لم يُستورد أي شيء."
+    ],
+    "classification_transfer.error.invalid_package": [
+      "الملف ليس تصديرًا صالحًا لخطة تصنيف. لم يُستورد أي شيء.",
+      "الملف ليس تصديرًا صالحًا لنظام تصنيف. لم يُستورد أي شيء."
+    ],
+    "classification_transfer.import_hint": [
+      "اختر ملف تصدير JSON أو CSV من واثق. ستُستورد خطة التصنيف كمسودة غير منشورة.",
+      "اختر ملف تصدير JSON أو CSV من وثق. ستُستورد نظام التصنيف كمسودة غير منشورة."
+    ],
+    "classification_transfer.import_title": [
+      "استيراد خطة تصنيف"
+    ],
+    "classification_transfer.success": [
+      "تم استيراد خطة التصنيف كمسودة غير منشورة."
+    ],
+    "classification_transfer.authority": [
+      "الجهة المعتمدة"
+    ],
+    "classification_transfer.current_period_years": [
+      "الاستبقاء الجاري (بالسنوات)"
+    ],
+    "classification_transfer.error.revision_unavailable": [
+      "بيانات مراجعة التطبيق غير متاحة."
+    ],
+    "classification_transfer.exported_at": [
+      "تاريخ التصدير"
+    ],
+    "classification_transfer.exported_by": [
+      "صدّره"
+    ],
+    "classification_transfer.intermediate_period_years": [
+      "الاستبقاء الوسيط (بالسنوات)"
+    ],
+    "classification_transfer.parent_code": [
+      "رمز الأصل"
+    ],
+    "classification_transfer.working": [
+      "جارٍ المعالجة…"
     ]
   },
   "items": [
@@ -2755,6 +2796,536 @@
         "model": "GPT-6",
         "prompt_version": "classification-action-panel-v1",
         "generated_at": "2026-09-29T09:08:54.376611+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.authority",
+      "translated_text": "المرجعية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.cancel",
+      "translated_text": "إلغاء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.choose_file",
+      "translated_text": "اختر ملف JSON أو CSV",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.code",
+      "translated_text": "الرمز",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.current_period_years",
+      "translated_text": "مدة الاستبقاء الجاري (بالسنوات)",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.database_name",
+      "translated_text": "قاعدة البيانات المصدر",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.date_created",
+      "translated_text": "تاريخ الإنشاء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.date_deactivated",
+      "translated_text": "تاريخ التعطيل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.date_first_used",
+      "translated_text": "تاريخ أول استخدام",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.date_published",
+      "translated_text": "تاريخ النشر",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.date_updated",
+      "translated_text": "تاريخ التحديث",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.description",
+      "translated_text": "الوصف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.download",
+      "translated_text": "تنزيل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.edition",
+      "translated_text": "الإصدار",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.empty",
+      "translated_text": "لا توجد تصنيفات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.checksum_mismatch",
+      "translated_text": "لا يتطابق المجموع الاختباري مع محتويات الملف. لم يُستورد أي شيء.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.duplicate_code",
+      "translated_text": "رمز نظام التصنيف أو التصنيف موجود بالفعل. لم يُستورد أي شيء.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.file_too_large",
+      "translated_text": "يتجاوز ملف التصدير الحد الأقصى للحجم المدعوم.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.invalid_package",
+      "translated_text": "الملف ليس ملف تصدير صالحًا لنظام تصنيف. لم يُستورد أي شيء.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.revision_unavailable",
+      "translated_text": "بيانات إصدار التطبيق غير متاحة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.unsupported_language",
+      "translated_text": "يتضمن ملف التصدير لغة غير مدعومة أو معطلة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.explicit",
+      "translated_text": "قاعدة صريحة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.export",
+      "translated_text": "تصدير",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.exported_at",
+      "translated_text": "تاريخ التصدير ووقته",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.exported_by",
+      "translated_text": "صدّره المستخدم",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.final_disposition",
+      "translated_text": "التصرف النهائي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.import",
+      "translated_text": "استيراد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.import_hint",
+      "translated_text": "اختر ملف تصدير بصيغة JSON أو CSV من وثق. سيُستورد نظام التصنيف بصفته مسودة غير منشورة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.import_title",
+      "translated_text": "استيراد نظام تصنيف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.inherited",
+      "translated_text": "موروثة من",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.instructions",
+      "translated_text": "التعليمات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.intermediate_period_years",
+      "translated_text": "مدة الاستبقاء الوسيط (بالسنوات)",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.is_terminal",
+      "translated_text": "تصنيف نهائي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.keywords",
+      "translated_text": "الكلمات المفتاحية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.landscape",
+      "translated_text": "أفقي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.language",
+      "translated_text": "لغة المستند",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.legend",
+      "translated_text": "المستوى 0 هو الجذر. تشير المسافة البادئة وتظليل الصفوف إلى عمق التسلسل الهرمي.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.level",
+      "translated_text": "المستوى",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.metadata",
+      "translated_text": "البيانات الوصفية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.no",
+      "translated_text": "لا",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.none",
+      "translated_text": "لا يوجد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.parent_code",
+      "translated_text": "رمز التصنيف الأصل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.retention_rule",
+      "translated_text": "قاعدة الاستبقاء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.scope_note",
+      "translated_text": "ملاحظة النطاق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.source_id",
+      "translated_text": "معرّف المصدر",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.success",
+      "translated_text": "تم استيراد نظام التصنيف كمسودة غير منشورة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.title",
+      "translated_text": "العنوان",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.translations",
+      "translated_text": "الترجمات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.value",
+      "translated_text": "القيمة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.version",
+      "translated_text": "النسخة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.word_title",
+      "translated_text": "تصدير إلى MS Word",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.working",
+      "translated_text": "المعالجة جارية…",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.yes",
+      "translated_text": "نعم",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
         "review_required": true
       }
     },

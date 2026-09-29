@@ -1,0 +1,71 @@
+format_version,row_type,scheme_code,classification_code,parent_code,source_id,field_name,language_tag,value,value_state
+1.0,manifest,UI-TRANSFER,,,,export_id,,9900a91e-f567-4cd1-ac04-22f7e55e7f1b,value
+1.0,manifest,UI-TRANSFER,,,,exported_at,,2026-01-01T08:00:00.000000Z,value
+1.0,manifest,UI-TRANSFER,,,,exported_by_source_user_id,,42,value
+1.0,manifest,UI-TRANSFER,,,,exported_by_username,,source@test.invalid,value
+1.0,manifest,UI-TRANSFER,,,,exported_by_display_name,,Source User,value
+1.0,manifest,UI-TRANSFER,,,,source_application,,Wathiq,value
+1.0,manifest,UI-TRANSFER,,,,source_application_revision,,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,value
+1.0,manifest,UI-TRANSFER,,,,source_database_name,,source,value
+1.0,manifest,UI-TRANSFER,,,,source_schema_version,,fixture,value
+1.0,manifest,UI-TRANSFER,,,,classification_count,,2,value
+1.0,manifest,UI-TRANSFER,,,,retention_rule_count,,1,value
+1.0,manifest,UI-TRANSFER,,,,checksum_algorithm,,SHA-256,value
+1.0,manifest,UI-TRANSFER,,,,checksum_canonicalization,,RFC8785,value
+1.0,manifest,UI-TRANSFER,,,,checksum_scope,,package_excluding_checksum,value
+1.0,manifest,UI-TRANSFER,,,,checksum_encoding,,hex,value
+1.0,manifest,UI-TRANSFER,,,,checksum_value,,d8fb49b72e24367334eedefe1f894be4a37eac88dd08dd77e7fd30da11b5f97e,value
+1.0,scheme,UI-TRANSFER,,,12,title,,Administrative records,value
+1.0,scheme,UI-TRANSFER,,,12,description,,"Arabic العربية, newline
+""quote""",value
+1.0,scheme,UI-TRANSFER,,,12,authority,,,null
+1.0,scheme,UI-TRANSFER,,,12,scope_note,,,value
+1.0,scheme,UI-TRANSFER,,,12,edition,,2026,value
+1.0,scheme,UI-TRANSFER,,,12,date_created,,2026-01-01T08:00:00.000000Z,value
+1.0,scheme,UI-TRANSFER,,,12,date_updated,,2026-01-01T08:00:00.000000Z,value
+1.0,scheme,UI-TRANSFER,,,12,date_published,,2026-01-01T08:00:00.000000Z,value
+1.0,scheme,UI-TRANSFER,,,12,date_deactivated,,,null
+1.0,scheme,UI-TRANSFER,,,12,date_first_used,,,null
+1.0,scheme,UI-TRANSFER,,,12,version,,9007199254740993,value
+1.0,scheme,UI-TRANSFER,,,12,translations,,present,value
+1.0,translation,UI-TRANSFER,,,12,title,ar,السجلات الإدارية,value
+1.0,translation,UI-TRANSFER,,,12,title,fr,Documents administratifs,value
+1.0,classification,UI-TRANSFER,01,,100,title,,Administrative records,value
+1.0,classification,UI-TRANSFER,01,,100,description,,"Arabic العربية, newline
+""quote""",value
+1.0,classification,UI-TRANSFER,01,,100,authority,,,null
+1.0,classification,UI-TRANSFER,01,,100,scope_note,,,value
+1.0,classification,UI-TRANSFER,01,,100,keywords,,,null
+1.0,classification,UI-TRANSFER,01,,100,is_terminal,,false,value
+1.0,classification,UI-TRANSFER,01,,100,date_created,,2026-01-01T08:00:00.000000Z,value
+1.0,classification,UI-TRANSFER,01,,100,date_updated,,2026-01-01T08:00:00.000000Z,value
+1.0,classification,UI-TRANSFER,01,,100,date_deactivated,,,null
+1.0,classification,UI-TRANSFER,01,,100,date_first_used,,,null
+1.0,classification,UI-TRANSFER,01,,100,version,,9007199254740993,value
+1.0,classification,UI-TRANSFER,01,,100,translations,,present,value
+1.0,classification,UI-TRANSFER,01,,100,has_retention_rule,,true,value
+1.0,translation,UI-TRANSFER,01,,100,title,ar,السجلات الإدارية,value
+1.0,translation,UI-TRANSFER,01,,100,title,fr,Documents administratifs,value
+1.0,retention_rule,UI-TRANSFER,01,,200,current_period_years,,2,value
+1.0,retention_rule,UI-TRANSFER,01,,200,intermediate_period_years,,5,value
+1.0,retention_rule,UI-TRANSFER,01,,200,final_disposition,,destruction,value
+1.0,retention_rule,UI-TRANSFER,01,,200,instructions,,,null
+1.0,retention_rule,UI-TRANSFER,01,,200,date_created,,2026-01-01T08:00:00.000000Z,value
+1.0,retention_rule,UI-TRANSFER,01,,200,date_updated,,2026-01-01T08:00:00.000000Z,value
+1.0,retention_rule,UI-TRANSFER,01,,200,version,,1,value
+1.0,classification,UI-TRANSFER,01.01,01,101,title,,Administrative records,value
+1.0,classification,UI-TRANSFER,01.01,01,101,description,,"Arabic العربية, newline
+""quote""",value
+1.0,classification,UI-TRANSFER,01.01,01,101,authority,,,null
+1.0,classification,UI-TRANSFER,01.01,01,101,scope_note,,,value
+1.0,classification,UI-TRANSFER,01.01,01,101,keywords,,,value
+1.0,classification,UI-TRANSFER,01.01,01,101,is_terminal,,true,value
+1.0,classification,UI-TRANSFER,01.01,01,101,date_created,,2026-01-01T08:00:00.000000Z,value
+1.0,classification,UI-TRANSFER,01.01,01,101,date_updated,,2026-01-01T08:00:00.000000Z,value
+1.0,classification,UI-TRANSFER,01.01,01,101,date_deactivated,,,null
+1.0,classification,UI-TRANSFER,01.01,01,101,date_first_used,,,null
+1.0,classification,UI-TRANSFER,01.01,01,101,version,,9007199254740993,value
+1.0,classification,UI-TRANSFER,01.01,01,101,translations,,present,value
+1.0,classification,UI-TRANSFER,01.01,01,101,has_retention_rule,,false,value
+1.0,translation,UI-TRANSFER,01.01,,101,title,ar,السجلات الإدارية,value
+1.0,translation,UI-TRANSFER,01.01,,101,title,fr,Documents administratifs,value

@@ -77,6 +77,7 @@ from .resource_authorization import (
 )
 from .user_management import router as user_management_router
 from .classification_management import router as classification_management_router
+from .scheme_transfer.routes import router as scheme_transfer_router
 from .browse import router as browse_router
 from .favourites import router as favourites_router
 from .security_levels import router as security_levels_router
@@ -168,6 +169,7 @@ app = FastAPI(
 app.include_router(number_suggestions_router)
 app.include_router(user_management_router)
 app.include_router(authentication_router)
+app.include_router(scheme_transfer_router)
 app.include_router(classification_management_router)
 app.include_router(browse_router)
 app.include_router(favourites_router)

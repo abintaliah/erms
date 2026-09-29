@@ -69,8 +69,10 @@ class Api:
         return rule
 
 
-async def open_workspace(user, *, preferences=None, direction='ltr'):
+async def open_workspace(user, *, preferences=None, direction='ltr', can_transfer=False, empty=False):
     api = Api()
+    if empty:
+        api.schemes = []
     editor = AsyncMock()
     pages = []
     live = {'active': True}
@@ -85,6 +87,7 @@ async def open_workspace(user, *, preferences=None, direction='ltr'):
             register_page=lambda page, item: pages.append((page, item)),
             active=lambda: live['active'], preferences=preferences or {},
             direction=lambda: direction,
+            can_transfer=can_transfer,
         )
     await user.open('/test-workspace')
     return api, editor, pages, live
@@ -204,3 +207,54 @@ async def test_details_group_commands_beside_summary_and_keep_back_in_summary(us
     summary = next(element for element in user.find(ui.column).elements if 'aggregation-command-summary' in element.classes)
     assert any(isinstance(element, ui.button) and 'Back to classification tree' in element.text for element in summary.descendants())
     assert 'aggregation-command-controls' in panel.parent_slot.parent.classes
+
+
+@pytest.mark.parametrize('direction',['ltr','rtl'])
+@pytest.mark.parametrize('empty',[False,True])
+async def test_transfer_placement_and_permission(user: User, direction, empty):
+    api, _, pages, _ = await open_workspace(user, direction=direction, can_transfer=True, empty=empty)
+    await user.should_see('Import')
+    await user.should_see('Add scheme')
+    assert not any('/export' in str(call) for call in api.calls)
+    if not empty:
+        button(user,label='S01 — Scheme 1').click()
+        await user.should_see('Export')
+        importer = next(b for b in user.find(ui.button).elements if b.text == 'Import')
+        assert not importer.parent_slot.parent.parent_slot.parent.visible
+        button(user,label='Back to classification tree').click()
+        await user.should_see('Import')
+
+
+async def test_transfer_hidden_without_administer(user: User):
+    await open_workspace(user, can_transfer=False)
+    await user.should_not_see('Import')
+    button(user,label='S01 — Scheme 1').click()
+    await user.should_see('Scheme information')
+    await user.should_not_see('Export')
+
+
+async def test_import_refresh_preserves_sort_filter_and_loaded_pages(user: User):
+    from io import BytesIO
+    from starlette.datastructures import UploadFile
+    preferences = {'scheme_sort':'title','scheme_sort_direction':'desc','scheme_query':'Scheme','scheme_pages':2}
+    api, _, pages, _ = await open_workspace(user, preferences=preferences, can_transfer=True)
+    original_search_sort = [payload['sort'] for kind,payload in api.calls if kind=='search'][-1]
+    old_request = api.request
+    async def request(method,path,**kwargs):
+        if path.endswith('/import'):
+            api.schemes.append(dict(id=28,code='S28',title='Scheme 28',version=1))
+            return {'id':28,'code':'S28','date_published':None}
+        return await old_request(method,path,**kwargs)
+    api.request = request
+    button(user,label='Import').click()
+    await user.should_see('Import classification scheme')
+    next(iter(user.find(ui.upload).elements)).handle_uploads([UploadFile(BytesIO(b'{}'),filename='scheme.json')])
+    await asyncio.sleep(.05)
+    confirm = sorted([b for b in user.find(ui.button).elements if b.text=='Import'],key=lambda b:b.id)[-1]
+    _marked(user,confirm).click()
+    await user.should_see('S28')
+    assert pages[-1][0] == 'classification-workspace'
+    assert {k:preferences[k] for k in ('scheme_sort','scheme_sort_direction','scheme_query','scheme_pages')} == {'scheme_sort':'title','scheme_sort_direction':'desc','scheme_query':'Scheme','scheme_pages':2}
+    searches = [payload for kind,payload in api.calls if kind=='search']
+    assert searches[-1]['offset'] == 25
+    assert searches[-1]['sort'] == original_search_sort

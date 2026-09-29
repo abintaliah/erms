@@ -1891,6 +1891,14 @@ def index(q: str = "") -> None:
             direction: ltr; unicode-bidi: isolate; text-align: left;
         }
         html[dir="rtl"] .row { flex-direction: row-reverse; }
+        /* Transfer dialogs inherit the supported document direction. NiceGUI's
+           select/row APIs have no per-control RTL layout switch. Live inspection
+           showed the legacy .row reversal reversing that RTL direction twice;
+           scope the correction to these dialogs, including Quasar field rows. */
+        html[dir="rtl"] .classification-transfer-dialog .row { flex-direction: row; }
+        html[dir="rtl"] .classification-transfer-dialog .q-field__label {
+            left: auto; right: 0; transform-origin: right top;
+        }
         html[dir="rtl"] .q-btn__content { flex-direction: row-reverse; }
         html[dir="rtl"] .erms-nav-link { justify-content: flex-start; text-align: right; }
         html[dir="rtl"] .erms-nav-link .q-btn__content {
@@ -18326,6 +18334,11 @@ def index(q: str = "") -> None:
         initial_scheme_id: int | None = None,
         initial_classification_id: int | None = None,
     ) -> None:
+        # Navigation can arrive while sign-in is still resolving the principal.
+        # Do not start authenticated requests or infer privileges in that gap.
+        principal = auth_state.get("principal")
+        if principal is None:
+            return
         show_authenticated_view()
         state.update(resource="classification-workspace", rows=[], searched=True, aggregation_detail=None)
         token = object()
@@ -18357,6 +18370,7 @@ def index(q: str = "") -> None:
             register_page=register_classification_page,
             active=lambda: state.get("classification_workspace_token") is token
             and state.get("resource") in {"classification-workspace", "classification-scheme-details", "classification-details"},
+            can_transfer="classifications.administer" in principal.get("global_privileges", []),
             preferences=state.setdefault("classification_browser_preferences", {}),
             direction=lambda: current_direction["value"],
             initial_scheme_id=initial_scheme_id,

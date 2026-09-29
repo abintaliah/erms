@@ -3272,6 +3272,801 @@
     "is_html": false
   },
   {
+    "message_key": "classification_transfer.authority",
+    "context_group": "classification_transfer",
+    "default_text": "Authority",
+    "semantic_meaning": "Classification scheme import/export: authority",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Authority",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.cancel",
+    "context_group": "classification_transfer",
+    "default_text": "Cancel",
+    "semantic_meaning": "Classification scheme import/export: cancel",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Cancel",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.choose_file",
+    "context_group": "classification_transfer",
+    "default_text": "Choose JSON or CSV file",
+    "semantic_meaning": "Classification scheme import/export: choose_file",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Choose JSON or CSV file",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.code",
+    "context_group": "classification_transfer",
+    "default_text": "Code",
+    "semantic_meaning": "Classification scheme import/export: code",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Code",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.current_period_years",
+    "context_group": "classification_transfer",
+    "default_text": "Current retention (years)",
+    "semantic_meaning": "Classification scheme import/export: current_period_years",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Current retention (years)",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.database_name",
+    "context_group": "classification_transfer",
+    "default_text": "Source database",
+    "semantic_meaning": "Classification scheme import/export: database_name",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Source database",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.date_created",
+    "context_group": "classification_transfer",
+    "default_text": "Date created",
+    "semantic_meaning": "Classification scheme import/export: date_created",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Date created",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.date_deactivated",
+    "context_group": "classification_transfer",
+    "default_text": "Date deactivated",
+    "semantic_meaning": "Classification scheme import/export: date_deactivated",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Date deactivated",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.date_first_used",
+    "context_group": "classification_transfer",
+    "default_text": "Date first used",
+    "semantic_meaning": "Classification scheme import/export: date_first_used",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Date first used",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.date_published",
+    "context_group": "classification_transfer",
+    "default_text": "Date published",
+    "semantic_meaning": "Classification scheme import/export: date_published",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Date published",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.date_updated",
+    "context_group": "classification_transfer",
+    "default_text": "Date updated",
+    "semantic_meaning": "Classification scheme import/export: date_updated",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Date updated",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.description",
+    "context_group": "classification_transfer",
+    "default_text": "Description",
+    "semantic_meaning": "Classification scheme import/export: description",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Description",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.download",
+    "context_group": "classification_transfer",
+    "default_text": "Download",
+    "semantic_meaning": "Classification scheme import/export: download",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Download",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.edition",
+    "context_group": "classification_transfer",
+    "default_text": "Edition",
+    "semantic_meaning": "Classification scheme import/export: edition",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Edition",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.empty",
+    "context_group": "classification_transfer",
+    "default_text": "No classifications",
+    "semantic_meaning": "Classification scheme import/export: empty",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "No classifications",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.checksum_mismatch",
+    "context_group": "classification_transfer",
+    "default_text": "The checksum does not match the file contents. Nothing was imported.",
+    "semantic_meaning": "Classification scheme import/export: error.checksum_mismatch",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The checksum does not match the file contents. Nothing was imported.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.duplicate_code",
+    "context_group": "classification_transfer",
+    "default_text": "A scheme or classification code already exists. Nothing was imported.",
+    "semantic_meaning": "Classification scheme import/export: error.duplicate_code",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "A scheme or classification code already exists. Nothing was imported.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.file_too_large",
+    "context_group": "classification_transfer",
+    "default_text": "The export exceeds the supported size limit.",
+    "semantic_meaning": "Classification scheme import/export: error.file_too_large",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The export exceeds the supported size limit.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.invalid_package",
+    "context_group": "classification_transfer",
+    "default_text": "The file is not a valid classification scheme export. Nothing was imported.",
+    "semantic_meaning": "Classification scheme import/export: error.invalid_package",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The file is not a valid classification scheme export. Nothing was imported.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.revision_unavailable",
+    "context_group": "classification_transfer",
+    "default_text": "Application revision metadata is unavailable.",
+    "semantic_meaning": "Classification scheme import/export: error.revision_unavailable",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Application revision metadata is unavailable.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.unsupported_language",
+    "context_group": "classification_transfer",
+    "default_text": "The export contains an unsupported or disabled language.",
+    "semantic_meaning": "Classification scheme import/export: error.unsupported_language",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The export contains an unsupported or disabled language.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.explicit",
+    "context_group": "classification_transfer",
+    "default_text": "Explicit rule",
+    "semantic_meaning": "Classification scheme import/export: explicit",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Explicit rule",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.export",
+    "context_group": "classification_transfer",
+    "default_text": "Export",
+    "semantic_meaning": "Classification scheme import/export: export",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Export",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.exported_at",
+    "context_group": "classification_transfer",
+    "default_text": "Exported at",
+    "semantic_meaning": "Classification scheme import/export: exported_at",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Exported at",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.exported_by",
+    "context_group": "classification_transfer",
+    "default_text": "Exported by",
+    "semantic_meaning": "Classification scheme import/export: exported_by",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Exported by",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.final_disposition",
+    "context_group": "classification_transfer",
+    "default_text": "Final disposition",
+    "semantic_meaning": "Classification scheme import/export: final_disposition",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Final disposition",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.import",
+    "context_group": "classification_transfer",
+    "default_text": "Import",
+    "semantic_meaning": "Classification scheme import/export: import",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Import",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.import_hint",
+    "context_group": "classification_transfer",
+    "default_text": "Choose a Wathiq JSON or CSV export. The scheme will be imported as an unpublished draft.",
+    "semantic_meaning": "Classification scheme import/export: import_hint",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Choose a Wathiq JSON or CSV export. The scheme will be imported as an unpublished draft.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.import_title",
+    "context_group": "classification_transfer",
+    "default_text": "Import classification scheme",
+    "semantic_meaning": "Classification scheme import/export: import_title",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Import classification scheme",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.inherited",
+    "context_group": "classification_transfer",
+    "default_text": "Inherited from",
+    "semantic_meaning": "Classification scheme import/export: inherited",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Inherited from",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.instructions",
+    "context_group": "classification_transfer",
+    "default_text": "Instructions",
+    "semantic_meaning": "Classification scheme import/export: instructions",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Instructions",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.intermediate_period_years",
+    "context_group": "classification_transfer",
+    "default_text": "Intermediate retention (years)",
+    "semantic_meaning": "Classification scheme import/export: intermediate_period_years",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Intermediate retention (years)",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.is_terminal",
+    "context_group": "classification_transfer",
+    "default_text": "Terminal classification",
+    "semantic_meaning": "Classification scheme import/export: is_terminal",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Terminal classification",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.keywords",
+    "context_group": "classification_transfer",
+    "default_text": "Keywords",
+    "semantic_meaning": "Classification scheme import/export: keywords",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Keywords",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.landscape",
+    "context_group": "classification_transfer",
+    "default_text": "Landscape",
+    "semantic_meaning": "Classification scheme import/export: landscape",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Landscape",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.language",
+    "context_group": "classification_transfer",
+    "default_text": "Document language",
+    "semantic_meaning": "Classification scheme import/export: language",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Document language",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.legend",
+    "context_group": "classification_transfer",
+    "default_text": "Level 0 is the root. Indentation and row shading indicate hierarchy depth.",
+    "semantic_meaning": "Classification scheme import/export: legend",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Level 0 is the root. Indentation and row shading indicate hierarchy depth.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.level",
+    "context_group": "classification_transfer",
+    "default_text": "Level",
+    "semantic_meaning": "Classification scheme import/export: level",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Level",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.metadata",
+    "context_group": "classification_transfer",
+    "default_text": "Metadata",
+    "semantic_meaning": "Classification scheme import/export: metadata",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Metadata",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.no",
+    "context_group": "classification_transfer",
+    "default_text": "No",
+    "semantic_meaning": "Classification scheme import/export: no",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "No",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.none",
+    "context_group": "classification_transfer",
+    "default_text": "None",
+    "semantic_meaning": "Classification scheme import/export: none",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "None",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.parent_code",
+    "context_group": "classification_transfer",
+    "default_text": "Parent code",
+    "semantic_meaning": "Classification scheme import/export: parent_code",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Parent code",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.retention_rule",
+    "context_group": "classification_transfer",
+    "default_text": "Retention rule",
+    "semantic_meaning": "Classification scheme import/export: retention_rule",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Retention rule",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.scope_note",
+    "context_group": "classification_transfer",
+    "default_text": "Scope note",
+    "semantic_meaning": "Classification scheme import/export: scope_note",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Scope note",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.source_id",
+    "context_group": "classification_transfer",
+    "default_text": "Source ID",
+    "semantic_meaning": "Classification scheme import/export: source_id",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Source ID",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.success",
+    "context_group": "classification_transfer",
+    "default_text": "Classification scheme imported as an unpublished draft.",
+    "semantic_meaning": "Classification scheme import/export: success",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Classification scheme imported as an unpublished draft.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.title",
+    "context_group": "classification_transfer",
+    "default_text": "Title",
+    "semantic_meaning": "Classification scheme import/export: title",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Title",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.translations",
+    "context_group": "classification_transfer",
+    "default_text": "Translations",
+    "semantic_meaning": "Classification scheme import/export: translations",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Translations",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.value",
+    "context_group": "classification_transfer",
+    "default_text": "Value",
+    "semantic_meaning": "Classification scheme export: metadata value column",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Value",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.version",
+    "context_group": "classification_transfer",
+    "default_text": "Version",
+    "semantic_meaning": "Classification scheme import/export: version",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Version",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.word_title",
+    "context_group": "classification_transfer",
+    "default_text": "Export to MS Word",
+    "semantic_meaning": "Classification scheme import/export: word_title",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Export to MS Word",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.working",
+    "context_group": "classification_transfer",
+    "default_text": "Processing…",
+    "semantic_meaning": "Classification scheme import/export: working",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Processing…",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.yes",
+    "context_group": "classification_transfer",
+    "default_text": "Yes",
+    "semantic_meaning": "Classification scheme import/export: yes",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Yes",
+    "is_html": false
+  },
+  {
     "message_key": "classification_workspace.metadata.first_used",
     "context_group": "classification_workspace",
     "default_text": "First used",

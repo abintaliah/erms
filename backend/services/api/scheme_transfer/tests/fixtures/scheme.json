@@ -1,0 +1,116 @@
+{
+  "package_type": "classification_scheme_export",
+  "format_version": "1.0",
+  "manifest": {
+    "export_id": "9900a91e-f567-4cd1-ac04-22f7e55e7f1b",
+    "exported_at": "2026-01-01T08:00:00.000000Z",
+    "exported_by": {
+      "source_user_id": "42",
+      "username": "source@test.invalid",
+      "display_name": "Source User"
+    },
+    "source": {
+      "application": "Wathiq",
+      "application_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "database_name": "source",
+      "schema_version": "fixture"
+    },
+    "counts": {
+      "classifications": 2,
+      "retention_rules": 1
+    },
+    "checksum": {
+      "algorithm": "SHA-256",
+      "canonicalization": "RFC8785",
+      "scope": "package_excluding_checksum",
+      "encoding": "hex",
+      "value": "d8fb49b72e24367334eedefe1f894be4a37eac88dd08dd77e7fd30da11b5f97e"
+    }
+  },
+  "data": {
+    "scheme": {
+      "title": "Administrative records",
+      "description": "Arabic العربية, newline\n\"quote\"",
+      "authority": null,
+      "scope_note": "",
+      "date_created": "2026-01-01T08:00:00.000000Z",
+      "date_updated": "2026-01-01T08:00:00.000000Z",
+      "date_deactivated": null,
+      "date_first_used": null,
+      "version": "9007199254740993",
+      "translations": {
+        "ar": {
+          "title": "السجلات الإدارية"
+        },
+        "fr": {
+          "title": "Documents administratifs"
+        }
+      },
+      "source_id": "12",
+      "code": "UI-TRANSFER",
+      "edition": "2026",
+      "date_published": "2026-01-01T08:00:00.000000Z",
+      "classifications": [
+        {
+          "title": "Administrative records",
+          "description": "Arabic العربية, newline\n\"quote\"",
+          "authority": null,
+          "scope_note": "",
+          "date_created": "2026-01-01T08:00:00.000000Z",
+          "date_updated": "2026-01-01T08:00:00.000000Z",
+          "date_deactivated": null,
+          "date_first_used": null,
+          "version": "9007199254740993",
+          "translations": {
+            "ar": {
+              "title": "السجلات الإدارية"
+            },
+            "fr": {
+              "title": "Documents administratifs"
+            }
+          },
+          "source_id": "100",
+          "code": "01",
+          "parent_code": null,
+          "keywords": null,
+          "is_terminal": false,
+          "retention_rule": {
+            "source_id": "200",
+            "current_period_years": 2,
+            "intermediate_period_years": 5,
+            "final_disposition": "destruction",
+            "instructions": null,
+            "date_created": "2026-01-01T08:00:00.000000Z",
+            "date_updated": "2026-01-01T08:00:00.000000Z",
+            "version": "1"
+          }
+        },
+        {
+          "title": "Administrative records",
+          "description": "Arabic العربية, newline\n\"quote\"",
+          "authority": null,
+          "scope_note": "",
+          "date_created": "2026-01-01T08:00:00.000000Z",
+          "date_updated": "2026-01-01T08:00:00.000000Z",
+          "date_deactivated": null,
+          "date_first_used": null,
+          "version": "9007199254740993",
+          "translations": {
+            "ar": {
+              "title": "السجلات الإدارية"
+            },
+            "fr": {
+              "title": "Documents administratifs"
+            }
+          },
+          "source_id": "101",
+          "code": "01.01",
+          "parent_code": "01",
+          "keywords": "",
+          "is_terminal": true,
+          "retention_rule": null
+        }
+      ]
+    }
+  }
+}

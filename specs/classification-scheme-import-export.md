@@ -1,9 +1,9 @@
 # Classification Scheme Import and Export
 
-**Status:** Draft — product decisions recorded; API/audit design remains under section 12  
-**Prepared:** 29 September 2026  
-**Revision:** 0.13 — mandatory automated acceptance tests  
-**Implementation state:** Not implemented
+**Status:** Implemented and verified — approved product decisions retained
+**Prepared:** 29 September 2026
+**Revision:** 0.16 — reader-oriented Word layout and native direction formatting
+**Implementation state:** API/codecs/Word/UI implemented; acceptance evidence recorded below; new Arabic draft wording awaits human review
 
 ## 1. Purpose and governing specifications
 
@@ -558,7 +558,10 @@ large-package handling must be documented and tested before release.
 
 ## 8. MS Word export
 
-**IE-09:** Produce `.docx` with landscape orientation by default.
+**IE-09:** Produce `.docx` with landscape orientation by default, on a
+13.5-inch-wide by 8.5-inch-high page (8.5 × 13.5-inch stock). Use Changa at
+10 points, including complex-script text and document headings. Set all script
+font slots explicitly so Word does not substitute a theme font for Arabic.
 
 Before generating the Word document, offer a language selector populated from
 Wathiq's enabled `supported_languages`, including **English (LTR)** and
@@ -591,8 +594,24 @@ unsupported or disabled selections are rejected rather than silently replaced.
   export provenance block with exporter, time, and source database.
 - Every root classification starts a separate table containing itself and all
   descendants in depth-first order. Do not combine unrelated roots.
-- Columns: code, level, title, description/scope/authority/keywords, branch or
-  terminal type and lifecycle information, and retention information.
+- Columns in reading order: code, level, title, current retention period,
+  intermediate retention period, final disposition action, metadata, and
+  remaining retention-rule information. The three new retention columns follow
+  the title and show the effective rule, including inherited values. The final
+  rule-information column still identifies explicit/inherited rules and their
+  governing classification, plus instructions and remaining rule metadata.
+  Metadata includes description/scope/authority/keywords, branch or terminal
+  type, lifecycle information and translations.
+- Code and level columns are narrow: 0.85 and 0.8 inches. Remaining column widths
+  are 2.1, 0.8, 0.85, 1.65, 3.15 and 2.2 inches respectively. Their 12.4-inch total
+  fits between 0.55-inch left/right margins. Set both table-grid and cell widths;
+  use fixed layout and wrapping. The scheme summary uses the same usable width.
+- Format timestamps for reading, using localized month names, day/year and
+  24-hour hours/minutes with an explicit UTC label (for example,
+  `1 January 2026, 08:00 UTC`). Omit machine timestamp syntax and fractional
+  seconds from this report. Use the selected language's configured locale,
+  falling back to its base language and then English if unavailable. JSON and
+  CSV continue to preserve the exact source timestamps.
 - Root level is 0. Use title-cell indentation to indicate increasing depth,
   an explicit level value, and different row shading by level. Include a legend.
   Never rely on color alone. At depths where distinct readable shades or
@@ -605,7 +624,9 @@ unsupported or disabled selections are rejected rather than silently replaced.
   readable contrast, and avoid clipping. Allow an exceptionally long row to
   span pages rather than losing content.
 - Respect document language and RTL/LTR direction, including mixed Arabic and
-  Latin codes. Do not reverse code strings.
+  Latin codes. Do not reverse code strings. Use native Word paragraph, table,
+  logical indentation and run-direction properties; do not insert Unicode
+  directional control characters into document text as formatting aids.
 - A scheme without classifications still exports its metadata table and an
   explicit empty-state statement.
 
@@ -667,7 +688,7 @@ source audit history. Viewing a scheme alone does not grant import or export.
 
 Enforce `classifications.administer` server-side for every format and reflect
 it in UI action availability. Reject an unauthorized operation without database
-changes. API routes and import audit vocabulary remain pending under D4.
+changes. The concrete routes and reuse of existing import audit vocabulary are documented in section 10.1.
 
 ## 10. Implementation constraints
 
@@ -680,7 +701,7 @@ changes. API routes and import audit vocabulary remain pending under D4.
 - Imported source actors are provenance snapshots, not authenticated destination
   identities. Never impersonate them or attach history to coincidentally equal
   destination user IDs. Local import activity is attributed to the actual
-  importing user. The local import event/source vocabulary remains subject to D4.
+  importing user. Local import activity reuses the existing CREATE action and api/web_ui event sources, as documented in section 10.1.
 - Any schema change updates the self-contained canonical schema and supplies
   a separate upgrade migration. No SQL file may contain psql meta-commands.
 - Keep maintained translation catalogues aligned by contextual message key,
@@ -690,26 +711,57 @@ changes. API routes and import audit vocabulary remain pending under D4.
 - Add a fully valid JSON fixture and matching complete CSV fixture as part of
   implementation; illustrative examples here are not conformance evidence.
 
+### 10.1 Concrete implementation mapping
+
+Implementation notes, transaction/trigger details, provenance recovery, resource
+limits, deployment revision configuration, and disposable test commands are in
+[`backend/services/api/scheme_transfer/README.md`](../backend/services/api/scheme_transfer/README.md).
+
+The import endpoint is `POST /api/v1/classification-schemes/import?format=json|csv`
+with one multipart `file`; success returns HTTP 201 with destination `id`, `code`,
+and `date_published: null`. Export is
+`GET /api/v1/classification-schemes/{scheme_id}/export?format=json|csv|docx`;
+Word additionally requires `language=<enabled language tag>`. Both enforce
+`classifications.administer` and retain the existing authentication/CSRF flow.
+
+No new audit source/action, entity, privilege, or database migration is introduced.
+Each existing immutable CREATE history row records the source manifest and source
+entity snapshot in `metadata.classification_scheme_import`; the history entity ID
+and after-state ID supply the local side of the mapping. The original source
+publication date is in the scheme's source snapshot. INSERT preserves supplied
+lifecycle dates/versions; existing UPDATE triggers and first-use restrictions
+apply thereafter. Local activity retains the actual authenticated importer.
+
+For `source.schema_version`, applied migration versions are sorted and joined
+following `migrations:`. Canonical installations with an empty migration ledger
+use `canonical-sha256:` plus the SHA-256 of the bundled canonical schema file.
+This identifies release provenance; it is not an assertion that an independently
+modified live schema has been audited for drift.
+
+The implementation rejects packages above 32 MiB or 10,000 classifications,
+without truncation. Traversal is iterative; there is no independent hierarchy
+depth limit. Deployment ingress must also bound multipart request bodies.
+
 ## 11. Acceptance conditions and verification traceability
 
 Every row below needs concrete implementation paths and passing verification
-evidence before the feature can be declared complete. All are currently pending.
+evidence before the feature can be declared complete. References below identify implemented coverage; section 11.4 records run results and remaining acceptance work. They do not waive any mandatory case.
 
 | Requirement | Required verification | Implementation/evidence |
 | --- | --- | --- |
-| IE-01 | Snapshot consistency during concurrent edits; all classifications included despite UI filtering/pagination | Pending |
-| IE-02 | Cross-database export/import/export comparison of every field and remapped relationship, including lifecycle metadata, rules, and translations; account explicitly for IE-12's NULL destination publication date and verify the original publication date remains recoverable as provenance | Pending |
-| IE-03 | Null versus empty values, absent translation keys, empty objects, Arabic, quotes, line breaks, leading zeros, microseconds, bigint IDs/versions beyond 2^53 through PostgreSQL bigint maximum | Pending |
-| IE-04 | Valid JSON Schema fixture; reject duplicate properties at every depth, unknown fields/versions, wrong types, missing required values, broken references | Pending |
-| IE-05 | RFC 8785 conformance and deterministic digest; data/manifest tampering, malformed digest, duplicate checksum properties, formatting/key-order/escape equivalence, array-order changes, invalid Unicode and non-finite number rejection | Pending |
-| IE-06 | Parse full CSV into the shared model and compare every field with JSON model; check row width, quoting, duplicate detection, typed values | Pending |
-| IE-07 | Successful transaction in both formats; cycles, orphan parents, terminal children, missing effective rules, invalid dates, unsupported language all rejected | Pending |
-| IE-08 | Second import within and across JSON/CSV, case variant, concurrent duplicate across formats, late insertion failure; verify no partial rows or modifications after failure | Pending |
-| IE-09 | Render English (LTR), Arabic (RTL), and an additional enabled test-language DOCX export without adding language-specific selection logic; inspect localized labels, entity fallback, paragraph/table direction, indentation from the correct edge, mixed-language codes, landscape layout, one table per root, hierarchy, colors, repeated headers, long content, and equal data coverage | Pending |
-| IE-10 | Live browser import alongside Add Classification Scheme, import available on an empty schemes list, no import on existing scheme details, JSON/CSV import choices, details-page export menu, all enabled Word language choices available independently of UI language, newly enabled language appears without code changes, disabled/unsupported selection rejected, explicit export-language selection, downloads, remain on schemes list after successful import with refreshed data and preserved filters/sort/page, failure retention, progress, repeated navigation, abandonment, freshness, LTR and RTL | Pending |
-| IE-11 | Anonymous/unauthorized access denied; classifications.administer permits all export formats without metadata privileges or audit.view; the same privilege alone permits complete imports including translations without metadata privileges or audit.view; test scheme-only, classification-only, both, null, and empty translations in JSON and CSV; missing privilege rejects all writes without stripping data; UI base-permission gating and identity/provenance attribution verified | Pending |
-| IE-12 | Import draft, published, and future-publication source schemes; verify each destination scheme has NULL `date_published`, displays as unpublished/draft, is not eligible through published-scheme selectors, retains source publication provenance, and can subsequently use the existing authorized publication workflow subject to its normal eligibility rules | Pending |
-| IE-13 | Complete CSV reconstructs the matching JSON package and digest; real CSV export/import round trip; shuffled rows, BOM, equivalent quoting and outer line endings; null/empty translations, bigint precision; reject missing/duplicate manifest fields, checksum tampering, wrong headers/row widths/types, conflicting owners, orphan translations/rules, malformed quoting and cycles; verify draft state and rollback | Pending |
+| IE-01 | Snapshot consistency during concurrent edits; all classifications included despite UI filtering/pagination | `service.export_package`; `test_snapshot_and_no_source_mutation`, `test_api_hierarchy_shapes` |
+| IE-02 | Cross-database export/import/export comparison of every field and remapped relationship, including lifecycle metadata, rules, and translations; account explicitly for IE-12's NULL destination publication date and verify the original publication date remains recoverable as provenance | `service.import_package`; `test_roundtrip_and_provenance`, `test_two_database_roundtrip`, `test_api_hierarchy_shapes` |
+| IE-03 | Null versus empty values, absent translation keys, empty objects, Arabic, quotes, line breaks, leading zeros, microseconds, bigint IDs/versions beyond 2^53 through PostgreSQL bigint maximum | `codec.py`; `test_codec_values_and_reordering`, `test_null_empty_and_missing_translation_fields`, `test_first_use_and_publication_workflow` |
+| IE-04 | Valid JSON Schema fixture; reject duplicate properties at every depth, unknown fields/versions, wrong types, missing required values, broken references | `v1.schema.json`, `codec.validate`; `test_invalid_json`, `test_integrity_edge_cases`, `test_invalid_domain_no_writes` |
+| IE-05 | RFC 8785 conformance and deterministic digest; data/manifest tampering, malformed digest, duplicate checksum properties, formatting/key-order/escape equivalence, array-order changes, invalid Unicode and non-finite number rejection | `codec.digest`; `test_jcs_reference_vector`, `test_checksum_failure_no_writes`, `test_integrity_edge_cases` |
+| IE-06 | Parse full CSV into the shared model and compare every field with JSON model; check row width, quoting, duplicate detection, typed values | `codec.to_csv/from_csv`; `test_checked_in_fixtures_match`, `test_codec_values_and_reordering`, `test_invalid_csv` |
+| IE-07 | Successful transaction in both formats; cycles, orphan parents, terminal children, missing effective rules, invalid dates, unsupported language all rejected | `service.import_package`; `test_invalid_domain_no_writes`, `test_unsupported_language`, `test_disabled_language_is_atomic` |
+| IE-08 | Second import within and across JSON/CSV, case variant, concurrent duplicate across formats, late insertion failure; verify no partial rows or modifications after failure | Unique indexes + request transaction; `test_roundtrip_and_provenance`, `test_concurrent_duplicate`, `test_case_variant_duplicate`, `test_late_failure_rolls_back` |
+| IE-09 | Render English (LTR), Arabic (RTL), and an additional enabled test-language DOCX export without adding language-specific selection logic; inspect localized labels, entity fallback, paragraph/table direction, indentation from the correct edge, mixed-language codes, landscape layout, one table per root, hierarchy, colors, repeated headers, long content, and equal data coverage | `word.render_word`; `test_word_languages`, `test_api_hierarchy_shapes`; rendered review in section 11.4 |
+| IE-10 | Live browser import alongside Add Classification Scheme, import available on an empty schemes list, no import on existing scheme details, JSON/CSV import choices, details-page export menu, all enabled Word language choices available independently of UI language, newly enabled language appears without code changes, disabled/unsupported selection rejected, explicit export-language selection, downloads, remain on schemes list after successful import with refreshed data and preserved filters/sort/page, failure retention, progress, repeated navigation, abandonment, freshness, LTR and RTL | `classification_transfer.py` + workspace integration; NiceGUI interaction tests and live browser checks; completed matrix evidence in section 11.4 |
+| IE-11 | Anonymous/unauthorized access denied; classifications.administer permits all export formats without metadata privileges or audit.view; the same privilege alone permits complete imports including translations without metadata privileges or audit.view; test scheme-only, classification-only, both, null, and empty translations in JSON and CSV; missing privilege rejects all writes without stripping data; UI base-permission gating and identity/provenance attribution verified | Route dependencies + UI gating; `test_only_administer_privilege`, `test_anonymous_transfer_denied`, `test_transfer_hidden_without_administer` |
+| IE-12 | Import draft, published, and future-publication source schemes; verify each destination scheme has NULL `date_published`, displays as unpublished/draft, is not eligible through published-scheme selectors, retains source publication provenance, and can subsequently use the existing authorized publication workflow subject to its normal eligibility rules | NULL publication override; `test_draft_import`, `test_first_use_and_publication_workflow`; live imported-draft display verified |
+| IE-13 | Complete CSV reconstructs the matching JSON package and digest; real CSV export/import round trip; shuffled rows, BOM, equivalent quoting and outer line endings; null/empty translations, bigint precision; reject missing/duplicate manifest fields, checksum tampering, wrong headers/row widths/types, conflicting owners, orphan translations/rules, malformed quoting and cycles; verify draft state and rollback | Shared typed package/checksum; JSON/CSV roundtrip, parsing, rollback tests; checked-in matching fixtures |
 
 Database-backed verification must create uniquely named disposable PostgreSQL
 databases per run, initialize empty databases from `database/schema.sql` alone,
@@ -800,6 +852,150 @@ verification evidence alongside automated results; neither substitutes for the
 other. Required translation coverage, placeholders, terminology, stale-key,
 provenance, ordering, and artifact-hash checks must also pass.
 
+### 11.4 Implementation verification record (2026-09-29)
+
+Verification used the working tree based on Git commit
+`59997e92fbd1535f07e6ba0f2bfba5d626564a6a`, with canonical schema SHA-256
+`269b1db0f85987a36c3b96633100034117767b981d9103dc2e93e2b96067ed09`.
+The implementation is uncommitted; the base SHA alone does not identify these
+changes.
+
+- `backend/services/api/.venv/bin/python tools/test_scheme_transfer.py`:
+  106 tests passed. The fixture asserts English source coverage and installed,
+  enabled, published Arabic and French test catalogues before feature tests.
+  Source `erms_transfer_test_c3012409e32649e2_source` and destination
+  `erms_transfer_test_8397683940794961_destination` were both dropped after
+  browser preview shutdown. No persistent application database was tested.
+- After fixing per-line mixed-script isolation in RTL Word output, the same
+  runner with `-k 'word_languages or api_hierarchy_shapes'` passed 15 tests
+  (91 deselected). Both databases for that run were dropped successfully.
+- The added `test_word_rejects_missing_unsupported_or_disabled_language`
+  cases passed separately (3 passed, 106 deselected), rejecting every invalid
+  selection without silently substituting a language. Both fresh databases
+  were dropped successfully. The current suite contains 109 tests.
+- Frontend verification: run the workspace and transfer tests under
+  `frontend/webui/interaction/tests/` together with
+  `frontend/webui/tests/test_api_client.py`, using the frontend virtualenv,
+  pytest and `--asyncio-mode=auto`: 74 tests passed.
+- Live browser checks exercised JSON import followed by CSV duplicate rejection
+  and CSV import followed by JSON duplicate rejection on separate disposable
+  previews. They verified draft display, list retention, filter preservation,
+  refresh, details-only export, language registry choices, and successful
+  authenticated JSON, CSV and Word export responses. The reusable phased checks
+  are in `frontend/webui/interaction/browser/classification_transfer.js`.
+- Dialog appearance and computed direction were inspected in English and
+  Arabic at 1280-pixel and 390-pixel viewport widths. Both directions fit the
+  viewport. A scoped correction fixes inherited double reversal in RTL fields.
+- Normal and long-text Word samples were rendered and inspected in English,
+  Arabic and the additional French test language. Long samples span three pages,
+  preserve mixed-script text, repeat headers and continue long rows without
+  clipping. Test French labels intentionally use `FR ...` markers, not a
+  production French translation. Generated QA documents are disposable artifacts.
+- Catalogue source coverage/stale-key checks and full Arabic quality validation
+  passed. There are 53 new contextual keys, with matching maintained-language
+  coverage, sorted order and updated source hash. Existing Arabic wording and
+  provenance are preserved. New Arabic entries remain machine-generated drafts
+  requiring human review; no administrator export was promoted or overwritten.
+
+The follow-up acceptance run closed the previously recorded browser and visual
+gaps:
+
+- Full suite: **109 passed**, with no skipped feature tests. Source
+  `erms_transfer_test_376ef3a731274762_source` and destination
+  `erms_transfer_test_7f8cf2ab5cee47f4_destination` were dropped after preview.
+- Live paging: seeded 60 disposable schemes, selected Creation order, loaded
+  two pages, imported successfully, and asserted the same sort and 50 loaded
+  rows after refresh. Existing filtered-import checks cover filter retention.
+- Live timing: a separate disposable transaction held the schemes table in
+  SHARE mode. A double-click disabled the import control and produced exactly
+  one POST in the API log. After canceling the dialog and navigating to Dashboard,
+  releasing the gate completed the import without replacing the dashboard.
+  Revisiting and filtering to the imported code showed the committed draft.
+- Live identity: repeated the held request with a distinct package, signed out,
+  and signed in through normal controls as a separately seeded viewer with no
+  roles. Releasing the gate did not expose the former user's result, notification,
+  scheme navigation, or transfer controls. The viewer's account menu confirmed
+  its own identity and no assigned roles.
+- Truly empty destination: `--preview -k test_anonymous_transfer_denied` initializes
+  published languages and accounts but creates no schemes. Import was available
+  beside Add with no filter; three Dashboard/list visits followed by CSV import
+  succeeded and refreshed the same list. Both preview databases were dropped.
+- Empty, multiple-root, broad (80 classifications), and deep (levels 0–79)
+  Word samples were rendered and reviewed in English, Arabic and the additional
+  test language. Broad/deep reports span 32 LTR or 35 RTL pages. Page overviews
+  and detailed edge/depth inspection verified headers, row continuation, text,
+  hierarchy, and margins. This exposed an RTL indentation bug: physical `w:right`
+  was rendered at the wrong edge. Logical `w:start`/`w:end` now follows document
+  direction, with bounded indentation and explicit depth/parent still present.
+  Final normal samples and the level-79 Arabic page were rendered again.
+- After that Word fix, **15 affected tests passed** (94 deselected) on source
+  `erms_transfer_test_30621ade366847fd_source` and destination
+  `erms_transfer_test_40f3d44682a942ec_destination`; both were dropped.
+  The frontend/client suite passed again: **74 tests**.
+- Rapid sign-in navigation exposed a null-principal exception in the new privilege
+  lookup. The workspace now waits for an available principal before starting
+  authenticated requests; no privileges are inferred during initialization.
+  Live retest confirmed the early click issued no schemes request, sign-in stayed
+  authenticated, and subsequent navigation succeeded. Its source
+  `erms_transfer_test_7fc71d6d04614c74_source` and destination
+  `erms_transfer_test_59d41ce140764617_destination` were dropped successfully.
+
+Browser assertions and reproduction steps are maintained alongside
+`classification_transfer.js`. All timing gates were released, preview workers
+stopped and test databases dropped. There is no unresolved transfer acceptance
+failure. Human review of the 53 new Arabic drafts remains a translation workflow
+requirement, not a claim that machine-generated wording has been approved.
+All 53 entries contain best-effort Arabic text; “draft” describes review status,
+not missing translations. A subsequent language pass improved 10 new entries,
+including import-hint agreement, application-revision wording, retention-period
+labels and consistency with the existing Authority label. Replaced machine text
+is recorded in `superseded_translations`. Full catalogue validation passed again;
+curated entries and their provenance remain unchanged. No administrator export
+was promoted and no persistent database translations were published by this pass.
+
+A reported bulk-publication warning subsequently confirmed that the `demo`
+database still contained 53 English `source_copy` transfer drafts. An explicit
+scoped seed replaced those 53 untouched rows with the validated Arabic artifact
+text in one transaction. Each remains an unpublished `generated` draft with
+artifact hash and machine provenance; no reviewed or published row was changed.
+Read-back verification confirmed all 53 texts match and zero transfer source
+copies remain. This was an operational draft update, not a test against a
+persistent database or automatic publication. API startup intentionally does
+not seed generated translations; artifact updates require explicit draft seeding.
+
+The full policy-inventory generator also encounters a pre-existing unclassified
+`GET /api/v1/number-suggestions/{resource}` operation. The two transfer route
+entries are recorded with the approved existing privilege; resolving that
+unrelated policy mapping is not claimed by this change.
+The no-role viewer also exposed an existing dashboard storage-chart error when
+the authorized unit list is empty (`max(1, *empty)`); transfer identity isolation
+remained intact. That unrelated dashboard defect is not changed here.
+
+### 11.5. Reader-oriented Word revision verification
+
+The September 29 Word revision implements native paragraph/table/run direction,
+Changa 10 for Latin and complex scripts, 13.5 × 8.5-inch landscape pages,
+friendly localized dates, compact code/level columns, and the three effective
+retention columns immediately after the title. Existing translation keys are
+reused; this revision adds no catalogue entries or changes to curated wording.
+
+The focused disposable-database run passed **15 tests** (three language exports
+and twelve JSON/CSV hierarchy cases). Assertions cover page geometry, font slots
+and sizes, exact grid/cell widths, inherited retention values, localized dates,
+native direction properties, absence of inserted direction controls, repeated
+headers, hierarchy indentation and shading. Source database
+`erms_transfer_test_9fbeddd097534dad_source` and destination
+`erms_transfer_test_3ed435e3735745ab_destination` were both dropped successfully.
+
+Rendered English, Arabic and French fixtures were visually reviewed, together
+with English/Arabic long-text cases and 80-node deep/broad hierarchies. Tables
+remain within the margins; Arabic column order, indentation, repeated headers
+and level shading remain correct. The preview renderer initially substituted
+DejaVu; an explicit QA font configuration resolved this, and PDF font inspection
+confirmed Changa Regular/Bold. Native Microsoft Word was not used for this
+rendering check. Automated DOCX assertions verify its native formatting markup.
+`git diff --check` and formatting checks passed.
+
 ## 12. Decisions and remaining clarification
 
 | ID | Decision | Resolution/status |
@@ -807,9 +1003,7 @@ provenance, ordering, and artifact-hash checks must also pass.
 | D1 | Does complete transfer include immutable source event history? | Approved: transfer current entity state and provenance only; exclude source event history. |
 | D2 | How should source IDs, dates, first-use markers, and versions survive import? | Approved: preserve original dates, first-use markers, and versions, except the destination scheme has NULL date_published and retains the source publication date as provenance. Allocate local IDs and persist the source-to-local provenance mapping. Imported first-use markers retain their governance effect. Document storage and trigger interaction before coding. |
 | D3 | Successful-import navigation | Approved: stay on the schemes list after successful import and refresh its data. Import remains alongside Add Classification Scheme, never on an existing scheme's details page. |
-| D4 | Authorization, API routes, and import audit vocabulary | Authorization approved and revised: classifications.administer alone permits the entire import, including translations, and all export formats. No additional metadata privileges are required. API routes and local import event source/actions remain to be specified before coding; introduce new audit vocabulary only with approval. |
+| D4 | Authorization, API routes, and import audit vocabulary | Authorization approved and revised: classifications.administer alone permits the entire import, including translations, and all export formats. No additional metadata privileges are required. Concrete route mapping is documented in section 10.1. Reuse existing CREATE/api/web_ui history with import provenance metadata; no new audit vocabulary is introduced. |
 
 D1, D2, D3, import placement, and the revised privilege mapping are approved.
-D4 retains API/audit design work. The specification
-remains a draft until the outstanding items are settled; approved decisions
-above must not be reopened merely because their implementation needs design work.
+D4 technical mapping is recorded in section 10.1. Full acceptance remains subject to every condition in section 11; implementation progress does not waive these conditions.

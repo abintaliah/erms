@@ -20,6 +20,7 @@ ALLOWED_LATIN = {
     "ACL", "API", "CASE-2026", "HTTP", "HTTPS", "IANA", "ID", "IP",
     "ISO", "JSON", "MIME", "PDF", "POST", "SQL", "UTC", "health", "wti_",
     "application/octet-stream",
+    "CSV", "MS", "Word",  # Export format/product names retain their spelling.
 }
 
 
