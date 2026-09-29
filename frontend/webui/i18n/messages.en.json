@@ -3118,6 +3118,160 @@
     "is_html": false
   },
   {
+    "message_key": "classification_browser.add_child",
+    "context_group": "classification_browser",
+    "default_text": "Child classification",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Child classification",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Child classification",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_browser.add_root",
+    "context_group": "classification_browser",
+    "default_text": "Root classification",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Root classification",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Root classification",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_browser.back_to_tree",
+    "context_group": "classification_browser",
+    "default_text": "Back to classification tree",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Back to classification tree",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Back to classification tree",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_browser.retry",
+    "context_group": "classification_browser",
+    "default_text": "Retry",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Retry",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Retry",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_browser.toggle_branch",
+    "context_group": "classification_browser",
+    "default_text": "Expand or collapse classification",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Expand or collapse classification",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Expand or collapse classification",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_browser.toggle_scheme",
+    "context_group": "classification_browser",
+    "default_text": "Expand or collapse scheme",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Expand or collapse scheme",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Expand or collapse scheme",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_details.actions.audit",
+    "context_group": "classification_details.actions",
+    "default_text": "Audit",
+    "semantic_meaning": "Heading grouping existing classification administration controls: Audit",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. These are group headings, not commands or new permissions.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Audit",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_details.actions.classification",
+    "context_group": "classification_details.actions",
+    "default_text": "Classification actions",
+    "semantic_meaning": "Heading grouping existing classification administration controls: Classification actions",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. These are group headings, not commands or new permissions.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Classification actions",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_details.actions.lifecycle",
+    "context_group": "classification_details.actions",
+    "default_text": "Lifecycle",
+    "semantic_meaning": "Heading grouping existing classification administration controls: Lifecycle",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. These are group headings, not commands or new permissions.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Lifecycle",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_details.actions.metadata",
+    "context_group": "classification_details.actions",
+    "default_text": "Metadata and hierarchy",
+    "semantic_meaning": "Heading grouping existing classification administration controls: Metadata and hierarchy",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. These are group headings, not commands or new permissions.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Metadata and hierarchy",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_details.actions.scheme",
+    "context_group": "classification_details.actions",
+    "default_text": "Scheme actions",
+    "semantic_meaning": "Heading grouping existing classification administration controls: Scheme actions",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. These are group headings, not commands or new permissions.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Scheme actions",
+    "is_html": false
+  },
+  {
     "message_key": "classification_workspace.metadata.first_used",
     "context_group": "classification_workspace",
     "default_text": "First used",
@@ -24020,20 +24174,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.render_scheme_list.label.counts_loading_1ffb90cd",
-    "context_group": "webui.render_scheme_list",
-    "default_text": "Counts loading…",
-    "semantic_meaning": "Interface text in the render scheme list workflow.",
-    "common_locations": [
-      "WebUI: render scheme list"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Counts loading…",
-    "is_html": false
-  },
-  {
     "message_key": "webui.render_scheme_list.label.no_matching_schemes_2a601365",
     "context_group": "webui.render_scheme_list",
     "default_text": "No matching schemes",
@@ -24045,20 +24185,6 @@
     "grammatical_role": "interface text",
     "parameter_schema": {},
     "rendered_example": "No matching schemes",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_scheme_list.text.no_description_7f023195",
-    "context_group": "webui.render_scheme_list",
-    "default_text": "No description",
-    "semantic_meaning": "Interface text in the render scheme list workflow.",
-    "common_locations": [
-      "WebUI: render scheme list"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "No description",
     "is_html": false
   },
   {
@@ -25622,34 +25748,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.render_workspace_right.label.its_information_will_appear_here_bc4769c5",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Its information will appear here.",
-    "semantic_meaning": "Interface text in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Its information will appear here.",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.label.its_metadata_and_effective_retention_rule_f231c468",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Its metadata and effective retention rule will appear here.",
-    "semantic_meaning": "Interface text in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Its metadata and effective retention rule will appear here.",
-    "is_html": false
-  },
-  {
     "message_key": "webui.render_workspace_right.label.no_classifications_match_this_search_3e1025e9",
     "context_group": "webui.render_workspace_right",
     "default_text": "No classifications match this search.",
@@ -25705,48 +25803,6 @@
       "search_result_count": "text"
     },
     "rendered_example": "<search_result_count> matching classifications",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.label.select_a_classification_192337f3",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Select a classification",
-    "semantic_meaning": "Interface text in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Select a classification",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.label.select_a_classification_scheme_825fcd9e",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Select a classification scheme",
-    "semantic_meaning": "Interface text in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Select a classification scheme",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.label.select_a_scheme_to_browse_its_classificati_afdd23e3",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Select a scheme to browse its classifications.",
-    "semantic_meaning": "Interface text in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Select a scheme to browse its classifications.",
     "is_html": false
   },
   {
@@ -26066,34 +26122,6 @@
     "grammatical_role": "action guidance",
     "parameter_schema": {},
     "rendered_example": "Schemes that have governed aggregations cannot be unpublished",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.tooltip.select_a_branch_classification_before_addi_b9ec1645",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Select a branch classification before adding a child",
-    "semantic_meaning": "Action guidance in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise action guidance; preserve the intent used in this workflow.",
-    "grammatical_role": "action guidance",
-    "parameter_schema": {},
-    "rendered_example": "Select a branch classification before adding a child",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.tooltip.terminal_classifications_cannot_contain_ch_80c2bf31",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Terminal classifications cannot contain children",
-    "semantic_meaning": "Action guidance in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise action guidance; preserve the intent used in this workflow.",
-    "grammatical_role": "action guidance",
-    "parameter_schema": {},
-    "rendered_example": "Terminal classifications cannot contain children",
     "is_html": false
   },
   {
@@ -27939,20 +27967,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.select_classification_workspace.label.classification_schemes_6020e95d",
-    "context_group": "webui.select_classification_workspace",
-    "default_text": "Classification schemes",
-    "semantic_meaning": "Interface text in the select classification workspace workflow.",
-    "common_locations": [
-      "WebUI: select classification workspace"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Classification schemes",
-    "is_html": false
-  },
-  {
     "message_key": "webui.select_classification_workspace.select.code_d3581de2",
     "context_group": "webui.select_classification_workspace",
     "default_text": "Code",
@@ -28034,20 +28048,6 @@
     "grammatical_role": "interface text",
     "parameter_schema": {},
     "rendered_example": "Build and govern classification hierarchies in context",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.select_classification_workspace.text.classification_schemes_79225ac9",
-    "context_group": "webui.select_classification_workspace",
-    "default_text": "Classification schemes",
-    "semantic_meaning": "Interface text in the select classification workspace workflow.",
-    "common_locations": [
-      "WebUI: select classification workspace"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Classification schemes",
     "is_html": false
   },
   {

@@ -612,36 +612,42 @@ the classification-scheme icon previously reserved when aggregation icons were
 changed to folders. Classifications do not have a second top-level navigation
 entry: they are administered in the context of their scheme.
 
-The workspace uses two coordinated master-detail rows:
+The approved 29 September 2026 redesign uses one full-width classification tree
+and separate scheme and classification details pages, following the Records and
+Aggregations details-page model:
 
-- The fixed-height upper row places the vertically scrollable scheme list and
-  scheme-creation controls on the left and the selected scheme's read-only
-  information and actions on the right.
-- Scheme list cards use a compact layout. Descriptions are limited to one line
-  with an ellipsis and provide the complete value in a hover tooltip.
-- The full-width lower row retains classification search followed by the
-  side-by-side classification tree and classification-information panes.
-- Root classifications load with scheme selection; direct children load only
-  when a branch is expanded.
-- The Classification tree header's add action sits beside Refresh and creates a
-  root classification with the selected scheme fixed as context.
-- The adjacent child-classification action is enabled only while a branch is
-  selected. It fixes both the selected scheme and branch as context and remains
-  disabled when nothing or a terminal classification is selected.
-- Selecting a classification presents its path, metadata, effective retention
-  rule, provenance, and contextual actions.
-- Complete scheme and classification metadata is presented read-only without
-  opening an edit dialog. Retention instructions and inheritance provenance are
-  part of this view; future update authorization may remove Edit without
-  removing permitted read access.
-- Codes must be displayed in full. Description and scope-note values span the
-  full detail-card width in multi-line, vertically scrollable regions.
-- A root classification has no parent, so its Parent classification value is
-  empty (`—`), not the misleading text “Root classification”. Tree nodes reserve
-  a consistent expander column so their type icons align by hierarchy depth.
-- Search results can focus their scheme and expand their ancestor path.
-- The within-scheme administrative search ORs case-insensitive literal
-  containment across code, title, description, and keywords.
+- Schemes are the tree roots. Each scheme and each classification branch loads
+  its children independently in server pages of 25, with an explicit Load more.
+- Classification siblings are always ordered by code ascending on the server.
+  Scheme roots default to code ascending and retain the scheme sort controls.
+- Scheme identity remains visible above its descendants and on every details
+  page, distinguishing identical classification codes in different schemes.
+- Clicking the node label opens the appropriate details page. The expander only
+  expands/collapses; there is no separate open-link icon.
+- Add scheme is a tree-level action. A scheme's plus creates a root classification;
+  a branch's plus creates a child. Creation locks the matching scheme and parent.
+  Terminal classifications have no child-creation action.
+- Inactive schemes and classifications use muted styling and explicit localized
+  badges. Direct inactivity, inactivity through an ancestor, and inactivity
+  through the scheme remain distinguishable without relying on color alone.
+- Scheme descriptions remain compact in the tree with full hover text. The
+  dedicated details pages show complete metadata, contextual lifecycle/edit/
+  history controls, and the existing deletion restrictions and explanations.
+- Classification details show the full ancestor path, direct/effective retention
+  and provenance, and disposal instructions. The existing current → intermediate
+  → final-disposition timeline is shared with aggregation details.
+- Codes appear in full. Descriptions and scope notes use full-width multiline
+  scroll regions. Root Parent classification is `—`.
+- Returning to the tree restores expansion, paging and filter preferences and
+  revalidates data. Details participate in the shared navigation-history trail.
+- Within-scheme search uses case-insensitive literal containment across code,
+  title, description and keywords, with bounded server pages and links to details.
+- All controls and status text support English/LTR and Arabic/RTL.
+
+Hierarchy icons mirror in Arabic so branches and terminals face the node text.
+Icons and labels have a consistent logical gap. Node codes remain visible;
+long node titles use an ellipsis and expose the complete title in a tooltip
+and accessible name.
 
 Scheme administration provides:
 

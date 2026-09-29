@@ -16,6 +16,8 @@ from zoneinfo import available_timezones
 from nicegui import app, background_tasks, context, events, ui
 
 from .api_client import ApiError, ErmsApiClient
+from .classification_workspace import classification_workspace
+from .retention_timeline import render_retention_stages
 from .capabilities import (
     capability_allowed,
     can_add_from_collection,
@@ -1858,7 +1860,7 @@ def index(q: str = "") -> None:
         }
         body {
             background: var(--erms-bg); color: var(--erms-ink);
-            font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+            font-family: Changa, ui-sans-serif, -apple-system, BlinkMacSystemFont,
                          "Segoe UI", sans-serif;
             letter-spacing: -.008em;
         }
@@ -2097,6 +2099,17 @@ def index(q: str = "") -> None:
         }
         html[dir="rtl"] .classification-scheme-detail-identity-content {
             direction: rtl; text-align: right;
+        }
+        /* NiceGUI Row exposes wrapping/alignment, not direction. The global
+           RTL .row reversal double-mirrors these naturally RTL containers.
+           Keep this fallback scoped to the classification workspace. */
+        html[dir="rtl"] .classification-workspace .row,
+        html[dir="rtl"] .classification-workspace .q-btn__content {
+            flex-direction: row !important;
+        }
+        /* Material hierarchy glyphs are fixed-direction; mirror toward RTL text. */
+        html[dir="rtl"] .classification-directional-icon .q-icon {
+            transform: scaleX(-1);
         }
         html[dir="rtl"] .classification-detail-title-status,
         html[dir="rtl"] .classification-detail-actions,
@@ -3640,6 +3653,8 @@ def index(q: str = "") -> None:
             "aggregation-details": "aggregations",
             "record-details": "records",
             "classification-workspace": "classification-schemes",
+            "classification-scheme-details": "classification-schemes",
+            "classification-details": "classification-schemes",
             "org-unit-details": "org-units",
             "role-details": "roles",
             "user-details": "users",
@@ -3764,6 +3779,8 @@ def index(q: str = "") -> None:
             "advanced-search": "manage_search",
             "classification-schemes": "account_tree",
             "classification-workspace": "account_tree",
+            "classification-scheme-details": "account_tree",
+            "classification-details": "schema",
             "org-units": "corporate_fare",
             "roles": "badge",
             "users": "group",
@@ -4345,6 +4362,10 @@ def index(q: str = "") -> None:
                 render_table(ENTITIES[page])
         elif page == "classification-workspace":
             await select_classification_workspace()
+        elif page == "classification-scheme-details" and entity_id is not None:
+            await select_classification_workspace(initial_scheme_id=entity_id)
+        elif page == "classification-details" and entity_id is not None:
+            await select_classification_workspace(initial_classification_id=entity_id)
         elif page == "organization-browser":
             await show_organization_structure()
         elif page == "audit-trail":
@@ -4424,6 +4445,8 @@ def index(q: str = "") -> None:
     def clear_signed_in_identity() -> None:
         """Remove account identity and overlays before presenting sign-in again."""
         clear_global_search_session()
+        state.pop("classification_browser_preferences", None)
+        state.pop("classification_workspace_token", None)
         api.cancel_pending_reads()
         drawer.hide()
         user_menu.close()
@@ -9802,28 +9825,7 @@ def index(q: str = "") -> None:
                                         )
                                     ui.label(source_text).classes("text-xs text-sky-700")
                                 ui.badge(render_message("webui.open_aggregation.badge.effective_a28f890c"), color="primary").props("outline")
-                            with ui.element("div").classes("aggregation-retention-stages w-full"):
-                                final_disposition = effective_rule["final_disposition"]
-                                final_value = localized_disposition_value(final_disposition)
-                                final_help = entity_metadata_label("Final disposition")
-                                for stage_label, stage_value, stage_help in (
-                                    (
-                                        entity_metadata_label("Current retention (years)"),
-                                        render_message("common.duration.years", count=effective_rule["current_period_years"]),
-                                        render_message("webui.open_aggregation.retention.business_unit"),
-                                    ),
-                                    (
-                                        entity_metadata_label("Intermediate retention (years)"),
-                                        render_message("common.duration.years", count=effective_rule["intermediate_period_years"]),
-                                        render_message("webui.open_aggregation.retention.records_storage"),
-                                    ),
-                                    (entity_metadata_label("Final disposition"), final_value, final_help),
-                                ):
-                                    with ui.column().classes("aggregation-retention-stage gap-0"):
-                                        ui.label(render_message("webui.open_aggregation.label.stage_label_stage_value_026d5c3a", stage_label=stage_label, stage_value=stage_value)).classes(
-                                            "w-full text-sm font-semibold text-slate-800"
-                                        )
-                                        ui.label(stage_help).classes("w-full text-xs text-slate-500")
+                            render_retention_stages(effective_rule, localized_disposition_value)
                             with ui.element("div").classes("aggregation-retention-footer w-full"):
                                 if classification_path:
                                     classification_text = " › ".join(
@@ -18324,17 +18326,10 @@ def index(q: str = "") -> None:
         initial_scheme_id: int | None = None,
         initial_classification_id: int | None = None,
     ) -> None:
-        register_navigation(
-            "classification-workspace",
-            render_message("navigation.item.classification_schemes"),
-        )
         show_authenticated_view()
-        state.update(
-            resource="classification-workspace", rows=[], searched=True,
-            aggregation_detail=None,
-        )
-        title.text = render_message("webui.select_classification_workspace.text.classification_schemes_79225ac9")
-        subtitle.text = render_message("webui.select_classification_workspace.text.build_and_govern_classification_hierarchie_1766e961")
+        state.update(resource="classification-workspace", rows=[], searched=True, aggregation_detail=None)
+        token = object()
+        state["classification_workspace_token"] = token
         search_bar.set_visibility(False)
         aggregation_mode_bar.set_visibility(False)
         add_button.set_visibility(False)
@@ -18342,1046 +18337,31 @@ def index(q: str = "") -> None:
         guidance.text = ""
         table_container.clear()
 
-        workspace: dict[str, Any] = {
-            "schemes": [], "scheme": None, "selected": None,
-            "children": {}, "children_more": {}, "paths": {}, "expanded": set(), "counts": {},
-            "query": "", "search_results": [],
-            "scheme_sort": "created", "scheme_sort_direction": "asc",
-            "schemes_more": False,
-            "tree_revision": 0,
-        }
-
-        with table_container:
-            with ui.column().classes("w-full gap-0"):
-                with ui.row().classes(
-                    "classification-scheme-master-detail w-full h-[420px] shrink-0 items-stretch gap-0 no-wrap "
-                    "overflow-hidden border-b border-slate-200"
-                ):
-                    with ui.column().classes(
-                        "classification-scheme-selector-panel w-[42%] basis-[42%] shrink-0 min-w-[340px] h-full "
-                        "p-4 gap-3"
-                    ):
-                        with ui.element("div").classes("classification-scheme-selector-heading w-full gap-2"):
-                            ui.label(render_message("webui.select_classification_workspace.label.classification_schemes_6020e95d")).classes("classification-scheme-selector-heading-label text-lg font-semibold")
-                            add_scheme_button = ui.button(
-                                render_message("webui.select_classification_workspace.button.add_scheme_ff7a6bd6"), icon="add"
-                            ).props("unelevated dense no-caps color=primary").classes("classification-scheme-selector-heading-action")
-                        with ui.row().classes("classification-scheme-filter-sort w-full items-center gap-2 no-wrap"):
-                            scheme_filter = ui.input(render_message("webui.select_classification_workspace.input.filter_schemes_a7f4591e")).props(
-                                "outlined dense clearable prepend-icon=search"
-                            ).classes("grow min-w-0")
-                            scheme_sort = ui.select(
-                                {
-                                    "created": render_message("webui.select_classification_workspace.select.creation_order_1f954421"),
-                                    "title": render_message("webui.select_classification_workspace.select.title_60b91cb4"),
-                                    "code": render_message("webui.select_classification_workspace.select.code_d3581de2"),
-                                    "published_status": render_message("webui.select_classification_workspace.select.status_5c0d1bcb"),
-                                },
-                                value="created",
-                                label=render_message("webui.select_classification_workspace.select.sort_by_67f4fa9f"),
-                            ).props("outlined dense options-dense").classes("w-44 shrink-0")
-                            scheme_sort_direction = ui.button(
-                                icon="arrow_upward"
-                            ).props("flat dense round color=primary").classes("shrink-0")
-                            scheme_sort_direction.tooltip(render_message("webui.select_classification_workspace.tooltip.reverse_sort_direction_98ba265c"))
-                        scheme_list = ui.column().classes(
-                            "w-full grow min-h-0 gap-2 overflow-y-auto pr-1"
-                        )
-                    scheme_information_panel = ui.column().classes(
-                        "grow min-w-0 h-full overflow-y-auto p-5 gap-4"
-                    )
-                classification_workspace = ui.column().classes(
-                    "w-full min-w-0 min-h-[520px] p-5 gap-4"
-                )
-
-        def scheme_lifecycle(scheme: dict[str, Any]) -> tuple[str, str]:
-            if scheme.get("date_deactivated"):
-                return render_message("webui.render_workspace_right.text.inactive_f9285c80"), "grey-7"
-            published = scheme.get("date_published")
-            if not published:
-                return render_message("localization.filter.status.draft"), "blue-grey"
-            try:
-                publication = datetime.fromisoformat(str(published).replace("Z", "+00:00"))
-                now = datetime.now(publication.tzinfo or timezone.utc)
-                if publication > now:
-                    return render_message("webui.select_holds.select.scheduled_860621ba"), "orange"
-            except (TypeError, ValueError):
-                pass
-            return render_message("entity_metadata.field.published"), "positive"
-
-        def scheme_deletion_block_reason(scheme: dict[str, Any]) -> str | None:
-            if scheme.get("date_first_used"):
-                return render_message("classification_workspace.scheme.delete_blocked.used")
-            if scheme.get("date_published"):
-                return render_message("classification_workspace.scheme.delete_blocked.published")
-            return None
-
-        def metadata_value(
-            label: str, value: Any, *, timestamp: bool = False,
-        ) -> None:
-            with ui.column().classes("gap-0 min-w-0 w-full"):
-                ui.label(label.upper()).classes("component-meta-label")
-                rendered = format_timestamp(value) if timestamp else display_value(value)
-                ui.label(rendered).classes(
-                    "w-full text-sm text-slate-700 whitespace-pre-wrap break-words select-text"
-                )
-
-        def long_metadata_value(label: str, value: Any) -> None:
-            with ui.column().classes("w-full gap-1 min-w-0"):
-                ui.label(label.upper()).classes("component-meta-label")
-                ui.label(display_value(value)).classes(
-                    "w-full min-h-[4.75rem] max-h-32 overflow-y-auto rounded-lg "
-                    "border border-slate-200 bg-slate-50 px-3 py-2 text-sm "
-                    "leading-6 text-slate-700 whitespace-pre-wrap break-words select-text"
-                )
-
-        def render_rule_details(rule: dict[str, Any] | None) -> None:
-            if rule is None:
-                ui.label(render_message("webui.render_rule_details.label.no_retention_rule_is_defined_here_c2ad525c")).classes("text-sm text-slate-400")
-                return
-            with ui.grid(columns=3).classes("w-full gap-4"):
-                metadata_value(
-                    entity_metadata_label("Current retention (years)"),
-                    render_message("common.duration.years", count=rule["current_period_years"]),
-                )
-                metadata_value(
-                    entity_metadata_label("Intermediate retention (years)"),
-                    render_message("common.duration.years", count=rule["intermediate_period_years"]),
-                )
-                metadata_value(
-                    entity_metadata_label("Final disposition"),
-                    localized_disposition_value(rule["final_disposition"]),
-                )
-            metadata_value(
-                entity_metadata_label("Retention and disposal instructions"),
-                rule.get("instructions"),
+        def register_classification_page(page: str, item: dict[str, Any] | None) -> None:
+            label = (
+                f"{item['code']} — {item['title']}"
+                if item and item.get("title") else
+                render_message("navigation.item.classification_schemes")
             )
+            register_navigation(page, label, entity_id=item["id"] if item else None, dynamic_label=bool(item))
+            state["resource"] = page
+            title.text = label
+            subtitle.text = "" if item else render_message("webui.select_classification_workspace.text.build_and_govern_classification_hierarchie_1766e961")
 
-        async def load_scheme_counts(schemes: list[dict[str, Any]]) -> None:
-            rows = await api.request(
-                "GET", "/api/v1/classification-schemes/classification-counts"
-            )
-            workspace["counts"] = {
-                row["classification_scheme_id"]: (
-                    int(row["branch_count"]), int(row["terminal_count"]),
-                )
-                for row in rows
-            }
-            for scheme in schemes:
-                workspace["counts"].setdefault(scheme["id"], (0, 0))
-
-        def render_scheme_list() -> None:
-            scheme_list.clear()
-            term = (scheme_filter.value or "").strip().casefold()
-            schemes = [
-                scheme for scheme in workspace["schemes"]
-                if not term or term in " ".join(filter(None, (
-                    scheme.get("code"), scheme.get("title"), scheme.get("description"),
-                ))).casefold()
-            ]
-            with scheme_list:
-                if not schemes:
-                    ui.label(render_message("webui.render_scheme_list.label.no_matching_schemes_2a601365")).classes("text-sm text-slate-400 py-5 self-center")
-                for scheme in schemes:
-                    selected = workspace["scheme"] and workspace["scheme"]["id"] == scheme["id"]
-                    status_label, status_color = scheme_lifecycle(scheme)
-                    scheme_counts = workspace["counts"].get(scheme["id"])
-                    classes = "w-full cursor-pointer shadow-none border p-2"
-                    classes += " border-blue-300 bg-blue-50" if selected else " border-slate-200"
-                    with ui.card().classes(classes).on(
-                        "click", lambda _, item=scheme: select_scheme(item)
-                    ):
-                        with ui.element("div").classes("classification-scheme-list-card-row w-full gap-2"):
-                            ui.avatar(icon="account_tree", color="blue-1", text_color="primary", size="32px").classes("classification-scheme-list-card-icon")
-                            with ui.column().classes("classification-scheme-list-card-content min-w-0 gap-0"):
-                                ui.label(scheme["title"]).classes("w-full font-semibold truncate")
-                                ui.label(scheme["code"]).classes(
-                                    "w-full text-xs font-medium text-primary truncate"
-                                )
-                                localized_scheme = scheme.get("localized") or {}
-                                description = localized_scheme.get("description") or scheme.get("description") or render_message("webui.render_scheme_list.text.no_description_7f023195")
-                                description_label = ui.label(description).classes(
-                                    "w-full text-xs text-slate-500 truncate"
-                                )
-                                if scheme.get("description"):
-                                    description_label.tooltip(description)
-                            with ui.column().classes(
-                                "classification-scheme-list-card-status w-40 shrink-0 items-end gap-1"
-                            ):
-                                ui.badge(status_label, color=status_color).props("outline")
-                                if scheme_counts is None:
-                                    ui.label(render_message("webui.render_scheme_list.label.counts_loading_1ffb90cd")).classes(
-                                        "w-full text-right text-xs text-slate-400 whitespace-nowrap"
-                                    )
-                                else:
-                                    branches, terminals = scheme_counts
-                                    ui.label(
-                                        render_message("webui.render_scheme_list.label.branches_value_terminals_value_2_c95fc338", branches=branches, terminals=terminals)
-                                    ).classes("w-full text-right text-xs text-slate-400 whitespace-nowrap")
-                if workspace.get("schemes_more"):
-                    ui.button(
-                        render_message("webui.render_collection.button.load_more_755f4879"),
-                        icon="more_horiz", on_click=lambda: reload_workspace(append=True),
-                    ).props("flat dense no-caps").classes("self-center")
-
-        async def load_children(
-            parent_id: int | None, *, append: bool = False,
-        ) -> list[dict[str, Any]]:
-            scheme = workspace["scheme"]
-            if scheme is None:
-                return []
-            scheme_id = int(scheme["id"])
-            existing = workspace["children"].get(parent_id, []) if append else []
-            page_rows = await api.list(
-                "classifications",
-                classification_scheme_id=scheme_id,
-                limit=26, offset=len(existing),
-                **({"roots_only": True} if parent_id is None else {"parent_classification_id": parent_id}),
-            )
-            rows = sorted(
-                [*existing, *page_rows[:25]],
-                key=lambda row: (str(row.get("code") or ""), int(row["id"])),
-            )
-            current_scheme = workspace["scheme"]
-            if current_scheme and int(current_scheme["id"]) == scheme_id:
-                workspace["children"][parent_id] = rows
-                workspace["children_more"][parent_id] = len(page_rows) > 25
-            return rows
-
-        async def load_classification_path(
-            classification_id: int, *, refresh: bool = False,
-        ) -> list[dict[str, Any]]:
-            """Share one path lookup across tree reveal and detail rendering."""
-            paths = workspace["paths"]
-            if not refresh and classification_id in paths:
-                return paths[classification_id]
-            path = await api.classification_path(classification_id)
-            paths[classification_id] = path
-            return path
-
-        async def focus_classification(
-            item: dict[str, Any], *, reveal: bool = False,
-        ) -> None:
-            client = page_client
-            if (
-                not reveal
-                and workspace["selected"]
-                and workspace["selected"]["id"] == item["id"]
-            ):
-                return
-            workspace["tree_revision"] += 1
-            revision = workspace["tree_revision"]
-
-            def is_current() -> bool:
-                return revision == workspace["tree_revision"]
-
-            scroll_top = None
-            if not reveal:
-                scroll_top = await client.run_javascript(
-                    "document.getElementById('classification-tree-scroll')?.scrollTop || 0"
-                )
-                if not is_current():
-                    return
-            scheme = next(
-                (entry for entry in workspace["schemes"] if entry["id"] == item["classification_scheme_id"]),
-                None,
-            )
-            if scheme is None:
-                return
-            if workspace["scheme"] is None or workspace["scheme"]["id"] != scheme["id"]:
-                workspace.update(
-                    scheme=scheme, selected=None, children={}, children_more={}, paths={},
-                    expanded=set(), query="", search_results=[],
-                )
-                await load_children(None)
-                if not is_current():
-                    return
-                render_scheme_list()
-            path = await load_classification_path(item["id"])
-            if not is_current():
-                return
-            parent_id = None
-            for node in path[:-1]:
-                if parent_id not in workspace["children"]:
-                    await load_children(parent_id)
-                    if not is_current():
-                        return
-                workspace["expanded"].add(node["id"])
-                if node["id"] not in workspace["children"]:
-                    await load_children(node["id"])
-                    if not is_current():
-                        return
-                parent_id = node["id"]
-            workspace["selected"] = item
-            await render_workspace_right()
-            if reveal:
-                await client.run_javascript(
-                    "requestAnimationFrame(() => requestAnimationFrame(() => { "
-                    "const tree = document.getElementById('classification-tree-scroll'); "
-                    f"const node = document.getElementById('classification-tree-node-{item['id']}'); "
-                    "if (!tree || !node) return; "
-                    "const treeBox = tree.getBoundingClientRect(); "
-                    "const nodeBox = node.getBoundingClientRect(); "
-                    "if (nodeBox.top < treeBox.top || nodeBox.bottom > treeBox.bottom) "
-                    "node.scrollIntoView({block: 'center', behavior: 'smooth'}); "
-                    "}));"
-                )
-            else:
-                await client.run_javascript(
-                    "requestAnimationFrame(() => requestAnimationFrame(() => { "
-                    "const tree = document.getElementById('classification-tree-scroll'); "
-                    f"if (tree) tree.scrollTop = {float(scroll_top or 0)}; "
-                    "}));"
-                )
-
-        async def toggle_branch(item: dict[str, Any]) -> None:
-            client = page_client
-            workspace["tree_revision"] += 1
-            revision = workspace["tree_revision"]
-            scroll_top = await client.run_javascript(
-                "document.getElementById('classification-tree-scroll')?.scrollTop || 0"
-            )
-            if revision != workspace["tree_revision"]:
-                return
-            if item["id"] in workspace["expanded"]:
-                workspace["expanded"].remove(item["id"])
-            else:
-                if item["id"] not in workspace["children"]:
-                    await load_children(item["id"])
-                    if revision != workspace["tree_revision"]:
-                        return
-                workspace["expanded"].add(item["id"])
-            await render_workspace_right()
-            await client.run_javascript(
-                "requestAnimationFrame(() => requestAnimationFrame(() => { "
-                "const tree = document.getElementById('classification-tree-scroll'); "
-                f"if (tree) tree.scrollTop = {float(scroll_top or 0)}; "
-                "}));"
-            )
-
-        def render_tree_level(
-            parent_id: int | None, depth: int = 0, ancestor_inactive: bool = False,
-        ) -> None:
-            rows = workspace["children"].get(parent_id, [])
-            for item in rows:
-                directly_inactive = bool(item.get("date_deactivated"))
-                effectively_inactive = bool(
-                    ancestor_inactive
-                    or directly_inactive
-                    or (workspace["scheme"] or {}).get("date_deactivated")
-                )
-                selected = workspace["selected"] and workspace["selected"]["id"] == item["id"]
-                tree_row = ui.element("div").classes(
-                    "classification-tree-row w-full rounded-lg py-1 pe-2 hover:bg-blue-50 "
-                    + ("bg-blue-50" if selected else "")
-                ).style(f"padding-inline-start: {depth * 20 + 4}px")
-                if selected:
-                    tree_row.props(f"id=classification-tree-node-{item['id']}")
-                with tree_row:
-                    with ui.element("div").classes(
-                        "classification-tree-expander w-8 h-8 shrink-0 flex items-center justify-center"
-                    ):
-                        if not item["is_terminal"]:
-                            ui.button(
-                                icon=tree_expander_icon(item["id"] in workspace["expanded"]),
-                                on_click=lambda _, node=item: toggle_branch(node),
-                            ).props("flat round dense size=sm color=blue-grey")
-                    ui.icon(
-                        "label" if item["is_terminal"] else "schema",
-                        color="primary",
-                        size="20px",
-                    ).classes("classification-tree-icon w-6 shrink-0")
-                    with ui.column().classes("classification-tree-content grow min-w-0 gap-0 cursor-pointer py-1").on(
-                        "click", lambda _, node=item: focus_classification(node)
-                    ):
-                        ui.label(item["title"]).classes("text-sm font-semibold line-clamp-1")
-                        ui.label(item["code"]).classes("text-xs text-slate-400")
-                    if effectively_inactive:
-                        inactive_label = render_message("webui.render_tree_level.text.inactive_83867934") if directly_inactive else render_message("webui.render_tree_level.text.inactive_via_parent_29212032")
-                        if (workspace["scheme"] or {}).get("date_deactivated"):
-                            inactive_label = render_message("webui.render_tree_level.text.inactive_via_scheme_f423139b")
-                        ui.badge(inactive_label, color="grey-7").props("outline").classes("classification-tree-badge")
-                    else:
-                        ui.badge(render_message("webui.render_tree_level.badge.terminal_522c0184") if item["is_terminal"] else render_message("webui.render_tree_level.badge.branch_e37cab95"), color="primary").props("outline").classes("classification-tree-badge")
-                if not item["is_terminal"] and item["id"] in workspace["expanded"]:
-                    children = workspace["children"].get(item["id"])
-                    if children is None:
-                        continue
-                    if children:
-                        render_tree_level(item["id"], depth + 1, effectively_inactive)
-                    else:
-                        ui.label(render_message("webui.render_tree_level.label.no_child_classifications_81d396e2")).classes("text-xs text-slate-400 py-1").style(
-                            f"padding-inline-start: {(depth + 1) * 20 + 36}px"
-                        )
-            if workspace["children_more"].get(parent_id):
-                async def load_more_children() -> None:
-                    await load_children(parent_id, append=True)
-                    await render_workspace_right()
-                ui.button(
-                    render_message("webui.render_collection.button.load_more_755f4879"),
-                    icon="more_horiz", on_click=load_more_children,
-                ).props("flat dense no-caps").style(
-                    f"margin-inline-start: {depth * 20 + 36}px"
-                )
-
-        async def create_classification(parent: dict[str, Any] | None = None) -> None:
-            scheme = workspace["scheme"]
-            if scheme is None:
-                return
-            if parent and parent.get("is_terminal"):
-                ui.notify(render_message("webui.create_classification.notify.terminal_classifications_cannot_contain_ch_93e2ea4c"), color="warning")
-                return
-
-            async def saved(item: dict[str, Any]) -> None:
-                await load_children(parent["id"] if parent else None)
-                if parent:
-                    workspace["expanded"].add(parent["id"])
-                await load_scheme_counts(workspace["schemes"])
-                render_scheme_list()
-                await focus_classification(item, reveal=True)
-
-            await open_editor(
-                initial_values={
-                    "classification_scheme_id": scheme["id"],
-                    "parent_classification_id": parent["id"] if parent else None,
-                },
-                locked_fields={"classification_scheme_id", "parent_classification_id"},
-                on_saved=saved,
-                resource_key="classifications",
-            )
-
-        async def edit_selected() -> None:
-            selected = workspace["selected"]
-            if selected is None:
-                return
-
-            async def saved(item: dict[str, Any]) -> None:
-                parent_id = item.get("parent_classification_id")
-                await load_children(parent_id)
-                await load_scheme_counts(workspace["schemes"])
-                render_scheme_list()
-                await focus_classification(item)
-
-            await open_editor(selected, on_saved=saved, resource_key="classifications")
-
-        async def change_classification_lifecycle(item: dict[str, Any]) -> None:
-            deactivated = bool(item.get("date_deactivated"))
-            action = render_message("webui.change_classification_lifecycle.text.reactivate_263766dd") if deactivated else render_message("webui.change_classification_lifecycle.text.deactivate_149beda7")
-            dialog = ui.dialog()
-            with dialog, ui.card().classes("w-[540px] max-w-full"):
-                ui.label(render_message("webui.change_classification_lifecycle.label.title_classification_22f782a8", title=action.title())).classes("text-xl font-semibold")
-                ui.label(render_message("webui.change_classification_lifecycle.label.code_title_58726667", code=item['code'], title=item['title'])).classes("font-semibold")
-                ui.label(
-                    render_message(
-                        "webui.change_classification_lifecycle.guidance.reactivate"
-                        if deactivated else
-                        "webui.change_classification_lifecycle.guidance.deactivate"
-                    )
-                ).classes("text-sm text-slate-600")
-                reason = ui.textarea(render_message("webui.change_classification_lifecycle.textarea.reason_for_action_8ac9320f", action=action)).props("outlined autogrow").classes("w-full")
-
-                async def apply_change() -> None:
-                    if not (reason.value or "").strip():
-                        ui.notify(render_message("webui.apply_change.notify.a_reason_for_action_is_required_11942f0f", action=action), color="warning")
-                        return
-                    try:
-                        updated = await api.request(
-                            "POST", f"/api/v1/classifications/{item['id']}/{action}",
-                            headers={
-                                "If-Match": str(item["version"]),
-                                "X-Change-Reason": reason.value.strip(),
-                            },
-                        )
-                        dialog.close()
-                        ui.notify(render_message("webui.apply_change.notify.classification_action_d_26155873", action=action), color="positive")
-                        await reload_workspace(updated["classification_scheme_id"], updated["id"])
-                    except ApiError as error:
-                        ui.notify(error_message(error), color="negative", close_button=True)
-
-                with ui.row().classes("w-full justify-end gap-2"):
-                    ui.button(render_message("webui.change_classification_lifecycle.button.cancel_0b3642a8"), on_click=dialog.close).props("flat no-caps")
-                    ui.button(action.title(), on_click=apply_change).props(
-                        "unelevated no-caps color=" + ("positive" if deactivated else "negative")
-                    )
-            dialog.open()
-
-        async def confirm_delete_classification(item: dict[str, Any]) -> None:
-            dialog = ui.dialog()
-            with dialog, ui.card().classes("w-[540px] max-w-full"):
-                ui.label(render_message("webui.confirm_delete_classification.label.delete_classification_permanently_71a3ad1f")).classes("text-xl font-semibold")
-                ui.label(render_message("webui.confirm_delete_classification.label.code_title_339d0b48", code=item['code'], title=item['title'])).classes("font-semibold")
-                ui.label(
-                    render_message("webui.confirm_delete_classification.label.its_directly_owned_retention_rule_and_rece_a6bb530e")
-                ).classes("text-sm text-slate-600")
-                reason = ui.textarea(render_message("webui.confirm_delete_classification.textarea.reason_for_deletion_b357bce9")).props("outlined autogrow").classes("w-full")
-
-                async def remove() -> None:
-                    if not (reason.value or "").strip():
-                        ui.notify(render_message("webui.remove.notify.a_reason_for_deletion_is_required_01159784"), color="warning")
-                        return
-                    try:
-                        await api.request(
-                            "DELETE", f"/api/v1/classifications/{item['id']}",
-                            headers={
-                                "If-Match": str(item["version"]),
-                                "X-Change-Reason": reason.value.strip(),
-                            },
-                        )
-                        dialog.close()
-                        ui.notify(render_message("webui.remove.notify.classification_deleted_ac0f9173"), color="positive")
-                        await reload_workspace(item["classification_scheme_id"])
-                    except ApiError as error:
-                        ui.notify(error_message(error), color="negative", close_button=True)
-
-                with ui.row().classes("w-full justify-end gap-2"):
-                    ui.button(render_message("webui.confirm_delete_classification.button.cancel_d099c16f"), on_click=dialog.close).props("flat no-caps")
-                    ui.button(render_message("webui.confirm_delete_classification.button.delete_permanently_16070e66"), icon="delete_forever", on_click=remove).props(
-                        "unelevated no-caps color=negative"
-                    )
-            dialog.open()
-
-        async def search_within_scheme(query_control: Any) -> None:
-            term = (query_control.value or "").strip()
-            workspace["query"] = term
-            if not term:
-                workspace["search_results"] = []
-            else:
-                scheme_id = workspace["scheme"]["id"]
-                result = await api.search_request("classifications", {
-                    "where": {"and": [
-                        {"field": "classification_scheme_id", "operator": "eq", "value": scheme_id},
-                        {"or": [
-                            {"field": field, "operator": "contains_ci", "value": term}
-                            for field in CLASSIFICATION_WORKSPACE_SEARCH_FIELDS
-                        ]},
-                    ]},
-                    "sort": [{"field": "code", "direction": "asc"}],
-                    "limit": 100,
-                })
-                workspace["search_results"] = result["items"]
-            await render_workspace_right()
-
-        async def render_workspace_right() -> None:
-            scheme_information_panel.clear()
-            classification_workspace.clear()
-            scheme = workspace["scheme"]
-            with scheme_information_panel:
-                if scheme is None:
-                    with ui.column().classes(
-                        "w-full h-full items-center justify-center gap-3 text-slate-500"
-                    ):
-                        ui.icon("account_tree", size="54px").classes("text-primary")
-                        ui.label(render_message("webui.render_workspace_right.label.select_a_classification_scheme_825fcd9e")).classes(
-                            "text-xl font-semibold text-slate-700"
-                        )
-                        ui.label(render_message("webui.render_workspace_right.label.its_information_will_appear_here_bc4769c5")).classes("text-sm")
-                else:
-                    status_label, status_color = scheme_lifecycle(scheme)
-                    with ui.element("div").classes("classification-scheme-detail-identity w-full gap-3"):
-                        ui.avatar(icon="account_tree", color="blue-1", text_color="primary").classes("classification-scheme-detail-identity-icon")
-                        with ui.column().classes("classification-scheme-detail-identity-content min-w-0 gap-0"):
-                            with ui.row().classes("items-center gap-2"):
-                                ui.label(scheme["title"]).classes("text-xl font-semibold")
-                                ui.badge(status_label, color=status_color).props("outline")
-                            ui.label(scheme["code"]).classes(
-                                "w-full text-sm text-primary font-medium whitespace-normal break-all select-text"
-                            )
-                    with ui.row().classes("classification-detail-actions w-full items-center gap-1 flex-wrap"):
-                        ui.button(render_message("webui.render_workspace_right.button.edit_scheme_4406dbed"), icon="edit", on_click=lambda: open_editor(
-                            scheme, on_saved=lambda _: reload_workspace(scheme["id"]),
-                            resource_key="classification-schemes",
-                        )).props("flat dense no-caps")
-                        ui.button(
-                            render_message("webui.render_workspace_right.button.event_history_6802c7be"), icon="history",
-                            on_click=lambda: show_entity_history("classification-schemes", scheme),
-                        ).props("flat dense no-caps")
-                        if not scheme.get("date_published"):
-                            ui.button(
-                                render_message("webui.render_workspace_right.button.publish_2e621852"), icon="publish",
-                                on_click=lambda: publish_workspace_scheme(scheme),
-                            ).props("flat dense no-caps color=primary")
-                        else:
-                            unpublish_button = ui.button(
-                                render_message("webui.render_workspace_right.button.unpublish_57f099a0"), icon="unpublished",
-                                on_click=lambda: unpublish_workspace_scheme(scheme),
-                            ).props("flat dense no-caps color=primary")
-                            if scheme.get("date_first_used"):
-                                unpublish_button.disable()
-                                unpublish_button.tooltip(
-                                    render_message("webui.render_workspace_right.tooltip.schemes_that_have_governed_aggregations_ca_423d00b9")
-                                )
-                        ui.button(
-                            render_message("webui.render_workspace_right.button.reactivate_b2117181") if scheme.get("date_deactivated") else render_message("webui.render_workspace_right.button.deactivate_ee74ba2e"),
-                            icon="toggle_on" if scheme.get("date_deactivated") else "toggle_off",
-                            color="positive" if scheme.get("date_deactivated") else "negative",
-                            on_click=lambda: change_workspace_scheme_lifecycle(scheme),
-                        ).props("flat dense no-caps")
-                        deletion_reason = scheme_deletion_block_reason(scheme)
-                        branches, terminals = workspace["counts"].get(scheme["id"], (0, 0))
-                        delete_label = (
-                            render_message("webui.render_workspace_right.text.delete_scheme_and_classifications_189d4401")
-                            if branches + terminals else render_message("webui.render_workspace_right.text.delete_scheme_ee677085")
-                        )
-                        delete_button = ui.button(
-                            delete_label, icon="delete_outline", color="negative",
-                            on_click=lambda: confirm_delete_workspace_scheme(scheme),
-                        ).props("flat dense no-caps")
-                        if deletion_reason:
-                            delete_button.disable()
-                            delete_button.tooltip(deletion_reason)
-                    if deletion_reason:
-                        with ui.row().classes(
-                            "classification-detail-warning w-full items-start gap-2 rounded-lg border border-amber-200 "
-                            "bg-amber-50 px-3 py-2"
-                        ):
-                            ui.icon("info", color="amber-8", size="18px").classes("shrink-0 mt-px")
-                            ui.label(deletion_reason).classes("text-xs text-amber-900 leading-5")
-                    ui.label(render_message("webui.render_workspace_right.label.scheme_information_b95e9ac6")).classes("font-semibold")
-                    with ui.grid(columns=3).classes("w-full gap-4"):
-                        metadata_value(entity_metadata_label("Code"), scheme.get("code"))
-                        metadata_value(render_message("webui.open_aggregation.label.lifecycle_118239ec"), status_label)
-                        metadata_value(entity_metadata_label("Edition"), scheme.get("edition"))
-                        metadata_value(entity_metadata_label("Authority"), scheme.get("authority"))
-                        metadata_value(entity_metadata_label("Published"), scheme.get("date_published"), timestamp=True)
-                        metadata_value(render_message("classification_workspace.metadata.first_used"), scheme.get("date_first_used"), timestamp=True)
-                        metadata_value(entity_metadata_label("Deactivated"), scheme.get("date_deactivated"), timestamp=True)
-                        metadata_value(render_message("dashboard.activity.created"), scheme.get("date_created"), timestamp=True)
-                        metadata_value(render_message("webui.render_governance_cards.text.last_updated_fdb63867"), scheme.get("date_updated"), timestamp=True)
-                    localized_scheme = scheme.get("localized") or {}
-                    long_metadata_value(entity_metadata_label("Description"), localized_scheme.get("description") or scheme.get("description"))
-                    long_metadata_value(entity_metadata_label("Scope note"), localized_scheme.get("scope_note") or scheme.get("scope_note"))
-
-            with classification_workspace:
-                if scheme is None:
-                    with ui.column().classes(
-                        "w-full items-center justify-center gap-2 py-16 text-slate-500"
-                    ):
-                        ui.icon("schema", size="44px").classes("text-primary")
-                        ui.label(render_message("webui.render_workspace_right.label.select_a_scheme_to_browse_its_classificati_afdd23e3")).classes("text-sm")
-                    return
-                status_label, status_color = scheme_lifecycle(scheme)
-                with ui.row().classes("w-full items-end gap-2"):
-                    classification_search = ui.input(
-                        render_message("webui.render_workspace_right.input.search_this_scheme_8fc08483"), value=workspace["query"],
-                    ).props("outlined dense clearable prepend-icon=search").classes("grow")
-                    ui.button(render_message("webui.render_workspace_right.button.search_be6d78e6"), icon="search", on_click=lambda: search_within_scheme(classification_search)).props("unelevated dense no-caps")
-                    if workspace["query"]:
-                        ui.button(render_message("webui.render_workspace_right.button.clear_0d070407"), on_click=lambda: clear_classification_search()).props("flat dense no-caps")
-                    classification_search.on("keydown.enter", lambda: search_within_scheme(classification_search))
-
-                if workspace["query"]:
-                    with ui.card().classes("w-full shadow-none border border-blue-100 bg-blue-50 p-3 gap-2"):
-                        ui.label(render_message("webui.render_workspace_right.label.search_result_count_matching_classificatio_1718c40f", search_result_count=len(workspace['search_results']))).classes("font-semibold")
-                        if not workspace["search_results"]:
-                            ui.label(render_message("webui.render_workspace_right.label.no_classifications_match_this_search_3e1025e9")).classes("text-sm text-slate-500")
-                        for result in workspace["search_results"]:
-                            with ui.row().classes("w-full items-center gap-2 cursor-pointer rounded p-2 hover:bg-white").on(
-                                "click", lambda _, item=result: focus_classification(item, reveal=True)
-                            ):
-                                ui.icon("label" if result["is_terminal"] else "schema", color="primary")
-                                with ui.column().classes("grow gap-0"):
-                                    ui.label(result["title"]).classes("font-semibold")
-                                    ui.label(" — ".join(filter(None, (result["code"], result.get("description"))))).classes("text-xs text-slate-500")
-
-                selected = workspace["selected"]
-                with ui.grid(columns=2).classes(
-                    "w-full h-[870px] min-h-0 gap-4 items-stretch"
-                ):
-                    with ui.card().classes(
-                        "w-full h-full min-h-0 overflow-hidden shadow-none "
-                        "border border-slate-200 p-3 gap-1"
-                    ):
-                        with ui.row().classes("classification-tree-toolbar w-full items-center"):
-                            ui.label(render_message("webui.render_workspace_right.label.classification_tree_69593539")).classes("font-semibold")
-                            ui.space()
-                            ui.button(
-                                icon="add", on_click=lambda: create_classification()
-                            ).props("flat round dense color=primary").tooltip(
-                                render_message("webui.render_workspace_right.tooltip.add_root_classification_32ac07fe")
-                            )
-                            child_button = ui.button(
-                                icon="subdirectory_arrow_right",
-                                on_click=lambda: create_classification(selected)
-                                if selected is not None and not selected["is_terminal"]
-                                else None,
-                            ).props("flat round dense color=primary")
-                            if selected is None:
-                                child_button.props("disable").tooltip(
-                                    render_message("webui.render_workspace_right.tooltip.select_a_branch_classification_before_addi_b9ec1645")
-                                )
-                            elif selected["is_terminal"]:
-                                child_button.props("disable").tooltip(
-                                    render_message("webui.render_workspace_right.tooltip.terminal_classifications_cannot_contain_ch_80c2bf31")
-                                )
-                            else:
-                                child_button.tooltip(
-                                    render_message("webui.render_workspace_right.tooltip.add_child_classification_beneath_title_b82facfa", title=selected['title'])
-                                )
-                            ui.button(icon="refresh", on_click=lambda: refresh_tree()).props("flat round dense").tooltip(render_message("webui.render_workspace_right.tooltip.refresh_tree_e83ccdf0"))
-                        with ui.column().classes(
-                            "w-full grow min-h-0 overflow-y-auto gap-1 pr-1"
-                        ).props("id=classification-tree-scroll"):
-                            roots = workspace["children"].get(None, [])
-                            if roots:
-                                render_tree_level(None)
-                            else:
-                                ui.label(render_message("webui.render_workspace_right.label.this_scheme_has_no_classifications_yet_e76fd30f")).classes("text-sm text-slate-400 py-8 self-center")
-                    with ui.card().classes(
-                        "w-full h-full min-h-0 overflow-y-auto shadow-none "
-                        "border border-slate-200 p-4 gap-3"
-                    ):
-                        if selected is None:
-                            ui.label(render_message("webui.render_workspace_right.label.select_a_classification_192337f3")).classes("font-semibold")
-                            ui.label(render_message("webui.render_workspace_right.label.its_metadata_and_effective_retention_rule_f231c468")).classes("text-sm text-slate-500")
-                        else:
-                            with ui.row().classes("classification-selected-identity w-full items-start gap-3"):
-                                ui.avatar(icon="label" if selected["is_terminal"] else "schema", color="blue-1", text_color="primary")
-                                with ui.column().classes("grow gap-0"):
-                                    ui.label(selected["title"]).classes("text-lg font-semibold")
-                                    ui.label(selected["code"]).classes(
-                                        "w-full text-sm text-primary whitespace-normal break-all select-text"
-                                    )
-                                ui.badge(render_message("webui.render_workspace_right.badge.terminal_3424e6bd") if selected["is_terminal"] else render_message("webui.render_workspace_right.badge.branch_5a8c9ddf"), color="primary").props("outline")
-                            if selected.get("description"):
-                                ui.label(selected["description"]).classes("text-sm text-slate-600")
-                            path = await load_classification_path(selected["id"])
-                            selected_children = await load_children(selected["id"])
-                            inactive_ancestor = next(
-                                (item for item in path[:-1] if item.get("date_deactivated")), None,
-                            )
-                            if scheme.get("date_deactivated"):
-                                effective_status = render_message("webui.render_workspace_right.text.inactive_via_scheme_84b8722d")
-                                effective_status_explanation = (
-                                    render_message("webui.render_workspace_right.text.the_scheme_code_title_is_deactivated_24061b49", code=scheme['code'], title=scheme['title'])
-                                )
-                            elif selected.get("date_deactivated"):
-                                effective_status = render_message("webui.render_workspace_right.text.inactive_f9285c80")
-                                effective_status_explanation = (
-                                    render_message("webui.render_workspace_right.text.this_classification_is_directly_deactivate_1511167f")
-                                )
-                            elif inactive_ancestor:
-                                effective_status = render_message("webui.render_workspace_right.text.inactive_via_ancestor_bf38d6fa")
-                                effective_status_explanation = (
-                                    render_message("webui.render_workspace_right.text.ancestor_code_title_is_deactivated_aae4022c", code=inactive_ancestor['code'], title=inactive_ancestor['title'])
-                                )
-                            else:
-                                effective_status = render_message("webui.render_workspace_right.text.active_78e7cbf5")
-                                effective_status_explanation = (
-                                    render_message("webui.render_workspace_right.text.this_classification_has_no_direct_or_inher_7ee3a26e")
-                                )
-                            ui.label(" › ".join(item["code"] for item in path)).classes("text-xs text-slate-400")
-                            with ui.row().classes("items-center gap-2"):
-                                ui.badge(
-                                    effective_status,
-                                    color="positive" if effective_status == "Active" else "grey-7",
-                                ).props("outline")
-                                ui.label(effective_status_explanation).classes("text-xs text-slate-500")
-                            direct_result, effective_result = await asyncio.gather(
-                                api.classification_retention_rule(selected["id"]),
-                                api.classification_effective_rule(selected["id"]),
-                                return_exceptions=True,
-                            )
-                            for result in (direct_result, effective_result):
-                                if isinstance(result, ApiError) and result.status_code != 404:
-                                    raise result
-                                if isinstance(result, Exception) and not isinstance(result, ApiError):
-                                    raise result
-                            direct_rule = direct_result if isinstance(direct_result, dict) else None
-                            effective_rule = effective_result if isinstance(effective_result, dict) else None
-
-                            ui.separator()
-                            ui.label(render_message("webui.render_workspace_right.label.classification_information_a1af0008")).classes("font-semibold")
-                            parent = path[-2] if len(path) > 1 else None
-                            with ui.grid(columns=2).classes("w-full gap-4"):
-                                metadata_value(entity_metadata_label("Code"), selected.get("code"))
-                                metadata_value(entity_metadata_label("Authority"), selected.get("authority"))
-                                metadata_value(entity_metadata_label("Keywords"), selected.get("keywords"))
-                                metadata_value(
-                                    entity_metadata_label("Parent classification"),
-                                    f"{parent['code']} — {parent['title']}" if parent else None,
-                                )
-                                metadata_value(render_message("dashboard.activity.created"), selected.get("date_created"), timestamp=True)
-                                metadata_value(render_message("webui.render_governance_cards.text.last_updated_fdb63867"), selected.get("date_updated"), timestamp=True)
-                                metadata_value(render_message("classification_workspace.metadata.first_used"), selected.get("date_first_used"), timestamp=True)
-                                metadata_value(entity_metadata_label("Deactivated"), selected.get("date_deactivated"), timestamp=True)
-                            localized_selected = selected.get("localized") or {}
-                            long_metadata_value(entity_metadata_label("Description"), localized_selected.get("description") or selected.get("description"))
-                            long_metadata_value(entity_metadata_label("Scope note"), localized_selected.get("scope_note") or selected.get("scope_note"))
-
-                            ui.separator()
-                            ui.label(render_message("webui.render_workspace_right.label.effective_retention_rule_e5300688")).classes("font-semibold")
-                            if effective_rule:
-                                inherited = effective_rule["defined_by_classification_id"] != selected["id"]
-                                source = next(
-                                    (
-                                        item for item in path
-                                        if item["id"] == effective_rule["defined_by_classification_id"]
-                                    ),
-                                    None,
-                                )
-                                provenance = render_message("webui.render_workspace_right.text.defined_on_this_classification_c28d511d")
-                                if inherited:
-                                    provenance = (
-                                        render_message("webui.render_workspace_right.text.inherited_from_code_title_5a7d1fa5", code=source['code'], title=source['title'])
-                                        if source else render_message("webui.render_workspace_right.text.inherited_from_an_ancestor_classification_4b3d7b4b")
-                                    )
-                                with ui.row().classes("items-center gap-2"):
-                                    ui.badge(render_message("webui.render_workspace_right.badge.inherited_47a9f6bf") if inherited else render_message("webui.render_workspace_right.badge.direct_5942e4ad"), color="indigo").props("outline")
-                                    ui.label(provenance).classes("text-sm text-slate-500")
-                                render_rule_details(effective_rule)
-                            else:
-                                ui.label(render_message("webui.render_workspace_right.label.no_direct_or_inherited_rule_82cc8a91")).classes("text-sm text-slate-400")
-                            if effective_rule and effective_rule.get("defined_by_classification_id") != selected["id"]:
-                                ui.separator()
-                                ui.label(render_message("webui.render_workspace_right.label.direct_retention_rule_0840d945")).classes("font-semibold")
-                                render_rule_details(direct_rule)
-                            with ui.row().classes("w-full justify-end gap-2"):
-                                ui.button(
-                                    render_message("webui.render_workspace_right.button.event_history_6802c7be"), icon="history",
-                                    on_click=lambda: show_entity_history("classifications", selected),
-                                ).props("flat dense no-caps")
-                                ui.button(render_message("webui.render_workspace_right.button.edit_a536c992"), icon="edit", on_click=edit_selected).props("flat dense no-caps")
-                                ui.button(
-                                    render_message("webui.render_workspace_right.button.reactivate_b2117181") if selected.get("date_deactivated") else render_message("webui.render_workspace_right.button.deactivate_ee74ba2e"),
-                                    icon="toggle_on" if selected.get("date_deactivated") else "toggle_off",
-                                    color="positive" if selected.get("date_deactivated") else "negative",
-                                    on_click=lambda: change_classification_lifecycle(selected),
-                                ).props("flat dense no-caps")
-                                deletion_reason = None
-                                if scheme.get("date_deactivated"):
-                                    deletion_reason = render_message("webui.render_workspace_right.text.reactivate_the_scheme_before_deleting_clas_14788563")
-                                elif scheme.get("date_published"):
-                                    deletion_reason = render_message("webui.render_workspace_right.text.unpublish_the_scheme_before_deleting_class_98f71b2c")
-                                elif selected.get("date_first_used"):
-                                    deletion_reason = (
-                                        render_message("webui.render_workspace_right.text.this_classification_has_governed_an_aggreg_b5e94f69")
-                                    )
-                                elif selected_children:
-                                    deletion_reason = render_message("webui.render_workspace_right.text.remove_child_classifications_first_414ee64a")
-                                delete_button = ui.button(
-                                    render_message("webui.render_workspace_right.button.delete_f1ebfe66"), icon="delete_outline", color="negative",
-                                    on_click=lambda: confirm_delete_classification(selected),
-                                ).props("flat dense no-caps")
-                                if deletion_reason:
-                                    delete_button.disable()
-                                    delete_button.tooltip(deletion_reason)
-                            if deletion_reason:
-                                with ui.row().classes(
-                                    "w-full items-start gap-2 rounded-lg border border-amber-200 "
-                                    "bg-amber-50 px-3 py-2"
-                                ):
-                                    ui.icon("info", color="amber-8", size="18px").classes("shrink-0 mt-px")
-                                    ui.label(deletion_reason).classes("text-xs text-amber-900 leading-5")
-
-        async def clear_classification_search() -> None:
-            workspace["query"], workspace["search_results"] = "", []
-            await render_workspace_right()
-
-        async def publish_workspace_scheme(scheme: dict[str, Any]) -> None:
-            try:
-                await api.request(
-                    "POST", f"/api/v1/classification-schemes/{scheme['id']}/publish",
-                    headers={"If-Match": str(scheme["version"])},
-                )
-                ui.notify(render_message("webui.publish_workspace_scheme.notify.classification_scheme_published_c92a7a2a"), color="positive")
-                await reload_workspace(scheme["id"])
-            except ApiError as error:
-                ui.notify(error_message(error), color="negative", close_button=True)
-
-        async def unpublish_workspace_scheme(scheme: dict[str, Any]) -> None:
-            dialog = ui.dialog()
-            with dialog, ui.card().classes("w-[520px] max-w-full"):
-                ui.label(render_message("webui.unpublish_workspace_scheme.label.unpublish_classification_scheme_6e0dafdd")).classes("text-xl font-semibold")
-                ui.label(
-                    render_message("webui.unpublish_workspace_scheme.label.code_title_will_no_longer_be_available_for_c0a23502", code=scheme['code'], title=scheme['title'])
-                ).classes("text-sm text-slate-700")
-                reason = ui.textarea(render_message("webui.unpublish_workspace_scheme.textarea.reason_for_unpublishing_62fcf4eb")).props("outlined autogrow").classes("w-full")
-
-                async def unpublish() -> None:
-                    if not (reason.value or "").strip():
-                        ui.notify(render_message("webui.unpublish.notify.a_reason_for_unpublishing_is_required_34d3c039"), color="warning")
-                        return
-                    try:
-                        await api.request(
-                            "POST", f"/api/v1/classification-schemes/{scheme['id']}/unpublish",
-                            headers={
-                                "If-Match": str(scheme["version"]),
-                                "X-Change-Reason": reason.value.strip(),
-                            },
-                        )
-                        dialog.close()
-                        ui.notify(render_message("webui.unpublish.notify.classification_scheme_unpublished_896edfcd"), color="positive")
-                        await reload_workspace(scheme["id"])
-                    except ApiError as error:
-                        ui.notify(error_message(error), color="negative", close_button=True)
-
-                with ui.row().classes("w-full justify-end gap-2"):
-                    ui.button(render_message("webui.unpublish_workspace_scheme.button.cancel_511877c5"), on_click=dialog.close).props("flat no-caps")
-                    ui.button(render_message("webui.unpublish_workspace_scheme.button.unpublish_7902e66e"), icon="unpublished", on_click=unpublish).props(
-                        "unelevated no-caps color=primary"
-                    )
-            dialog.open()
-
-        async def confirm_delete_workspace_scheme(scheme: dict[str, Any]) -> None:
-            branches, terminals = workspace["counts"].get(scheme["id"], (0, 0))
-            total = branches + terminals
-            dialog = ui.dialog()
-            with dialog, ui.card().classes("w-[560px] max-w-full"):
-                ui.label(render_message("webui.confirm_delete_workspace_scheme.label.delete_classification_scheme_35b63adb")).classes("text-xl font-semibold")
-                ui.label(render_message("webui.confirm_delete_workspace_scheme.label.code_title_7a072c4b", code=scheme['code'], title=scheme['title'])).classes(
-                    "font-semibold text-slate-800"
-                )
-                if total:
-                    ui.label(
-                        render_message("webui.confirm_delete_workspace_scheme.label.this_permanently_deletes_total_classificat_0cfbf8a1", total=total, branches=branches, terminals=terminals)
-                    ).classes("text-sm text-slate-700")
-                else:
-                    ui.label(render_message("webui.confirm_delete_workspace_scheme.label.this_permanently_deletes_the_empty_scheme_efe8bed5")).classes(
-                        "text-sm text-slate-700"
-                    )
-                ui.label(
-                    render_message("webui.confirm_delete_workspace_scheme.label.immutable_audit_events_are_retained_this_a_68367eee")
-                ).classes("text-xs text-slate-500")
-                reason = ui.textarea(render_message("webui.confirm_delete_workspace_scheme.textarea.reason_for_deletion_45441f2e")).props("outlined autogrow").classes("w-full")
-
-                async def delete_scheme() -> None:
-                    if not (reason.value or "").strip():
-                        ui.notify(render_message("webui.delete_scheme.notify.a_reason_for_deletion_is_required_4f6f8490"), color="warning")
-                        return
-                    try:
-                        await api.request(
-                            "DELETE", f"/api/v1/classification-schemes/{scheme['id']}",
-                            headers={
-                                "If-Match": str(scheme["version"]),
-                                "X-Change-Reason": reason.value.strip(),
-                            },
-                        )
-                        dialog.close()
-                        ui.notify(render_message("webui.delete_scheme.notify.classification_scheme_deleted_5e7bfd9f"), color="positive")
-                        await reload_workspace()
-                    except ApiError as error:
-                        ui.notify(error_message(error), color="negative", close_button=True)
-
-                with ui.row().classes("w-full justify-end gap-2"):
-                    ui.button(render_message("webui.confirm_delete_workspace_scheme.button.cancel_9d5de1b1"), on_click=dialog.close).props("flat no-caps")
-                    ui.button(
-                        render_message("webui.confirm_delete_workspace_scheme.button.delete_permanently_fe15def9"), icon="delete_forever", color="negative",
-                        on_click=delete_scheme,
-                    ).props("unelevated no-caps")
-            dialog.open()
-
-        async def change_workspace_scheme_lifecycle(scheme: dict[str, Any]) -> None:
-            action = render_message("webui.change_workspace_scheme_lifecycle.text.reactivate_a849017f") if scheme.get("date_deactivated") else render_message("webui.change_workspace_scheme_lifecycle.text.deactivate_e3f22c0d")
-            try:
-                await api.request(
-                    "POST", f"/api/v1/classification-schemes/{scheme['id']}/{action}",
-                    headers={
-                        "If-Match": str(scheme["version"]),
-                        "X-Change-Reason": f"{action.title()} from classification administration",
-                    },
-                )
-                ui.notify(render_message("webui.change_workspace_scheme_lifecycle.notify.classification_scheme_action_d_4d8e7f9b", action=action), color="positive")
-                await reload_workspace(scheme["id"])
-            except ApiError as error:
-                ui.notify(error_message(error), color="negative", close_button=True)
-
-        async def refresh_tree() -> None:
-            scheme = workspace["scheme"]
-            selected = workspace["selected"]
-            if scheme is None:
-                return
-            workspace["tree_revision"] += 1
-            revision = workspace["tree_revision"]
-            workspace["children"] = {}
-            workspace["paths"] = {}
-            await load_children(None)
-            if revision != workspace["tree_revision"]:
-                return
-            if selected:
-                await focus_classification(selected)
-            else:
-                await render_workspace_right()
-
-        async def select_scheme(scheme: dict[str, Any]) -> None:
-            workspace["tree_revision"] += 1
-            revision = workspace["tree_revision"]
-            workspace.update(
-                scheme=scheme, selected=None, children={}, paths={}, expanded=set(),
-                query="", search_results=[],
-            )
-            await load_children(None)
-            if revision != workspace["tree_revision"]:
-                return
-            render_scheme_list()
-            await render_workspace_right()
-
-        async def reload_workspace(
-            scheme_id: int | None = None, classification_id: int | None = None,
-            *, append: bool = False,
-        ) -> None:
-            try:
-                existing = workspace["schemes"] if append else []
-                page_schemes = await api.list(
-                    "classification-schemes",
-                    sort=workspace["scheme_sort"],
-                    direction=workspace["scheme_sort_direction"],
-                    limit=26, offset=len(existing),
-                )
-                schemes = [*existing, *page_schemes[:25]]
-                workspace["schemes_more"] = len(page_schemes) > 25
-                workspace["schemes"] = schemes
-                render_scheme_list()
-                if append:
-                    await load_scheme_counts(page_schemes[:25])
-                    render_scheme_list()
-                    return
-                target_scheme = next((item for item in schemes if item["id"] == scheme_id), None)
-                if target_scheme:
-                    await select_scheme(target_scheme)
-                else:
-                    workspace.update(
-                        scheme=None, selected=None, children={}, paths={}, expanded=set(),
-                    )
-                    await render_workspace_right()
-                if classification_id is not None:
-                    try:
-                        item = await api.get("classifications", classification_id)
-                        await focus_classification(item, reveal=True)
-                    except ApiError as error:
-                        if error.status_code != 404:
-                            raise
-                await load_scheme_counts(schemes)
-                render_scheme_list()
-                set_connection_status(True)
-            except ApiError as error:
-                set_connection_status(error.status_code != 503)
-                ui.notify(error_message(error), color="negative", close_button=True)
-
-        async def create_scheme() -> None:
-            async def saved(scheme: dict[str, Any]) -> None:
-                await reload_workspace(scheme["id"])
-            await open_editor(on_saved=saved, resource_key="classification-schemes")
-
-        scheme_filter.on_value_change(lambda: render_scheme_list())
-
-        async def change_scheme_sort() -> None:
-            workspace["scheme_sort"] = scheme_sort.value
-            selected_id = workspace["scheme"]["id"] if workspace["scheme"] else None
-            await reload_workspace(selected_id)
-
-        async def toggle_scheme_sort_direction() -> None:
-            direction = "desc" if workspace["scheme_sort_direction"] == "asc" else "asc"
-            workspace["scheme_sort_direction"] = direction
-            scheme_sort_direction.props(
-                f"icon={'arrow_upward' if direction == 'asc' else 'arrow_downward'}"
-            )
-            selected_id = workspace["scheme"]["id"] if workspace["scheme"] else None
-            await reload_workspace(selected_id)
-
-        scheme_sort.on_value_change(lambda: change_scheme_sort())
-        scheme_sort_direction.on("click", toggle_scheme_sort_direction)
-        add_scheme_button.on("click", create_scheme)
-        await reload_workspace(initial_scheme_id, initial_classification_id)
+        await classification_workspace(
+            api=api, container=table_container, open_editor=open_editor,
+            show_entity_history=show_entity_history, format_timestamp=format_timestamp,
+            display_value=display_value, error_message=error_message,
+            entity_metadata_label=entity_metadata_label,
+            localized_disposition_value=localized_disposition_value,
+            register_page=register_classification_page,
+            active=lambda: state.get("classification_workspace_token") is token
+            and state.get("resource") in {"classification-workspace", "classification-scheme-details", "classification-details"},
+            preferences=state.setdefault("classification_browser_preferences", {}),
+            direction=lambda: current_direction["value"],
+            initial_scheme_id=initial_scheme_id,
+            initial_classification_id=initial_classification_id,
+        )
 
     async def hold_reason_dialog(title_text: str, action_label: str, action: Any) -> None:
         dialog = ui.dialog()
