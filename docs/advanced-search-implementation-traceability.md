@@ -87,3 +87,19 @@ component-field exclusion from sorting, keyboard-semantic controls, and record
 result empty-state behavior. RTL logical-edge rules cover the added indentation,
 group boundary and trailing status alignment. No schema or migration change was
 required because Phase 4 extends the version-1 controlled query compiler only.
+
+## Authentication-boundary isolation regression
+
+Advanced Search workspace snapshots (criteria, cached results, saved-search
+context, and component details) are cleared at sign-out, session expiry, and
+successful login through the shared search-session cleanup. The cleanup also
+discards the old workspace's navigation guard. A session revision and principal
+check prevent callbacks from the previous identity from persisting its snapshot.
+Search responses and errors are ignored after identity change or navigation away,
+including responses arriving during component-detail loading. This implements
+the WebUI performance contract's identity isolation and abandoned-response rules.
+
+`frontend/webui/tests/test_search_session_isolation.py` exercises the actual
+cleanup and callback functions with synthetic state: normal persistence, identity
+boundary cleanup, stale persistence, and delayed success/error/cancellation.
+These tests do not access a database. No translation keys or artifacts changed.

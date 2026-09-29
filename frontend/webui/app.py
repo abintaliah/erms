@@ -4396,6 +4396,9 @@ def index(q: str = "") -> None:
 
     def clear_global_search_session() -> None:
         """Discard private query state and invalidate outstanding search responses."""
+        state.pop("advanced_search_workspace", None)
+        state.pop("discard_navigation_guard", None)
+        state["advanced_search_session_revision"] = state.get("advanced_search_session_revision", 0) + 1
         state.update(
             global_search_revision=state.get("global_search_revision", 0) + 1,
             global_search_query="", global_search_items=[], global_search_cursor=None,
@@ -16821,6 +16824,23 @@ def index(q: str = "") -> None:
         await load_security_operations()
 
     async def select_advanced_search() -> None:
+        search_session_revision = state.get("advanced_search_session_revision", 0)
+        search_principal = auth_state.get("principal")
+
+        def search_session_is_current() -> bool:
+            return (
+                search_principal is not None
+                and auth_state.get("principal") is search_principal
+                and state.get("advanced_search_session_revision", 0) == search_session_revision
+            )
+
+        def search_view_is_current() -> bool:
+            return (
+                search_session_is_current()
+                and state.get("resource") == "advanced-search"
+                and not results_host.is_deleted
+            )
+
         privileges = set((auth_state.get("principal") or {}).get("global_privileges", []))
         targets = {
             key: label for key, label, privilege in (
@@ -16953,7 +16973,9 @@ def index(q: str = "") -> None:
             return {"type": "condition", "kind": "structured", "field": "title", "operator": "contains_ci", "value": ""}
 
         def persist_workspace() -> None:
-            state["advanced_search_workspace"] = copy.deepcopy(workspace)
+            # A callback from a discarded identity must never restore its cache.
+            if search_session_is_current():
+                state["advanced_search_workspace"] = copy.deepcopy(workspace)
 
         def set_advanced_result_expansion(identifier: int, expanded: bool) -> None:
             key = int(identifier)
@@ -17897,6 +17919,8 @@ def index(q: str = "") -> None:
             sort_field.update()
 
         async def execute_search() -> None:
+            if not search_view_is_current():
+                return
             expression, error = validate_builder()
             if error:
                 show_validation(error)
@@ -17929,6 +17953,8 @@ def index(q: str = "") -> None:
                     )
                 else:
                     result = await api.search_request(workspace["resource"], payload)
+                if not search_view_is_current():
+                    return
                 workspace["record_component_details"] = {}
                 workspace["record_capabilities"] = {}
                 if workspace["resource"] == "records":
@@ -17947,6 +17973,8 @@ def index(q: str = "") -> None:
                     component_contexts = await asyncio.gather(*(
                         load_matching_component_details(record_item) for record_item in result.get("items", [])
                     ))
+                    if not search_view_is_current():
+                        return
                     workspace["record_component_details"] = {
                         record_id: components for record_id, _, components in component_contexts
                     }
@@ -17957,6 +17985,8 @@ def index(q: str = "") -> None:
                 workspace["searched"] = True
                 render_results(result)
             except ApiError as api_error:
+                if not search_view_is_current():
+                    return
                 results_host.clear()
                 with results_host, ui.card().classes("w-full border border-red-200 bg-red-50 p-4 shadow-none"):
                     ui.label(render_message("webui.execute_search.label.the_search_could_not_be_completed_f959e209")).classes("font-semibold text-red-800")
@@ -17964,10 +17994,13 @@ def index(q: str = "") -> None:
                 status_label.text = render_message("webui.execute_search.text.search_failed_e44b669e")
             finally:
                 workspace["busy"] = False
-                search_advanced.enable()
-                persist_workspace()
+                if search_view_is_current():
+                    search_advanced.enable()
+                    persist_workspace()
 
         def render_results(result: dict[str, Any]) -> None:
+            if not search_view_is_current():
+                return
             workspace["last_result"] = copy.deepcopy(result)
             results_host.clear()
             freshness_host.clear()

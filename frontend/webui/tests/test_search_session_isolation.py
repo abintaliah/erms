@@ -2,6 +2,7 @@
 import ast
 import asyncio
 import json
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -59,4 +60,90 @@ def test_old_search_response_cannot_repopulate_new_session():
         assert state['global_search_items'] == []
         assert state['global_search_query'] == ''
         assert len(renders) == 1  # only the original loading render
+    asyncio.run(scenario())
+
+
+def test_advanced_workspace_is_cleared_and_old_callbacks_cannot_restore_it():
+    import copy
+    state = {'discard_navigation_guard': lambda: None,
+             'advanced_search_workspace': {'root': {'value': 'private'},
+             'last_result': {'items': [{'id': 42}]}, 'saved': {'id': 7}}}
+    principal = {'principal': {'user': {'id': 1}}}
+    namespace = dict(state=state, auth_state=principal, copy=copy,
+                     search_principal=principal['principal'], search_session_revision=0,
+                     workspace=copy.deepcopy(state['advanced_search_workspace']),
+                     global_search_input=SimpleNamespace(value='', update=lambda: None))
+    namespace['search_session_is_current'] = load('search_session_is_current', namespace)
+    persist = load('persist_workspace', namespace)
+    clear = load('clear_global_search_session', namespace)
+    persist()  # Ordinary same-session navigation still preserves the workspace.
+    assert state['advanced_search_workspace'] == namespace['workspace']
+    clear()  # Sign-out / expiry.
+    clear()  # Successful login also clears state, even for the same account.
+    principal['principal'] = {'user': {'id': 2}}
+    persist()  # Late callback from the original page.
+    assert 'advanced_search_workspace' not in state
+    assert state['advanced_search_session_revision'] == 2
+    assert 'discard_navigation_guard' not in state
+
+
+@pytest.mark.parametrize("outcome", ["success", "error", "cancelled", "navigation", "component_details"])
+def test_advanced_search_late_response_does_not_render_or_restore_private_results(outcome):
+    async def scenario():
+        import copy
+        state = {'resource': 'advanced-search'}
+        principal = {'principal': {'user': {'id': 1}}}
+        started, release = asyncio.Event(), asyncio.Event()
+        renders = []
+        async def search(*args):
+            if outcome != 'component_details':
+                started.set()
+                await release.wait()
+            if outcome == 'error':
+                raise RuntimeError('old-session failure')
+            if outcome == 'cancelled':
+                raise asyncio.CancelledError
+            return {'items': [{'id': 42, 'title': 'private result'}], 'total': 1}
+        async def component_details(*args):
+            started.set()
+            await release.wait()
+            return []
+        class Host:
+            is_deleted = False
+            def clear(self): pass
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+        workspace = dict(root={}, resource='records' if outcome == 'component_details' else 'aggregations', sort_field='id', sort_direction='asc',
+                         limit=25, offset=0, saved=None)
+        ns = dict(state=state, auth_state=principal, search_principal=principal['principal'],
+                  search_session_revision=0, workspace=workspace, copy=copy, Any=Any,
+                  asyncio=asyncio, ApiError=RuntimeError, results_host=Host(),
+                  validate_builder=lambda: ({'field': 'title', 'operator': 'contains_ci', 'value': 'private'}, None),
+                  search_advanced=SimpleNamespace(disable=lambda: None, enable=lambda: renders.append('enabled')),
+                  status_label=SimpleNamespace(text=''), max_results=SimpleNamespace(value=1000),
+                  render_message=lambda *a: '',
+                  ui=SimpleNamespace(spinner=lambda **k: SimpleNamespace(classes=lambda *a: None)),
+                  advanced_search_has_positive_full_text=lambda root: False,
+                  api=SimpleNamespace(search_request=search, components=component_details,
+                                      resource_capabilities=component_details), render_results=renders.append,
+                  global_search_input=SimpleNamespace(value='', update=lambda: None))
+        for name in ('search_session_is_current', 'search_view_is_current', 'persist_workspace'):
+            ns[name] = load(name, ns)
+        clear = load('clear_global_search_session', ns)
+        task = asyncio.create_task(load('execute_search', ns)())
+        await started.wait()
+        if outcome == 'navigation':
+            state['resource'] = 'dashboard'
+        else:
+            clear()
+            principal['principal'] = {'user': {'id': 2}}
+        state['advanced_search_workspace'] = {'root': 'new user query'}
+        release.set()
+        if outcome == 'cancelled':
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        else:
+            await task
+        assert renders == []
+        assert state['advanced_search_workspace'] == {'root': 'new user query'}
     asyncio.run(scenario())
