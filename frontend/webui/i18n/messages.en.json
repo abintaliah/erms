@@ -10453,6 +10453,20 @@
     "is_html": false
   },
   {
+    "message_key": "security_level.selection.constraints",
+    "context_group": "security_level.selection",
+    "default_text": "Available levels cannot exceed your highest effective-role clearance or, when a parent aggregation is selected, its security level. An aggregation also cannot be lowered below the security level of its contents.",
+    "semantic_meaning": "Explains security-level limits in ordinary record and aggregation creation and edit forms.",
+    "common_locations": [
+      "Record and aggregation creation and edit forms"
+    ],
+    "translator_guidance": "Effective roles determine the user ceiling; the containing aggregation supplies a second ceiling. Aggregation contents impose a minimum.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Available levels cannot exceed your highest effective-role clearance or, when a parent aggregation is selected, its security level. An aggregation also cannot be lowered below the security level of its contents.",
+    "is_html": false
+  },
+  {
     "message_key": "security_operations.event.authentication_failed",
     "context_group": "security_operations.events",
     "default_text": "Authentication Failed",

@@ -886,12 +886,16 @@ class ErmsApiClient:
     async def administration_reference_page(
         self, resource: str, *, query: str = "", sort: str = "name",
         limit: int = 25, offset: int = 0,
+        filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if resource not in {"profiles", "security-levels"}:
             raise ValueError("unsupported administration reference page")
         return await self.request(
             "GET", f"/api/v1/{resource}/page",
-            params={"q": query or None, "sort": sort, "limit": limit, "offset": offset},
+            params={key: value for key, value in {
+                "q": query or None, "sort": sort, "limit": limit, "offset": offset,
+                **(filters or {}),
+            }.items() if value is not None},
         )
 
     async def full_text_search(self, payload: dict[str, Any]) -> dict[str, Any]:

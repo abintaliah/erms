@@ -16,7 +16,7 @@ from .database import get_connection
 from .authorization_policy import require_global_privilege
 from .schemas import SearchRequest
 from .search import canonicalize_search_request, search_rows
-from .entity_localization import localize_rows, preferred_language
+from .entity_localization import localize_rows, localized_projection, preferred_language
 
 
 router = APIRouter(prefix="/api/v1/saved-searches", tags=["saved searches"])
@@ -159,14 +159,17 @@ def _capabilities(connection: Connection, row: dict[str, Any]) -> tuple[dict[str
     return values, reasons
 
 
-def _serialize(connection: Connection, row: dict[str, Any]) -> dict[str, Any]:
+def _serialize(connection: Connection, row: dict[str, Any], language: str) -> dict[str, Any]:
     result = dict(row)
     roles, units = _audience(connection, row["id"])
     result["role_ids"] = roles
     result["org_unit_ids"] = units
     result["owner"] = connection.execute(
-        "SELECT id,name,email,status FROM users WHERE id=%s", (row["owner_user_id"],),
+        "SELECT id,name,email,status,translations FROM users WHERE id=%s", (row["owner_user_id"],),
     ).fetchone()
+    if result["owner"] is not None:
+        result["owner"]["localized"] = localized_projection(result["owner"], language, "name")
+        result["owner"].pop("translations", None)
     result["capabilities"], result["capability_reasons"] = _capabilities(connection, row)
     return result
 
@@ -248,6 +251,7 @@ def _replace_audience(connection: Connection, saved_search_id: int, payload: Sav
 
 @router.get("")
 def list_saved_searches(
+    request: Request,
     scope: Literal["all", "owned", "shared_with_me"] = "all",
     resource_type: Literal["record", "aggregation"] | None = None,
     q: str | None = None, category: str | None = None,
@@ -270,7 +274,8 @@ def list_saved_searches(
         f"SELECT saved.* FROM saved_searches saved {where} ORDER BY saved.date_updated DESC,saved.id DESC LIMIT %s OFFSET %s",
         (*params, limit, offset),
     ).fetchall()
-    items = [_serialize(connection, row) for row in rows]
+    language = preferred_language(connection, request)
+    items = [_serialize(connection, row, language) for row in rows]
     return {"items": items, "total": total, "limit": limit, "offset": offset, "returned": len(items)}
 
 
@@ -351,6 +356,7 @@ def audience_options(
 
 @router.get("/administration", dependencies=[Depends(require_saved_search_administrator)])
 def administer_saved_searches(
+    request: Request,
     owner_user_id: int | None = None, resource_type: Literal["record", "aggregation"] | None = None,
     q: str | None = None, category: str | None = None,
     role_id: int | None = None, org_unit_id: int | None = None,
@@ -385,12 +391,13 @@ def administer_saved_searches(
         f"SELECT saved.* FROM saved_searches saved {where} ORDER BY saved.date_updated DESC,saved.id DESC LIMIT %s OFFSET %s",
         (*params, limit, offset),
     ).fetchall()
-    items = [_serialize(connection, row) for row in rows]
+    language = preferred_language(connection, request)
+    items = [_serialize(connection, row, language) for row in rows]
     return {"items": items, "total": total, "limit": limit, "offset": offset, "returned": len(items)}
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_saved_search_save)])
-def create_saved_search(payload: SavedSearchWrite, connection: Connection = Depends(get_connection, scope="function")):
+def create_saved_search(payload: SavedSearchWrite, request: Request, connection: Connection = Depends(get_connection, scope="function")):
     if not _has(connection, "search.saved_search.save"):
         raise HTTPException(status_code=403, detail={"code": "insufficient_privilege"})
     administrator = _has(connection, "search.saved_search.administrator")
@@ -408,12 +415,12 @@ def create_saved_search(payload: SavedSearchWrite, connection: Connection = Depe
         (payload.name, payload.category, payload.description, definition["resource_type"], Jsonb(definition), payload.audience_mode),
     ).fetchone()
     _replace_audience(connection, row["id"], payload)
-    return _serialize(connection, row)
+    return _serialize(connection, row, preferred_language(connection, request))
 
 
 @router.get("/{saved_search_id}")
-def get_saved_search(saved_search_id: int, connection: Connection = Depends(get_connection, scope="function")):
-    return _serialize(connection, _get(connection, saved_search_id))
+def get_saved_search(saved_search_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
+    return _serialize(connection, _get(connection, saved_search_id), preferred_language(connection, request))
 
 
 @router.post("/{saved_search_id}/execute")
@@ -510,7 +517,7 @@ def update_saved_search(
         raise HTTPException(status_code=409, detail={"code": "stale_version"})
     if audience_changed:
         _replace_audience(connection, saved_search_id, payload)
-    return _serialize(connection, updated)
+    return _serialize(connection, updated, preferred_language(connection, request))
 
 
 @router.delete("/{saved_search_id}", status_code=status.HTTP_204_NO_CONTENT,

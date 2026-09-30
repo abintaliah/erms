@@ -62,16 +62,19 @@ ENTITIES = {
         "org-units", "Organization units", "organization unit",
         (("code", "Code"), ("name", "Name"), ("effective_status", "Status"), ("parent_org_unit_display", "Parent")),
         (FieldSpec("parent_org_unit_id", "Parent organization unit", "lookup", lookup_resource="org-units", lookup_label_fields=("code", "name")), FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea")),
+        search_fields=("code", "name", "description"),
     ),
     "users": EntitySpec(
         "users", "Users", "user",
         (("_avatar", ""), ("name", "Name"), ("email", "Email"), ("account_type", "Account type"), ("status", "Status")),
         (FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("email", "Email"), FieldSpec("external_id", "External ID"), FieldSpec("account_type", "Account type", "account_type", True)),
+        search_fields=("name", "email", "external_id"),
     ),
     "roles": EntitySpec(
         "roles", "Roles", "role",
         (("code", "Code"), ("name", "Name"), ("org_unit_display", "Organization unit"), ("profile_display", "Profile"), ("effective_status", "Status")),
         (FieldSpec("org_unit_id", "Organization unit", "lookup", True, "org-units", ("code", "name")), FieldSpec("supervisor_role_id", "Supervising role", "lookup", False, "roles", ("code", "name")), FieldSpec("security_level_id", "Security clearance", "lookup", True, "security-levels", ("code", "name")), FieldSpec("profile_id", "Profile", "lookup", True, "profiles", ("code", "name")), FieldSpec("is_information_governance", "Information-governance role", "bool"), FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea")),
+        search_fields=("code", "name", "description"),
     ),
     "security-levels": EntitySpec(
         "security-levels", "Security levels", "security level",

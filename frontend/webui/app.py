@@ -1654,6 +1654,79 @@ def index(q: str = "") -> None:
             background_tasks.create(resolve_selected_options())
         return load_options
 
+    def bind_resource_security_select(
+        control: Any, *, parent_control: Any = None,
+        parent_id: int | None = None, aggregation_id: int | None = None,
+    ) -> Callable[..., Any]:
+        """Keep resource choices within freshly evaluated server-side bounds."""
+        revision = 0
+        search_task: Any = None
+        hint = render_message_plain("security_level.selection.constraints")
+        # A normal-flow NiceGUI label reserves space for wrapped guidance;
+        # the select's native hint overlaps the next field at narrow widths.
+        with ui.column().classes("w-full min-w-0 gap-1") as field_group:
+            control.move(field_group)
+            ui.label(hint).classes("w-full text-xs text-slate-500 leading-relaxed")
+
+        async def load(query: str = "") -> None:
+            nonlocal revision
+            if control.is_deleted:
+                return
+            revision += 1
+            current = revision
+            selected = control.value
+            try:
+                page = await api.administration_reference_page(
+                    "security-levels", query=query, sort="level_number", limit=25,
+                    filters={"assignable": True,
+                             "parent_aggregation_id": parent_control.value if parent_control else parent_id,
+                             "aggregation_id": aggregation_id},
+                )
+                if "maximum_level" not in page or "minimum_level" not in page:
+                    # An older API ignores assignable=true and returns unfiltered
+                    # choices. Never interpret missing bounds as unrestricted.
+                    raise ApiError(503, {"message_key": "shared.errors.unexpected"})
+                rows = list(page["items"])
+                if selected is not None and selected not in {item["id"] for item in rows}:
+                    rows.append(await api.get("security-levels", int(selected)))
+                if current != revision or control.is_deleted or control.value != selected:
+                    return
+                maximum, minimum = page["maximum_level"], page["minimum_level"]
+                rows = [item for item in rows if maximum is not None
+                        and item["level_number"] <= maximum
+                        and (minimum is None or item["level_number"] >= minimum)]
+                with control:
+                    options = relationship_options(rows, ("code", "name"), include_level_number=True)
+                control.set_options(options, value=selected if selected in options else None)
+                control.enable()
+            except ApiError as error:
+                if current != revision or control.is_deleted:
+                    return
+                control.set_options({}, value=None)
+                with control:
+                    ui.notify(error_message(error), color="negative", close_button=True)
+
+        def search(event: Any) -> None:
+            nonlocal search_task, revision
+            query = relationship_search_query(control, event.args)
+            if query is not None:
+                revision += 1
+                if search_task is not None and not search_task.done():
+                    search_task.cancel()
+                async def delayed() -> None:
+                    await asyncio.sleep(0.2)
+                    if not control.is_deleted:
+                        await load(query)
+                search_task = background_tasks.create(delayed())
+
+        control.disable()
+        control.on("input-value", search)
+        control.on("popup-show", lambda: background_tasks.create(load()))
+        if parent_control is not None:
+            parent_control.on_value_change(lambda: background_tasks.create(load()))
+        background_tasks.create(load())
+        return load
+
     def bind_remote_saved_audience_select(
         control: Any, audience_kind: str, more_button: Any,
     ) -> tuple[Callable[..., Any], Callable[..., Any]]:
@@ -7636,32 +7709,11 @@ def index(q: str = "") -> None:
                         if field.name == "record_number":
                             add_number_suggestion(controls[field.name], "records", controls)
                         if field.name == "security_level_id":
-                            bind_remote_relationship_select(
-                                controls[field.name],
-                                resource="security-levels",
-                                search_fields=("code", "name"),
-                                label_fields=("code", "name"),
+                            bind_resource_security_select(
+                                controls[field.name], parent_control=controls["aggregation_id"],
                             )
                         if field.kind == "textarea":
                             controls[field.name].classes("col-span-2")
-                    def constrain_record_security_levels() -> None:
-                        aggregation = aggregations_by_id.get(controls["aggregation_id"].value)
-                        if not aggregation:
-                            return
-                        parent_level = next(
-                            (item for item in security_levels if item["id"] == aggregation.get("security_level_id")),
-                            None,
-                        )
-                        if not parent_level:
-                            return
-                        allowed = [
-                            item for item in security_levels
-                            if item["level_number"] <= parent_level["level_number"]
-                        ]
-                        controls["security_level_id"].options = relationship_options(
-                            allowed, ("code", "name")
-                        )
-                        controls["security_level_id"].update()
                     def constrain_record_medium() -> None:
                         parent = aggregations_by_id.get(controls["aggregation_id"].value)
                         medium_control = controls["medium"]
@@ -7752,14 +7804,12 @@ def index(q: str = "") -> None:
                             except ApiError as error:
                                 ui.notify(error_message(error), color="negative", close_button=True)
                                 return
-                        constrain_record_security_levels()
                         constrain_record_medium()
                         await refresh_record_creation_roles()
 
                     controls["aggregation_id"].on_value_change(
                         lambda: background_tasks.create(apply_selected_aggregation())
                     )
-                    constrain_record_security_levels()
                     constrain_record_medium()
                 with ui.column().classes("w-full gap-0 mt-5 mb-2"):
                     ui.label(render_message("webui.open_record_draft_editor.label.digital_components_21c9474b")).classes("w-full text-start text-base font-semibold")
@@ -8183,7 +8233,18 @@ def index(q: str = "") -> None:
                     )
                     if creating and field.name in {"aggregation_number", "record_number"}:
                         add_number_suggestion(controls[field.name], spec.key, controls)
-                    if field.lookup_resource:
+                    if field.name == "security_level_id" and spec.key in {"aggregations", "records"}:
+                        if field.name not in effective_locked_fields:
+                            bind_resource_security_select(
+                                controls[field.name],
+                                parent_control=controls.get("parent_aggregation_id" if spec.key == "aggregations" else "aggregation_id"),
+                                aggregation_id=row["id"] if row and spec.key == "aggregations" else None,
+                            )
+                        else:
+                            with ui.column().classes("w-full min-w-0 gap-1") as field_group:
+                                controls[field.name].move(field_group)
+                                ui.label(render_message("security_level.selection.constraints")).classes("w-full text-xs text-slate-500 leading-relaxed")
+                    elif field.lookup_resource:
                         bind_remote_relationship_select(
                             controls[field.name], field.lookup_resource,
                             CLASSIFICATION_SELECTOR_SEARCH_FIELDS
@@ -8466,35 +8527,7 @@ def index(q: str = "") -> None:
                             await load_entity_translation()
 
             if spec.key == "aggregations" and "security_level_id" in controls:
-                all_levels = lookup_rows_by_field.get("security_level_id", [])
                 parents = lookup_rows_by_field.get("parent_aggregation_id", [])
-
-                def constrain_aggregation_security_levels() -> None:
-                    parent_control = controls.get("parent_aggregation_id")
-                    parent_id = parent_control.value if parent_control else None
-                    parent = next((item for item in parents if item["id"] == parent_id), None)
-                    maximum = next(
-                        (item["level_number"] for item in all_levels
-                         if parent and item["id"] == parent.get("security_level_id")),
-                        None,
-                    )
-                    permitted = [
-                        item for item in all_levels
-                        if maximum is None or item["level_number"] <= maximum
-                    ]
-                    security_control = controls["security_level_id"]
-                    security_field = next(
-                        field for field in spec.fields if field.name == "security_level_id"
-                    )
-                    security_control.options = relationship_options(
-                        permitted, security_field.lookup_label_fields
-                    )
-                    if security_control.value not in security_control.options:
-                        security_control.value = parent.get("security_level_id") if parent else (
-                            min(permitted, key=lambda item: (item["level_number"], item["id"]))["id"]
-                            if permitted else None
-                        )
-                    security_control.update()
 
                 def constrain_aggregation_medium() -> None:
                     parent_id = controls["parent_aggregation_id"].value
@@ -8513,9 +8546,6 @@ def index(q: str = "") -> None:
                     medium_control.update()
 
                 if controls.get("parent_aggregation_id"):
-                    controls["parent_aggregation_id"].on_value_change(
-                        lambda _: constrain_aggregation_security_levels()
-                    )
                     controls["parent_aggregation_id"].on_value_change(
                         lambda _: constrain_aggregation_medium()
                     )
@@ -8582,7 +8612,6 @@ def index(q: str = "") -> None:
                         controls["parent_aggregation_id"].on_value_change(
                             lambda _: refresh_aggregation_creation_roles()
                         )
-                constrain_aggregation_security_levels()
                 constrain_aggregation_medium()
 
             if spec.key == "records" and "medium" in controls:
@@ -10705,7 +10734,7 @@ def index(q: str = "") -> None:
                 with ui.row().classes("w-full items-center px-5"):
                     card_summary = ui.label().classes("text-sm text-slate-500")
                     ui.space()
-                    ui.button(render_message("webui.render_table.button.refresh_d245cda4"), icon="refresh", on_click=lambda: load_rows(repeat_search=True)).props("flat dense no-caps")
+                    ui.button(render_message("webui.render_table.button.refresh_d245cda4"), icon="refresh", on_click=lambda: reload_governance_cards()).props("flat dense no-caps")
                 card_host = ui.element("div").classes("governance-card-list w-full px-5")
                 with ui.row().classes("w-full items-center px-5 pb-5 gap-2"):
                     card_range = ui.label().classes("text-sm text-slate-500")
@@ -10716,7 +10745,7 @@ def index(q: str = "") -> None:
                     card_last = ui.button(render_message("webui.render_table.button.last_cb5252cb"), icon="last_page").props("flat dense no-caps icon-right")
 
                 def render_governance_cards(*, reset: bool = False) -> None:
-                    rows = list(visible_rows)
+                    rows = list(state["rows"])
                     def card_value(row: dict[str, Any], field: str) -> Any:
                         if spec.key == "profiles" and field in {"name", "description"}:
                             return localized_profile_value(row, field)
@@ -10870,11 +10899,17 @@ def index(q: str = "") -> None:
                     )
                     if reset:
                         card_page["offset"] = 0
-                    await load_rows(repeat_search=True)
+                    await load_rows(
+                        repeat_search=True, on_loaded=render_governance_cards,
+                        is_current=lambda: not card_host.is_deleted,
+                    )
 
                 async def move_card_page(offset: int) -> None:
                     card_page["offset"] = max(0, offset)
-                    await load_rows(repeat_search=True)
+                    await load_rows(
+                        repeat_search=True, on_loaded=render_governance_cards,
+                        is_current=lambda: not card_host.is_deleted,
+                    )
 
                 card_filter.on_value_change(lambda: reload_governance_cards(reset=True))
                 card_sort.on_value_change(lambda: reload_governance_cards(reset=True))
@@ -11208,7 +11243,10 @@ def index(q: str = "") -> None:
                     async def reopened(_: dict[str, Any]) -> None:
                         await load_recent(spec)
                         if state["searched"]:
-                            await load_rows(repeat_search=True)
+                            await load_rows(
+                        repeat_search=True, on_loaded=render_governance_cards,
+                        is_current=lambda: not card_host.is_deleted,
+                    )
                         else:
                             render_table(spec)
 
@@ -11223,7 +11261,10 @@ def index(q: str = "") -> None:
                             headers={"If-Match": str(row["version"])},
                         )
                         ui.notify(render_message("webui.publish_scheme.notify.classification_scheme_published_cd141332"), color="positive")
-                        await load_rows(repeat_search=True)
+                        await load_rows(
+                        repeat_search=True, on_loaded=render_governance_cards,
+                        is_current=lambda: not card_host.is_deleted,
+                    )
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True)
                 async def change_scheme_lifecycle(event) -> None:
@@ -11238,7 +11279,10 @@ def index(q: str = "") -> None:
                             },
                         )
                         ui.notify(render_message("webui.change_scheme_lifecycle.notify.classification_scheme_action_d_18fb0eda", action=action), color="positive")
-                        await load_rows(repeat_search=True)
+                        await load_rows(
+                        repeat_search=True, on_loaded=render_governance_cards,
+                        is_current=lambda: not card_host.is_deleted,
+                    )
                     except ApiError as error:
                         ui.notify(error_message(error), color="negative", close_button=True)
                 table.on("publish_scheme", publish_scheme)
@@ -12952,8 +12996,18 @@ def index(q: str = "") -> None:
         next_button.on("click", next_page)
         await load_audit_events()
 
-    async def load_rows(*, repeat_search: bool = False) -> None:
+    async def load_rows(
+        *, repeat_search: bool = False, on_loaded: Callable[[], None] | None = None,
+        is_current: Callable[[], bool] | None = None,
+    ) -> None:
         spec = ENTITIES[state["resource"]]
+        revision = state.get("collection_request_revision", 0) + 1
+        state["collection_request_revision"] = revision
+
+        def request_is_current() -> bool:
+            return (state.get("resource") == spec.key
+                    and state.get("collection_request_revision") == revision
+                    and (is_current is None or is_current()))
         try:
             if spec.search_first:
                 query = (search_input.value or "").strip()
@@ -13013,17 +13067,21 @@ def index(q: str = "") -> None:
                         include_system=True if spec.key == "roles" else None,
                     )
                 )
-                rows = result["items"]
+                if not request_is_current():
+                    return
+                decorated = await decorate_for_spec(spec, result["items"])
+                if not request_is_current():
+                    return
                 page["total"] = int(result["total"])
-                state["rows"] = await decorate_for_spec(
-                    spec,
-                    rows,
-                )
+                state["rows"] = decorated
                 state["searched"] = True
             set_connection_status(True)
-            render_table(spec)
+            if on_loaded is not None:
+                on_loaded()
+            else:
+                render_table(spec)
         except ApiError as error:
-            if getattr(page_client, "_deleted", False):
+            if not request_is_current() or getattr(page_client, "_deleted", False):
                 return
             set_connection_status(error.status_code != 503)
             ui.notify(error_message(error), color="negative", close_button=True)
@@ -17325,7 +17383,7 @@ def index(q: str = "") -> None:
                         ui.label(saved["name"]).classes("font-semibold")
                         ui.label(render_message("webui.render_saved_context.label.category_value_d60c970c", value=saved.get('category') or 'Uncategorized')).classes("text-xs text-slate-600")
                         ui.label(
-                            render_message("webui.render_saved_context.label.owned_by_value_updated_format_timestamp_824cfbd4", value=owner.get('name') or 'Unknown owner', format_timestamp=format_timestamp(saved.get('date_updated')))
+                            render_message("webui.render_saved_context.label.owned_by_value_updated_format_timestamp_824cfbd4", value=(owner.get('localized') or {}).get('name') or owner.get('name') or 'Unknown owner', format_timestamp=format_timestamp(saved.get('date_updated')))
                         ).classes("text-xs text-slate-600")
                     ui.badge(render_message("webui.render_saved_context.badge.mine_74055dac") if saved.get("owner_user_id") == (auth_state.get("principal") or {}).get("user", {}).get("id") else render_message("webui.render_saved_context.badge.shared_d6938797")).props("outline")
 
@@ -17346,7 +17404,10 @@ def index(q: str = "") -> None:
                 builder_host.props(add="inert aria-disabled=true")
                 builder_host.classes(add="pointer-events-none opacity-70")
             search_advanced.set_enabled(can_execute and structurally_valid)
-            save_button.text = render_message("webui.refresh_saved_actions.text.update_saved_search_31788e51") if saved is not None else render_message("webui.refresh_saved_actions.text.save_search_76b8ff5b")
+            # Navigation restoration can refresh controls outside their page slot.
+            # Resolve the catalogue through the button's owning client.
+            with save_button:
+                save_button.text = render_message("webui.refresh_saved_actions.text.update_saved_search_31788e51") if saved is not None else render_message("webui.refresh_saved_actions.text.save_search_76b8ff5b")
             save_button.update()
             save_button.set_visibility((saved is None and has_save) or capabilities.get("update") is True)
             edit_details_button.set_visibility(
@@ -17644,13 +17705,13 @@ def index(q: str = "") -> None:
                                 roles=len(item.get("role_ids") or []), units=len(item.get("org_unit_ids") or []),
                             )
                             with ui.card().classes("w-full shadow-none border border-slate-200 p-4"):
-                                with ui.row().classes("w-full items-start gap-3"):
+                                with ui.grid(columns="auto minmax(0, 1fr) auto").classes("w-full items-start gap-3"):
                                     ui.icon("description" if item["resource_type"] == "record" else "folder", color="primary")
-                                    with ui.column().classes("gap-1 grow min-w-0"):
+                                    with ui.column().classes("gap-1 min-w-0 break-words"):
                                         ui.label(item["name"]).classes("font-semibold")
                                         ui.label(item.get("description") or render_message("webui.load_saved_page.label.no_description_e23ca0ad")).classes("text-sm text-slate-600")
                                         ui.label(
-                                            render_message("webui.load_saved_page.label.title_value_updated_format_timestamp_value_b78393c6", title=localized_editor_entity("records" if item["resource_type"] == "record" else "aggregations", item["resource_type"]), value=item.get('category') or render_message("webui.saved_search_metadata.uncategorized"), format_timestamp=format_timestamp(item['date_updated']), value_2=render_message("webui.saved_search_metadata.owned") if mine else render_message("webui.saved_search_metadata.shared_by", owner=str(owner.get('name') or item['owner_user_id'])))
+                                            render_message("webui.load_saved_page.label.title_value_updated_format_timestamp_value_b78393c6", title=localized_editor_entity("records" if item["resource_type"] == "record" else "aggregations", item["resource_type"]), value=item.get('category') or render_message("webui.saved_search_metadata.uncategorized"), format_timestamp=format_timestamp(item['date_updated']), value_2=render_message("webui.saved_search_metadata.owned") if mine else render_message("webui.saved_search_metadata.shared_by", owner=str((owner.get('localized') or {}).get('name') or owner.get('name') or item['owner_user_id'])))
                                         ).classes("text-xs text-slate-500")
                                         ui.label(
                                             render_message("webui.load_saved_page.label.maximum_max_results_results_audience_label_1664749d", max_results=format(item['definition']['max_results'], ','), audience_label=audience_label)
@@ -17664,10 +17725,10 @@ def index(q: str = "") -> None:
                                             if names:
                                                 ui.label(render_message(label_key) + ": " + "; ".join(names)).classes("text-xs text-slate-500")
                                     ui.badge(render_message("webui.load_saved_page.badge.mine_47cb9b71") if mine else render_message("webui.load_saved_page.badge.shared_0a95a474"), color="blue-grey").props("outline")
-                                    ui.button(
-                                        render_message("webui.load_saved_page.button.open_2606a7e0"), icon="folder_open",
-                                        on_click=lambda _, selected=item: select_saved_search(selected),
-                                    ).props("flat dense no-caps")
+                                ui.button(
+                                    render_message("webui.load_saved_page.button.open_2606a7e0"), icon="folder_open",
+                                    on_click=lambda _, selected=item: select_saved_search(selected),
+                                ).props("flat dense no-caps")
                     start = page["offset"] + 1 if page["items"] else 0
                     page_label.text = render_message("webui.load_saved_page.text.start_value_of_total_eed8d817", start=start, value=page['offset'] + len(page['items']), total=page['total'])
                     previous.set_enabled(page["offset"] > 0)
