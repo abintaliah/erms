@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../core/network/api_failure.dart';
 import '../data/auth_api.dart';
 import '../domain/auth_principal.dart';
@@ -27,7 +29,7 @@ class NoopSessionWarningScheduler implements SessionWarningScheduler {
   Future<void> schedule(Duration delay) async {}
 }
 
-class SessionController {
+class SessionController extends ChangeNotifier {
   SessionController(
     this._api, {
     SessionWarningScheduler? warningScheduler,
@@ -56,6 +58,7 @@ class SessionController {
     final generation = ++_generation;
     status = SessionStatus.signingIn;
     failure = null;
+    notifyListeners();
     try {
       final session = await _api.signIn(email: email, password: password);
       if (generation != _generation) {
@@ -66,12 +69,14 @@ class SessionController {
       status = session.principal.mustChangePassword
           ? SessionStatus.passwordChangeRequired
           : SessionStatus.authenticated;
+      notifyListeners();
     } on ApiFailure catch (error) {
       if (generation != _generation) {
         return;
       }
       _clear();
       failure = error;
+      notifyListeners();
     }
   }
 
@@ -86,6 +91,7 @@ class SessionController {
     final generation = _generation;
     status = SessionStatus.changingPassword;
     failure = null;
+    notifyListeners();
     try {
       await _api.changePassword(
         token: token,
@@ -98,12 +104,14 @@ class SessionController {
       }
       principal = refreshed;
       status = SessionStatus.authenticated;
+      notifyListeners();
     } on ApiFailure catch (error) {
       if (generation != _generation) {
         return;
       }
       failure = error;
       status = SessionStatus.passwordChangeRequired;
+      notifyListeners();
     }
   }
 
@@ -111,6 +119,7 @@ class SessionController {
     final token = _token;
     ++_generation;
     status = SessionStatus.signingOut;
+    notifyListeners();
     try {
       if (token != null) {
         await _api.signOut(token);
@@ -120,6 +129,7 @@ class SessionController {
     } finally {
       await _warningScheduler.cancel();
       _clear();
+      notifyListeners();
     }
   }
 
@@ -151,12 +161,14 @@ class SessionController {
     }
     ++_generation;
     _clear();
+    notifyListeners();
     return true;
   }
 
   void clearForRevocation() {
     ++_generation;
     _clear();
+    notifyListeners();
   }
 
   void _clear() {

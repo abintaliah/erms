@@ -24,11 +24,18 @@ Started: 30 September 2026
   a best-effort scheduler interface whose failure cannot extend the session.
 - Focused model, HTTP-contract, and session-state tests pass, and Flutter static
   analysis reports no issues.
+- The approved canonical WebUI facet logo is reproduced as a dependency-free
+  Flutter vector painter from the source SVG geometry and colors.
+- English/LTR and Arabic/RTL sign-in screens use canonical catalogue keys for
+  brand, field, action, and non-disclosing failure text.
+- Required-password-change presentation uses existing canonical password keys,
+  keeps protected destinations unavailable, validates confirmation locally,
+  and delegates the actual change to the existing API contract.
+- Application composition now switches from signed out to password change or
+  authenticated state exclusively from the in-memory session controller.
 
 ## Pending
 
-- Implement the approved sign-in and required-password-change screens using
-  canonical catalogue keys and the WebUI logo.
 - Implement authenticated phone and tablet shell layouts, destination
   disclosure, sign-out, and central loading/error/offline/revocation states.
 - Connect lifecycle handling to Flutter application lifecycle events and add
