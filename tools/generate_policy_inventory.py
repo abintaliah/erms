@@ -70,9 +70,9 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         if method == "POST" and path == "/api/v1/saved-searches":
             return "globally_privileged", "search.saved_search.save", None
         if path == "/api/v1/saved-searches/administration":
-            return "globally_privileged", "search.saved_search.administrator", None
+            return "globally_privileged", "search.saved_search.administer", None
         if method == "DELETE":
-            return "globally_privileged", "search.saved_search.delete", None
+            return "relationship_scoped", None, None
         return "relationship_scoped", None, None
     if path.startswith("/api/v1/content-indexing/"):
         return "resource_scoped", "record.component.view", "record.component.view"

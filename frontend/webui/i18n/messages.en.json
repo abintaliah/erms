@@ -10394,6 +10394,42 @@
     "is_html": false
   },
   {
+    "message_key": "saved_search.administration.filter.created_before",
+    "context_group": "saved_search.administration",
+    "default_text": "Created before",
+    "semantic_meaning": "Upper creation-date boundary for the saved-search administration inventory.",
+    "common_locations": ["Saved Search Administration"],
+    "translator_guidance": "Translate as a concise date-filter label.",
+    "grammatical_role": "field label",
+    "parameter_schema": {},
+    "rendered_example": "Created before",
+    "is_html": false
+  },
+  {
+    "message_key": "saved_search.administration.filter.created_from",
+    "context_group": "saved_search.administration",
+    "default_text": "Created from",
+    "semantic_meaning": "Lower creation-date boundary for the saved-search administration inventory.",
+    "common_locations": ["Saved Search Administration"],
+    "translator_guidance": "Translate as a concise date-filter label.",
+    "grammatical_role": "field label",
+    "parameter_schema": {},
+    "rendered_example": "Created from",
+    "is_html": false
+  },
+  {
+    "message_key": "saved_search.administration.filter.owner",
+    "context_group": "saved_search.administration",
+    "default_text": "Owner name or email",
+    "semantic_meaning": "Owner filter for the saved-search administration inventory.",
+    "common_locations": ["Saved Search Administration"],
+    "translator_guidance": "Translate as a concise search-field label.",
+    "grammatical_role": "field label",
+    "parameter_schema": {},
+    "rendered_example": "Owner name or email",
+    "is_html": false
+  },
+  {
     "message_key": "saved_search.error.name_exists",
     "context_group": "saved_search.error",
     "default_text": "You already have a saved search with this name. Choose a different name.",
