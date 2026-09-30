@@ -1,7 +1,10 @@
 # Phase 0 progress record
 
-Status: In progress  
+Status: Complete
+
 Started: 30 September 2026
+
+Completed: 30 September 2026
 
 ## Completed
 
@@ -26,7 +29,7 @@ Started: 30 September 2026
 - Unit-level validation contract and Phase 0 traceability matrix established.
 - Wathiq light-theme tokens aligned with the existing WebUI color tokens.
 - Canonical WebUI catalogue synchronization implemented.
-- 2,561 English and Arabic active messages synchronized with exact key coverage.
+- 2,615 English and Arabic active messages synchronized with exact key coverage.
 - Minimal Wathiq foundation shell created with explicit effective-locale support.
 - English LTR and Arabic RTL widget behavior verified.
 - Environment configuration rejects absent, malformed, and non-HTTPS remote API
@@ -58,16 +61,20 @@ Started: 30 September 2026
 - Separate Web-familiar and mobile-focused Phase 0 foundation mockup boards are
   recorded under `docs/mockups`, and the user approved Option B — Mobile-focused
   as the foundation visual direction on 30 September 2026.
+- Live Arabic/RTL inspection confirms the foundation shell renders canonical
+  Arabic text without clipping or overflow on the iPhone 18 Pro, Pixel 8, and
+  Pixel Tablet in portrait and landscape where applicable.
+- Post-merge validation passes all twenty-one project checks, Dart formatting,
+  and Flutter static analysis after synchronizing 2,615 canonical messages.
 
-## Pending Phase 0 gates
+## Deferred items
 
 - Replace temporary `erms.wathiq` with the permanent organization/application
   identifier before external distribution.
-- Complete live Arabic/RTL inspection on applicable phone and tablet layouts.
 - Select routing, networking, and state packages only when the Phase 1 concrete
   requirements justify them.
-- Add validation-matrix rows and retained checks for every additional Phase 0
-  implementation unit introduced while completing these gates.
 
-Phase 0 must not be marked complete until every applicable exit gate in the
-mobile specification is supported by verification evidence.
+All applicable Phase 0 exit gates in the mobile specification are supported by
+the evidence recorded above and in `docs/validation-matrix.md`. The deferred
+items are not Phase 0 blockers and remain explicit prerequisites for their
+respective later work.

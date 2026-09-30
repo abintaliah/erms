@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import '../lib/core/config/app_environment.dart';
+import 'package:wathiq_mobile/core/config/app_environment.dart';
 
 Future<void> main(List<String> arguments) async {
   if (arguments.length != 1) {
