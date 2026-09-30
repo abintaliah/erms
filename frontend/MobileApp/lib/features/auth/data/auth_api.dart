@@ -13,6 +13,8 @@ abstract interface class AuthApi {
 
   Future<AuthPrincipal> currentPrincipal(String token);
 
+  Future<String> effectiveLanguage(String token);
+
   Future<void> changePassword({
     required String token,
     required String currentPassword,
@@ -65,6 +67,24 @@ class IoAuthApi implements AuthApi {
   Future<AuthPrincipal> currentPrincipal(String token) async {
     final response = await _request('GET', '/api/v1/auth/me', token: token);
     return _principal(response.payload);
+  }
+
+  @override
+  Future<String> effectiveLanguage(String token) async {
+    final response = await _request(
+      'GET',
+      '/api/v1/i18n/bootstrap',
+      token: token,
+    );
+    final payload = response.payload;
+    if (payload is! Map) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    final language = payload['effective_language'];
+    if (language is! String || !const {'en', 'ar'}.contains(language)) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    return language;
   }
 
   @override

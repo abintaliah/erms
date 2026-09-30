@@ -52,6 +52,10 @@ void main() {
         request.response
           ..headers.contentType = ContentType.json
           ..write(jsonEncode(_principalJson()));
+      } else if (request.uri.path == '/api/v1/i18n/bootstrap') {
+        request.response
+          ..headers.contentType = ContentType.json
+          ..write(jsonEncode({'effective_language': 'ar'}));
       } else {
         request.response.statusCode = HttpStatus.noContent;
       }
@@ -64,6 +68,7 @@ void main() {
     );
 
     await api.currentPrincipal('memory-token');
+    expect(await api.effectiveLanguage('memory-token'), 'ar');
     await api.changePassword(
       token: 'memory-token',
       currentPassword: 'current-secret',
@@ -73,6 +78,7 @@ void main() {
 
     expect(requests.map((request) => request.uri.path), [
       '/api/v1/auth/me',
+      '/api/v1/i18n/bootstrap',
       '/api/v1/auth/change-password',
       '/api/v1/auth/logout',
     ]);

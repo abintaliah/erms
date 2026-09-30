@@ -48,6 +48,7 @@ class SessionController extends ChangeNotifier {
   SessionStatus status = SessionStatus.signedOut;
   AuthPrincipal? principal;
   ApiFailure? failure;
+  String effectiveLanguageTag = 'en';
   String? _token;
   DateTime? _backgroundedAt;
   int _generation = 0;
@@ -66,6 +67,10 @@ class SessionController extends ChangeNotifier {
       }
       _token = session.token;
       principal = session.principal;
+      effectiveLanguageTag = await _api.effectiveLanguage(session.token);
+      if (generation != _generation) {
+        return;
+      }
       status = session.principal.mustChangePassword
           ? SessionStatus.passwordChangeRequired
           : SessionStatus.authenticated;
@@ -176,5 +181,6 @@ class SessionController extends ChangeNotifier {
     principal = null;
     _token = null;
     _backgroundedAt = null;
+    effectiveLanguageTag = 'en';
   }
 }

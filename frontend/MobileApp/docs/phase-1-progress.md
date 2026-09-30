@@ -33,6 +33,10 @@ Started: 30 September 2026
   and delegates the actual change to the existing API contract.
 - Application composition now switches from signed out to password change or
   authenticated state exclusively from the in-memory session controller.
+- Anonymous startup is explicitly English and does not follow the device
+  locale. After authentication, the existing localization bootstrap contract
+  makes the user's effective language authoritative immediately; protected
+  locale state resets to English at logout or session expiry.
 
 ## Pending
 

@@ -11,36 +11,28 @@ class WathiqApp extends StatelessWidget {
   const WathiqApp({
     required this.catalogue,
     required this.sessionController,
-    this.locale,
     super.key,
   });
 
   final MessageCatalogue catalogue;
   final SessionController sessionController;
-  final Locale? locale;
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Wathiq',
-      locale: locale,
-      supportedLocales: MessageCatalogue.supportedLocales,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      localeResolutionCallback: (deviceLocale, supportedLocales) {
-        if (deviceLocale?.languageCode == 'ar') {
-          return MessageCatalogue.arabicLocale;
-        }
-        return MessageCatalogue.englishLocale;
-      },
-      theme: WathiqTheme.light,
-      home: AnimatedBuilder(
-        animation: sessionController,
-        builder: (context, _) => switch (sessionController.status) {
+    return AnimatedBuilder(
+      animation: sessionController,
+      builder: (context, _) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Wathiq',
+        locale: Locale(sessionController.effectiveLanguageTag),
+        supportedLocales: MessageCatalogue.supportedLocales,
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        theme: WathiqTheme.light,
+        home: switch (sessionController.status) {
           SessionStatus.passwordChangeRequired ||
           SessionStatus.changingPassword => PasswordChangeScreen(
             catalogue: catalogue,

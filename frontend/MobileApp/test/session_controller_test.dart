@@ -19,6 +19,7 @@ void main() {
     expect(controller.status, SessionStatus.authenticated);
     expect(controller.principal?.user.id, 7);
     expect(controller.hasProtectedState, isTrue);
+    expect(controller.effectiveLanguageTag, 'en');
     expect(api.lastEmail, 'user@example.test');
   });
 
@@ -57,6 +58,7 @@ void main() {
 
       expect(controller.status, SessionStatus.signedOut);
       expect(controller.hasProtectedState, isFalse);
+      expect(controller.effectiveLanguageTag, 'en');
     },
   );
 
@@ -154,6 +156,9 @@ class _FakeAuthApi implements AuthApi {
 
   @override
   Future<AuthPrincipal> currentPrincipal(String token) async => principal;
+
+  @override
+  Future<String> effectiveLanguage(String token) async => 'en';
 
   @override
   Future<void> changePassword({

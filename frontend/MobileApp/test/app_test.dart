@@ -7,9 +7,11 @@ import 'package:wathiq_mobile/features/auth/data/auth_api.dart';
 import 'package:wathiq_mobile/features/auth/domain/auth_principal.dart';
 
 void main() {
-  testWidgets('sign-in resolves canonical English text and logo', (
+  testWidgets('sign-in defaults to English independently of device locale', (
     tester,
   ) async {
+    tester.platformDispatcher.localeTestValue = const Locale('ar');
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
     final controller = SessionController(_FakeAuthApi());
     await tester.pumpWidget(
       WathiqApp(catalogue: _catalogue, sessionController: controller),
@@ -25,20 +27,29 @@ void main() {
     );
   });
 
-  testWidgets('sign-in resolves Arabic with RTL direction', (tester) async {
-    final controller = SessionController(_FakeAuthApi());
+  testWidgets('saved Arabic preference becomes authoritative after sign-in', (
+    tester,
+  ) async {
+    final controller = SessionController(_FakeAuthApi(languageTag: 'ar'));
     await tester.pumpWidget(
-      WathiqApp(
-        catalogue: _catalogue,
-        sessionController: controller,
-        locale: const Locale('ar'),
-      ),
+      WathiqApp(catalogue: _catalogue, sessionController: controller),
     );
 
-    expect(find.text('وثق'), findsOneWidget);
-    expect(find.text('تسجيل الدخول'), findsNWidgets(2));
+    expect(find.text('Sign in'), findsNWidgets(2));
+    await tester.enterText(
+      find.byKey(const ValueKey('sign-in-email')),
+      'user@example.test',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('sign-in-password')),
+      'secret',
+    );
+    await tester.tap(find.byKey(const ValueKey('sign-in-submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('لوحة المعلومات'), findsOneWidget);
     expect(
-      Directionality.of(tester.element(find.text('البريد الإلكتروني'))),
+      Directionality.of(tester.element(find.text('لوحة المعلومات'))),
       TextDirection.rtl,
     );
   });
@@ -140,10 +151,11 @@ const _catalogue = MessageCatalogue(
 );
 
 class _FakeAuthApi implements AuthApi {
-  _FakeAuthApi({AuthPrincipal? principal})
+  _FakeAuthApi({AuthPrincipal? principal, this.languageTag = 'en'})
     : principal = principal ?? _principal();
 
   final AuthPrincipal principal;
+  final String languageTag;
   String? lastEmail;
 
   @override
@@ -157,6 +169,9 @@ class _FakeAuthApi implements AuthApi {
 
   @override
   Future<AuthPrincipal> currentPrincipal(String token) async => principal;
+
+  @override
+  Future<String> effectiveLanguage(String token) async => languageTag;
 
   @override
   Future<void> changePassword({
