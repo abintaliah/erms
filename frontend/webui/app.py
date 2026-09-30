@@ -17,6 +17,7 @@ from nicegui import app, background_tasks, context, events, ui
 
 from .api_client import ApiError, ErmsApiClient
 from .classification_workspace import classification_workspace
+from .audit_labels import audit_entity_type_label
 from .retention_timeline import render_disposition_date, render_retention_stages
 from .capabilities import (
     capability_allowed,
@@ -12925,7 +12926,7 @@ def index(q: str = "") -> None:
         try:
             filter_options = await api.event_history_filter_options()
             type_filter.options = {
-                value: value.replace("_", " ").title()
+                value: audit_entity_type_label(value)
                 for value in filter_options["entity_types"]
             }
             operation_filter.options = {code: event_label(code) for code in filter_options["operations"]}
