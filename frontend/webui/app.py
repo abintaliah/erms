@@ -6819,8 +6819,8 @@ def index(q: str = "") -> None:
                 await select_record_details(record_id)
 
             await hold_reason_dialog(
-                "Remove from all holds? Inherited protection from its aggregation hierarchy will remain.",
-                "Remove from all holds",
+                render_message("webui.hold_reason_dialog.remove_all_confirmation"),
+                render_message("webui.open_aggregation.button.remove_direct_holds_d5ecb7ae"),
                 remove,
             )
 
@@ -9266,8 +9266,8 @@ def index(q: str = "") -> None:
                         await open_aggregation(current)
 
                     await hold_reason_dialog(
-                        "Remove from all holds? Inherited protection from parent aggregations will remain.",
-                        "Remove from all holds",
+                        render_message("webui.hold_reason_dialog.remove_all_confirmation"),
+                        render_message("webui.open_aggregation.button.remove_direct_holds_d5ecb7ae"),
                         remove,
                     )
 
@@ -18548,7 +18548,7 @@ def index(q: str = "") -> None:
         dialog = ui.dialog()
         with dialog, ui.card().classes("w-[520px] max-w-full"):
             ui.label(title_text).classes("text-xl font-semibold")
-            reason = ui.textarea(render_message("webui.hold_reason_dialog.textarea.reason_c483e491"), validation={"A reason is required": lambda value: bool((value or "").strip())}).props("outlined autogrow maxlength=2000").classes("w-full")
+            reason = ui.textarea(render_message("webui.hold_reason_dialog.textarea.reason_c483e491"), validation={render_message_plain("webui.submit.notify.a_reason_is_required_2d25211d"): lambda value: bool((value or "").strip())}).props("outlined autogrow maxlength=2000").classes("w-full")
 
             async def submit() -> None:
                 if not (reason.value or "").strip():

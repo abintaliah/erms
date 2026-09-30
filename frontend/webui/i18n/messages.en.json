@@ -13871,6 +13871,20 @@
     "is_html": false
   },
   {
+    "message_key": "webui.hold_reason_dialog.remove_all_confirmation",
+    "context_group": "webui.hold_reason_dialog",
+    "default_text": "Remove all directly assigned holds? Protection inherited from parent aggregations will remain.",
+    "semantic_meaning": "Confirmation for removing direct hold assignments from a record or aggregation, while retaining inherited protection.",
+    "common_locations": [
+      "Record and aggregation remove-all-holds confirmation dialogs"
+    ],
+    "translator_guidance": "Holds are legal holds. Only direct assignments are removed; ancestor aggregation protection remains.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Remove all directly assigned holds? Protection inherited from parent aggregations will remain.",
+    "is_html": false
+  },
+  {
     "message_key": "webui.hold_reason_dialog.textarea.reason_c483e491",
     "context_group": "webui.hold_reason_dialog",
     "default_text": "Reason",

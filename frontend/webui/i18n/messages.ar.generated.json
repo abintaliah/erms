@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "1aafce9b96af39851c56fb2893fabd23272f2bc5f23956c90b3b12a004a3337e",
+  "catalogue_sha256": "722e2000438d70bba901d841976553455dd7741369a2d3486c04147b416779fb",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260929040036",
   "generated_at": "2026-09-29T04:00:36.438919+04:00",
@@ -11293,6 +11293,16 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
         "date_published": "2026-09-26T13:44:17.672002+00:00"
+      }
+    },
+    {
+      "message_key": "webui.hold_reason_dialog.remove_all_confirmation",
+      "translated_text": "هل تريد إزالة جميع حالات التعليق المسندة مباشرة؟ ستظل الحماية الموروثة من الملفات الحاوية سارية.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "source_origin": "generated",
+        "source_status": "draft"
       }
     },
     {
