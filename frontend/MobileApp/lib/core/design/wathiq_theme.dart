@@ -34,6 +34,25 @@ abstract final class WathiqTheme {
       error: WathiqColors.error,
     ),
     scaffoldBackgroundColor: WathiqColors.surface,
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: WathiqColors.surface,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: WathiqColors.outline),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: WathiqColors.outline),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size.fromHeight(48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    ),
     useMaterial3: true,
   );
 }

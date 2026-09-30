@@ -55,7 +55,8 @@ Completed: 30 September 2026
   clipping or overflow on the phone in portrait and on the tablet in both
   portrait and landscape.
 - The mobile project's validated environment boundary reached the locally
-  running ERMS service at `http://127.0.0.1:8080` and received HTTP 200.
+  running ERMS WebUI at `http://127.0.0.1:8080` and received HTTP 200. The
+  mobile application targets the separate API service on port `8000`.
 - A repeatable, credential-free connectivity verifier is available at
   `tool/verify_connectivity.dart`.
 - Separate Web-familiar and mobile-focused Phase 0 foundation mockup boards are

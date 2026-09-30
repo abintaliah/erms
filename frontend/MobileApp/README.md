@@ -82,11 +82,11 @@ For a locally running ERMS instance, verify that the mobile project's validated
 environment boundary can reach it with:
 
 ```sh
-dart run tool/verify_connectivity.dart http://127.0.0.1:8080
+dart run tool/verify_connectivity.dart http://127.0.0.1:8000
 ```
 
 Supply the same address at launch with
-`--dart-define=WATHIQ_API_BASE_URL=http://127.0.0.1:8080`. On an Android
+`--dart-define=WATHIQ_API_BASE_URL=http://127.0.0.1:8000`. On an Android
 emulator, reverse the selected local port through ADB before launch so that the
 emulator's loopback address reaches the host. Do not commit environment URLs or
 credentials.
