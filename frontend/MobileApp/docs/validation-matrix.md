@@ -20,6 +20,15 @@ row.
 | Sensitive-file exclusion | Mobile specification §§8, 19, 26 Phase 0 | Project boundary and `.gitignore` | `test/project_structure_test.dart` rejects common credential files | Secret scanning expansion pending dependency selection | Automated baseline passes |
 | Foundation visual-direction proposals | Mobile specification §§5, 26 Phase 0 | `docs/mockups/phase-0-review.md` and two option boards | Visual artifact presence is covered by repository review; implementation checks begin only after selection | User approved Option B — Mobile-focused on 30 September 2026 | Verified |
 
+## Phase 1
+
+| Implementation unit | Requirement | Implementation | Automated validation | Additional evidence | Status |
+| --- | --- | --- | --- | --- | --- |
+| Authentication response model | Mobile specification §§3.1, 8.1, 21, 26 Phase 1 | `lib/features/auth/domain/auth_principal.dart` | `test/auth_principal_test.dart` covers successful parsing and malformed authorization/session fields | Matches `PrincipalRead` in the existing API schema | Verified |
+| Authentication HTTP boundary | Mobile specification §§8.1–8.2, 8.4–8.5, 19, 21, 26 Phase 1 | `lib/features/auth/data/auth_api.dart` | `test/auth_api_test.dart` covers existing paths, request fields, session cookie, bearer token, mobile user-agent, non-disclosing failure category, and missing-cookie failure | Live non-production contract check pending | Automated contract verified |
+| In-memory session ownership and isolation | Mobile specification §§8.2–8.4, 18–19, 26 Phase 1 | `lib/features/auth/application/session_controller.dart` | `test/session_controller_test.dart` covers success, credential-change gate, failure, unconditional local sign-out clearing, and stale-response rejection | No persistence dependency or credential file introduced | Verified |
+| Background timeout policy | Mobile specification §8.3 and §26 Phase 1 | `SessionController` and `SessionWarningScheduler` | `test/session_controller_test.dart` covers 14:59 retention, 15:00 clearing, warning scheduling, cancellation, and warning failure | Platform notification adapter pending | Core policy verified |
+
 ## Later phases
 
 Add one or more rows for every independently meaningful parser, configuration

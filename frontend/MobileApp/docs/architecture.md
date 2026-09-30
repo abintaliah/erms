@@ -21,15 +21,17 @@ lib/
   core/
     design/             Wathiq mobile tokens and shared presentation
     localization/       governed catalogue loading and lookup
-    network/            future HTTP transport and error mapping
+    network/            shared transport-safe failure categories
     routing/            future typed route ownership
-  features/             future mobile feature modules by user journey
+  features/
+    auth/                typed authentication contract and session ownership
 ```
 
-Phase 0 deliberately uses Flutter SDK facilities only. Networking, state, and
-routing packages will be selected when their concrete requirements are known;
-adding a framework merely to populate the scaffold is not an architectural
-decision.
+The Phase 1 authentication client uses `dart:io` HTTP facilities behind an
+injectable `AuthApi` boundary and keeps session state in a plain controller.
+No networking, state-management, persistence, or routing package is required
+for this unit. A later package may be selected only when a concrete requirement
+cannot be met cleanly with the pinned SDK.
 
 ## Environment boundary
 
