@@ -120,6 +120,7 @@
   "audit.event.transient_user_data_removed": "Transient User Data Removed",
   "audit.event.update": "Update",
   "audit.event.vital_status_changed": "Vital Status Changed",
+  "audit.source.mobile": "Mobile",
   "authorization.acl.inherit_from_parent": "Inherit ACL from parent",
   "authorization.acl_source.custom": "Custom Template",
   "authorization.acl_source.local": "Local",

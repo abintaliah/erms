@@ -65,6 +65,19 @@ def test_event_catalogue_covers_emitters_and_preserves_codes():
         set_active_messages({})
 
 
+def test_mobile_event_source_has_localized_label_and_stable_code():
+    from frontend.webui.event_labels import event_source_label
+    root = Path(__file__).parents[3]
+    artifact = json.loads((root / 'frontend/webui/i18n/messages.ar.generated.json').read_text())
+    arabic = {i['message_key']: i['translated_text'] for i in artifact['items']}
+    try:
+        set_active_messages(arabic)
+        assert event_source_label('mobile') == arabic['audit.source.mobile']
+        assert event_source_label('integration') == 'integration'
+    finally:
+        set_active_messages({})
+
+
 def test_security_refresh_restores_client_context_before_rendering():
     tree = ast.parse((Path(__file__).parents[1] / 'app.py').read_text())
     loader = next(n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == 'load_security_operations')

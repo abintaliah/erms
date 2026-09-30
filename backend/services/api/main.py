@@ -195,7 +195,7 @@ def full_text_search(
     return global_search_rows(connection,payload)
 
 EVENT_SOURCES = {
-    "api", "web_ui", "bulk_import", "background_worker", "scheduled_job",
+    "api", "web_ui", "mobile", "bulk_import", "background_worker", "scheduled_job",
     "integration", "migration", "seeding", "administrative_tool", "cli", "oidc_sync",
     "directory_sync",
 }

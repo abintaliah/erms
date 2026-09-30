@@ -1,13 +1,13 @@
 {
-  "generator": "Wathiq Translation Administration",
-  "model": "database-reviewed-translations",
-  "model_version": "1",
-  "prompt_version": "manual-admin-export-v1",
-  "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "6d1daeac8e8bc8466d21dab023463d3930e039be076746063bcc6f49720078a1",
-  "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
-  "batch_id": "admin-export-ar-20260929040036",
-  "generated_at": "2026-09-29T04:00:36.438919+04:00",
+  "generator": "Wathiq Translation Administration with OpenAI Codex key merge",
+  "model": "OpenAI Codex",
+  "model_version": "2026-09-30",
+  "prompt_version": "wathiq-arabic-contextual-key-merge-v1",
+  "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+  "catalogue_sha256": "7b1d97a9b73fea725bb908578dc3ddd6a1fe567ee7b28e784d5f70e28e8f21f4",
+  "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+  "batch_id": "codex-mobile-audit-source-ar-20260930T195315Z",
+  "generated_at": "2026-09-30T19:53:15Z",
   "artifact_type": "wathiq_translation_administration_export",
   "language_tag": "ar",
   "language_metadata": {
@@ -1585,6 +1585,16 @@
         "source_status": "published",
         "date_reviewed": "2026-09-28T10:30:03.437443+00:00",
         "date_published": "2026-09-28T10:30:03.437443+00:00"
+      }
+    },
+    {
+      "message_key": "audit.source.mobile",
+      "translated_text": "تطبيق الهاتف المحمول",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "source_origin": "generated",
+        "source_status": "draft"
       }
     },
     {

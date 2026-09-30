@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from frontend.webui.event_labels import event_label
+from frontend.webui.event_labels import event_label, event_source_label
 
 import asyncio
 import base64
@@ -4982,7 +4982,7 @@ def index(q: str = "") -> None:
                             ui.label(actor_email).classes("text-xs text-slate-500")
                     with ui.column().classes("gap-0"):
                         ui.label(render_message("webui.show_event_detail.label.source_c6457d34")).classes("component-meta-label")
-                        ui.label(event.get("source") or "—").classes("text-sm text-slate-700")
+                        ui.label(event_source_label(event["source"]) if event.get("source") else "—").classes("text-sm text-slate-700")
                 if event.get("reason"):
                     with ui.card().classes("w-full bg-blue-50 shadow-none border border-blue-100"):
                         ui.label(render_message("webui.show_event_detail.label.change_reason_93b265ba")).classes("component-meta-label")
@@ -5055,7 +5055,7 @@ def index(q: str = "") -> None:
                             ui.label(actor_name).classes("text-xs font-medium text-slate-600")
                             if actor_email:
                                 ui.label(actor_email).classes("text-xs text-slate-400")
-                            ui.label(event.get("source", render_message("webui.render_event_timeline.label.unknown_509e35f5"))).classes("text-xs text-slate-400")
+                            ui.label(event_source_label(event["source"]) if event.get("source") else render_message("webui.render_event_timeline.label.unknown_509e35f5")).classes("text-xs text-slate-400")
                         if event["entity_type"] in {"aggregation", "record", "digital_component", "org_unit", "user", "role"}:
                             ui.button(
                                 icon="open_in_new",
@@ -12950,7 +12950,10 @@ def index(q: str = "") -> None:
                 for value in filter_options["entity_types"]
             }
             operation_filter.options = {code: event_label(code) for code in filter_options["operations"]}
-            source_filter.options = filter_options["sources"]
+            source_filter.options = {
+                source: event_source_label(source)
+                for source in filter_options["sources"]
+            }
             actor_filter.options = filter_options["actor_types"]
             for control in (
                 type_filter, operation_filter, source_filter, actor_filter,

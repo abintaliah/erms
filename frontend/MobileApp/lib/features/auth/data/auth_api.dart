@@ -5,8 +5,8 @@ import 'dart:io';
 import '../../../core/network/api_failure.dart';
 import '../domain/auth_principal.dart';
 
-const mobileEventSource = 'mobile';
 const mobileClientVersion = '0.1';
+const mobileEventSource = 'mobile';
 
 abstract interface class AuthApi {
   Future<AuthSession> signIn({required String email, required String password});

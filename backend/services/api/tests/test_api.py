@@ -903,6 +903,17 @@ def test_event_source_is_controlled(client: TestClient):
     ).json()
     assert history[0]["source"] == "web_ui"
 
+    mobile_created = client.post(
+        "/api/v1/aggregations",
+        headers={"X-Event-Source": "mobile"},
+        json={"aggregation_number": "SOURCE-MOBILE", "title": "Mobile source", "classification_id": 1},
+    )
+    assert mobile_created.status_code == 201
+    mobile_history = client.get(
+        f"/api/v1/aggregations/{mobile_created.json()['id']}/history"
+    ).json()
+    assert mobile_history[0]["source"] == "mobile"
+
 
 def test_update_and_delete_snapshots_remain_available(
     client: TestClient, record: dict

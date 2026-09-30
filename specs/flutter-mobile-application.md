@@ -282,6 +282,11 @@ allows the existing session-administration experience to distinguish Wathiq
 mobile sessions and platform family. It must not include a persistent device
 fingerprint or unnecessary personal data.
 
+Mobile requests must also send the governed `X-Event-Source: mobile` value so
+immutable audit events identify their originating application directly. The
+API allowlist, audit filters, and presentation treat `mobile` as a controlled
+source; unknown source values remain rejected.
+
 Biometric and PIN re-entry are deferred. They must not be represented as
 available controls until separately specified and approved.
 

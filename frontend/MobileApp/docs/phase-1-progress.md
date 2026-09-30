@@ -14,7 +14,8 @@ Started: 30 September 2026
   fields are parsed through typed models with malformed-response rejection.
 - Session tokens and protected principal state remain in memory only.
 - Mobile requests identify themselves as `WathiqMobile/0.1` plus the truthful
-  platform family without a device fingerprint.
+  platform family without a device fingerprint and use the approved `mobile`
+  audit source.
 - Sign-in errors are reduced to non-disclosing client categories.
 - Explicit sign-out clears local protected state even when the server request
   fails.
@@ -37,6 +38,9 @@ Started: 30 September 2026
   locale. After authentication, the existing localization bootstrap contract
   makes the user's effective language authoritative immediately; protected
   locale state resets to English at logout or session expiry.
+- Live iOS authentication against the local API reached the authenticated
+  Dashboard and persisted `AUTHENTICATION_SUCCEEDED` with source `mobile` and
+  user agent `WathiqMobile/0.1 (ios)`.
 
 ## Pending
 
@@ -44,7 +48,5 @@ Started: 30 September 2026
   disclosure, sign-out, and central loading/error/offline/revocation states.
 - Connect lifecycle handling to Flutter application lifecycle events and add
   the platform notification implementation for the best-effort warning.
-- Validate the authentication contract against a running non-production ERMS
-  service.
 - Complete English, Arabic, LTR, RTL, iOS, Android, phone, and tablet runtime
   verification for all delivered Phase 1 screens.

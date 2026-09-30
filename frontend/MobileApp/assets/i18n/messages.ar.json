@@ -120,6 +120,7 @@
   "audit.event.transient_user_data_removed": "إزالة بيانات المستخدم المؤقتة",
   "audit.event.update": "تحديث",
   "audit.event.vital_status_changed": "تغيير حالة الأهمية الحيوية",
+  "audit.source.mobile": "تطبيق الهاتف المحمول",
   "authorization.acl.inherit_from_parent": "استمداد قائمة التحكم في الوصول من الملف الحاوي",
   "authorization.acl_source.custom": "قالب مخصص",
   "authorization.acl_source.local": "محلي",

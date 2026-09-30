@@ -1802,6 +1802,20 @@
     "is_html": false
   },
   {
+    "message_key": "audit.source.mobile",
+    "context_group": "audit.source",
+    "default_text": "Mobile",
+    "semantic_meaning": "Display label for the governed mobile audit-event source code.",
+    "common_locations": [
+      "Audit Trail source filters, timelines and event details"
+    ],
+    "translator_guidance": "Translate the originating application channel label; do not translate or alter the underlying technical source code mobile.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Mobile",
+    "is_html": false
+  },
+  {
     "message_key": "authorization.acl.inherit_from_parent",
     "context_group": "authorization.acl",
     "default_text": "Inherit ACL from parent",

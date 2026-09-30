@@ -149,6 +149,7 @@ are:
 
 ```text
 web_ui   - request originated in the NiceGUI application
+mobile   - request originated in the Wathiq mobile application
 api      - request came from another REST client or did not identify a client
 database - change executed directly without API request context
 ```
@@ -164,6 +165,9 @@ utilities must not describe their events as migrations.
 
 NiceGUI sends `X-Event-Source: web_ui` on every API request. FastAPI validates
 this header against the controlled list and defaults an absent header to `api`.
+Wathiq Mobile sends `X-Event-Source: mobile` together with its truthful mobile
+user agent. The source identifies the originating application while the user
+agent distinguishes the mobile client version and platform family.
 The value describes the originating application or execution channel; all
 ordinary application writes still pass through FastAPI as the enforcement
 boundary.

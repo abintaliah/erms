@@ -60,7 +60,12 @@ EVENT_MESSAGE_KEYS = {
     "VITAL_STATUS_CHANGED": "audit.event.vital_status_changed",
 }
 
-
 def event_label(code: str) -> str:
     key = EVENT_MESSAGE_KEYS.get(code)
     return render_message(key) if key else code
+
+
+def event_source_label(code: str) -> str:
+    if code == "mobile":
+        return render_message("audit.source.mobile")
+    return code
