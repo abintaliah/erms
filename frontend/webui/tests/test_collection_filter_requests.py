@@ -85,3 +85,39 @@ def test_collection_ignores_stale_and_abandoned_filter_responses():
         callback.assert_not_called()
         scope['render_table'].assert_not_called()
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('resource', ['aggregations', 'records'])
+def test_clear_search_discards_pending_results_and_resets_result_controls(resource):
+    from types import SimpleNamespace
+    source = Path(__file__).parents[1] / 'app.py'
+    tree = ast.parse(source.read_text())
+    functions = [n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef)
+                 and n.name in {'load_rows', 'clear_collection_search'}]
+    async def run():
+        started, release = asyncio.Event(), asyncio.Event()
+        async def search(*args):
+            started.set()
+            await release.wait()
+            return [{'id': 408}]
+        async def decorate(spec, rows):
+            return rows
+        search_input = Mock(value='سجل')
+        state = dict(resource=resource, searched=True, rows=[{'id': 1}],
+                     entity_result_states={resource: {'filter': 'old', 'page': 3}})
+        scope = dict(ENTITIES=ENTITIES, state=state, api=Mock(search=search),
+                     Any=Any, Callable=Callable, search_input=search_input,
+                     decorate_for_spec=decorate, set_connection_status=Mock(),
+                     render_table=Mock(), page_client=SimpleNamespace(_deleted=False))
+        exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), 'exec'), scope)
+        pending = asyncio.create_task(scope['load_rows']())
+        await started.wait()
+        await scope['clear_collection_search']()
+        release.set()
+        await pending
+        assert state['searched'] is False and state['rows'] == []
+        assert resource not in state['entity_result_states']
+        assert search_input.value == ''
+        search_input.run_method.assert_called_once_with('focus')
+        scope['render_table'].assert_called_once_with(ENTITIES[resource])
+    asyncio.run(run())

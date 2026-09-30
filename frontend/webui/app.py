@@ -10646,15 +10646,18 @@ def index(q: str = "") -> None:
         render_results()
 
     def render_table(spec: EntitySpec) -> None:
+        if spec.key in {"aggregations", "records"}:
+            guidance.text = "" if state["searched"] else render_message(
+                "webui.select_entity.text.large_collections_are_search_first_to_avoi_717a0f77"
+            )
+            subtitle.text = "" if state["searched"] else render_message(
+                "webui.select_entity.text.search_required_before_loading_results_88549c49"
+            )
         table_container.clear()
         with table_container:
             if spec.key in {"aggregations", "records"} and spec.search_first and not state["searched"]:
                 render_resource_personal_sections(spec)
                 return
-            if spec.key in {"aggregations", "records"}:
-                # Keep the same favourites and recent-activity context visible
-                # before and after a collection search.
-                render_resource_personal_sections(spec)
             if spec.search_first and not state["searched"]:
                 if spec.key == "classifications":
                     with ui.column().classes("w-full items-center py-12 gap-2 text-slate-500"):
@@ -10668,6 +10671,7 @@ def index(q: str = "") -> None:
                 return
             if spec.key in {"aggregations", "records"}:
                 render_entity_compact_results(spec)
+                render_resource_personal_sections(spec)
                 return
             if spec.key == "aggregations":
                 ui.separator().classes("erms-results-divider")
@@ -13019,13 +13023,19 @@ def index(q: str = "") -> None:
                 if not query and not repeat_search:
                     state["searched"] = False
                     state["rows"] = []
+                    state.setdefault("entity_result_states", {}).pop(spec.key, None)
                 elif query:
                     rows = await api.search(spec.key, query, spec.search_fields)
+                    if not request_is_current():
+                        return
                     decorated_rows = await decorate_for_spec(spec, rows)
-                    state["rows"] = (
+                    decorated_rows = (
                         await decorate_record_search_components(decorated_rows)
                         if spec.key == "records" else decorated_rows
                     )
+                    if not request_is_current() or getattr(page_client, "_deleted", False):
+                        return
+                    state["rows"] = decorated_rows
                     state["searched"] = True
             else:
                 page = state["collection_pages"].setdefault(spec.key, {
@@ -20042,6 +20052,14 @@ def index(q: str = "") -> None:
     add_record_button.on("click", add_record_for_current_aggregation)
     search_button.on("click", lambda: load_rows())
     search_input.on("keydown.enter", lambda: load_rows())
+    async def clear_collection_search() -> None:
+        if state.get("resource") not in {"aggregations", "records"}:
+            return
+        search_input.value = ""
+        await load_rows()
+        search_input.run_method("focus")
+
+    search_input.on("clear", clear_collection_search)
     if full_text_search_enabled():
         global_search_submit.on("click", lambda: run_global_search(global_search_input.value or ""))
         global_search_input.on("keydown.enter", lambda: run_global_search(global_search_input.value or ""))
