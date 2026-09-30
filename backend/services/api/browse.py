@@ -403,7 +403,7 @@ def audience_tree_sources(connection: Connection, audience: str | None) -> tuple
         return (f"SELECT node.*, true AS audience_selectable FROM ({ORG_UNIT_NODE_SQL}) node",
                 f"SELECT node.*, true AS audience_selectable FROM ({ROLE_NODE_SQL}) node")
     administrator = connection.execute(
-        "SELECT user_has_global_privilege(current_user_id(),'search.saved_search.administrator') AS allowed"
+        "SELECT user_has_global_privilege(current_user_id(),'search.saved_search.administer') AS allowed"
     ).fetchone()["allowed"]
     roles = audience_eligibility_sql("roles", administrator=administrator)
     units = audience_eligibility_sql("org-units", administrator=administrator)

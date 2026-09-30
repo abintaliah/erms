@@ -228,6 +228,42 @@ def test_sharing_definition_does_not_grant_record_view(client):
     assert denied.json()["detail"]["code"] == "resource_view_required"
 
 
+def test_information_governance_role_bypasses_saved_search_audience(client):
+    password = "Saved-Search-Governance-123!"
+    created = client.post("/api/v1/saved-searches", json=_payload())
+    assert created.status_code == 201, created.text
+    saved_id = created.json()["id"]
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        profile_id = connection.execute(
+            "INSERT INTO profiles(code,name) VALUES ('SAVED_SEARCH_GOV','Saved search governance') RETURNING id"
+        ).fetchone()[0]
+        connection.execute(
+            """INSERT INTO profile_privileges(profile_id,privilege_id)
+               SELECT %s,id FROM privileges WHERE code='record.view'""", (profile_id,),
+        )
+        user_id = connection.execute(
+            "INSERT INTO users(name,email) VALUES ('Governance Search User','governance-search@test.invalid') RETURNING id"
+        ).fetchone()[0]
+        role_id = connection.execute(
+            """INSERT INTO roles(org_unit_id,code,name,profile_id,is_information_governance)
+               VALUES (1,'saved-search-governance-role','Saved search governance role',%s,true) RETURNING id""",
+            (profile_id,),
+        ).fetchone()[0]
+        connection.execute("INSERT INTO user_role_assignments(user_id,role_id) VALUES (%s,%s)", (user_id, role_id))
+        connection.execute(
+            "INSERT INTO user_credentials(user_id,password_hash,must_change_password) VALUES (%s,%s,false)",
+            (user_id, hash_password(password)),
+        )
+    login = client.post("/api/v1/auth/login", json={
+        "email": "governance-search@test.invalid", "password": password,
+    })
+    assert login.status_code == 200
+    client.headers["X-CSRF-Token"] = client.cookies.get("erms_csrf")
+    assert client.get("/api/v1/saved-searches", params={"scope": "all"}).json()["items"] == []
+    executed = client.post(f"/api/v1/saved-searches/{saved_id}/execute", json={})
+    assert executed.status_code == 200, executed.text
+
+
 def test_administration_filters_and_execution_does_not_create_history(client):
     private = client.post("/api/v1/saved-searches", json=_payload(
         name="Small finance search", category="Finance", definition=_definition(maximum=50),

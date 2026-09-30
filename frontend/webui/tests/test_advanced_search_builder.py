@@ -224,10 +224,10 @@ def test_relevance_sort_refreshes_when_full_text_becomes_valid():
     assert 'update_search_enabled(), refresh_sort_options(), persist_workspace(),' in sources_handler[:300]
 
 
-def test_saved_search_administrator_sees_system_inventory_under_all():
+def test_saved_search_dialog_never_uses_system_inventory():
     advanced_search = APP_SOURCE[APP_SOURCE.index("async def select_advanced_search"):]
     dialog = advanced_search[advanced_search.index("async def open_saved_search_dialog"):]
-    assert 'administrator = "search.saved_search.administrator" in privileges' in dialog
+    assert "administrator = False" in dialog
     assert 'administrative_all = administrator and scope_control.value == "all"' in dialog
     assert 'api.saved_search_administration(**params) if administrative_all' in dialog
     assert 'ui.button("Administration"' not in advanced_search
