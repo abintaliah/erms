@@ -1979,6 +1979,12 @@ def index(q: str = "") -> None:
         html[dir="rtl"] .classification-transfer-dialog .q-field__label {
             left: auto; right: 0; transform-origin: right top;
         }
+        /* The document direction already places the first heading item at the
+           reading start.  The legacy global .row reversal would reverse it a
+           second time and put the child-aggregation heading on the left. */
+        html[dir="rtl"] .aggregation-child-section-heading {
+            flex-direction: row;
+        }
         html[dir="rtl"] .q-btn__content { flex-direction: row-reverse; }
         /* Detail action groups must wrap from the reading start. NiceGUI Row
            offers wrap/align_items, not direction; grids cannot preserve these
@@ -9952,7 +9958,9 @@ def index(q: str = "") -> None:
                                 ui.label(render_message("webui.open_aggregation.label.no_hold_actions_are_available_c0a40db4")).classes("text-xs text-slate-500")
                     aggregation_command_side.__exit__(None, None, None)
 
-                with ui.row().classes("w-full items-center px-5 pt-1"):
+                with ui.row().classes(
+                    "aggregation-child-section-heading w-full items-center px-5 pt-1"
+                ):
                     ui.label(render_message("webui.open_aggregation.label.child_aggregations_cd3bce3a")).classes("text-base font-semibold text-slate-800")
                     ui.space()
                     ui.label(render_message("webui.open_aggregation.label.children_count_children_0b322dbd", children_count=child_total)).classes("text-xs text-slate-500")

@@ -623,6 +623,15 @@ def test_resource_detail_headers_mirror_identity_and_actions_in_rtl():
     assert 'ui.icon("description", color="primary", size="18px").classes("w-6")' in source
 
 
+def test_child_aggregation_section_heading_stays_at_rtl_reading_start():
+    source = with_english_messages(inspect.getsource(index))
+    assert '"aggregation-child-section-heading w-full items-center px-5 pt-1"' in source
+    rtl_rule = source.split(
+        'html[dir="rtl"] .aggregation-child-section-heading {', 1
+    )[1].split("}", 1)[0]
+    assert "flex-direction: row;" in rtl_rule
+
+
 def test_record_details_uses_the_approved_right_hand_control_column():
     source = with_english_messages(inspect.getsource(index))
     assert '"record-command-layout w-full"' in source

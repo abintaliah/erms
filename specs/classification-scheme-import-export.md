@@ -963,10 +963,12 @@ copies remain. This was an operational draft update, not a test against a
 persistent database or automatic publication. API startup intentionally does
 not seed generated translations; artifact updates require explicit draft seeding.
 
-The full policy-inventory generator also encounters a pre-existing unclassified
-`GET /api/v1/number-suggestions/{resource}` operation. The two transfer route
-entries are recorded with the approved existing privilege; resolving that
-unrelated policy mapping is not claimed by this change.
+The previously unclassified
+`GET /api/v1/number-suggestions/{resource}` operation is now recorded as
+`relationship_scoped`, reflecting its runtime selection of the applicable
+creation privilege and its additional parent-visibility check when a parent
+aggregation supplies the numbering context. The two transfer route entries
+remain recorded with the approved existing privilege.
 The no-role viewer also exposed an existing dashboard storage-chart error when
 the authorized unit list is empty (`max(1, *empty)`); transfer identity isolation
 remained intact. That unrelated dashboard defect is not changed here.
