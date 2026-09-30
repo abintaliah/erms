@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "d781f7f20800a81cb971b26cf60daf232e097ea8fab86e2473d540347ea40c24",
+  "catalogue_sha256": "1aafce9b96af39851c56fb2893fabd23272f2bc5f23956c90b3b12a004a3337e",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260929040036",
   "generated_at": "2026-09-29T04:00:36.438919+04:00",
@@ -14869,6 +14869,16 @@
         "source_status": "published",
         "date_reviewed": "2026-09-27T05:36:02.357506+00:00",
         "date_published": "2026-09-27T05:36:02.357506+00:00"
+      }
+    },
+    {
+      "message_key": "webui.open_aggregation.retention.calculated_disposition_date",
+      "translated_text": "تاريخ التصرف المحسوب",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "source_origin": "generated",
+        "source_status": "draft"
       }
     },
     {

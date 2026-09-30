@@ -18149,6 +18149,20 @@
     "is_html": false
   },
   {
+    "message_key": "webui.open_aggregation.retention.calculated_disposition_date",
+    "context_group": "webui.open_aggregation.retention",
+    "default_text": "Calculated disposition date",
+    "semantic_meaning": "Calendar date obtained by adding both retention periods to the governing root aggregation closure date; not authorization to dispose.",
+    "common_locations": [
+      "Aggregation details retention section"
+    ],
+    "translator_guidance": "Disposition is the final action prescribed by the retention rule, not necessarily destruction. This date does not waive safeguards.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Calculated disposition date",
+    "is_html": false
+  },
+  {
     "message_key": "webui.open_aggregation.retention.records_storage",
     "context_group": "webui.open_aggregation.retention",
     "default_text": "Records storage",

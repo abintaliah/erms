@@ -17,7 +17,7 @@ from nicegui import app, background_tasks, context, events, ui
 
 from .api_client import ApiError, ErmsApiClient
 from .classification_workspace import classification_workspace
-from .retention_timeline import render_retention_stages
+from .retention_timeline import render_disposition_date, render_retention_stages
 from .capabilities import (
     capability_allowed,
     can_add_from_collection,
@@ -9880,6 +9880,11 @@ def index(q: str = "") -> None:
                                     ui.label(source_text).classes("text-xs text-sky-700")
                                 ui.badge(render_message("webui.open_aggregation.badge.effective_a28f890c"), color="primary").props("outline")
                             render_retention_stages(effective_rule, localized_disposition_value)
+                            render_disposition_date(
+                                effective_rule,
+                                aggregation_context_by_id.get(effective_rule["governing_root_aggregation_id"]),
+                                *current_locale_context(),
+                            )
                             with ui.element("div").classes("aggregation-retention-footer w-full"):
                                 if classification_path:
                                     classification_text = " › ".join(

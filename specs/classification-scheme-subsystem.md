@@ -316,8 +316,8 @@ restores the root's classification-derived effective rule.
 Local rules may be used later by an authorized records administrator during
 disposition review to prolong an aggregation's retention or prevent the
 classification-derived disposition from applying. This iteration stores and
-displays the override but does not calculate disposal dates or execute a
-disposition workflow. Formal legal/regulatory holds remain a future,
+displays the override and the calculated disposition date described below,
+but does not execute a disposition workflow. Formal legal/regulatory holds remain a future,
 separately-modelled capability rather than being hidden inside unusually large
 retention periods.
 
@@ -707,6 +707,23 @@ effective. When present, it displays the local rule prominently, shows the
 classification-derived rule it supersedes, and provides edit/remove actions.
 Child aggregation views show the same governing information without local-rule
 actions.
+
+For a closed governing root, the retention section displays **Calculated
+disposition date** below the three retention stages and above the provenance
+footer, followed by **Date closed**. It does not repeat the retention periods.
+The date is the root's closure date in the user's working timezone plus the
+sum of the effective current and intermediate periods in calendar years.
+A February 29 anniversary falls on February 28 when the target year is not a
+leap year. Child details use the same governing root date, not a child's
+independent closure date. No calculated date is shown when the governing root
+is open or unavailable, or its effective periods are unavailable. Dates follow
+the active language's date formatting. This is informational and does not
+override holds, confer eligibility, or execute disposition.
+
+Implementation: `frontend/webui/retention_timeline.py` and the aggregation
+details renderer in `frontend/webui/app.py`. Calendar arithmetic, leap years,
+timezone boundaries, and absent inputs are covered by
+`frontend/webui/tests/test_retention_timeline.py`.
 
 ## 16. Audit history
 

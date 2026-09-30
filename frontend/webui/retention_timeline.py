@@ -1,9 +1,51 @@
 """Shared, direction-aware three-stage retention presentation."""
+from calendar import monthrange
+from datetime import date, datetime
 from typing import Any, Callable
 
 from nicegui import ui
 
 from .i18n_catalogue import render_message
+from .locale_services import format_local_date, utc_instant_to_working
+
+
+def disposition_dates(
+    rule: dict[str, Any], governing_root: dict[str, Any] | None, timezone_name: str,
+) -> tuple[date, date] | None:
+    """Return closure and calculated disposition dates for the root disposition unit."""
+    if not governing_root or not governing_root.get("date_closed"):
+        return None
+    periods = (rule.get("current_period_years"), rule.get("intermediate_period_years"))
+    if any(type(period) is not int or period < 0 for period in periods):
+        return None
+    try:
+        instant = governing_root["date_closed"]
+        if isinstance(instant, str):
+            instant = datetime.fromisoformat(instant.replace("Z", "+00:00"))
+        closed = utc_instant_to_working(instant, timezone_name).date()
+        year = closed.year + sum(periods)
+        due = closed.replace(year=year, day=min(closed.day, monthrange(year, closed.month)[1]))
+    except (ValueError, TypeError, OverflowError):
+        return None
+    return closed, due
+
+
+def render_disposition_date(
+    rule: dict[str, Any], governing_root: dict[str, Any] | None,
+    language: str, timezone_name: str,
+) -> None:
+    dates = disposition_dates(rule, governing_root, timezone_name)
+    if dates is None:
+        return
+    closed, due = dates
+    with ui.row().classes("w-full items-start gap-3 rounded-lg bg-blue-50 p-4"):
+        ui.icon("event", color="primary").classes("text-2xl")
+        with ui.column().classes("min-w-0 gap-1"):
+            ui.label(render_message("webui.open_aggregation.retention.calculated_disposition_date")).classes("text-sm font-semibold text-slate-800")
+            ui.label(format_local_date(due, language)).classes("text-xl font-semibold text-slate-900")
+            with ui.row().classes("items-baseline gap-1 text-xs text-slate-500"):
+                ui.label(render_message("entity_metadata.field.date_closed"))
+                ui.label(format_local_date(closed, language))
 
 
 def render_retention_stages(rule: dict[str, Any], disposition_label: Callable) -> None:
