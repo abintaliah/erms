@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "f0936e4fe2d4e3e8f0302ba3b024115d4def0a7530b33d01d526f11d8884b11b",
+  "catalogue_sha256": "6d1daeac8e8bc8466d21dab023463d3930e039be076746063bcc6f49720078a1",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260929040036",
   "generated_at": "2026-09-29T04:00:36.438919+04:00",
@@ -91,6 +91,47 @@
     ],
     "webui.select_governance_custody.label.custodian_count_active_value_currently_qua_5dd0d9d6": [
       "يتأهل حالياً {custodian_count} من {value} النشطين عبر {qualifying_role_count} من {value_2} الحوكمة و{qualifying_assignment_count} من {value_3} الحالية."
+    ],
+    "classification_transfer.error.duplicate_code": [
+      "رمز خطة التصنيف أو التصنيف موجود بالفعل. لم يُستورد أي شيء."
+    ],
+    "classification_transfer.error.invalid_package": [
+      "الملف ليس تصديرًا صالحًا لخطة تصنيف. لم يُستورد أي شيء.",
+      "الملف ليس تصديرًا صالحًا لنظام تصنيف. لم يُستورد أي شيء."
+    ],
+    "classification_transfer.import_hint": [
+      "اختر ملف تصدير JSON أو CSV من واثق. ستُستورد خطة التصنيف كمسودة غير منشورة.",
+      "اختر ملف تصدير JSON أو CSV من وثق. ستُستورد نظام التصنيف كمسودة غير منشورة."
+    ],
+    "classification_transfer.import_title": [
+      "استيراد خطة تصنيف"
+    ],
+    "classification_transfer.success": [
+      "تم استيراد خطة التصنيف كمسودة غير منشورة."
+    ],
+    "classification_transfer.authority": [
+      "الجهة المعتمدة"
+    ],
+    "classification_transfer.current_period_years": [
+      "الاستبقاء الجاري (بالسنوات)"
+    ],
+    "classification_transfer.error.revision_unavailable": [
+      "بيانات مراجعة التطبيق غير متاحة."
+    ],
+    "classification_transfer.exported_at": [
+      "تاريخ التصدير"
+    ],
+    "classification_transfer.exported_by": [
+      "صدّره"
+    ],
+    "classification_transfer.intermediate_period_years": [
+      "الاستبقاء الوسيط (بالسنوات)"
+    ],
+    "classification_transfer.parent_code": [
+      "رمز الأصل"
+    ],
+    "classification_transfer.working": [
+      "جارٍ المعالجة…"
     ]
   },
   "items": [
@@ -2624,6 +2665,668 @@
         "source_status": "published",
         "date_reviewed": "2026-09-28T09:31:33.877240+00:00",
         "date_published": "2026-09-28T09:31:33.877240+00:00"
+      }
+    },
+    {
+      "message_key": "classification_browser.add_child",
+      "translated_text": "تصنيف فرعي",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614640+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_browser.add_root",
+      "translated_text": "تصنيف جذري",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614637+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_browser.back_to_tree",
+      "translated_text": "العودة إلى شجرة التصنيف",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614614+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_browser.retry",
+      "translated_text": "إعادة المحاولة",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614645+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_browser.toggle_branch",
+      "translated_text": "توسيع التصنيف أو طيه",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614650+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_browser.toggle_scheme",
+      "translated_text": "توسيع نظام التصنيف أو طيه",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-browser-v1",
+        "generated_at": "2026-09-29T08:26:11.614648+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_details.actions.audit",
+      "translated_text": "التدقيق",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-action-panel-v1",
+        "generated_at": "2026-09-29T09:08:54.377001+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_details.actions.classification",
+      "translated_text": "إجراءات التصنيف",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-action-panel-v1",
+        "generated_at": "2026-09-29T09:08:54.376995+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_details.actions.lifecycle",
+      "translated_text": "دورة الحياة",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-action-panel-v1",
+        "generated_at": "2026-09-29T09:08:54.376999+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_details.actions.metadata",
+      "translated_text": "البيانات الوصفية والتسلسل الهرمي",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-action-panel-v1",
+        "generated_at": "2026-09-29T09:08:54.376997+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_details.actions.scheme",
+      "translated_text": "إجراءات نظام التصنيف",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "classification-action-panel-v1",
+        "generated_at": "2026-09-29T09:08:54.376611+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.authority",
+      "translated_text": "المرجعية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.cancel",
+      "translated_text": "إلغاء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.choose_file",
+      "translated_text": "اختر ملف JSON أو CSV",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.code",
+      "translated_text": "الرمز",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.current_period_years",
+      "translated_text": "مدة الاستبقاء الجاري (بالسنوات)",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.database_name",
+      "translated_text": "قاعدة البيانات المصدر",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.date_created",
+      "translated_text": "تاريخ الإنشاء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.date_deactivated",
+      "translated_text": "تاريخ التعطيل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.date_first_used",
+      "translated_text": "تاريخ أول استخدام",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.date_published",
+      "translated_text": "تاريخ النشر",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.date_updated",
+      "translated_text": "تاريخ التحديث",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.description",
+      "translated_text": "الوصف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.download",
+      "translated_text": "تنزيل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.edition",
+      "translated_text": "الإصدار",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.empty",
+      "translated_text": "لا توجد تصنيفات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.checksum_mismatch",
+      "translated_text": "لا يتطابق المجموع الاختباري مع محتويات الملف. لم يُستورد أي شيء.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.duplicate_code",
+      "translated_text": "رمز نظام التصنيف أو التصنيف موجود بالفعل. لم يُستورد أي شيء.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.file_too_large",
+      "translated_text": "يتجاوز ملف التصدير الحد الأقصى للحجم المدعوم.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.invalid_package",
+      "translated_text": "الملف ليس ملف تصدير صالحًا لنظام تصنيف. لم يُستورد أي شيء.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.revision_unavailable",
+      "translated_text": "بيانات إصدار التطبيق غير متاحة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.error.unsupported_language",
+      "translated_text": "يتضمن ملف التصدير لغة غير مدعومة أو معطلة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.explicit",
+      "translated_text": "قاعدة صريحة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.export",
+      "translated_text": "تصدير",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.exported_at",
+      "translated_text": "تاريخ التصدير ووقته",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.exported_by",
+      "translated_text": "صدّره المستخدم",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.final_disposition",
+      "translated_text": "التصرف النهائي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.import",
+      "translated_text": "استيراد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.import_hint",
+      "translated_text": "اختر ملف تصدير بصيغة JSON أو CSV من وثق. سيُستورد نظام التصنيف بصفته مسودة غير منشورة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.import_title",
+      "translated_text": "استيراد نظام تصنيف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.inherited",
+      "translated_text": "موروثة من",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.instructions",
+      "translated_text": "التعليمات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.intermediate_period_years",
+      "translated_text": "مدة الاستبقاء الوسيط (بالسنوات)",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.is_terminal",
+      "translated_text": "تصنيف نهائي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.keywords",
+      "translated_text": "الكلمات المفتاحية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.landscape",
+      "translated_text": "أفقي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.language",
+      "translated_text": "لغة المستند",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.legend",
+      "translated_text": "المستوى 0 هو الجذر. تشير المسافة البادئة وتظليل الصفوف إلى عمق التسلسل الهرمي.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.level",
+      "translated_text": "المستوى",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.metadata",
+      "translated_text": "البيانات الوصفية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.no",
+      "translated_text": "لا",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.none",
+      "translated_text": "لا يوجد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.parent_code",
+      "translated_text": "رمز التصنيف الأصل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.retention_rule",
+      "translated_text": "قاعدة الاستبقاء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.scope_note",
+      "translated_text": "ملاحظة النطاق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.source_id",
+      "translated_text": "معرّف المصدر",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.success",
+      "translated_text": "تم استيراد نظام التصنيف كمسودة غير منشورة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.title",
+      "translated_text": "العنوان",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.translations",
+      "translated_text": "الترجمات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.value",
+      "translated_text": "القيمة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.version",
+      "translated_text": "النسخة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.word_title",
+      "translated_text": "تصدير إلى MS Word",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.working",
+      "translated_text": "المعالجة جارية…",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "classification_transfer.yes",
+      "translated_text": "نعم",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "generator": "codex",
+        "review_required": true
       }
     },
     {
@@ -7703,6 +8406,24 @@
       }
     },
     {
+      "message_key": "saved_search.administration.filter.created_before",
+      "translated_text": "أُنشئ قبل",
+      "quality_flags": [],
+      "provenance": {"kind": "generated", "generated_by": "OpenAI", "review_state": "unreviewed"}
+    },
+    {
+      "message_key": "saved_search.administration.filter.created_from",
+      "translated_text": "أُنشئ بدءًا من",
+      "quality_flags": [],
+      "provenance": {"kind": "generated", "generated_by": "OpenAI", "review_state": "unreviewed"}
+    },
+    {
+      "message_key": "saved_search.administration.filter.owner",
+      "translated_text": "اسم المالك أو بريده الإلكتروني",
+      "quality_flags": [],
+      "provenance": {"kind": "generated", "generated_by": "OpenAI", "review_state": "unreviewed"}
+    },
+    {
       "message_key": "saved_search.error.name_exists",
       "translated_text": "لديك بحث محفوظ بهذا الاسم بالفعل. اختر اسمًا مختلفًا.",
       "quality_flags": [],
@@ -7712,6 +8433,18 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
         "date_published": "2026-09-26T13:44:17.672002+00:00"
+      }
+    },
+    {
+      "message_key": "saved_search.error.unavailable",
+      "translated_text": "لم يعد هذا البحث المحفوظ موجودًا، أو لم تعد لديك صلاحية الوصول إليه.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T11:11:50.290555+04:00",
+        "date_published": "2026-09-29T11:11:50.290555+04:00"
       }
     },
     {
@@ -7736,6 +8469,16 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
         "date_published": "2026-09-26T13:44:17.672002+00:00"
+      }
+    },
+    {
+      "message_key": "security_level.selection.constraints",
+      "translated_text": "لا تتجاوز درجات السرية المتاحة أعلى تصريح أمني تمنحه أدوارك الفعّالة، ولا درجة سرية الملف الحاوي عند تحديده. ولا يمكن خفض درجة سرية ملف إلى ما دون درجة سرية محتوياته.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "source_origin": "generated",
+        "source_status": "draft"
       }
     },
     {
@@ -10568,6 +11311,16 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
         "date_published": "2026-09-26T13:44:17.672002+00:00"
+      }
+    },
+    {
+      "message_key": "webui.hold_reason_dialog.remove_all_confirmation",
+      "translated_text": "هل تريد إزالة جميع حالات التعليق المسندة مباشرة؟ ستظل الحماية الموروثة من الملفات الحاوية سارية.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "source_origin": "generated",
+        "source_status": "draft"
       }
     },
     {
@@ -14147,6 +14900,16 @@
       }
     },
     {
+      "message_key": "webui.open_aggregation.retention.calculated_disposition_date",
+      "translated_text": "تاريخ التصرف المحسوب",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "source_origin": "generated",
+        "source_status": "draft"
+      }
+    },
+    {
       "message_key": "webui.open_aggregation.retention.records_storage",
       "translated_text": "حفظ الوثائق",
       "quality_flags": [],
@@ -17555,150 +18318,6 @@
       }
     },
     {
-      "message_key": "webui.render_detail_content.badge.closed_a5e8b91f",
-      "translated_text": "مغلق",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_detail_content.button.open_aggregation_b78f84c7",
-      "translated_text": "فتح الملف",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_detail_content.button.open_record_2cdef6ca",
-      "translated_text": "فتح الوثيقة",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_detail_content.label.effective_retention_rule_d14a3565",
-      "translated_text": "قاعدة الحفظ الفعلية",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_detail_content.label.loading_retention_information_0c61089c",
-      "translated_text": "جارٍ تحميل معلومات الحفظ…",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_detail_content.label.no_effective_retention_rule_is_available_4d243b93",
-      "translated_text": "لا تتوفر قاعدة حفظ فعلية.",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_detail_content.label.select_an_aggregation_or_record_to_see_its_357a0fb1",
-      "translated_text": "اختر ملفًا أو وثيقة لعرض تفاصيلها.",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_detail_content.text.inherited_from_aggregation_number_title_00829b69",
-      "translated_text": "· موروث من {aggregation_number} — {title}",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_detail_content.text.inherited_from_aggregation_source_id_ed94bee8",
-      "translated_text": "· مستمد من الملف #{source_id}",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_detail_content.text.inherited_from_classification_1708e778",
-      "translated_text": "مستمد من التصنيف",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_detail_content.text.local_aggregation_override_7185c566",
-      "translated_text": "تجاوز محلي للملف",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_detail_content.text.set_here_1d585734",
-      "translated_text": "· محدّد هنا",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
       "message_key": "webui.render_detail_content.text.unknown_d3c1ce73",
       "translated_text": "غير معروف",
       "quality_flags": [],
@@ -19835,18 +20454,6 @@
       }
     },
     {
-      "message_key": "webui.render_scheme_list.label.counts_loading_1ffb90cd",
-      "translated_text": "جارٍ تحميل الأعداد…",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
       "message_key": "webui.render_scheme_list.label.no_matching_schemes_2a601365",
       "translated_text": "لا توجد نظم تصنيف مطابقة",
       "quality_flags": [],
@@ -19856,18 +20463,6 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
         "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_scheme_list.text.no_description_7f023195",
-      "translated_text": "لا يوجد وصف",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
       }
     },
     {
@@ -21191,30 +21786,6 @@
       }
     },
     {
-      "message_key": "webui.render_workspace_right.label.its_information_will_appear_here_bc4769c5",
-      "translated_text": "ستظهر معلوماته هنا.",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.label.its_metadata_and_effective_retention_rule_f231c468",
-      "translated_text": "ستظهر بياناته الوصفية وقاعدة الحفظ الفعلية هنا.",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
       "message_key": "webui.render_workspace_right.label.no_classifications_match_this_search_3e1025e9",
       "translated_text": "لا توجد تصنيفات تطابق هذا البحث.",
       "quality_flags": [],
@@ -21260,42 +21831,6 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
         "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.label.select_a_classification_192337f3",
-      "translated_text": "اختر تصنيفًا",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.label.select_a_classification_scheme_825fcd9e",
-      "translated_text": "اختر نظام تصنيف",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.label.select_a_scheme_to_browse_its_classificati_afdd23e3",
-      "translated_text": "اختر نظام تصنيف لاستعراض تصنيفاته.",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
       }
     },
     {
@@ -21553,30 +22088,6 @@
     {
       "message_key": "webui.render_workspace_right.tooltip.schemes_that_have_governed_aggregations_ca_423d00b9",
       "translated_text": "لا يمكن إلغاء نشر نظم التصنيف التي تحتوي على ملفات خاضعة للحوكمة",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.tooltip.select_a_branch_classification_before_addi_b9ec1645",
-      "translated_text": "اختر تصنيفًا فرعيًا قبل إضافة تصنيف تابع",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
-      "message_key": "webui.render_workspace_right.tooltip.terminal_classifications_cannot_contain_ch_80c2bf31",
-      "translated_text": "لا يمكن أن تحتوي التصنيفات النهائية على تصنيفات تابعة",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",
@@ -22355,6 +22866,78 @@
       }
     },
     {
+      "message_key": "webui.saved_audience.roles_help",
+      "translated_text": "يمكنك اختيار أدوارك النشطة. ويمكن لمسؤولي عمليات البحث المحفوظة اختيار أي دور نشط مؤهل.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:28:37.214484+04:00",
+        "date_published": "2026-09-29T10:28:37.214484+04:00"
+      }
+    },
+    {
+      "message_key": "webui.saved_audience.units_help",
+      "translated_text": "يمكنك اختيار الوحدات التنظيمية المرتبطة بأدوارك النشطة. ويمكن لمسؤولي عمليات البحث المحفوظة اختيار أي وحدة تنظيمية نشطة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:28:37.214484+04:00",
+        "date_published": "2026-09-29T10:28:37.214484+04:00"
+      }
+    },
+    {
+      "message_key": "webui.saved_search_metadata.audience",
+      "translated_text": "مشاركة مع الأدوار: {roles}، والوحدات التنظيمية: {units}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:40:32.898819+04:00",
+        "date_published": "2026-09-29T10:40:32.898819+04:00"
+      }
+    },
+    {
+      "message_key": "webui.saved_search_metadata.owned",
+      "translated_text": "أنت المالك",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:40:32.898819+04:00",
+        "date_published": "2026-09-29T10:40:32.898819+04:00"
+      }
+    },
+    {
+      "message_key": "webui.saved_search_metadata.shared_by",
+      "translated_text": "مشاركة من {owner}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:40:32.898819+04:00",
+        "date_published": "2026-09-29T10:40:32.898819+04:00"
+      }
+    },
+    {
+      "message_key": "webui.saved_search_metadata.uncategorized",
+      "translated_text": "بلا فئة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-09-29T10:40:32.898819+04:00",
+        "date_published": "2026-09-29T10:40:32.898819+04:00"
+      }
+    },
+    {
       "message_key": "webui.security_level_remedy.description.downgrade_subtree",
       "translated_text": "عند خفض درجة سرية ملف، يخفض وثق أيضاً درجات سرية الملفات الفرعية والوثائق التي ستتجاوز الدرجة المسموح بها. قد يؤثر ذلك في موارد عديدة، لذا تُعرض الآثار أثناء المراجعة.",
       "quality_flags": [],
@@ -23075,18 +23658,6 @@
       }
     },
     {
-      "message_key": "webui.select_classification_workspace.label.classification_schemes_6020e95d",
-      "translated_text": "نظم التصنيف",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
-        "date_published": "2026-09-26T13:44:17.672002+00:00"
-      }
-    },
-    {
       "message_key": "webui.select_classification_workspace.select.code_d3581de2",
       "translated_text": "الرمز",
       "quality_flags": [],
@@ -23149,18 +23720,6 @@
     {
       "message_key": "webui.select_classification_workspace.text.build_and_govern_classification_hierarchie_1766e961",
       "translated_text": "إنشاء التسلسلات الهرمية للتصنيف وحوكمتها ضمن سياقها",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "generated",
-        "source_status": "published",
-        "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
-        "date_published": "2026-09-26T16:20:14.562571+00:00"
-      }
-    },
-    {
-      "message_key": "webui.select_classification_workspace.text.classification_schemes_79225ac9",
-      "translated_text": "نظم التصنيف",
       "quality_flags": [],
       "provenance": {
         "kind": "admin_catalogue_export",

@@ -237,6 +237,13 @@ language/timezone values, actor, time, and request correlation ID.
 
 ## 7. UI message catalogue
 
+The signed-in account menu displays the user's, assigned roles', and organization
+units' localized names using the effective user language and the existing entity
+fallback rules. Avatar initials use the displayed user name. Email addresses,
+codes, identity IDs, and authorization behavior remain unchanged. Login and
+`/auth/me` supply localized projections alongside canonical names so the menu
+does not fetch each assigned entity separately.
+
 ### 7.1 Key contract
 
 Every application-owned user-visible message must be addressed by a stable,

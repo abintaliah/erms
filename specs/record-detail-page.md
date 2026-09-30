@@ -25,8 +25,12 @@ aggregation's dedicated page.
 
 ## Record metadata and actions
 
-The page header shows the record title, record number, icon, and favourite
-control. It exposes the existing Edit, Delete, and Event history actions.
+The page header shows the record title, record number, icon, Favourite, Preview
+when an eligible component exists, and Back controls. The identity icon stays
+beside the title at the reading start; Favourite, Preview, and Back form the
+opposite-side action group. In Arabic, the header mirrors this placement and
+Back uses a right-pointing arrow after its label. It exposes the existing Edit,
+Delete, and Event history actions.
 Edit and Delete are unavailable when the containing aggregation hierarchy makes
 the record read-only. The page explains that inherited closure explicitly.
 

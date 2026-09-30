@@ -14,6 +14,7 @@ from psycopg import Connection
 
 from .config import boolean_environment, integer_environment
 from .database import get_connection
+from .entity_localization import localized_projection, preferred_language_for_user
 from .authorization_policy import (
     load_policy_context,
     require_identity_sessions_admin,
@@ -64,8 +65,9 @@ def validate_password(password: str) -> None:
 def _roles(connection: Connection, user_id: int) -> list[dict[str, Any]]:
     return list(connection.execute(
         """
-        SELECT r.id, r.code, r.name,
-               jsonb_build_object('id', ou.id, 'code', ou.code, 'name', ou.name) AS org_unit
+        SELECT r.id, r.code, r.name, r.translations,
+               jsonb_build_object('id', ou.id, 'code', ou.code, 'name', ou.name,
+                                  'translations', ou.translations) AS org_unit
         FROM user_role_assignments ura
         JOIN roles r ON r.id = ura.role_id AND r.status = 'active'
         JOIN org_units ou ON ou.id = r.org_unit_id
@@ -284,9 +286,24 @@ def _previous_login_at(connection: Connection, principal: Principal) -> datetime
 
 def principal_response(principal: Principal, connection: Connection) -> dict[str, Any]:
     policy = load_policy_context(connection, principal)
+    language = preferred_language_for_user(connection, principal.user_id)
+    user = dict(connection.execute(
+        "SELECT id,name,email,account_type,translations FROM users WHERE id=%s",
+        (principal.user_id,),
+    ).fetchone())
+    user["localized"] = localized_projection(user, language, "name")
+    user.pop("translations", None)
+    roles = []
+    for source in principal.roles:
+        role = {key: value for key, value in source.items() if key != "translations"}
+        role["localized"] = localized_projection(source, language, "name")
+        unit = source["org_unit"]
+        role["org_unit"] = {key: value for key, value in unit.items() if key != "translations"}
+        role["org_unit"]["localized"] = localized_projection(unit, language, "name")
+        roles.append(role)
     return {
-        "user": {"id": principal.user_id, "name": principal.name, "email": principal.email, "account_type": principal.account_type},
-        "roles": principal.roles,
+        "user": user,
+        "roles": roles,
         "session": {"id": principal.session_id},
         "must_change_password": principal.must_change_password,
         "previous_login_at": _previous_login_at(connection, principal),

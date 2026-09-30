@@ -305,3 +305,74 @@ def test_organization_unit_selector_mode_can_omit_roles(client: TestClient):
     )
     assert response.status_code == 200
     assert response.json()["roles"] == []
+
+
+def test_organization_sibling_codes_are_natural_and_units_precede_all_roles(client):
+    root = client.post('/api/v1/org-units', json={'code': 'SORT', 'name': 'Sort'}).json()
+    for number in (10, 2, 1):
+        for resource, payload in (
+            ('org-units', {'parent_org_unit_id': root['id']}),
+            ('roles', {'org_unit_id': root['id']}),
+        ):
+            response = client.post('/api/v1/' + resource, json={
+                **payload, 'code': f'S-{number}', 'name': f'Name {number}',
+            })
+            assert response.status_code == 201, response.text
+    url = f"/api/v1/browse/organization/org-units/{root['id']}/children"
+    unit_offset = role_offset = 0
+    observed = []
+    for _ in range(10):
+        response = client.get(url, params={'limit': 1, 'unit_offset': unit_offset, 'role_offset': role_offset})
+        assert response.status_code == 200, response.text
+        page = response.json()
+        observed.extend(('unit', row['code']) for row in page['org_units'])
+        observed.extend(('role', row['code']) for row in page['roles'])
+        if page['more_org_units']:
+            assert page['roles'] == [] and page['more_roles']
+        unit_offset += len(page['org_units'])
+        role_offset += len(page['roles'])
+        if not page['more_org_units'] and not page['more_roles']:
+            break
+    assert observed == [(kind, f'S-{n}') for kind in ('unit', 'role') for n in (1, 2, 10)]
+    without_roles = client.get(url, params={'limit': 1, 'include_roles': False}).json()
+    assert without_roles['roles'] == [] and not without_roles['more_roles']
+    for number in (10, 2, 1):
+        assert client.post('/api/v1/org-units', json={'code': f'A-{number}', 'name': f'Root {number}'}).status_code == 201
+    assert [client.get('/api/v1/browse/organization/roots', params={'limit': 1, 'offset': i}).json()[0]['code'] for i in range(3)] == ['A-1', 'A-2', 'A-10']
+
+
+def test_organization_users_sort_displayed_names_before_pagination(client, monkeypatch):
+    role = client.post('/api/v1/roles', json={'code': 'SORT', 'name': 'Sort', 'org_unit_id': 1}).json()
+    people = []
+    for index, (name, arabic) in enumerate((('Zebra', 'أحمد'), ('alice', 'زيد'), ('Bob', 'باسم'), ('Bob', 'باسم'))):
+        person = client.post('/api/v1/users', json={'name': name, 'email': f'sort{index}@example.test', 'account_type': 'person'}).json()
+        response = client.patch(f"/api/v1/entity-translations/users/{person['id']}/ar", json={'name': arabic}, headers={'If-Match': str(person['version']), 'X-Change-Reason': 'Verify sorting'})
+        assert response.status_code == 200, response.text
+        assert client.post('/api/v1/user-role-assignments', json={'user_id': person['id'], 'role_id': role['id']}).status_code == 201
+        people.append(person['id'])
+    url = f"/api/v1/browse/organization/roles/{role['id']}/users"
+    def paged():
+        rows = []
+        for offset in range(4):
+            response = client.get(url, params={'limit': 1, 'offset': offset})
+            assert response.status_code == 200, response.text
+            rows.extend(response.json())
+        return rows
+    assert [row['id'] for row in paged()] == [people[i] for i in (1, 2, 3, 0)]
+    preference = client.get('/api/v1/preferences').json()
+    response = client.put('/api/v1/preferences', headers={'If-Match': str(preference['version'])}, json={'language_tag': 'ar', 'working_timezone': 'Asia/Dubai'})
+    assert response.status_code == 200, response.text
+    rows = paged()
+    assert [row['id'] for row in rows] == [people[i] for i in (0, 2, 3, 1)]
+    assert [row['name'] for row in rows] == ['أحمد', 'باسم', 'باسم', 'زيد']
+
+    from backend.services.api import browse
+    monkeypatch.setattr(browse, 'preferred_language', lambda *_: 'ar-AE')
+    assert [row['id'] for row in paged()] == [people[i] for i in (0, 2, 3, 1)]
+    fallback = client.post('/api/v1/users', json={
+        'name': 'داليا', 'email': 'fallback@example.test', 'account_type': 'person',
+    }).json()
+    assert client.post('/api/v1/user-role-assignments', json={
+        'user_id': fallback['id'], 'role_id': role['id'],
+    }).status_code == 201
+    assert [row['name'] for row in client.get(url).json()] == ['أحمد', 'باسم', 'باسم', 'داليا', 'زيد']

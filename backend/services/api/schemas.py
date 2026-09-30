@@ -1310,6 +1310,7 @@ class ChangePasswordRequest(ApiModel):
 
 
 class PrincipalUserRead(ApiModel):
+    localized: dict[str, Any] | None = None
     id: int
     name: str
     email: str
@@ -1317,6 +1318,7 @@ class PrincipalUserRead(ApiModel):
 
 
 class PrincipalRoleRead(ApiModel):
+    localized: dict[str, Any] | None = None
     id: int
     code: str
     name: str

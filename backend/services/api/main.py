@@ -77,6 +77,7 @@ from .resource_authorization import (
 )
 from .user_management import router as user_management_router
 from .classification_management import router as classification_management_router
+from .scheme_transfer.routes import router as scheme_transfer_router
 from .browse import router as browse_router
 from .favourites import router as favourites_router
 from .security_levels import router as security_levels_router
@@ -168,6 +169,7 @@ app = FastAPI(
 app.include_router(number_suggestions_router)
 app.include_router(user_management_router)
 app.include_router(authentication_router)
+app.include_router(scheme_transfer_router)
 app.include_router(classification_management_router)
 app.include_router(browse_router)
 app.include_router(favourites_router)
@@ -1797,9 +1799,12 @@ def upload_digital_component(
     return component
 
 
-@app.api_route(
+@app.head(
     "/api/v1/digital-components/{component_id}/content",
-    methods=["GET", "HEAD"],
+    include_in_schema=False,
+)
+@app.get(
+    "/api/v1/digital-components/{component_id}/content",
     tags=["digital component content"],
 )
 def download_digital_component_content(
@@ -1918,9 +1923,12 @@ def _component_rendition_response(
     )
 
 
-@app.api_route(
+@app.head(
     "/api/v1/digital-components/{component_id}/rendition",
-    methods=["GET", "HEAD"],
+    include_in_schema=False,
+)
+@app.get(
+    "/api/v1/digital-components/{component_id}/rendition",
     tags=["digital component content"],
 )
 def view_digital_component_rendition(
@@ -1933,9 +1941,12 @@ def view_digital_component_rendition(
     return _component_rendition_response(component, request, connection)
 
 
-@app.api_route(
+@app.head(
     "/api/v1/digital-components/{component_id}/print-rendition",
-    methods=["GET", "HEAD"],
+    include_in_schema=False,
+)
+@app.get(
+    "/api/v1/digital-components/{component_id}/print-rendition",
     tags=["digital component content"],
 )
 def print_digital_component_rendition(

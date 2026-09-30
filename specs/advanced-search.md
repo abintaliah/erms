@@ -561,7 +561,7 @@ principal ID is prohibited.
   description, and definition, including criteria, sort, and maximum results.
   This owner right remains available even if the owner later loses the save
   privilege. Ownership cannot be transferred.
-- Only the owner or a user with `search.saved_search.administrator` may modify a
+- Only the owner or a user with `search.saved_search.administer` may modify a
   saved search's name, category, description, or definition.
 - An owner with the save privilege may update the search's permitted audience.
 - A recipient can open and execute but cannot edit, reshare, rename, or delete.
@@ -584,16 +584,19 @@ The canonical privilege catalogue shall add:
 | Code | Purpose |
 | --- | --- |
 | `search.saved_search.save` | Create saved searches, create copies with **Save as**, and update the audience of an owned search within the user's own effective roles and organizational units |
-| `search.saved_search.administrator` | List any saved search; modify any saved search's name, category, description, definition, and audience; and select any eligible active role or organizational unit as its audience; does not permit deletion or reveal search results/resources |
-| `search.saved_search.delete` | Delete an owned saved search; when combined with `search.saved_search.administrator`, delete any saved search |
+| `search.saved_search.administer` | List any saved search; modify any saved search's name, category, description, definition, and audience; and select any eligible active role or organizational unit as its audience; does not permit deletion or reveal search results/resources |
+| `search.saved_search.delete` | When combined with `search.saved_search.administer`, delete a saved search owned by another user; owners need no delete privilege for their own searches |
 
 These names are recommended over generic `query.save`, `query.administrator`,
 and `query.delete` because the `search.saved_search` namespace matches the
 product entity and does not imply database-query administration.
 
-Reading and executing a saved search needs no management privilege: ownership
-or current audience membership is sufficient, together with the relevant
-`aggregation.view` or `record.view` privilege. The owner may modify the saved
+Reading and executing a saved search needs no management privilege: ownership,
+current audience membership, or an effective information-governance role is
+sufficient, together with the relevant `aggregation.view` or `record.view`
+privilege. Information-governance bypass applies to saved-search audience
+access in the same manner as a resource ACL bypass, but does not add the search
+to **Shared with me** or the ordinary **All** union. The owner may modify the saved
 search's name, category, description, and definition based on ownership; this
 authority does not depend on retaining `search.saved_search.save`.
 
@@ -602,7 +605,7 @@ non-administrator may grant only currently effective non-system person roles
 assigned to them and their directly associated active organizational units.
 The server derives this allowlist; submitted IDs outside it return `403`.
 
-`search.saved_search.administrator` allows any active, non-platform person role
+`search.saved_search.administer` allows any active, non-platform person role
 or active organizational unit to be selected. It also permits modification of
 any saved search's name, category, description, and definition, but does not
 grant membership in a
@@ -612,16 +615,15 @@ access. Administrative inspection returns the definition and audience metadata
 but never results unless the administrator is owner/audience-authorized and has
 the underlying resource view access.
 
-Only a principal with `search.saved_search.delete` can delete. The owner cannot
-delete merely because they created the search. Deleting another user's search
-requires both `search.saved_search.delete` and
-`search.saved_search.administrator`.
+An owner may delete their own saved search without a separate delete privilege.
+Deleting another user's search requires both `search.saved_search.delete` and
+`search.saved_search.administer`.
 
 ### 8.2 Recommended default profile grants
 
 - `ALL_PRIVS` and `SYS_ADMIN`: all three privileges.
-- `INFO_GOV_MGR`: `save`, `administrator`, and `delete`.
-- `INFO_GOV_OFFICER`: `save` and `delete`, but not `administrator`.
+- `INFO_GOV_MGR`: `save`, `administer`, and `delete`.
+- `INFO_GOV_OFFICER`: `save`, `administer`, and `delete`.
 - other profiles: no automatic grant unless separately approved.
 
 This proposed seeding is a product decision and must be confirmed during
@@ -678,8 +680,8 @@ PUT /api/v1/saved-searches/{saved_search_id}
 
 Read requires ownership, effective audience membership, or administration.
 Changing the name, category, description, or definition requires ownership or
-`search.saved_search.administrator`. Changing the audience requires ownership
-plus `search.saved_search.save`, or `search.saved_search.administrator`. `PUT`
+`search.saved_search.administer`. Changing the audience requires ownership
+plus `search.saved_search.save`, or `search.saved_search.administer`. `PUT`
 requires `If-Match` with the current version and a nonblank `X-Change-Reason`;
 stale writes return `409`.
 
@@ -720,9 +722,9 @@ Authorization follows section 8.1. Successful deletion returns `204`.
 GET /api/v1/saved-searches/administration?limit=25&offset=0
 ```
 
-Requires `search.saved_search.administrator` and supports bounded filters for
+Requires `search.saved_search.administer` and supports bounded filters for
 owner, resource type, role audience, organizational-unit audience, name,
-category, maximum-results range, and update date. This is an administrative
+category, maximum-results range, and creation date. This is an administrative
 card/list view, not a result-execution bypass.
 
 ## 10. Saved-search user experience
@@ -741,6 +743,14 @@ tabs:
 **All** never means every saved search in the system. A saved-search
 administrator uses the separate administration view to inspect searches that
 they do not own and that have not been shared with them.
+
+The separate **Saved Search Administration** screen appears under **System
+Administration**, immediately after **Security Operations** and before
+**Security Levels**, and is visible only with
+`search.saved_search.administer`. It lists every saved search system-wide with
+server-side name, owner, and creation-date filters. Administrative editing does
+not transfer ownership or grant execution access. Cross-owner deletion also
+requires `search.saved_search.delete` and a nonblank reason.
 
 Target and category are hidden initially and appear under **Filters**. The
 administration dialog follows the same search-first presentation, with its
@@ -767,6 +777,14 @@ The initial audience is **Only me**. Choosing **Roles or organization units**
 shows a searchable, paginated selector constrained by the server-computed
 audience choices. It explains that recipients see the saved query but only
 their own authorized matching resources.
+
+Each role and organizational-unit selector displays localized guidance explaining
+ordinary-user and Saved Search Administrator eligibility. Its browse tree uses
+the same server-computed eligibility as type-ahead search, before branch
+pagination. Unrelated ineligible branches are hidden; necessary ancestor units
+remain visible for navigation but cannot be selected unless independently
+eligible. Browser search returns eligible choices only. These constraints apply
+to audience pickers, not the general organization browser.
 
 The server supplies owner ID, schema version normalization, timestamps, version,
 and capabilities. These are not creator-editable fields. Page offset, current
@@ -909,8 +927,8 @@ data volumes.
 | AS-08 | A saved search stores its target, criteria, sort and creator-selected `max_results`, but no page offset, cursor, debug flag, result, count, score, or snippet | schema/API tests |
 | AS-09 | Executing a saved search returns fresh results under the executor's current authorization and never grants resource access through sharing | multi-user mutation/authorization tests |
 | AS-10 | A user with `search.saved_search.save` can create searches, use **Save as**, and share an owned search only to their own eligible roles/units | privilege and audience tests |
-| AS-11 | Only the creator or a user with `search.saved_search.administrator` can modify a saved search's name, category, description, or definition; administrator authority permits arbitrary eligible audience administration but neither deletion nor result-authorization bypass | ownership and negative authorization tests |
-| AS-12 | Deletion always requires `search.saved_search.delete`; deleting another owner's search additionally requires administration | privilege matrix tests |
+| AS-11 | Only the creator or a user with `search.saved_search.administer` can modify a saved search's name, category, description, or definition; administration authority permits arbitrary eligible audience administration but neither deletion nor result-authorization bypass | ownership and negative authorization tests |
+| AS-12 | An owner may delete their own saved search; deleting another owner's search requires both `search.saved_search.delete` and `search.saved_search.administer` | privilege matrix tests |
 | AS-13 | Role/unit audience access follows current effective membership and direct-unit semantics | lifecycle and hierarchy tests |
 | AS-14 | Version conflicts reject stale updates/deletes and preserve the winning definition | concurrency tests |
 | AS-15 | Saved-search changes are audited, while execution does not create governed entity-history | event-history tests |
@@ -951,14 +969,15 @@ The product owner approved the following decisions on 25 September 2026:
 5. non-administrators may share only with their own effective roles and
    associated organizational units;
 6. the creator may modify the name, category, description, criteria, sort, and
-   result limit, while `search.saved_search.administrator` may modify any saved
+   result limit, while `search.saved_search.administer` may modify any saved
    search;
 7. changing an audience requires creator ownership plus
-   `search.saved_search.save`, or `search.saved_search.administrator`;
-8. deletion requires `search.saved_search.delete`, and deleting another owner's
-   search additionally requires `search.saved_search.administrator`;
-9. administrators cannot execute a saved search or view its results unless it
-   is accessible to them and they possess the underlying resource privileges;
+   `search.saved_search.save`, or `search.saved_search.administer`;
+8. an owner may delete their own saved search, while deleting another owner's
+   search requires both `search.saved_search.delete` and `search.saved_search.administer`;
+9. administrators cannot execute a saved search merely through administration;
+   ownership, audience membership, or an effective information-governance role
+   is required together with the underlying resource privileges;
 10. shared-search recipients can execute or **Save as**, but cannot edit or
     reshare the original;
 11. opening a saved search does not auto-execute it;

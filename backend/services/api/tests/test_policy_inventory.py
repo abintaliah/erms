@@ -90,6 +90,23 @@ def test_unclassified_api_operation_is_rejected_instead_of_getting_a_fallback():
         _target_policy("POST", "/api/v1/new-unreviewed-operation")
 
 
+def test_number_suggestions_have_explicit_relationship_scoped_policy():
+    assert _target_policy("GET", "/api/v1/number-suggestions/{resource}") == (
+        "relationship_scoped",
+        None,
+        None,
+    )
+
+
+def test_registry_declares_every_policy_class_it_uses():
+    registry = build_inventory()
+    used = {
+        operation["target_policy_class"]
+        for operation in registry["api_operations"]
+    }
+    assert used <= set(registry["access_classes"])
+
+
 def test_every_target_policy_reference_exists_in_approved_seed():
     registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
     seed = json.loads(SEED_PATH.read_text(encoding="utf-8"))
@@ -140,10 +157,11 @@ def test_approved_seed_catalogue_and_dependencies_are_internally_consistent():
         "record.view",
         "record.component.download",
     } & set(profiles["SYS_ADMIN"]["privilege_codes"])
-    assert set(profiles["INFO_GOV_MGR"]["privilege_codes"]) == (
-        set(profiles["INFO_GOV_OFFICER"]["privilege_codes"])
-        | {"search.saved_search.administrator"}
+    assert set(profiles["INFO_GOV_MGR"]["privilege_codes"]) == set(
+        profiles["INFO_GOV_OFFICER"]["privilege_codes"]
     )
+    assert "search.saved_search.administer" in profiles["INFO_GOV_MGR"]["privilege_codes"]
+    assert "search.saved_search.delete" in profiles["INFO_GOV_MGR"]["privilege_codes"]
     assert "classifications.administer" in profiles["INFO_GOV_MGR"]["privilege_codes"]
     assert "security_levels.administer" in profiles["INFO_GOV_MGR"]["privilege_codes"]
     assert "organization.browse" in profiles["SYS_ADMIN"]["privilege_codes"]

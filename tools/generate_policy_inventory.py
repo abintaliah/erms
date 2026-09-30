@@ -70,9 +70,15 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         if method == "POST" and path == "/api/v1/saved-searches":
             return "globally_privileged", "search.saved_search.save", None
         if path == "/api/v1/saved-searches/administration":
-            return "globally_privileged", "search.saved_search.administrator", None
+            return "globally_privileged", "search.saved_search.administer", None
         if method == "DELETE":
-            return "globally_privileged", "search.saved_search.delete", None
+            return "relationship_scoped", None, None
+        return "relationship_scoped", None, None
+    if method == "GET" and path == "/api/v1/number-suggestions/{resource}":
+        # The resource path parameter selects the creation privilege at runtime:
+        # record.create, or aggregation.create_root/aggregation.create_child.
+        # Parent-derived suggestions additionally require visibility of that
+        # parent, so this cannot be represented by one static privilege field.
         return "relationship_scoped", None, None
     if path.startswith("/api/v1/content-indexing/"):
         return "resource_scoped", "record.component.view", "record.component.view"
@@ -333,6 +339,9 @@ def build_inventory() -> dict[str, Any]:
             "system_administrator",
             "globally_privileged",
             "resource_scoped",
+            "relationship_scoped",
+            "governance_exception",
+            "service_lease_scoped",
         ],
         "api_operations": api_operations(),
     }

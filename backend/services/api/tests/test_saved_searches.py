@@ -1,6 +1,7 @@
 import os
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from backend.services.api.authentication import hash_password
 
@@ -31,6 +32,26 @@ def _payload(**changes) -> dict:
     }
     value.update(changes)
     return value
+
+
+def test_owner_name_follows_viewer_language(client):
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        connection.execute("UPDATE users SET translations=%s WHERE id=1", (Jsonb({'ar': {'name': 'عمر إبراهيم'}}),))
+        connection.execute("INSERT INTO user_preferences(user_id,language_tag,working_timezone) VALUES (1,'ar','Asia/Dubai') ON CONFLICT(user_id) DO UPDATE SET language_tag='ar'")
+    created = client.post('/api/v1/saved-searches', json=_payload()).json()
+    saved_id = created['id']
+    for value in (
+        created,
+        client.get(f'/api/v1/saved-searches/{saved_id}').json(),
+        client.get('/api/v1/saved-searches').json()['items'][0],
+        client.get('/api/v1/saved-searches/administration').json()['items'][0],
+    ):
+        assert value['owner']['localized']['name'] == 'عمر إبراهيم'
+        assert 'translations' not in value['owner']
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        connection.execute("UPDATE user_preferences SET language_tag='en' WHERE user_id=1")
+    owner = client.get(f'/api/v1/saved-searches/{saved_id}').json()['owner']
+    assert owner['localized']['name'] == owner['name']
 
 
 def test_create_canonicalize_update_history_and_delete(client):
@@ -205,6 +226,42 @@ def test_sharing_definition_does_not_grant_record_view(client):
     denied = client.post(f"/api/v1/saved-searches/{created.json()['id']}/execute", json={})
     assert denied.status_code == 403
     assert denied.json()["detail"]["code"] == "resource_view_required"
+
+
+def test_information_governance_role_bypasses_saved_search_audience(client):
+    password = "Saved-Search-Governance-123!"
+    created = client.post("/api/v1/saved-searches", json=_payload())
+    assert created.status_code == 201, created.text
+    saved_id = created.json()["id"]
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        profile_id = connection.execute(
+            "INSERT INTO profiles(code,name) VALUES ('SAVED_SEARCH_GOV','Saved search governance') RETURNING id"
+        ).fetchone()[0]
+        connection.execute(
+            """INSERT INTO profile_privileges(profile_id,privilege_id)
+               SELECT %s,id FROM privileges WHERE code='record.view'""", (profile_id,),
+        )
+        user_id = connection.execute(
+            "INSERT INTO users(name,email) VALUES ('Governance Search User','governance-search@test.invalid') RETURNING id"
+        ).fetchone()[0]
+        role_id = connection.execute(
+            """INSERT INTO roles(org_unit_id,code,name,profile_id,is_information_governance)
+               VALUES (1,'saved-search-governance-role','Saved search governance role',%s,true) RETURNING id""",
+            (profile_id,),
+        ).fetchone()[0]
+        connection.execute("INSERT INTO user_role_assignments(user_id,role_id) VALUES (%s,%s)", (user_id, role_id))
+        connection.execute(
+            "INSERT INTO user_credentials(user_id,password_hash,must_change_password) VALUES (%s,%s,false)",
+            (user_id, hash_password(password)),
+        )
+    login = client.post("/api/v1/auth/login", json={
+        "email": "governance-search@test.invalid", "password": password,
+    })
+    assert login.status_code == 200
+    client.headers["X-CSRF-Token"] = client.cookies.get("erms_csrf")
+    assert client.get("/api/v1/saved-searches", params={"scope": "all"}).json()["items"] == []
+    executed = client.post(f"/api/v1/saved-searches/{saved_id}/execute", json={})
+    assert executed.status_code == 200, executed.text
 
 
 def test_administration_filters_and_execution_does_not_create_history(client):

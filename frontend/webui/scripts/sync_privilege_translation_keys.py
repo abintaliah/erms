@@ -84,7 +84,7 @@ NAME_ARABIC = {
     "record.vital_status.change": "تغيير الحالة الحيوية لوثيقة",
     "role.modify_metadata": "تعديل البيانات الوصفية للدور",
     "search.query.debug": "تشخيص استعلام البحث",
-    "search.saved_search.administrator": "إدارة عمليات البحث المحفوظة",
+    "search.saved_search.administer": "إدارة عمليات البحث المحفوظة",
     "search.saved_search.delete": "حذف عمليات البحث المحفوظة",
     "search.saved_search.save": "حفظ عمليات البحث",
     "security.resource.downgrade": "خفض درجة سرية المورد",
@@ -169,9 +169,12 @@ def main() -> None:
         english_name = privilege["name"]
         english_description = privilege_help_text(code, privilege.get("description"))
         arabic_name = NAME_ARABIC[code]
-        name_key = f"privilege.{code}.name"
-        description_key = f"privilege.{code}.description"
-        group = f"privilege.{code}"
+        translation_code = {
+            "search.saved_search.administer": "search.saved_search.administrator",
+        }.get(code, code)
+        name_key = f"privilege.{translation_code}.name"
+        description_key = f"privilege.{translation_code}.description"
+        group = f"privilege.{translation_code}"
         by_key[name_key] = definition(
             name_key,
             group,

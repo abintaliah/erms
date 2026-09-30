@@ -10,6 +10,38 @@ def levels(client: TestClient) -> dict[str, dict]:
     return {item["code"]: item for item in response.json()}
 
 
+def test_assignable_levels_follow_clearance_and_parent(client, aggregation):
+    catalogue = levels(client)
+    def choices(**params):
+        response = client.get('/api/v1/security-levels/page', params={'assignable': True, **params})
+        assert response.status_code == 200, response.text
+        return response.json()
+    assert [item['code'] for item in choices()['items']] == ['G']
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        connection.execute('UPDATE roles SET security_level_id=%s WHERE id=1', (catalogue['S']['id'],))
+    assert [item['code'] for item in choices()['items']] == ['G', 'R', 'S']
+    assert [item['code'] for item in choices(parent_aggregation_id=aggregation['id'])['items']] == ['G']
+    # Filtering precedes pagination/counting and applies equally to text searches.
+    assert choices(q='TS')['total'] == 0
+    page = choices(limit=1, offset=2)
+    assert page['total'] == 3 and page['items'][0]['code'] == 'S'
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        connection.execute('UPDATE user_role_assignments SET valid_until=CURRENT_TIMESTAMP WHERE user_id=1')
+    assert choices()['items'] == []
+
+
+def test_assignable_aggregation_update_respects_contents(client, aggregation, record):
+    catalogue = levels(client)
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        connection.execute('UPDATE roles SET security_level_id=%s WHERE id=1', (catalogue['TS']['id'],))
+        connection.execute('UPDATE aggregations SET security_level_id=%s WHERE id=%s', (catalogue['S']['id'], aggregation['id']))
+        connection.execute('UPDATE records SET security_level_id=%s WHERE id=%s', (catalogue['R']['id'], record['id']))
+    response = client.get('/api/v1/security-levels/page', params={'assignable': True, 'aggregation_id': aggregation['id']})
+    assert response.status_code == 200, response.text
+    assert response.json()['minimum_level'] == 50
+    assert [item['code'] for item in response.json()['items']] == ['R', 'S', 'TS']
+
+
 def test_seeded_catalogue_and_lowest_level_defaults(client: TestClient, aggregation: dict, record: dict):
     catalogue = levels(client)
     assert [(item["code"], item["level_number"]) for item in catalogue.values()] == [

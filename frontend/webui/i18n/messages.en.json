@@ -3118,6 +3118,955 @@
     "is_html": false
   },
   {
+    "message_key": "classification_browser.add_child",
+    "context_group": "classification_browser",
+    "default_text": "Child classification",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Child classification",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Child classification",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_browser.add_root",
+    "context_group": "classification_browser",
+    "default_text": "Root classification",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Root classification",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Root classification",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_browser.back_to_tree",
+    "context_group": "classification_browser",
+    "default_text": "Back to classification tree",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Back to classification tree",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Back to classification tree",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_browser.retry",
+    "context_group": "classification_browser",
+    "default_text": "Retry",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Retry",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Retry",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_browser.toggle_branch",
+    "context_group": "classification_browser",
+    "default_text": "Expand or collapse classification",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Expand or collapse classification",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Expand or collapse classification",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_browser.toggle_scheme",
+    "context_group": "classification_browser",
+    "default_text": "Expand or collapse scheme",
+    "semantic_meaning": "Classification tree navigation or contextual creation action: Expand or collapse scheme",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. Root means a classification directly below its scheme; child means beneath a branch.",
+    "grammatical_role": "action",
+    "parameter_schema": {},
+    "rendered_example": "Expand or collapse scheme",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_details.actions.audit",
+    "context_group": "classification_details.actions",
+    "default_text": "Audit",
+    "semantic_meaning": "Heading grouping existing classification administration controls: Audit",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. These are group headings, not commands or new permissions.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Audit",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_details.actions.classification",
+    "context_group": "classification_details.actions",
+    "default_text": "Classification actions",
+    "semantic_meaning": "Heading grouping existing classification administration controls: Classification actions",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. These are group headings, not commands or new permissions.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Classification actions",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_details.actions.lifecycle",
+    "context_group": "classification_details.actions",
+    "default_text": "Lifecycle",
+    "semantic_meaning": "Heading grouping existing classification administration controls: Lifecycle",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. These are group headings, not commands or new permissions.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Lifecycle",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_details.actions.metadata",
+    "context_group": "classification_details.actions",
+    "default_text": "Metadata and hierarchy",
+    "semantic_meaning": "Heading grouping existing classification administration controls: Metadata and hierarchy",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. These are group headings, not commands or new permissions.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Metadata and hierarchy",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_details.actions.scheme",
+    "context_group": "classification_details.actions",
+    "default_text": "Scheme actions",
+    "semantic_meaning": "Heading grouping existing classification administration controls: Scheme actions",
+    "common_locations": [
+      "frontend/webui/classification_workspace.py"
+    ],
+    "translator_guidance": "Use approved Wathiq classification terminology. These are group headings, not commands or new permissions.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Scheme actions",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.authority",
+    "context_group": "classification_transfer",
+    "default_text": "Authority",
+    "semantic_meaning": "Classification scheme import/export: authority",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Authority",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.cancel",
+    "context_group": "classification_transfer",
+    "default_text": "Cancel",
+    "semantic_meaning": "Classification scheme import/export: cancel",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Cancel",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.choose_file",
+    "context_group": "classification_transfer",
+    "default_text": "Choose JSON or CSV file",
+    "semantic_meaning": "Classification scheme import/export: choose_file",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Choose JSON or CSV file",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.code",
+    "context_group": "classification_transfer",
+    "default_text": "Code",
+    "semantic_meaning": "Classification scheme import/export: code",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Code",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.current_period_years",
+    "context_group": "classification_transfer",
+    "default_text": "Current retention (years)",
+    "semantic_meaning": "Classification scheme import/export: current_period_years",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Current retention (years)",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.database_name",
+    "context_group": "classification_transfer",
+    "default_text": "Source database",
+    "semantic_meaning": "Classification scheme import/export: database_name",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Source database",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.date_created",
+    "context_group": "classification_transfer",
+    "default_text": "Date created",
+    "semantic_meaning": "Classification scheme import/export: date_created",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Date created",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.date_deactivated",
+    "context_group": "classification_transfer",
+    "default_text": "Date deactivated",
+    "semantic_meaning": "Classification scheme import/export: date_deactivated",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Date deactivated",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.date_first_used",
+    "context_group": "classification_transfer",
+    "default_text": "Date first used",
+    "semantic_meaning": "Classification scheme import/export: date_first_used",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Date first used",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.date_published",
+    "context_group": "classification_transfer",
+    "default_text": "Date published",
+    "semantic_meaning": "Classification scheme import/export: date_published",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Date published",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.date_updated",
+    "context_group": "classification_transfer",
+    "default_text": "Date updated",
+    "semantic_meaning": "Classification scheme import/export: date_updated",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Date updated",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.description",
+    "context_group": "classification_transfer",
+    "default_text": "Description",
+    "semantic_meaning": "Classification scheme import/export: description",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Description",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.download",
+    "context_group": "classification_transfer",
+    "default_text": "Download",
+    "semantic_meaning": "Classification scheme import/export: download",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Download",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.edition",
+    "context_group": "classification_transfer",
+    "default_text": "Edition",
+    "semantic_meaning": "Classification scheme import/export: edition",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Edition",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.empty",
+    "context_group": "classification_transfer",
+    "default_text": "No classifications",
+    "semantic_meaning": "Classification scheme import/export: empty",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "No classifications",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.checksum_mismatch",
+    "context_group": "classification_transfer",
+    "default_text": "The checksum does not match the file contents. Nothing was imported.",
+    "semantic_meaning": "Classification scheme import/export: error.checksum_mismatch",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The checksum does not match the file contents. Nothing was imported.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.duplicate_code",
+    "context_group": "classification_transfer",
+    "default_text": "A scheme or classification code already exists. Nothing was imported.",
+    "semantic_meaning": "Classification scheme import/export: error.duplicate_code",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "A scheme or classification code already exists. Nothing was imported.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.file_too_large",
+    "context_group": "classification_transfer",
+    "default_text": "The export exceeds the supported size limit.",
+    "semantic_meaning": "Classification scheme import/export: error.file_too_large",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The export exceeds the supported size limit.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.invalid_package",
+    "context_group": "classification_transfer",
+    "default_text": "The file is not a valid classification scheme export. Nothing was imported.",
+    "semantic_meaning": "Classification scheme import/export: error.invalid_package",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The file is not a valid classification scheme export. Nothing was imported.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.revision_unavailable",
+    "context_group": "classification_transfer",
+    "default_text": "Application revision metadata is unavailable.",
+    "semantic_meaning": "Classification scheme import/export: error.revision_unavailable",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Application revision metadata is unavailable.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.error.unsupported_language",
+    "context_group": "classification_transfer",
+    "default_text": "The export contains an unsupported or disabled language.",
+    "semantic_meaning": "Classification scheme import/export: error.unsupported_language",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The export contains an unsupported or disabled language.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.explicit",
+    "context_group": "classification_transfer",
+    "default_text": "Explicit rule",
+    "semantic_meaning": "Classification scheme import/export: explicit",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Explicit rule",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.export",
+    "context_group": "classification_transfer",
+    "default_text": "Export",
+    "semantic_meaning": "Classification scheme import/export: export",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Export",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.exported_at",
+    "context_group": "classification_transfer",
+    "default_text": "Exported at",
+    "semantic_meaning": "Classification scheme import/export: exported_at",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Exported at",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.exported_by",
+    "context_group": "classification_transfer",
+    "default_text": "Exported by",
+    "semantic_meaning": "Classification scheme import/export: exported_by",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Exported by",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.final_disposition",
+    "context_group": "classification_transfer",
+    "default_text": "Final disposition",
+    "semantic_meaning": "Classification scheme import/export: final_disposition",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Final disposition",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.import",
+    "context_group": "classification_transfer",
+    "default_text": "Import",
+    "semantic_meaning": "Classification scheme import/export: import",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Import",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.import_hint",
+    "context_group": "classification_transfer",
+    "default_text": "Choose a Wathiq JSON or CSV export. The scheme will be imported as an unpublished draft.",
+    "semantic_meaning": "Classification scheme import/export: import_hint",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Choose a Wathiq JSON or CSV export. The scheme will be imported as an unpublished draft.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.import_title",
+    "context_group": "classification_transfer",
+    "default_text": "Import classification scheme",
+    "semantic_meaning": "Classification scheme import/export: import_title",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Import classification scheme",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.inherited",
+    "context_group": "classification_transfer",
+    "default_text": "Inherited from",
+    "semantic_meaning": "Classification scheme import/export: inherited",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Inherited from",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.instructions",
+    "context_group": "classification_transfer",
+    "default_text": "Instructions",
+    "semantic_meaning": "Classification scheme import/export: instructions",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Instructions",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.intermediate_period_years",
+    "context_group": "classification_transfer",
+    "default_text": "Intermediate retention (years)",
+    "semantic_meaning": "Classification scheme import/export: intermediate_period_years",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Intermediate retention (years)",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.is_terminal",
+    "context_group": "classification_transfer",
+    "default_text": "Terminal classification",
+    "semantic_meaning": "Classification scheme import/export: is_terminal",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Terminal classification",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.keywords",
+    "context_group": "classification_transfer",
+    "default_text": "Keywords",
+    "semantic_meaning": "Classification scheme import/export: keywords",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Keywords",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.landscape",
+    "context_group": "classification_transfer",
+    "default_text": "Landscape",
+    "semantic_meaning": "Classification scheme import/export: landscape",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Landscape",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.language",
+    "context_group": "classification_transfer",
+    "default_text": "Document language",
+    "semantic_meaning": "Classification scheme import/export: language",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Document language",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.legend",
+    "context_group": "classification_transfer",
+    "default_text": "Level 0 is the root. Indentation and row shading indicate hierarchy depth.",
+    "semantic_meaning": "Classification scheme import/export: legend",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Level 0 is the root. Indentation and row shading indicate hierarchy depth.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.level",
+    "context_group": "classification_transfer",
+    "default_text": "Level",
+    "semantic_meaning": "Classification scheme import/export: level",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Level",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.metadata",
+    "context_group": "classification_transfer",
+    "default_text": "Metadata",
+    "semantic_meaning": "Classification scheme import/export: metadata",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Metadata",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.no",
+    "context_group": "classification_transfer",
+    "default_text": "No",
+    "semantic_meaning": "Classification scheme import/export: no",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "No",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.none",
+    "context_group": "classification_transfer",
+    "default_text": "None",
+    "semantic_meaning": "Classification scheme import/export: none",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "None",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.parent_code",
+    "context_group": "classification_transfer",
+    "default_text": "Parent code",
+    "semantic_meaning": "Classification scheme import/export: parent_code",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Parent code",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.retention_rule",
+    "context_group": "classification_transfer",
+    "default_text": "Retention rule",
+    "semantic_meaning": "Classification scheme import/export: retention_rule",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Retention rule",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.scope_note",
+    "context_group": "classification_transfer",
+    "default_text": "Scope note",
+    "semantic_meaning": "Classification scheme import/export: scope_note",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Scope note",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.source_id",
+    "context_group": "classification_transfer",
+    "default_text": "Source ID",
+    "semantic_meaning": "Classification scheme import/export: source_id",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Source ID",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.success",
+    "context_group": "classification_transfer",
+    "default_text": "Classification scheme imported as an unpublished draft.",
+    "semantic_meaning": "Classification scheme import/export: success",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Classification scheme imported as an unpublished draft.",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.title",
+    "context_group": "classification_transfer",
+    "default_text": "Title",
+    "semantic_meaning": "Classification scheme import/export: title",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Title",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.translations",
+    "context_group": "classification_transfer",
+    "default_text": "Translations",
+    "semantic_meaning": "Classification scheme import/export: translations",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Translations",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.value",
+    "context_group": "classification_transfer",
+    "default_text": "Value",
+    "semantic_meaning": "Classification scheme export: metadata value column",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Value",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.version",
+    "context_group": "classification_transfer",
+    "default_text": "Version",
+    "semantic_meaning": "Classification scheme import/export: version",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Version",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.word_title",
+    "context_group": "classification_transfer",
+    "default_text": "Export to MS Word",
+    "semantic_meaning": "Classification scheme import/export: word_title",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Export to MS Word",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.working",
+    "context_group": "classification_transfer",
+    "default_text": "Processing…",
+    "semantic_meaning": "Classification scheme import/export: working",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Processing…",
+    "is_html": false
+  },
+  {
+    "message_key": "classification_transfer.yes",
+    "context_group": "classification_transfer",
+    "default_text": "Yes",
+    "semantic_meaning": "Classification scheme import/export: yes",
+    "common_locations": [
+      "Classification schemes",
+      "Word export"
+    ],
+    "translator_guidance": "Preserve format names and technical tokens. Used in scheme transfer controls or document labels.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Yes",
+    "is_html": false
+  },
+  {
     "message_key": "classification_workspace.metadata.first_used",
     "context_group": "classification_workspace",
     "default_text": "First used",
@@ -9445,6 +10394,42 @@
     "is_html": false
   },
   {
+    "message_key": "saved_search.administration.filter.created_before",
+    "context_group": "saved_search.administration",
+    "default_text": "Created before",
+    "semantic_meaning": "Upper creation-date boundary for the saved-search administration inventory.",
+    "common_locations": ["Saved Search Administration"],
+    "translator_guidance": "Translate as a concise date-filter label.",
+    "grammatical_role": "field label",
+    "parameter_schema": {},
+    "rendered_example": "Created before",
+    "is_html": false
+  },
+  {
+    "message_key": "saved_search.administration.filter.created_from",
+    "context_group": "saved_search.administration",
+    "default_text": "Created from",
+    "semantic_meaning": "Lower creation-date boundary for the saved-search administration inventory.",
+    "common_locations": ["Saved Search Administration"],
+    "translator_guidance": "Translate as a concise date-filter label.",
+    "grammatical_role": "field label",
+    "parameter_schema": {},
+    "rendered_example": "Created from",
+    "is_html": false
+  },
+  {
+    "message_key": "saved_search.administration.filter.owner",
+    "context_group": "saved_search.administration",
+    "default_text": "Owner name or email",
+    "semantic_meaning": "Owner filter for the saved-search administration inventory.",
+    "common_locations": ["Saved Search Administration"],
+    "translator_guidance": "Translate as a concise search-field label.",
+    "grammatical_role": "field label",
+    "parameter_schema": {},
+    "rendered_example": "Owner name or email",
+    "is_html": false
+  },
+  {
     "message_key": "saved_search.error.name_exists",
     "context_group": "saved_search.error",
     "default_text": "You already have a saved search with this name. Choose a different name.",
@@ -9457,6 +10442,20 @@
     "grammatical_role": "complete sentence",
     "parameter_schema": {},
     "rendered_example": "You already have a saved search with this name. Choose a different name.",
+    "is_html": false
+  },
+  {
+    "message_key": "saved_search.error.unavailable",
+    "context_group": "saved_search.error",
+    "default_text": "This saved search no longer exists or you no longer have access to it.",
+    "semantic_meaning": "Saved search is missing or inaccessible to the current user.",
+    "common_locations": [
+      "Saved-search API errors and Advanced Search results"
+    ],
+    "translator_guidance": "Keep both possible causes; do not imply which one occurred or reveal an inaccessible search.",
+    "grammatical_role": "error",
+    "parameter_schema": {},
+    "rendered_example": "This saved search no longer exists or you no longer have access to it.",
     "is_html": false
   },
   {
@@ -9487,6 +10486,20 @@
     "grammatical_role": "complete sentence",
     "parameter_schema": {},
     "rendered_example": "Please explain why the security level is being lowered, then try again.",
+    "is_html": false
+  },
+  {
+    "message_key": "security_level.selection.constraints",
+    "context_group": "security_level.selection",
+    "default_text": "Available levels cannot exceed your highest effective-role clearance or, when a parent aggregation is selected, its security level. An aggregation also cannot be lowered below the security level of its contents.",
+    "semantic_meaning": "Explains security-level limits in ordinary record and aggregation creation and edit forms.",
+    "common_locations": [
+      "Record and aggregation creation and edit forms"
+    ],
+    "translator_guidance": "Effective roles determine the user ceiling; the containing aggregation supplies a second ceiling. Aggregation contents impose a minimum.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Available levels cannot exceed your highest effective-role clearance or, when a parent aggregation is selected, its security level. An aggregation also cannot be lowered below the security level of its contents.",
     "is_html": false
   },
   {
@@ -12891,6 +13904,20 @@
     "grammatical_role": "action label",
     "parameter_schema": {},
     "rendered_example": "Cancel",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.hold_reason_dialog.remove_all_confirmation",
+    "context_group": "webui.hold_reason_dialog",
+    "default_text": "Remove all directly assigned holds? Protection inherited from parent aggregations will remain.",
+    "semantic_meaning": "Confirmation for removing direct hold assignments from a record or aggregation, while retaining inherited protection.",
+    "common_locations": [
+      "Record and aggregation remove-all-holds confirmation dialogs"
+    ],
+    "translator_guidance": "Holds are legal holds. Only direct assignments are removed; ancestor aggregation protection remains.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Remove all directly assigned holds? Protection inherited from parent aggregations will remain.",
     "is_html": false
   },
   {
@@ -17172,6 +18199,20 @@
     "is_html": false
   },
   {
+    "message_key": "webui.open_aggregation.retention.calculated_disposition_date",
+    "context_group": "webui.open_aggregation.retention",
+    "default_text": "Calculated disposition date",
+    "semantic_meaning": "Calendar date obtained by adding both retention periods to the governing root aggregation closure date; not authorization to dispose.",
+    "common_locations": [
+      "Aggregation details retention section"
+    ],
+    "translator_guidance": "Disposition is the final action prescribed by the retention rule, not necessarily destruction. This date does not waive safeguards.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Calculated disposition date",
+    "is_html": false
+  },
+  {
     "message_key": "webui.open_aggregation.retention.records_storage",
     "context_group": "webui.open_aggregation.retention",
     "default_text": "Records storage",
@@ -21244,179 +22285,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.render_detail_content.badge.closed_a5e8b91f",
-    "context_group": "webui.render_detail_content",
-    "default_text": "Closed",
-    "semantic_meaning": "Interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Closed",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.button.open_aggregation_b78f84c7",
-    "context_group": "webui.render_detail_content",
-    "default_text": "Open aggregation",
-    "semantic_meaning": "Action label in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate as a concise action label; preserve the intent used in this workflow.",
-    "grammatical_role": "action label",
-    "parameter_schema": {},
-    "rendered_example": "Open aggregation",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.button.open_record_2cdef6ca",
-    "context_group": "webui.render_detail_content",
-    "default_text": "Open record",
-    "semantic_meaning": "Action label in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate as a concise action label; preserve the intent used in this workflow.",
-    "grammatical_role": "action label",
-    "parameter_schema": {},
-    "rendered_example": "Open record",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.label.effective_retention_rule_d14a3565",
-    "context_group": "webui.render_detail_content",
-    "default_text": "Effective retention rule",
-    "semantic_meaning": "Interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Effective retention rule",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.label.loading_retention_information_0c61089c",
-    "context_group": "webui.render_detail_content",
-    "default_text": "Loading retention information…",
-    "semantic_meaning": "Interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Loading retention information…",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.label.no_effective_retention_rule_is_available_4d243b93",
-    "context_group": "webui.render_detail_content",
-    "default_text": "No effective retention rule is available.",
-    "semantic_meaning": "Interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "No effective retention rule is available.",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.label.select_an_aggregation_or_record_to_see_its_357a0fb1",
-    "context_group": "webui.render_detail_content",
-    "default_text": "Select an aggregation or record to see its details.",
-    "semantic_meaning": "Interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Select an aggregation or record to see its details.",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.text.inherited_from_aggregation_number_title_00829b69",
-    "context_group": "webui.render_detail_content",
-    "default_text": " · inherited from {aggregation_number} — {title}",
-    "semantic_meaning": "Interpolated interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate the complete message naturally and preserve every named placeholder exactly.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {
-      "aggregation_number": "text",
-      "title": "text"
-    },
-    "rendered_example": " · inherited from <aggregation_number> — <title>",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.text.inherited_from_aggregation_source_id_ed94bee8",
-    "context_group": "webui.render_detail_content",
-    "default_text": " · inherited from aggregation #{source_id}",
-    "semantic_meaning": "Interpolated interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate the complete message naturally and preserve every named placeholder exactly.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {
-      "source_id": "text"
-    },
-    "rendered_example": " · inherited from aggregation #<source_id>",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.text.inherited_from_classification_1708e778",
-    "context_group": "webui.render_detail_content",
-    "default_text": "Inherited from classification",
-    "semantic_meaning": "Interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Inherited from classification",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.text.local_aggregation_override_7185c566",
-    "context_group": "webui.render_detail_content",
-    "default_text": "Local aggregation override",
-    "semantic_meaning": "Interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Local aggregation override",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_detail_content.text.set_here_1d585734",
-    "context_group": "webui.render_detail_content",
-    "default_text": " · set here",
-    "semantic_meaning": "Interface text in the render detail content workflow.",
-    "common_locations": [
-      "WebUI: render detail content"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": " · set here",
-    "is_html": false
-  },
-  {
     "message_key": "webui.render_detail_content.text.unknown_d3c1ce73",
     "context_group": "webui.render_detail_content",
     "default_text": "Unknown",
@@ -24006,20 +24874,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.render_scheme_list.label.counts_loading_1ffb90cd",
-    "context_group": "webui.render_scheme_list",
-    "default_text": "Counts loading…",
-    "semantic_meaning": "Interface text in the render scheme list workflow.",
-    "common_locations": [
-      "WebUI: render scheme list"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Counts loading…",
-    "is_html": false
-  },
-  {
     "message_key": "webui.render_scheme_list.label.no_matching_schemes_2a601365",
     "context_group": "webui.render_scheme_list",
     "default_text": "No matching schemes",
@@ -24031,20 +24885,6 @@
     "grammatical_role": "interface text",
     "parameter_schema": {},
     "rendered_example": "No matching schemes",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_scheme_list.text.no_description_7f023195",
-    "context_group": "webui.render_scheme_list",
-    "default_text": "No description",
-    "semantic_meaning": "Interface text in the render scheme list workflow.",
-    "common_locations": [
-      "WebUI: render scheme list"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "No description",
     "is_html": false
   },
   {
@@ -25608,34 +26448,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.render_workspace_right.label.its_information_will_appear_here_bc4769c5",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Its information will appear here.",
-    "semantic_meaning": "Interface text in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Its information will appear here.",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.label.its_metadata_and_effective_retention_rule_f231c468",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Its metadata and effective retention rule will appear here.",
-    "semantic_meaning": "Interface text in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Its metadata and effective retention rule will appear here.",
-    "is_html": false
-  },
-  {
     "message_key": "webui.render_workspace_right.label.no_classifications_match_this_search_3e1025e9",
     "context_group": "webui.render_workspace_right",
     "default_text": "No classifications match this search.",
@@ -25691,48 +26503,6 @@
       "search_result_count": "text"
     },
     "rendered_example": "<search_result_count> matching classifications",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.label.select_a_classification_192337f3",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Select a classification",
-    "semantic_meaning": "Interface text in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Select a classification",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.label.select_a_classification_scheme_825fcd9e",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Select a classification scheme",
-    "semantic_meaning": "Interface text in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Select a classification scheme",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.label.select_a_scheme_to_browse_its_classificati_afdd23e3",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Select a scheme to browse its classifications.",
-    "semantic_meaning": "Interface text in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Select a scheme to browse its classifications.",
     "is_html": false
   },
   {
@@ -26052,34 +26822,6 @@
     "grammatical_role": "action guidance",
     "parameter_schema": {},
     "rendered_example": "Schemes that have governed aggregations cannot be unpublished",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.tooltip.select_a_branch_classification_before_addi_b9ec1645",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Select a branch classification before adding a child",
-    "semantic_meaning": "Action guidance in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise action guidance; preserve the intent used in this workflow.",
-    "grammatical_role": "action guidance",
-    "parameter_schema": {},
-    "rendered_example": "Select a branch classification before adding a child",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.render_workspace_right.tooltip.terminal_classifications_cannot_contain_ch_80c2bf31",
-    "context_group": "webui.render_workspace_right",
-    "default_text": "Terminal classifications cannot contain children",
-    "semantic_meaning": "Action guidance in the render workspace right workflow.",
-    "common_locations": [
-      "WebUI: render workspace right"
-    ],
-    "translator_guidance": "Translate as a concise action guidance; preserve the intent used in this workflow.",
-    "grammatical_role": "action guidance",
-    "parameter_schema": {},
-    "rendered_example": "Terminal classifications cannot contain children",
     "is_html": false
   },
   {
@@ -26994,6 +27736,95 @@
     "is_html": false
   },
   {
+    "message_key": "webui.saved_audience.roles_help",
+    "context_group": "webui.saved_audience",
+    "default_text": "You can select your own active roles. Saved Search Administrators can select any eligible active role.",
+    "semantic_meaning": "Explains saved-search audience eligibility for ordinary users and saved-search administrators.",
+    "common_locations": [
+      "Saved Search dialog, beneath the Roles selector"
+    ],
+    "translator_guidance": "Administrator means a holder of the saved-search administrator privilege, not all organization browsers. Preserve the distinction between own memberships and administrator scope.",
+    "grammatical_role": "help_text",
+    "parameter_schema": {},
+    "rendered_example": "You can select your own active roles. Saved Search Administrators can select any eligible active role.",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_audience.units_help",
+    "context_group": "webui.saved_audience",
+    "default_text": "You can select organizational units associated with your active roles. Saved Search Administrators can select any active organizational unit.",
+    "semantic_meaning": "Explains saved-search audience eligibility for ordinary users and saved-search administrators.",
+    "common_locations": [
+      "Saved Search dialog, beneath the Organizational units selector"
+    ],
+    "translator_guidance": "Administrator means a holder of the saved-search administrator privilege, not all organization browsers. Preserve the distinction between own memberships and administrator scope.",
+    "grammatical_role": "help_text",
+    "parameter_schema": {},
+    "rendered_example": "You can select organizational units associated with your active roles. Saved Search Administrators can select any active organizational unit.",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_search_metadata.audience",
+    "context_group": "webui.saved_search_metadata",
+    "default_text": "Shared with {roles} role(s) and {units} organizational unit(s)",
+    "semantic_meaning": "Saved-search card audience metadata.",
+    "common_locations": [
+      "Saved-search browser cards"
+    ],
+    "translator_guidance": "Translate system metadata; preserve placeholders. Owner names are user content. Counts describe directly selected audience roles and units.",
+    "grammatical_role": "interface text",
+    "parameter_schema": {
+      "roles": "integer",
+      "units": "integer"
+    },
+    "rendered_example": "Shared with {roles} role(s) and {units} organizational unit(s)",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_search_metadata.owned",
+    "context_group": "webui.saved_search_metadata",
+    "default_text": "Owned by you",
+    "semantic_meaning": "Saved-search card owned metadata.",
+    "common_locations": [
+      "Saved-search browser cards"
+    ],
+    "translator_guidance": "Translate system metadata; preserve placeholders. Owner names are user content. Counts describe directly selected audience roles and units.",
+    "grammatical_role": "interface text",
+    "parameter_schema": {},
+    "rendered_example": "Owned by you",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_search_metadata.shared_by",
+    "context_group": "webui.saved_search_metadata",
+    "default_text": "Shared by {owner}",
+    "semantic_meaning": "Saved-search card shared_by metadata.",
+    "common_locations": [
+      "Saved-search browser cards"
+    ],
+    "translator_guidance": "Translate system metadata; preserve placeholders. Owner names are user content. Counts describe directly selected audience roles and units.",
+    "grammatical_role": "interface text",
+    "parameter_schema": {
+      "owner": "text"
+    },
+    "rendered_example": "Shared by {owner}",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.saved_search_metadata.uncategorized",
+    "context_group": "webui.saved_search_metadata",
+    "default_text": "Uncategorized",
+    "semantic_meaning": "Saved-search card uncategorized metadata.",
+    "common_locations": [
+      "Saved-search browser cards"
+    ],
+    "translator_guidance": "Translate system metadata; preserve placeholders. Owner names are user content. Counts describe directly selected audience roles and units.",
+    "grammatical_role": "interface text",
+    "parameter_schema": {},
+    "rendered_example": "Uncategorized",
+    "is_html": false
+  },
+  {
     "message_key": "webui.security_level_remedy.description.downgrade_subtree",
     "context_group": "webui.security_level_remedy.description",
     "default_text": "If an aggregation is being lowered, Wathiq also lowers child aggregations and records whose security levels would otherwise be too high. This can affect many resources and is therefore shown during review.",
@@ -27836,20 +28667,6 @@
     "is_html": false
   },
   {
-    "message_key": "webui.select_classification_workspace.label.classification_schemes_6020e95d",
-    "context_group": "webui.select_classification_workspace",
-    "default_text": "Classification schemes",
-    "semantic_meaning": "Interface text in the select classification workspace workflow.",
-    "common_locations": [
-      "WebUI: select classification workspace"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Classification schemes",
-    "is_html": false
-  },
-  {
     "message_key": "webui.select_classification_workspace.select.code_d3581de2",
     "context_group": "webui.select_classification_workspace",
     "default_text": "Code",
@@ -27931,20 +28748,6 @@
     "grammatical_role": "interface text",
     "parameter_schema": {},
     "rendered_example": "Build and govern classification hierarchies in context",
-    "is_html": false
-  },
-  {
-    "message_key": "webui.select_classification_workspace.text.classification_schemes_79225ac9",
-    "context_group": "webui.select_classification_workspace",
-    "default_text": "Classification schemes",
-    "semantic_meaning": "Interface text in the select classification workspace workflow.",
-    "common_locations": [
-      "WebUI: select classification workspace"
-    ],
-    "translator_guidance": "Translate as a concise interface text; preserve the intent used in this workflow.",
-    "grammatical_role": "interface text",
-    "parameter_schema": {},
-    "rendered_example": "Classification schemes",
     "is_html": false
   },
   {

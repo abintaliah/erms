@@ -1,5 +1,8 @@
 BEGIN;
 
+-- Natural numeric ordering for organization-unit and role codes.
+CREATE COLLATION erms_code_natural (provider = icu, locale = 'und-u-kn-true');
+
 CREATE TABLE security_levels (
     id                   bigserial PRIMARY KEY,
     code                 text NOT NULL,
@@ -5584,13 +5587,13 @@ FOR EACH ROW EXECUTE FUNCTION record_entity_history('saved_search');
 
 INSERT INTO privileges(code,name,description,category,is_reserved,account_type_restriction) VALUES
  ('search.saved_search.save','Save Searches','Create saved searches, copy accessible searches, and manage permitted audiences for owned searches.','administration',false,'person'),
- ('search.saved_search.administrator','Administer Saved Searches','Inspect and modify any saved search and manage any eligible role or organizational-unit audience.','administration',false,'person'),
+ ('search.saved_search.administer','Administer Saved Searches','Inspect and modify any saved search and manage any eligible role or organizational-unit audience.','administration',false,'person'),
  ('search.saved_search.delete','Delete Saved Searches','Delete owned saved searches and, with saved-search administration, searches owned by other users.','administration',false,'person')
 ON CONFLICT DO NOTHING;
 INSERT INTO profile_privileges(profile_id,privilege_id)
 SELECT profile.id,privilege.id FROM profiles profile CROSS JOIN privileges privilege
-WHERE (profile.code IN ('ALL_PRIVS','SYS_ADMIN','INFO_GOV_MGR') AND privilege.code IN ('search.saved_search.save','search.saved_search.administrator','search.saved_search.delete'))
-   OR (profile.code='INFO_GOV_OFFICER' AND privilege.code IN ('search.saved_search.save','search.saved_search.delete'))
+WHERE profile.code IN ('ALL_PRIVS','SYS_ADMIN','INFO_GOV_MGR','INFO_GOV_OFFICER')
+  AND privilege.code IN ('search.saved_search.save','search.saved_search.administer','search.saved_search.delete')
 ON CONFLICT DO NOTHING;
 -- Advanced Search Phase 1 ends.
 

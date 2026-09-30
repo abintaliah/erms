@@ -194,6 +194,16 @@ but it does not itself change ordinary read or write authorization.
 
 ### 4.3 Container security invariant
 
+Ordinary aggregation and record creation/edit forms offer only security levels
+at or below both the caller's highest effective-role clearance and the selected
+parent aggregation's level (when a parent exists). Aggregation edits also exclude
+levels below the security level of their contents. These constraints apply before
+selector pagination and text filtering, are refreshed when the parent changes,
+and clear a previously selected level if it becomes invalid. Explanatory text
+under the field describes both ceilings and the aggregation content minimum.
+The separate governed **Change security level** action retains its administrative
+hierarchy remedies and their existing authorization and atomic validation rules.
+
 An aggregation is a security envelope. Its level must be equal to or more
 restrictive than every aggregation and record anywhere within its branch:
 

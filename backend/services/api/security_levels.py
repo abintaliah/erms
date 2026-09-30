@@ -210,12 +210,48 @@ def list_security_levels(
 @router.get("/security-levels/page")
 def page_security_levels(
     request: Request, q: str | None = None,
+    assignable: bool = False,
+    parent_aggregation_id: int | None = None,
+    aggregation_id: int | None = None,
     sort: str = Query("level_number", pattern="^(level_number|code|name)$"),
     limit: int = Query(25, ge=1, le=50), offset: int = Query(0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     predicate = "WHERE (%s::text IS NULL OR level.code ILIKE '%%'||%s||'%%' OR level.name ILIKE '%%'||%s||'%%' OR level.description ILIKE '%%'||%s||'%%')"
     parameters = (q, q, q, q)
+    minimum = None
+    maximum = None
+    if assignable:
+        maximum = connection.execute("""SELECT max(level.level_number) AS value
+            FROM user_role_assignments assignment
+            JOIN roles role ON role.id=assignment.role_id
+            JOIN security_levels level ON level.id=role.security_level_id
+            WHERE assignment.user_id=current_user_id()
+              AND assignment.valid_from<=CURRENT_TIMESTAMP
+              AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+              AND role_effectively_active(role.id)""").fetchone()["value"]
+        for resource_id in {parent_aggregation_id, aggregation_id} - {None}:
+            if not connection.execute(
+                "SELECT id FROM aggregations WHERE id=%s AND current_user_can_view_aggregation(id)",
+                (resource_id,),
+            ).fetchone():
+                raise HTTPException(status_code=404, detail="aggregation not found")
+        if parent_aggregation_id is not None:
+            parent_level = connection.execute("""SELECT level.level_number FROM aggregations parent
+                JOIN security_levels level ON level.id=parent.security_level_id WHERE parent.id=%s""",
+                (parent_aggregation_id,),
+            ).fetchone()["level_number"]
+            maximum = min(maximum, parent_level) if maximum is not None else None
+        if aggregation_id is not None:
+            minimum = connection.execute("""SELECT max(level.level_number) AS value
+                FROM security_levels level JOIN (
+                    SELECT security_level_id FROM aggregations WHERE parent_aggregation_id=%s
+                    UNION ALL SELECT security_level_id FROM records WHERE aggregation_id=%s
+                ) child ON child.security_level_id=level.id""",
+                (aggregation_id, aggregation_id),
+            ).fetchone()["value"]
+        predicate += " AND level.level_number<=%s AND (%s::integer IS NULL OR level.level_number>=%s)"
+        parameters += (maximum, minimum, minimum)
     total = connection.execute(
         f"SELECT count(*) value FROM security_levels level {predicate}", parameters,
     ).fetchone()["value"]
@@ -230,7 +266,8 @@ def page_security_levels(
         (*parameters, limit, offset),
     ).fetchall())
     items = localize_rows(rows, preferred_language(connection, request), "name")
-    return {"items": items, "total": total, "limit": limit, "offset": offset}
+    return {"items": items, "total": total, "limit": limit, "offset": offset,
+            **({"minimum_level": minimum, "maximum_level": maximum} if assignable else {})}
 
 
 @router.get("/security-levels/{level_id}", response_model=SecurityLevelRead)

@@ -63,6 +63,8 @@ from frontend.webui.app import favourite_preview, personal_dialog_list_height
 from frontend.webui.tests.localization_assertions import with_english_messages
 
 APP_SOURCE = with_english_messages(inspect.getsource(index))
+WORKSPACE_SOURCE = (Path(__file__).parents[1] / "classification_workspace.py").read_text()
+TIMELINE_SOURCE = (Path(__file__).parents[1] / "retention_timeline.py").read_text()
 
 
 def test_direct_classification_label_uses_only_leaf_classification():
@@ -219,14 +221,19 @@ def test_dashboard_overview_uses_compact_holdings_first_layout():
     assert '"dashboard-overview-card-heading w-full items-center no-wrap gap-3"' in APP_SOURCE
 
 
-def test_classification_tree_rtl_grid_does_not_double_mirror_expanders():
-    rtl_tree = APP_SOURCE.split('html[dir="rtl"] .classification-tree-row {', 1)[1].split('}', 1)[0]
-    assert 'grid-template-areas: "expander icon content badge"' in rtl_tree
-    assert '"badge content icon expander"' not in rtl_tree
-    assert 'html[dir="rtl"] .classification-tree-content { direction: rtl; text-align: right; }' in APP_SOURCE
-    assert 'return "chevron_left" if current_direction["value"] == "rtl" else "chevron_right"' in APP_SOURCE
-    assert 'current_direction["value"] = normalized' in APP_SOURCE
-    assert 'icon=tree_expander_icon(item["id"] in workspace["expanded"])' in APP_SOURCE
+def test_classification_tree_uses_logical_indentation_and_direction_aware_expanders():
+    assert 'padding-inline-start:' in WORKSPACE_SOURCE
+    assert '"chevron_left" if direction() == "rtl" else "chevron_right"' in WORKSPACE_SOURCE
+    assert 'aria-expanded=' in WORKSPACE_SOURCE
+    assert 'flex-row-reverse' not in WORKSPACE_SOURCE
+
+
+def test_classification_icons_point_toward_rtl_labels():
+    assert 'html[dir="rtl"] .classification-directional-icon .q-icon' in APP_SOURCE
+    assert 'transform: scaleX(-1)' in APP_SOURCE
+    assert 'if icon in {"label", "schema", "account_tree"}:' in WORKSPACE_SOURCE
+    assert 'button.classes("classification-directional-icon")' in WORKSPACE_SOURCE
+    assert 'classes("classification-directional-icon")' in WORKSPACE_SOURCE
 
 
 def test_aggregation_browser_tree_keeps_expanders_at_rtl_inline_start():
@@ -238,22 +245,13 @@ def test_aggregation_browser_tree_keeps_expanders_at_rtl_inline_start():
     assert 'py-2 pe-2 hover:bg-blue-50 cursor-pointer' in APP_SOURCE
 
 
-def test_classification_scheme_master_detail_uses_logical_rtl_order():
-    assert '.classification-scheme-selector-panel { border-inline-end:' in APP_SOURCE
-    assert 'html[dir="rtl"] .classification-scheme-master-detail' in APP_SOURCE
-    assert 'direction: rtl; flex-direction: row !important;' in APP_SOURCE
-    assert '"classification-scheme-master-detail w-full h-[420px]' in APP_SOURCE
-    assert '"classification-scheme-selector-panel w-[42%]' in APP_SOURCE
-    assert 'html[dir="rtl"] .classification-scheme-filter-sort' in APP_SOURCE
-    assert '"classification-scheme-filter-sort w-full items-center gap-2 no-wrap"' in APP_SOURCE
-    assert 'html[dir="rtl"] .classification-scheme-selector-heading' in APP_SOURCE
-    assert 'grid-template-areas: "action heading"' in APP_SOURCE
-    assert 'classification-scheme-selector-heading-action' in APP_SOURCE
-    assert 'html[dir="rtl"] .classification-scheme-list-card-row' in APP_SOURCE
-    assert 'grid-template-areas: "status content icon"' in APP_SOURCE
-    assert 'classification-scheme-list-card-icon' in APP_SOURCE
-    assert 'html[dir="rtl"] .classification-scheme-detail-identity' in APP_SOURCE
-    assert 'grid-template-areas: "content icon"' in APP_SOURCE
+def test_classification_workspace_has_exclusive_tree_and_detail_pages():
+    assert 'browser_host.set_visibility(False)' in WORKSPACE_SOURCE
+    assert 'detail_host.set_visibility(False)' in WORKSPACE_SOURCE
+    assert 'register_page("classification-scheme-details", fresh)' in WORKSPACE_SOURCE
+    assert 'register_page("classification-details", selected)' in WORKSPACE_SOURCE
+    assert 'classification-scheme-master-detail' not in WORKSPACE_SOURCE
+    assert 'open_in_new' not in WORKSPACE_SOURCE
 
 
 def test_classification_detail_rows_use_single_logical_rtl_order():
@@ -332,20 +330,20 @@ def test_personal_dialog_list_height_is_compact_and_capped():
     assert personal_dialog_list_height(100) == 520
 
 
-def test_classification_workspace_tree_and_summary_are_taller():
-    assert '"w-full h-[870px] min-h-0 gap-4 items-stretch"' in APP_SOURCE
-    assert '"w-full h-[820px] min-h-0 gap-4 items-stretch"' not in APP_SOURCE
+def test_classification_workspace_uses_available_height_without_fixed_panels():
+    assert 'h-[870px]' not in WORKSPACE_SOURCE
+    assert 'h-[420px]' not in WORKSPACE_SOURCE
+    assert 'browser_host = ui.column().classes("classification-workspace w-full gap-3")' in WORKSPACE_SOURCE
 
 
-def test_classification_workspace_tree_is_always_sorted_by_code_ascending():
-    workspace = APP_SOURCE[APP_SOURCE.index("async def select_classification_workspace"):]
-    load_children = workspace[
-        workspace.index("async def load_children"):
-        workspace.index("async def load_classification_path")
-    ]
-    assert "rows = sorted(" in load_children
-    assert 'str(row.get("code") or "")' in load_children
-    assert 'int(row["id"])' in load_children
+def test_classification_workspace_uses_server_order_and_branch_pagination():
+    load_children = WORKSPACE_SOURCE.split("async def load_children", 1)[1].split("async def load_classification_path", 1)[0]
+    assert 'limit=PAGE_SIZE + 1, offset=len(existing)' in load_children
+    assert '"roots_only": True' in load_children
+    assert '"parent_classification_id": parent_id' in load_children
+    # The list endpoint orders the entire sibling set before applying pagination.
+    api_source = (Path(__file__).parents[3] / "backend/services/api/classification_management.py").read_text()
+    assert 'ORDER BY c.code COLLATE "C" ASC, c.id ASC LIMIT %s OFFSET %s' in api_source
 
 
 def test_dashboard_overview_shows_medium_breakdowns_and_admin_hold_total():
@@ -608,7 +606,7 @@ def test_aggregation_summary_has_command_centre_layout():
     assert "min-w-[520px]" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
 
 
-def test_record_detail_header_matches_aggregation_title_and_action_alignment():
+def test_resource_detail_headers_mirror_identity_and_actions_in_rtl():
     assert "items-center" in RECORD_DETAIL_HEADER_CLASSES
     assert "no-wrap" in RECORD_DETAIL_HEADER_CLASSES
     assert "flex-wrap" not in RECORD_DETAIL_HEADER_CLASSES
@@ -617,6 +615,21 @@ def test_record_detail_header_matches_aggregation_title_and_action_alignment():
     source = with_english_messages(inspect.getsource(index))
     assert 'ui.label(record["record_number"]).classes("text-xs text-primary font-semibold")' in source
     assert 'ui.label(record["title"]).classes("text-lg font-semibold break-words")' in source
+    assert '"record-detail-identity-header w-full' in source
+    assert '"record-detail-header-actions items-center gap-2"' in source
+    assert '"aggregation-detail-identity-header w-full items-center gap-3"' in source
+    assert '"aggregation-detail-header-actions items-center gap-2"' in source
+    assert source.count('" icon-right=arrow_forward" if current_direction["value"] == "rtl"') >= 2
+    assert 'ui.icon("description", color="primary", size="18px").classes("w-6")' in source
+
+
+def test_child_aggregation_section_heading_stays_at_rtl_reading_start():
+    source = with_english_messages(inspect.getsource(index))
+    assert '"aggregation-child-section-heading w-full items-center px-5 pt-1"' in source
+    rtl_rule = source.split(
+        'html[dir="rtl"] .aggregation-child-section-heading {', 1
+    )[1].split("}", 1)[0]
+    assert "flex-direction: row;" in rtl_rule
 
 
 def test_record_details_uses_the_approved_right_hand_control_column():
@@ -972,16 +985,10 @@ def test_detail_pages_use_light_blue_metadata_and_retention_visual_system():
     assert 'primary="#268bd2"' in source
     assert ".detail-field-label" in source
     assert ".retention-card" in source
-    assert 'entity_metadata_label("Current retention (years)")' in source
-    assert 'f"{effective_rule[\\"current_period_years\\"]} years"' in source
-    assert 'localized_disposition_value(final_disposition)' in source
-    assert 'localized_disposition_value(retention["final_disposition"])' in source
-    assert '"aggregation-browser-retention-facts"' in source
-    assert '"aggregation-browser-retention-fact gap-2"' in source
-    assert '.aggregation-browser-retention-facts {' in source
+    assert "render_retention_stages(" in source
+    assert 'count=rule["current_period_years"]' in TIMELINE_SOURCE
+    assert 'disposition_label(rule["final_disposition"])' in TIMELINE_SOURCE
     assert 'grid-template-columns: repeat(3, minmax(0, 1fr))' in source
-    assert 'entity_metadata_label("Intermediate retention (years)")' in source
-    assert 'entity_metadata_label("Final disposition")' in source
     assert 'ui.label(str(len(children))).classes("text-2xl font-bold text-primary")' not in source
     assert '"retention-card aggregation-retention-compact shadow-none p-4 gap-3"' in source
 
@@ -1537,7 +1544,7 @@ def test_aggregation_browser_load_more_preserves_the_previous_last_child_anchor(
 def test_organization_browser_selectors_have_persistent_confirmation_action():
     source = with_english_messages(inspect.getsource(index))
     assert '"Clear selection"' not in source
-    assert 'f"Select {selection_mode.replace(\'_\', \' \')}"' in source
+    assert 'f"Select {selection_entity_label}"' in source
     assert "selection_confirm_button.disable()" in source
     assert "selection_confirm_button.enable()" in source
     assert "apply_relationship_selection(" in source
@@ -1581,14 +1588,13 @@ def test_organization_browser_localizes_statuses_summary_and_rtl_disclosures():
     assert "organization-browser-summary-value" in source
 
 
-def test_organization_browser_places_tree_on_the_leading_side_in_rtl():
+def test_organization_browser_has_one_full_width_tree_and_explicit_directional_icons():
     source = inspect.getsource(index)
-    assert 'page_layout_class = "" if is_selector else "organization-browser-page-layout"' in source
-    assert "organization-browser-page-tree w-1/2" in source
-    assert 'html[dir="rtl"] .organization-browser-page-layout' in source
-    assert "flex-direction: row !important;" in source
-    assert 'html[dir="rtl"] .organization-browser-page-tree' in source
-    assert "border-left-width: 1px !important;" in source
+    assert "organization-browser-page-tree w-full min-w-0 h-full overflow-auto" in source
+    assert "organization-browser-page-tree w-1/2" not in source
+    assert "icon=tree_expander_icon(key in expanded)" in source
+    assert 'html[dir="rtl"] .organization-browser-disclosure' not in source
+    assert 'html[dir="rtl"] .organization-browser-page-tree' not in source
 
 
 def test_browsed_relationship_selection_adds_option_and_value_atomically():
@@ -1869,14 +1875,11 @@ def test_record_and_aggregation_searches_keep_favourites_and_recents_visible():
 
 
 def test_classification_workspace_reuses_path_loaded_for_tree_reveal():
-    workspace_source = APP_SOURCE[
-        APP_SOURCE.index("async def select_classification_workspace("):
-        APP_SOURCE.index("async def hold_reason_dialog(")
-    ]
-    assert '"children": {}, "children_more": {}, "paths": {}' in workspace_source
-    assert workspace_source.count("api.classification_path(") == 1
-    assert workspace_source.count("load_classification_path(") == 3
-    assert 'workspace["paths"] = {}' in workspace_source
+    assert WORKSPACE_SOURCE.count("api.classification_path(") == 1
+    assert WORKSPACE_SOURCE.count("load_classification_path(") == 2
+    assert 'workspace["paths"].clear()' in WORKSPACE_SOURCE
+    assert 'workspace["paths"][selected["id"]][:-1]' in WORKSPACE_SOURCE
+    assert 'if not current(revision):' in WORKSPACE_SOURCE
 
 
 def test_resource_personal_sections_load_lazily_and_update_their_own_host():

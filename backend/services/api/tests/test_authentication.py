@@ -24,6 +24,37 @@ def test_authenticated_principal_includes_roles(client: TestClient):
     assert principal["previous_login_at"] is None
 
 
+def test_account_menu_names_follow_language_and_fall_back(client: TestClient):
+    from psycopg.types.json import Jsonb
+
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        for table, name in (("users", "مدير النظام"), ("roles", "مسؤول النظام"), ("org_units", "الإدارة")):
+            connection.execute(
+                psycopg.sql.SQL("UPDATE {} SET translations=%s WHERE id=1").format(psycopg.sql.Identifier(table)),
+                (Jsonb({"ar": {"name": name}}),),
+            )
+        connection.execute("INSERT INTO user_preferences(user_id,language_tag,working_timezone) VALUES (1,'ar','Asia/Dubai') ON CONFLICT(user_id) DO UPDATE SET language_tag='ar'")
+    for response in (
+        client.get("/api/v1/auth/me"),
+        client.post("/api/v1/auth/login", json={"email": "admin@test.invalid", "password": "Temporary-Test-Password-123!"}),
+    ):
+        assert response.status_code == 200
+        principal = response.json()
+        assert principal["user"]["localized"]["name"] == "مدير النظام"
+        assert principal["user"]["name"] == "Test Administrator"
+        assert principal["roles"][0]["localized"]["name"] == "مسؤول النظام"
+        assert principal["roles"][0]["org_unit"]["localized"]["name"] == "الإدارة"
+        assert principal["user"]["email"] == "admin@test.invalid"
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        connection.execute("UPDATE roles SET translations='{}' WHERE id=1")
+    assert client.get("/api/v1/auth/me").json()["roles"][0]["localized"]["name"] == "System Administrator"
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        connection.execute("UPDATE user_preferences SET language_tag='en' WHERE user_id=1")
+    english = client.get("/api/v1/auth/me").json()
+    assert english["user"]["localized"]["name"] == "Test Administrator"
+    assert english["roles"][0]["org_unit"]["localized"]["name"] == "Test Root"
+
+
 def test_principal_reports_previous_successful_login_excluding_current_session(client: TestClient):
     response = client.post(
         "/api/v1/auth/login",

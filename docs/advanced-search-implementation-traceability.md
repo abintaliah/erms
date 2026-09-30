@@ -87,3 +87,60 @@ component-field exclusion from sorting, keyboard-semantic controls, and record
 result empty-state behavior. RTL logical-edge rules cover the added indentation,
 group boundary and trailing status alignment. No schema or migration change was
 required because Phase 4 extends the version-1 controlled query compiler only.
+
+## Authentication-boundary isolation regression
+
+Advanced Search workspace snapshots (criteria, cached results, saved-search
+context, and component details) are cleared at sign-out, session expiry, and
+successful login through the shared search-session cleanup. The cleanup also
+discards the old workspace's navigation guard. A session revision and principal
+check prevent callbacks from the previous identity from persisting its snapshot.
+Search responses and errors are ignored after identity change or navigation away,
+including responses arriving during component-detail loading. This implements
+the WebUI performance contract's identity isolation and abandoned-response rules.
+
+`frontend/webui/tests/test_search_session_isolation.py` exercises the actual
+cleanup and callback functions with synthetic state: normal persistence, identity
+boundary cleanup, stale persistence, and delayed success/error/cancellation.
+These tests do not access a database. No translation keys or artifacts changed.
+
+## Saved-search audience guidance and scoped browsing
+
+Section 10 audience selectors reuse the eligibility predicate from AS-10/AS-11
+in both type-ahead and browse APIs. The optional `audience` browse scope filters
+roots, children and search before pagination; recursive ancestor paths remain
+navigable, while `audience_selectable` prevents choosing context-only units.
+The shared general organization browser retains its existing scope. No cache,
+privilege, schema or migration was added.
+
+`test_saved_audience_tree.py`, `test_browse.py` and `test_saved_searches.py` passed
+13 tests against a newly created canonical-schema disposable database, which
+was dropped afterward. Coverage includes ordinary/admin scope, hidden siblings,
+disabled ancestor metadata, branch paging, matching type-ahead choices, and fresh
+results after assignment removal. `test_saved_audience_paging.py` verifies the
+selection predicate and propagation of scope through every browse request.
+
+Two contextual keys (`webui.saved_audience.roles_help` and `.units_help`) were
+added in English and Arabic. Existing administrator-exported translations and
+provenance are preserved; the new Arabic wording is flagged for human review.
+
+The focused frontend/locale run passed 27 tests. Catalogue reference, exact-key,
+ordering, blank, placeholder, terminology, source hash and unchanged-existing-
+provenance checks passed. No new administrator export was promoted. Live Arabic
+UI inspection confirmed note placement, currently using English fallback until
+the new drafts are reviewed and published. The local API process still serves
+the old browse implementation and requires restart; live scoped-tree and full
+LTR/RTL verification remain pending that reload/publication.
+
+## Criteria edits reset pagination
+
+The identity-scoped Advanced Search workspace compares criteria, target, sort
+and maximum-result settings with its previous snapshot when persisting changes.
+A change resets offset to zero, including invalid intermediate criteria edits;
+unchanged criteria preserve ordinary pagination and same-session restoration.
+The existing builder callbacks all flow through this persistence boundary.
+`test_search_session_isolation.py` passed 15 tests, including later-page edits
+to values, operators, group logic, added/removed conditions, full-text queries,
+and sorting, followed by normal paging with unchanged criteria. No database or
+translation artifacts changed for this fix. Live browser verification remains
+pending.

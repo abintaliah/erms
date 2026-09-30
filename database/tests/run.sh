@@ -190,8 +190,10 @@ psql "${ADVANCED_SEARCH_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${PRE_ADVANCED_SEARCH_SCHEMA}"
 psql "${ADVANCED_SEARCH_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${DATABASE_DIR}/migrations/018_add_advanced_search_phase1.sql"
+psql "${ADVANCED_SEARCH_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/030_rename_saved_search_admin_privilege.sql"
 psql "${ADVANCED_SEARCH_MIGRATION_DATABASE_URL}" --set ON_ERROR_STOP=on --command \
-    "DO \$\$ BEGIN IF to_regclass('public.saved_searches') IS NULL OR to_regclass('public.saved_search_role_grants') IS NULL OR to_regclass('public.saved_search_org_unit_grants') IS NULL OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='018_add_advanced_search_phase1') OR NOT EXISTS(SELECT 1 FROM privileges WHERE code='search.saved_search.administrator') THEN RAISE EXCEPTION 'advanced-search migration verification failed'; END IF; END \$\$"
+    "DO \$\$ BEGIN IF to_regclass('public.saved_searches') IS NULL OR to_regclass('public.saved_search_role_grants') IS NULL OR to_regclass('public.saved_search_org_unit_grants') IS NULL OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='018_add_advanced_search_phase1') OR NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='030_rename_saved_search_admin_privilege') OR NOT EXISTS(SELECT 1 FROM privileges WHERE code='search.saved_search.administer') OR EXISTS(SELECT 1 FROM privileges WHERE code='search.saved_search.administrator') OR (SELECT count(*) FROM profiles profile JOIN profile_privileges membership ON membership.profile_id=profile.id JOIN privileges privilege ON privilege.id=membership.privilege_id WHERE profile.code IN ('INFO_GOV_MGR','INFO_GOV_OFFICER') AND privilege.code IN ('search.saved_search.administer','search.saved_search.delete'))<>4 THEN RAISE EXCEPTION 'advanced-search migration verification failed'; END IF; END \$\$"
 docker exec "${CONTAINER_NAME}" dropdb --force \
     --username "${POSTGRES_USER}" "${ADVANCED_SEARCH_MIGRATION_DB}"
 ADVANCED_SEARCH_MIGRATION_DB_CREATED=false

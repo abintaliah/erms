@@ -836,6 +836,25 @@ or documented style surface rather than duplicating them.
 
 ### 19.1 NiceGUI-first layout and RTL troubleshooting
 
+Saved-search cards keep the Mine/Shared badge at the top trailing edge (right
+in English, left in Arabic). A native NiceGUI three-column grid reserves space
+for the resource icon, wrapping metadata, and badge; Open occupies its own line.
+This replaces the wrapping row that could move the badge beneath long metadata.
+The source-rendered cards were checked in a local NiceGUI browser preview at
+900px and narrow 360px widths in both directions, with no card overflow; the
+Open callback retained the selected search. No custom CSS or translation changes
+were needed.
+
+Detail-page action groups align to the reading start: left in English and right
+in Arabic. Buttons keep their source order in the reading direction, and each
+wrapped line starts at that same edge. Leading button icons precede their labels
+with a visible gap. This applies to management, lifecycle, audit, hold controls,
+advanced actions, and credential actions. Identity-header Back/Favourite/Preview
+groups retain their separate opposite-side placement.
+
+The shared action-panel correction and verification are documented in
+[detail action RTL verification](detail-action-rtl-verification.md).
+
 For developers and agents, the required troubleshooting order is:
 
 1. Reproduce the issue and inspect the existing shared component and its
