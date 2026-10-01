@@ -255,6 +255,10 @@ docker exec "${CONTAINER_NAME}" dropdb --force --username "${POSTGRES_USER}" "${
 I18N_HARDENING_MIGRATION_DB_CREATED=false
 
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --file "${DATABASE_DIR}/schema.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
+    --file "${DATABASE_DIR}/migrations/031_allow_governed_security_changes_on_closed_resources.sql"
+psql "${DATABASE_URL}" --set ON_ERROR_STOP=on --command \
+    "DO \$\$ BEGIN IF NOT EXISTS(SELECT 1 FROM schema_migrations WHERE version='031_allow_governed_security_changes_on_closed_resources') THEN RAISE EXCEPTION 'security-level closed-resource migration verification failed'; END IF; END \$\$"
 "${SCRIPT_DIR}/check_security_schema_parity.sh" "${DATABASE_URL}" "${DATABASE_DIR}/schema.sql"
 psql "${DATABASE_URL}" --set ON_ERROR_STOP=on \
     --file "${SCRIPT_DIR}/organizational_ownership_invariants.sql"

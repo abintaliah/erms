@@ -4957,6 +4957,7 @@ BEGIN
  IF TG_OP='DELETE' THEN PERFORM assert_aggregation_effectively_open(OLD.aggregation_id); RETURN OLD; END IF;
  IF current_setting('app.vital_status_change_authorized',true)='authorized' AND NEW.is_vital IS DISTINCT FROM OLD.is_vital AND (to_jsonb(NEW)-'is_vital'-'version')=(to_jsonb(OLD)-'is_vital'-'version') THEN RETURN NEW; END IF;
  IF current_setting('app.review_date_change_authorized',true)='authorized' AND NEW.date_of_next_review IS DISTINCT FROM OLD.date_of_next_review AND (to_jsonb(NEW)-'date_of_next_review'-'version')=(to_jsonb(OLD)-'date_of_next_review'-'version') THEN RETURN NEW; END IF;
+ IF current_setting('app.security_level_change_authorized',true)='authorized' AND NEW.security_level_id IS DISTINCT FROM OLD.security_level_id AND (to_jsonb(NEW)-'security_level_id'-'version')=(to_jsonb(OLD)-'security_level_id'-'version') THEN RETURN NEW; END IF;
  PERFORM assert_aggregation_effectively_open(OLD.aggregation_id); RETURN NEW;
 END; $$;
 INSERT INTO privileges(code,name,description,category) VALUES ('aggregation.location.change','Change Aggregation Location','Governed change of aggregation assigned or current location.','aggregation') ON CONFLICT DO NOTHING;
@@ -5016,6 +5017,11 @@ BEGIN
    IF current_setting('app.review_date_change_authorized',true)='authorized'
       AND NEW.date_of_next_review IS DISTINCT FROM OLD.date_of_next_review
       AND (to_jsonb(NEW)-'date_of_next_review'-'version')=(to_jsonb(OLD)-'date_of_next_review'-'version') THEN
+     RETURN NEW;
+   END IF;
+   IF current_setting('app.security_level_change_authorized',true)='authorized'
+      AND NEW.security_level_id IS DISTINCT FROM OLD.security_level_id
+      AND (to_jsonb(NEW)-'security_level_id'-'version')=(to_jsonb(OLD)-'security_level_id'-'version') THEN
      RETURN NEW;
    END IF;
    IF closure_source_id=OLD.id AND OLD.date_closed IS NOT NULL
