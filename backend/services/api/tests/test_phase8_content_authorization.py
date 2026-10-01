@@ -40,8 +40,8 @@ def test_drafts_are_private_and_commit_rechecks_current_policy(client: TestClien
     assert client.get(f"/api/v1/record-drafts/{draft.json()['id']}").status_code == 403
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
         assert connection.execute(
-            "SELECT status FROM record_drafts WHERE id=%s", (draft.json()["id"],),
-        ).fetchone()[0] == "open"
+            "SELECT EXISTS(SELECT 1 FROM record_drafts WHERE id=%s)", (draft.json()["id"],),
+        ).fetchone()[0] is True
 
 
 def test_record_create_covers_staged_components_but_not_post_commit_changes(
@@ -130,6 +130,18 @@ def test_metadata_only_record_viewer_cannot_enumerate_or_read_components(
     _set_record_acl(record["id"], role_id, {"record.view"})
     _login_as_phase7(client)
     assert client.get("/api/v1/digital-components", params={"record_id": record["id"]}).json() == []
+    page = client.post("/api/v1/digital-components/search", json={
+        "where": {"field": "record_id", "operator": "eq", "value": record["id"]},
+        "sort": [{"field": "component_order", "direction": "asc"}],
+        "limit": 25,
+    })
+    assert page.status_code == 200
+    assert page.json()["items"] == []
+    assert page.json()["total"] == 0
+    assert client.post(
+        f"/api/v1/records/{record['id']}/digital-components/{component['id']}/move",
+        json={"direction": 1},
+    ).status_code == 403
     assert client.get(f"/api/v1/digital-components/{component['id']}").status_code == 404
     assert client.get(f"/api/v1/digital-components/{component['id']}/content").status_code == 404
 

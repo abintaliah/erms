@@ -6,7 +6,8 @@ from pathlib import Path
 
 APP_PATH = Path(__file__).parents[1] / "app.py"
 TENANT_GROWN_RESOURCES = {
-    "aggregations", "classifications", "org-units", "records", "roles", "users",
+    "aggregations", "classifications", "digital-components", "org-units",
+    "records", "roles", "users",
 }
 
 
@@ -43,3 +44,11 @@ def test_tenant_grown_list_calls_always_declare_a_bound() -> None:
                 f"uses limit={limit_keyword.value.value}"
             )
     assert not violations, "Unbounded tenant-grown collection reads:\n" + "\n".join(violations)
+
+
+def test_webui_does_not_use_legacy_digital_component_array() -> None:
+    source = APP_PATH.read_text(encoding="utf-8")
+    client_source = (APP_PATH.parent / "api_client.py").read_text(encoding="utf-8")
+    assert "api.components(" not in source
+    assert '"GET", "/api/v1/digital-components"' not in client_source
+    assert "async def component_page(" in client_source

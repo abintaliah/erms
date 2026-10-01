@@ -148,7 +148,13 @@ positions, and gaps are rejected atomically.
 components are renumbered in their prior relative order to the contiguous
 positions `1..N`.
 
-**RM-CMP-05 (Observed).** Metadata update may rename or otherwise update a
+**RM-CMP-05 (Observed).** A component may be moved one adjacent position by an
+authorized record-scoped operation. The server locks the record's ordered
+component set and swaps the two positions atomically, so the client does not
+need to download the complete collection. Moving the first component upward or
+the last component downward is an idempotent no-op.
+
+**RM-CMP-06 (Observed).** Metadata update may rename or otherwise update a
 component, but an attempted change of `record_id` to another record is rejected.
 
 ## 4. Containment and hierarchy invariants
@@ -284,12 +290,13 @@ and segmented-storage specifications. The following residual draft behavior is
 implemented.
 
 **RM-DRFT-01 (Observed).** A draft is a private, expiring, pre-commit record
-package with status `open` or `committed`, timestamps, and a positive version.
+package with timestamps and a positive version. The existence of the row means
+the draft is open. Successful commit atomically creates the record and deletes
+the draft rather than retaining a post-commit draft.
 
 **RM-DRFT-02 (Observed).** Reading or mutating a draft requires it to exist, be
-owned by the caller, remain open, remain unexpired, and pass the current record-
-creation authorization check. A non-open draft returns conflict; an expired
-draft returns `410 Gone`.
+owned by the caller, remain unexpired, and pass the current record-creation
+authorization check. An expired draft returns `410 Gone`.
 
 **RM-DRFT-03 (Observed).** Draft metadata may be incomplete while the draft is
 open. Ordinary commit requires a destination aggregation, medium, record
@@ -384,7 +391,7 @@ are unstable; symbol and test names are the durable trace.
 |---|---|---|
 | RM-AGG-01–03 | `database/schema.sql`: `aggregations`, `prevent_aggregation_cycle`, default-date triggers | `database/tests/core_records_management.sql`; `test_aggregation_crud_and_hierarchy` |
 | RM-REC-01–04 | `database/schema.sql`: `records` FK and component cascade; `main.py`: `create_record`, `update_record`, `delete_record` | `test_record_crud_and_required_aggregation`; `test_record_deletion_cascades_to_components_and_content` |
-| RM-CMP-01–05 | `digital_components` constraints; `main.py`: `_reorder_components`, component CRUD | `test_digital_component_crud_and_order`; `test_committed_components_can_be_reordered_and_removed_without_order_gaps` |
+| RM-CMP-01–06 | `digital_components` constraints; `main.py`: `_reorder_components`, `move_digital_component`, component CRUD | `test_digital_component_crud_and_order`; `test_committed_components_can_be_reordered_and_removed_without_order_gaps`; `test_component_search_pages_and_single_move_cross_page_boundary` |
 | RM-HIER-01–04 | hierarchy constraints; `list_aggregations`, `list_records`; `AggregationRead` and `RecordRead` redaction state | `database/tests/core_records_management.sql`; `test_aggregation_crud_and_hierarchy`; authorization API tests |
 | RM-LIFE-01–09 | aggregation, record, and component CRUD routes; database FK actions and duplicate mapping | `test_api.py` CRUD, duplicate, parent-deletion, and cascade tests |
 | RM-CLOSE-01–06 | `protect_closed_aggregation_hierarchy`, record/component/blob/content-set closure triggers; `_effective_closure`; aggregation patch | `test_closed_aggregation_makes_its_entire_subtree_immutable` |
@@ -408,14 +415,11 @@ These are observations, not new product requirements:
 1. The core list endpoints use bounded offset pagination and return bare arrays;
    newer browse/search APIs use stronger server-pagination contracts. New UI
    work must not treat the legacy 100/500-row surface as sufficient pagination.
-2. Digital-component metadata can be created independently of uploaded bytes,
-   leaving content lifecycle state to the storage subsystem. Callers that need
-   a usable file should use the upload workflow governed by the storage spec.
-3. `record_drafts.status` includes `committed`, while the ordinary successful
-   commit currently deletes the draft row. The value exists in the persistence
-   contract but is not a retained post-commit business record in the observed
-   workflow.
-4. Direct database constraints are intentionally stronger than API-only
+2. The deprecated generic component-create endpoint can create metadata
+   independently of uploaded bytes, leaving content lifecycle state to the
+   storage subsystem. Its OpenAPI operation directs callers that need a usable
+   file to the upload workflow governed by the storage spec.
+3. Direct database constraints are intentionally stronger than API-only
    validation for hierarchy, containment, closure, holds, security, ownership,
    medium, and vital-resource integrity.
 

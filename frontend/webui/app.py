@@ -744,7 +744,7 @@ def component_file_icon(mime_type: str | None) -> str:
         return "table_view"
     if "word" in value or "document" in value or value.startswith("text/"):
         return "description"
-    return "draft"
+    return "description"
 
 
 def native_preview_kind(mime_type: str | None) -> str | None:
@@ -4220,9 +4220,9 @@ def index(q: str = "") -> None:
                 try:
                     capabilities, components = await asyncio.gather(
                         api.resource_capabilities("records", record_id),
-                        api.components(record_id),
+                        api.component_page(record_id, limit=25),
                     )
-                    return record_id, capabilities, components
+                    return record_id, capabilities, components["items"]
                 except ApiError:
                     return record_id, {}, []
             component_contexts = await asyncio.gather(*(
@@ -5099,13 +5099,21 @@ def index(q: str = "") -> None:
         # later through NiceGUI's implicit current-slot context.
         viewer_client = context.client
         try:
-            components, capabilities = await asyncio.gather(
-                api.components(record["id"]),
-                api.resource_capabilities("records", record["id"]),
+            capabilities = await api.resource_capabilities("records", record["id"])
+            preview_page = {"limit": 50, "offset": 0, "total": 0}
+            if initial_component_id is not None:
+                initial_component = await api.get("digital-components", initial_component_id)
+                preview_page["offset"] = (
+                    (int(initial_component["component_order"]) - 1) // preview_page["limit"]
+                ) * preview_page["limit"]
+            components = await api.component_page(
+                record["id"], limit=preview_page["limit"], offset=preview_page["offset"],
             )
         except ApiError as error:
             ui.notify(error_message(error), color="negative", close_button=True)
             return
+        preview_page["total"] = int(components["total"])
+        components = components["items"]
         previewable = sorted(
             (item for item in components if component_is_previewable(item)),
             key=lambda item: item.get("component_order", 0),
@@ -5164,6 +5172,30 @@ def index(q: str = "") -> None:
         toolbar_host: Any = None
         content_host: Any = None
 
+        async def load_preview_page(direction: int) -> None:
+            nonlocal previewable
+            target_offset = max(
+                0,
+                int(preview_page["offset"]) + direction * int(preview_page["limit"]),
+            )
+            try:
+                result = await api.component_page(
+                    record["id"], limit=int(preview_page["limit"]), offset=target_offset,
+                )
+            except ApiError as error:
+                ui.notify(error_message(error), color="negative", close_button=True)
+                return
+            candidates = sorted(
+                (item for item in result["items"] if component_is_previewable(item)),
+                key=lambda item: item.get("component_order", 0),
+            )
+            if not candidates:
+                ui.notify(render_message("webui.preview_record_components.notify.no_previewable_digital_components_are_avai_8160d774"), color="warning")
+                return
+            preview_page.update(offset=target_offset, total=int(result["total"]))
+            previewable = candidates
+            await select_component(previewable[0])
+
         def render_switcher() -> None:
             switcher_host.clear()
             active_id = viewer_state["component"]["id"]
@@ -5209,6 +5241,18 @@ def index(q: str = "") -> None:
                             if viewer_state.get("loading_id") == item["id"]:
                                 button.disable()
                             button.tooltip(item.get("file_name") or render_message("webui.render_switcher.tooltip.unnamed_file_1e7c23b2"))
+                    previous_components = ui.button(icon="chevron_left").props(
+                        "flat round dense aria-label='" + render_message("webui.render_entity_compact_results.accessible_name.previous_page_2ba84275") + "'"
+                    )
+                    next_components = ui.button(icon="chevron_right").props(
+                        "flat round dense aria-label='" + render_message("webui.render_entity_compact_results.accessible_name.next_page_66adc3fc") + "'"
+                    )
+                    if preview_page["offset"] <= 0:
+                        previous_components.disable()
+                    if preview_page["offset"] + preview_page["limit"] >= preview_page["total"]:
+                        next_components.disable()
+                    previous_components.on("click", lambda: load_preview_page(-1))
+                    next_components.on("click", lambda: load_preview_page(1))
 
         async def select_component(component: dict[str, Any]) -> None:
             if viewer_state.get("loading_id") == component["id"]:
@@ -5376,6 +5420,7 @@ def index(q: str = "") -> None:
             return
         readonly = closure is not None
         current_rows: list[dict[str, Any]] = []
+        component_page = {"limit": 25, "offset": 0, "total": 0}
         upload_lock = asyncio.Lock()
         uploader_control: dict[str, Any] = {}
         component_refresh: dict[str, Any] = {}
@@ -5411,7 +5456,7 @@ def index(q: str = "") -> None:
                 try:
                     async with upload_lock:
                         await component_refresh["fn"]()
-                        first_position = len(current_rows) + 1
+                        first_position = int(component_page["total"]) + 1
                         for offset, (content, name, mime_type) in enumerate(buffered_files):
                             await api.upload_component(
                                 record["id"], first_position + offset, name, content, mime_type,
@@ -5452,10 +5497,50 @@ def index(q: str = "") -> None:
                         capabilities=component_capabilities,
                         focused_component_id=focused_component_id,
                     )
+                total = int(component_page["total"])
+                if total:
+                    first = int(component_page["offset"]) + 1
+                    last = int(component_page["offset"]) + len(current_rows)
+                    with ui.row().classes("w-full items-center justify-center gap-2 pt-3"):
+                        previous = ui.button(icon="chevron_left").props(
+                            "flat round aria-label='" + render_message("webui.render_entity_compact_results.accessible_name.previous_page_2ba84275") + "'"
+                        )
+                        ui.badge(f"{first}–{last} / {total}", color="blue-grey").props("outline")
+                        next_button = ui.button(icon="chevron_right").props(
+                            "flat round aria-label='" + render_message("webui.render_entity_compact_results.accessible_name.next_page_66adc3fc") + "'"
+                        )
+                        if component_page["offset"] <= 0:
+                            previous.disable()
+                        if last >= total:
+                            next_button.disable()
+                        previous.on("click", lambda: change_component_page(-1))
+                        next_button.on("click", lambda: change_component_page(1))
+
+        async def change_component_page(direction: int) -> None:
+            component_page["offset"] = max(
+                0,
+                int(component_page["offset"]) + direction * int(component_page["limit"]),
+            )
+            await refresh_components()
 
         async def refresh_components() -> None:
             try:
-                rows = await api.components(record["id"])
+                result = await api.component_page(
+                    record["id"], limit=int(component_page["limit"]),
+                    offset=int(component_page["offset"]),
+                )
+                if not result["items"] and result["total"] and component_page["offset"]:
+                    component_page["offset"] = max(
+                        0,
+                        ((int(result["total"]) - 1) // int(component_page["limit"]))
+                        * int(component_page["limit"]),
+                    )
+                    result = await api.component_page(
+                        record["id"], limit=int(component_page["limit"]),
+                        offset=int(component_page["offset"]),
+                    )
+                rows = result["items"]
+                component_page["total"] = int(result["total"])
                 if capability_allowed(component_capabilities,"reindex_components"):
                     statuses=await asyncio.gather(*[
                         api.component_indexing_status(item["id"]) for item in rows
@@ -5469,17 +5554,8 @@ def index(q: str = "") -> None:
                 ui.notify(error_message(error), color="negative")
 
         async def move_component(component: dict[str, Any], direction: int) -> None:
-            index = next((i for i, item in enumerate(current_rows) if item["id"] == component["id"]), -1)
-            target = index + direction
-            if index < 0 or target < 0 or target >= len(current_rows):
-                return
-            reordered = list(current_rows)
-            reordered[index], reordered[target] = reordered[target], reordered[index]
             try:
-                await api.reorder_components(record["id"], [
-                    {"id": item["id"], "component_order": position}
-                    for position, item in enumerate(reordered, 1)
-                ])
+                await api.move_component(record["id"], component["id"], direction)
                 await refresh_components()
             except ApiError as error:
                 ui.notify(error_message(error), color="negative")
@@ -6751,7 +6827,7 @@ def index(q: str = "") -> None:
                 api.effective_holds("record", record_id),
             )
             record_components = (
-                await api.components(record_id)
+                (await api.component_page(record_id, limit=25))["items"]
                 if capabilities.get("list_components") else []
             )
             location_source_ids = {
@@ -6798,7 +6874,7 @@ def index(q: str = "") -> None:
         async def confirm_delete_record() -> None:
             confirmation = ui.dialog()
             try:
-                components = await api.components(record["id"])
+                component_total = await api.component_count(record["id"])
             except ApiError as error:
                 ui.notify(error_message(error), color="negative", close_button=True)
                 return
@@ -6807,9 +6883,9 @@ def index(q: str = "") -> None:
                 ui.label(
                     render_message("webui.confirm_delete_record.label.record_number_title_will_be_permanently_de_fd38dfa9", record_number=record['record_number'], title=record['title'])
                 ).classes("text-sm text-slate-700")
-                if components:
+                if component_total:
                     ui.label(
-                        render_message("webui.confirm_delete_record.label.its_component_count_digital_component_valu_7b85da08", component_count=len(components), value='s' if len(components) != 1 else '')
+                        render_message("webui.confirm_delete_record.label.its_component_count_digital_component_valu_7b85da08", component_count=component_total, value='s' if component_total != 1 else '')
                     ).classes("text-sm font-medium text-negative")
                 ui.label(render_message("webui.confirm_delete_record.label.the_immutable_event_history_will_be_retain_daa89bf7")).classes("text-xs text-slate-500")
 
@@ -9205,11 +9281,11 @@ def index(q: str = "") -> None:
                 try:
                     record_capabilities, components = await asyncio.gather(
                         api.resource_capabilities("records", record["id"]),
-                        api.components(record["id"]),
+                        api.component_page(record["id"], limit=25),
                     )
                 except ApiError:
                     return {}, []
-                return record_capabilities, components
+                return record_capabilities, components["items"]
 
             record_contexts = await asyncio.gather(*[
                 load_record_result_context(record) for record in records
@@ -10550,7 +10626,7 @@ def index(q: str = "") -> None:
             try:
                 capabilities = await api.resource_capabilities("records", int(record["id"]))
                 components = (
-                    await api.components(int(record["id"]))
+                    (await api.component_page(int(record["id"]), limit=25))["items"]
                     if capabilities.get("list_components") else []
                 )
                 return capabilities, components
@@ -18358,9 +18434,9 @@ def index(q: str = "") -> None:
                             record_id = int(record_item["id"])
                             capabilities, components = await asyncio.gather(
                                 api.resource_capabilities("records", record_id),
-                                api.components(record_id),
+                                api.component_page(record_id, limit=25),
                             )
-                            return record_id, capabilities, components
+                            return record_id, capabilities, components["items"]
                         except ApiError:
                             return int(record_item["id"]), {}, []
                     component_contexts = await asyncio.gather(*(

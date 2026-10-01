@@ -985,7 +985,6 @@ class RecordDraftRead(ApiModel):
     date_created: datetime
     date_updated: datetime
     expires_at: datetime
-    status: Literal["open", "committed"]
     version: int
 
 
@@ -1011,6 +1010,10 @@ class ComponentOrderItem(ApiModel):
 
 class ComponentReorderRequest(ApiModel):
     components: list[ComponentOrderItem]
+
+
+class ComponentMoveRequest(ApiModel):
+    direction: Literal[-1, 1]
 
 
 class DigitalComponentCreate(ApiModel):

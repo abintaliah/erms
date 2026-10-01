@@ -3808,6 +3808,23 @@
       "phase_12_enforced": false
     },
     {
+      "id": "POST:/api/v1/records/{record_id}/digital-components/{component_id}/move",
+      "method": "POST",
+      "path": "/api/v1/records/{record_id}/digital-components/{component_id}/move",
+      "current_access_class": "authenticated_only",
+      "target_policy_class": "resource_scoped",
+      "global_privilege": "record.component.reorder",
+      "resource_permission": "record.component.reorder",
+      "phase_0_enforced": false,
+      "phase_4_enforced": false,
+      "phase_5_enforced": false,
+      "phase_7_enforced": false,
+      "phase_8_enforced": true,
+      "phase_9_enforced": false,
+      "phase_11_enforced": false,
+      "phase_12_enforced": false
+    },
+    {
       "id": "GET:/api/v1/records/{record_id}/history",
       "method": "GET",
       "path": "/api/v1/records/{record_id}/history",

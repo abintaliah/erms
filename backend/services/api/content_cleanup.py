@@ -102,7 +102,7 @@ def cleanup_content(connection: Connection, *, batch_size: int = 100, dry_run: b
                       ON blob.record_draft_component_id = component.id
                    WHERE component.draft_id = draft.id), 0) AS stored_bytes
            FROM record_drafts draft
-           WHERE expires_at <= CURRENT_TIMESTAMP AND status = 'open'
+           WHERE expires_at <= CURRENT_TIMESTAMP
            ORDER BY id FOR UPDATE SKIP LOCKED LIMIT %s""",
         (batch_size,),
     ).fetchall()

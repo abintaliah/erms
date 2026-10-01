@@ -51,3 +51,13 @@ def test_content_head_routes_are_not_documented_as_duplicate_operations():
             for method in getattr(route, "methods", set())
         }
         assert {"GET", "HEAD"} <= registered_methods
+
+
+def test_metadata_only_component_creation_is_documented_as_deprecated():
+    app.openapi_schema = None
+    schema = app.openapi()
+
+    operation = schema["paths"]["/api/v1/digital-components"]["post"]
+    assert operation["deprecated"] is True
+    assert "metadata only" in operation["description"]
+    assert "/api/v1/records/{record_id}/digital-components/upload" in operation["description"]
