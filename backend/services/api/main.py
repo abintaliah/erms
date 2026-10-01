@@ -46,6 +46,7 @@ from .schemas import (
     DigitalComponentRead,
     DigitalComponentUpdate,
     ComponentReorderRequest,
+    ComponentMoveRequest,
     EventHistoryRead,
     RecordCreate,
     RecordDraftComponentRead,
@@ -1309,8 +1310,6 @@ def _open_draft(connection: Connection, draft_id: int, *, lock: bool = False) ->
     ).fetchone()
     if draft is None:
         raise HTTPException(status_code=404, detail="record draft not found")
-    if draft["status"] != "open":
-        raise HTTPException(status_code=409, detail="record draft is no longer open")
     if draft["expires_at"] <= datetime.now(draft["expires_at"].tzinfo):
         raise HTTPException(status_code=410, detail="record draft has expired")
     return draft
@@ -1590,6 +1589,14 @@ def commit_record_draft_placement_correction(
     response_model=DigitalComponentRead,
     status_code=status.HTTP_201_CREATED,
     tags=["digital components"],
+    deprecated=True,
+    summary="Create digital-component metadata (deprecated)",
+    description=(
+        "Deprecated: this operation creates metadata only and does not upload or "
+        "verify file content. Use `POST "
+        "/api/v1/records/{record_id}/digital-components/upload` to create a usable "
+        "digital component with its metadata and stored content."
+    ),
 )
 def create_digital_component(
     payload: DigitalComponentCreate,
@@ -1706,6 +1713,47 @@ def reorder_digital_components(
     require_resource_operation(connection, "record", record_id,
                                "record.component.reorder", "record.component.reorder")
     _reorder_components(connection, "digital_components", "record_id", record_id, payload)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.post(
+    "/api/v1/records/{record_id}/digital-components/{component_id}/move",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["digital components"],
+)
+def move_digital_component(
+    record_id: int,
+    component_id: int,
+    payload: ComponentMoveRequest,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    """Move one component by one position without downloading the full list."""
+    require_resource_operation(
+        connection, "record", record_id,
+        "record.component.reorder", "record.component.reorder",
+    )
+    rows = list(connection.execute(
+        """SELECT id,component_order FROM digital_components
+            WHERE record_id=%s ORDER BY component_order,id FOR UPDATE""",
+        (record_id,),
+    ).fetchall())
+    index = next((position for position, row in enumerate(rows) if row["id"] == component_id), None)
+    if index is None:
+        raise HTTPException(status_code=404, detail="digital component not found")
+    target_index = index + payload.direction
+    if target_index < 0 or target_index >= len(rows):
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    current = rows[index]
+    target = rows[target_index]
+    connection.execute("SET CONSTRAINTS ALL DEFERRED")
+    connection.execute(
+        "UPDATE digital_components SET component_order=%s WHERE id=%s",
+        (target["component_order"], current["id"]),
+    )
+    connection.execute(
+        "UPDATE digital_components SET component_order=%s WHERE id=%s",
+        (current["component_order"], target["id"]),
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

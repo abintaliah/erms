@@ -1236,13 +1236,32 @@ class ErmsApiClient:
             files={"file": (name, content, mime_type or "application/octet-stream")},
         )
 
-    async def components(self, record_id: int) -> list[dict[str, Any]]:
-        return await self.request(
-            "GET", "/api/v1/digital-components", params={"record_id": record_id}
-        )
+    async def component_page(
+        self, record_id: int, *, limit: int = 25, offset: int = 0,
+    ) -> dict[str, Any]:
+        """Return one authorized, deterministically ordered component page."""
+        return await self.search_request("digital-components", {
+            "where": {"field": "record_id", "operator": "eq", "value": record_id},
+            "sort": [
+                {"field": "component_order", "direction": "asc"},
+                {"field": "id", "direction": "asc"},
+            ],
+            "limit": limit,
+            "offset": offset,
+        })
+
+    async def component_count(self, record_id: int) -> int:
+        return int((await self.component_page(record_id, limit=1))["total"])
 
     async def reorder_components(self, record_id: int, components: list[dict[str, int]]) -> None:
         await self.request("PUT", f"/api/v1/records/{record_id}/digital-components/order", json={"components": components})
+
+    async def move_component(self, record_id: int, component_id: int, direction: int) -> None:
+        await self.request(
+            "POST",
+            f"/api/v1/records/{record_id}/digital-components/{component_id}/move",
+            json={"direction": direction},
+        )
 
     async def delete_component(self, component_id: int, version: int) -> None:
         await self.request("DELETE", f"/api/v1/digital-components/{component_id}", headers={"If-Match": str(version)})

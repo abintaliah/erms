@@ -75,6 +75,14 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/027_simplify_translation_publication.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/migrations/028_disallow_non_source_copy_publication.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/029_organization_tree_ordering.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/030_rename_saved_search_admin_privilege.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/031_allow_governed_security_changes_on_closed_resources.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f database/migrations/032_remove_redundant_record_draft_status.sql
 ```
 
 Migration 004 makes lifecycle timestamps authoritative. Organization units and

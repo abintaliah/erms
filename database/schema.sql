@@ -937,7 +937,6 @@ CREATE TABLE IF NOT EXISTS record_drafts (
     date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_updated timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at timestamptz NOT NULL DEFAULT (CURRENT_TIMESTAMP + interval '7 days'),
-    status text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'committed')),
     version bigint NOT NULL DEFAULT 1 CHECK (version > 0)
 );
 CREATE INDEX IF NOT EXISTS record_drafts_owner_user_id_idx ON record_drafts (owner_user_id);
@@ -3265,7 +3264,7 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
     SELECT 1 FROM record_drafts draft
     JOIN users owner ON owner.id=draft.owner_user_id
     WHERE draft.id=p_draft_id AND draft.owner_user_id=current_user_id()
-      AND draft.status='open' AND draft.expires_at>CURRENT_TIMESTAMP
+      AND draft.expires_at>CURRENT_TIMESTAMP
       AND owner.status='active')
 $$;
 

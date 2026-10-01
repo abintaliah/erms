@@ -199,7 +199,7 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
             return "resource_scoped", "record.component.replace", "record.component.replace"
         if method == "DELETE" and path.endswith("/content"):
             return "resource_scoped", "record.component.remove", "record.component.remove"
-        if path.endswith("/order"):
+        if path.endswith("/order") or path.endswith("/move"):
             return "resource_scoped", "record.component.reorder", "record.component.reorder"
         if method == "POST" and (path.endswith("/upload") or path.endswith("/components")):
             return "resource_scoped", "record.component.add", "record.component.add"

@@ -133,6 +133,17 @@ def test_phase1_preview_controls_and_entry_points_are_present():
     assert "viewer_client.run_javascript(" in viewer_source
 
 
+def test_component_surfaces_use_bounded_server_pages_and_cross_page_moves():
+    source = APP_SOURCE
+    assert "api.components(" not in source
+    assert 'component_page = {"limit": 25, "offset": 0, "total": 0}' in source
+    assert 'api.component_page(' in source
+    assert 'await api.move_component(record["id"], component["id"], direction)' in source
+    assert 'first_position = int(component_page["total"]) + 1' in source
+    assert 'component_total = await api.component_count(record["id"])' in source
+    assert 'preview_page = {"limit": 50, "offset": 0, "total": 0}' in source
+
+
 def test_pdf_preview_is_isolated_from_the_arabic_ui_direction():
     assert 'ui.element("canvas").props(f"id={canvas_id} dir=ltr")' in APP_SOURCE
     viewer_source = (
@@ -1767,7 +1778,9 @@ def test_component_display_helpers_prioritize_readable_file_information():
     assert format_file_size(None) == "—"
     assert component_file_icon("application/pdf") == "picture_as_pdf"
     assert component_file_icon("image/jpeg") == "image"
-    assert component_file_icon("application/octet-stream") == "draft"
+    assert component_file_icon("application/xml") == "description"
+    assert component_file_icon("application/octet-stream") == "description"
+    assert component_file_icon(None) == "description"
 
 
 def test_component_uploader_batches_multiple_files_into_one_handler():

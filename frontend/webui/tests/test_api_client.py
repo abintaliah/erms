@@ -942,6 +942,46 @@ def test_component_download_view_and_print_use_distinct_authorized_routes():
     ]
 
 
+def test_component_page_preserves_server_pagination_and_move_contract():
+    captured = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content or b"{}")
+        captured.append((request.method, request.url.path, body))
+        if request.url.path.endswith("/search"):
+            return httpx.Response(200, json={
+                "items": [{"id": 31, "component_order": 26}],
+                "total": 105, "limit": 25, "offset": 25, "returned": 1,
+            })
+        return httpx.Response(204)
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            page = await client.component_page(7, limit=25, offset=25)
+            await client.move_component(7, 31, -1)
+            return page
+        finally:
+            await client.close()
+
+    page = asyncio.run(exercise())
+    assert page["total"] == 105
+    search = captured[0]
+    assert search[0:2] == ("POST", "/api/v1/digital-components/search")
+    assert search[2] == {
+        "where": {"field": "record_id", "operator": "eq", "value": 7},
+        "sort": [
+            {"field": "component_order", "direction": "asc"},
+            {"field": "id", "direction": "asc"},
+        ],
+        "limit": 25,
+        "offset": 25,
+    }
+    assert captured[1] == (
+        "POST", "/api/v1/records/7/digital-components/31/move", {"direction": -1},
+    )
+
+
 def test_entity_history_uses_read_only_timeline_route():
     captured = {}
 
