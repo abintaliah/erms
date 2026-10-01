@@ -6699,7 +6699,7 @@ def index(q: str = "") -> None:
                         "resource_id": resource["id"],
                         "target_security_level_id": int(target.value),
                         "remedy": remedy.value,
-                        "preview_token": preview_state["preview_token"],
+                        "reviewed_versions": preview_state["reviewed_versions"],
                     }, reason=change_reason)
                 except ApiError as error:
                     ui.notify(error_message(error), color="negative", close_button=True)

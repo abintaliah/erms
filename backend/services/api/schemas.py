@@ -470,17 +470,23 @@ class SecurityLevelChangePreviewRequest(ApiModel):
     remedy: Literal["none", "raise_ancestors", "downgrade_subtree"] = "none"
 
 
+class SecurityLevelChangeVersions(ApiModel):
+    resource: int
+    aggregations: dict[str, int]
+    records: dict[str, int]
+
+
 class SecurityLevelChangeApplyRequest(SecurityLevelChangePreviewRequest):
-    preview_token: str
+    reviewed_versions: SecurityLevelChangeVersions
 
 
 class SecurityLevelChangePreviewRead(ApiModel):
-    preview_token: str
     conflict: bool
     remedy: str
     target_level_number: int
     affected_aggregations: list[dict[str, Any]]
     affected_records: list[dict[str, Any]]
+    reviewed_versions: SecurityLevelChangeVersions
 
 
 class AggregationCreate(ApiModel):
