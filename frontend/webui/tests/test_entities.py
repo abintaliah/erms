@@ -1031,9 +1031,11 @@ def test_application_shell_is_flat_and_uses_one_background():
     assert 'ui.image("/static/brand/wathiq-mark.svg?v=2")' in source
     assert 'ui.label("wathiq").classes("erms-brand-name")' in source
     assert 'ui.label("ERMS")' not in source
-    assert "family=Righteous&display=swap" in source
+    assert 'href="/static/fonts/righteous/righteous.css?v=1"' in source
+    assert "family=Righteous" not in source
     assert "font-family: Righteous, Inter" in source
-    assert "family=Changa:wght@400;500;600;700" in source
+    assert 'href="/static/fonts/changa/changa.css?v=1"' in source
+    assert "family=Changa" not in source
     assert 'font-family: Changa, Tahoma, Arial, "Segoe UI", sans-serif' in source
     assert 'html[dir="rtl"] .erms-brand {' in source
     assert 'direction: rtl; flex-direction: row !important;' in source
@@ -1095,8 +1097,47 @@ def test_aggregation_records_use_compact_authorized_expandable_rows():
 def test_brand_assets_are_exposed_through_the_frontend_static_route():
     module_source = inspect.getsource(inspect.getmodule(index))
     assert 'app.add_static_files("/static/brand"' in module_source
+    assert 'app.add_static_files("/static/fonts"' in module_source
     assert 'title="wathiq"' in module_source
     assert 'favicon=Path(__file__).with_name("static") / "brand" / "wathiq-mark.svg"' in module_source
+
+
+def test_changa_is_bundled_for_local_browser_delivery():
+    font_dir = Path(__file__).parents[1] / "static" / "fonts" / "changa"
+    stylesheet = (font_dir / "changa.css").read_text(encoding="utf-8")
+
+    assert "fonts.googleapis.com" not in stylesheet
+    assert "fonts.gstatic.com" not in stylesheet
+    assert 'font-weight: 400 700;' in stylesheet
+    for filename in (
+        "changa-arabic.woff2",
+        "changa-latin-ext.woff2",
+        "changa-latin.woff2",
+    ):
+        assert f'url("./{filename}")' in stylesheet
+        assert (font_dir / filename).read_bytes().startswith(b"wOF2")
+    assert "SIL OPEN FONT LICENSE Version 1.1" in (
+        font_dir / "OFL.txt"
+    ).read_text(encoding="utf-8")
+
+
+def test_righteous_is_bundled_for_local_brand_delivery():
+    font_dir = Path(__file__).parents[1] / "static" / "fonts" / "righteous"
+    stylesheet = (font_dir / "righteous.css").read_text(encoding="utf-8")
+
+    assert "fonts.googleapis.com" not in stylesheet
+    assert "fonts.gstatic.com" not in stylesheet
+    assert 'font-family: "Righteous";' in stylesheet
+    assert "font-weight: 400;" in stylesheet
+    for filename in (
+        "righteous-latin-ext.woff2",
+        "righteous-latin.woff2",
+    ):
+        assert f'url("./{filename}")' in stylesheet
+        assert (font_dir / filename).read_bytes().startswith(b"wOF2")
+    assert "SIL OPEN FONT LICENSE Version 1.1" in (
+        font_dir / "OFL.txt"
+    ).read_text(encoding="utf-8")
 
 
 def test_record_detail_aggregation_navigation_uses_click_handler_not_route_link():

@@ -63,6 +63,7 @@ from .rtl import document_direction_script, normalize_direction
 app.add_static_files("/static/pdfjs", Path(__file__).with_name("static") / "pdfjs")
 app.add_static_files("/static/brand", Path(__file__).with_name("static") / "brand")
 app.add_static_files("/static/login", Path(__file__).with_name("static") / "login")
+app.add_static_files("/static/fonts", Path(__file__).with_name("static") / "fonts")
 app.add_static_files("/static/inspector", Path(__file__).with_name("static"))
 
 CLASSIFICATION_WORKSPACE_SEARCH_FIELDS = ("code", "title", "description", "keywords")
@@ -1928,8 +1929,8 @@ def index(q: str = "") -> None:
     ui.add_head_html(
         '<link rel="preconnect" href="https://fonts.googleapis.com">'
         '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-        '<link href="https://fonts.googleapis.com/css2?family=Righteous&display=swap" rel="stylesheet">'
-        '<link href="https://fonts.googleapis.com/css2?family=Changa:wght@400;500;600;700&display=swap" rel="stylesheet">'
+        '<link href="/static/fonts/righteous/righteous.css?v=1" rel="stylesheet">'
+        '<link href="/static/fonts/changa/changa.css?v=1" rel="stylesheet">'
         '<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:'
         'opsz,wght,FILL,GRAD@20,300,0,0&display=swap" rel="stylesheet">'
     )
