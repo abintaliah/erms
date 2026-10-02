@@ -3,7 +3,7 @@
 **Status:** Proposed  
 **Project:** ERMS / Wathiq  
 **Prepared:** 30 September 2026  
-**Revision:** 1.16 — phased implementation and verification plan
+**Revision:** 1.17 — linked user-messaging UI mockup
 
 ## 1. Purpose
 
@@ -19,6 +19,20 @@ toast and a future Flutter application may show an in-app banner.
 The live connection is an optimization, not the message store and not proof of
 delivery. A temporary network failure, closed client, or restarted application
 must not lose a committed message.
+
+### 1.1 Non-normative user-interface mockup
+
+The repository includes a
+[clickable user-to-user messaging mockup](../docs/mockups/wathiq-user-messaging.html)
+covering Inbox, Outbox, Drafts, Compose, message reading, replies, forwarding,
+follow-ups, recipient selection, action completion, and action amendments.
+
+The mockup is a design and review aid only. It does not create an API contract,
+authorize behavior, or override this specification. If the mockup and this
+specification differ, this specification is authoritative. Production user
+interfaces must also comply with the design language, internationalization,
+accessibility, authorization, performance, and frontend-specific requirements
+applicable to that implementation.
 
 ## 2. Scope
 
