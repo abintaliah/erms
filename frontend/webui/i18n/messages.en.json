@@ -14187,6 +14187,22 @@
     "is_html": false
   },
   {
+    "message_key": "webui.index.label.database_display_name_31c6f7d2",
+    "context_group": "webui.index",
+    "default_text": "Database: {database_name}",
+    "semantic_meaning": "Identifies the configured database environment in the application footer.",
+    "common_locations": [
+      "WebUI: application footer"
+    ],
+    "translator_guidance": "Translate the Database label concisely and preserve the database_name placeholder exactly. The placeholder value is supplied separately for the active language.",
+    "grammatical_role": "label with value",
+    "parameter_schema": {
+      "database_name": "text"
+    },
+    "rendered_example": "Database: Production Database",
+    "is_html": false
+  },
+  {
     "message_key": "webui.index.label.designed_and_built_by_sharjah_archives_742aec80",
     "context_group": "webui.index",
     "default_text": "Designed and built by Sharjah Archives",
