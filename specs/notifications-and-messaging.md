@@ -3,7 +3,7 @@
 **Status:** Proposed  
 **Project:** ERMS / Wathiq  
 **Prepared:** 30 September 2026  
-**Revision:** 1.9 — channel comparison
+**Revision:** 1.16 — phased implementation and verification plan
 
 ## 1. Purpose
 
@@ -205,6 +205,40 @@ of a human user's role or organizational-unit selector includes the sender,
 the sender is excluded before deduplication and recipient-limit evaluation. If
 expansion produces no eligible concrete user, sending fails without creating
 an envelope or delivery.
+
+### MSG-005A — Shared selector components
+
+Within each frontend implementation, every messaging interface that selects a
+user, role, organizational unit, or security level shall reuse the corresponding
+selector component already used elsewhere in that same frontend. Thus WebUI
+messaging reuses the established WebUI selectors, while a Flutter messaging UI
+reuses the selectors established by the Flutter application. This applies to
+Compose, Drafts, recipient validation, Notification Administration audiences,
+controlled test sends, filters, and any later messaging interface that presents
+one of these entity selectors.
+
+This requirement does not require WebUI and Flutter to share UI source code,
+widgets, packages, rendering behavior, or other implementation technology. Each
+frontend reuses and remains consistent with its own component system while all
+frontends consume the same frontend-neutral messaging APIs and server-enforced
+rules.
+
+The messaging subsystem shall not introduce a messaging-only user selector,
+role selector, organizational-unit selector, or security-level selector, nor
+copy the shared component's search, pagination, display, accessibility, RTL, or
+selection behavior into a separate implementation. Messaging may configure the
+shared components for single or multiple selection, `To` or `Cc` placement,
+bounded search, retained selected values, and messaging-specific eligibility or
+validation explanations.
+
+If an established selector in that frontend lacks a capability required by this
+specification, that capability shall be added to that frontend's shared
+component through a general reusable interface and verified against its
+existing consumers. It shall not be solved by creating or maintaining a
+messaging-specific fork within that frontend. Reuse of a UI component does not
+replace server-side messaging authorization,
+clearance, activity, privilege, expansion, deduplication, or send-time
+validation.
 
 ### MSG-006 — Fan-out
 
@@ -546,13 +580,19 @@ send it twice.
 
 ### MSG-017 — Save a message as a Wathiq record
 
-The sender or a recipient may save a message they are currently authorized to
-read as a new record in an aggregation they choose. This operation uses the
-existing record-draft and record-commit workflow rather than bypassing record
-creation controls.
+The sender or a recipient may save an ordinary human-authored message they are
+currently authorized to read as a new record in an aggregation they choose.
+This operation uses the existing record-draft and record-commit workflow rather
+than bypassing record creation controls.
 
-An envelope marked `is_test = true` under MSG-019, or whose `message_kind` is
-`action_amendment_notice`, is not eligible for independent capture as a record.
+Only `message_kind = user_message` is eligible for message-to-record capture.
+A `system_notification`—whether production or test—and an
+`action_amendment_notice` cannot be selected or included as a linked message in
+a capture. If an otherwise eligible user message has a relationship chain that
+contains an ineligible kind, capture is blocked with a clear explanation rather
+than silently omitting part of the chain. A feature whose business event must
+itself create a record shall do so through that feature's approved backend
+record-creation process, not by asking a recipient to preserve its notification.
 
 The user must have:
 
@@ -683,7 +723,22 @@ contract defines:
 - the allowlisted subject/body placeholder schema and renderer;
 - allowed priority and resource-link behavior;
 - the stable domain-event identifier used for idempotency; and
-- whether the notification is mandatory or may be disabled.
+- whether durable notification creation is required for the associated business
+  transaction to commit.
+
+The feature-owned boolean `required_for_business_commit` expresses only that
+transactional policy. When true, administrators cannot disable the producer and
+occurrence of the registered event must create the durable envelope and all
+recipient deliveries in the same transaction; failure rolls back the business
+change. When false, administrators may disable the producer, in which case the
+business operation may commit without a notification. If an optional producer
+is enabled, an attempted notification still follows the ordinary atomic send
+rules and a creation failure rolls back the transaction.
+
+`required_for_business_commit` does not set message priority, request a read
+receipt or action, require the recipient to read the message, or require a toast
+or live event to reach a connected client before commit. The required outcome
+is durable database creation, not user attention or real-time presentation.
 
 This does not require the product owner to enumerate every future notification
 producer before the messaging subsystem can be implemented. The initial
@@ -702,7 +757,8 @@ integration, not REST and not an automatic event-bus subscription.
 Each feature that introduces notifications provides a declarative Python
 `SystemNotificationDefinition`. At minimum it contains the producer code,
 event type, typed placeholder schema, allowed audience resolver names, allowed
-resource-link kinds, mandatory/optional policy, and contract version. The API
+resource-link kinds, `required_for_business_commit` policy, and contract
+version. The API
 application assembles these definitions into one registry explicitly during
 startup; registration must not depend on an incidental module import or a
 client request.
@@ -712,8 +768,9 @@ deployment, while an upgrade migration advances the row for an existing
 deployment when the contract changes. Seeds remain separate from schema
 creation. On startup, every API instance read-only compares the database
 producer row and contract version with the Python registry. A missing, unknown,
-duplicate, or incompatible mandatory definition fails readiness with a clear
-configuration error instead of silently dropping notifications.
+duplicate, or incompatible definition whose
+`required_for_business_commit = true` fails readiness with a clear configuration
+error instead of silently dropping required notifications.
 
 Feature backend code calls one internal Python application-service operation at
 the exact point where the approved business outcome is written. The conceptual
@@ -749,9 +806,10 @@ the operation has these mandatory semantics:
   language variant, forces the baseline security level and prohibited
   receipt/action fields, and calls the canonical envelope/fan-out writer; and
 - it returns a typed result containing the created envelope and delivery IDs,
-  or a defined `disabled` result for an optional disabled producer. Validation
-  or required-configuration failure raises a domain error and rolls back the
-  caller's transaction.
+  or a defined `disabled` result for a producer whose
+  `required_for_business_commit = false` and active configuration is disabled.
+  Validation or required-configuration failure raises a domain error and rolls
+  back the caller's transaction.
 
 The business feature must not insert messaging tables directly. A scheduled
 backend job may call the same operation while updating its governed domain state
@@ -811,13 +869,13 @@ The administration page operates on producer definitions registered by
 application features. Feature code supplies the immutable `producer_code`,
 event type, allowed template placeholders and their data types, permitted
 audience modes, permitted resource-link kinds, and whether notification is
-mandatory. Administrators cannot create a new executable event, change its
+`required_for_business_commit`. Administrators cannot create a new executable event, change its
 trigger, submit arbitrary production event data, or directly send a production
 system message from this page.
 
 For each registered producer, an administrator may:
 
-- enable or disable it when the feature declares it optional;
+- enable or disable it only when `required_for_business_commit = false`;
 - author, review, and publish the bounded subject and sanitized rich-text body
   template for every enabled language using only the producer's allowlisted
   placeholders;
@@ -886,16 +944,19 @@ active configuration version, resolves and snapshots the concrete audience,
 renders and sanitizes the allowlisted template, writes the resulting envelope
 with its configuration-version ID, and commits atomically as required by
 MSG-018. Later administration changes never rewrite an already-sent message.
-An invalid required configuration causes the business transaction to fail
-closed with an operational error. A disabled optional producer creates no
-message.
+An invalid configuration for an enabled producer causes the business
+transaction to fail closed with an operational error. A producer whose
+`required_for_business_commit = false` and active configuration is disabled
+creates no message and does not prevent the business transaction from
+committing.
 
 ### MSG-020 — Sent-message retention and deletion
 
 Sent messages expire by default three years after `sent_at`. Ninety days before
-expiry, Inbox and Outbox show a localized expiry indicator and provide the
-existing **Save as record** action. Reconnect and live-event processing must not
-emit one warning toast per expiring message.
+expiry, Inbox and Outbox show a localized expiry indicator. An eligible human-
+authored message also provides the existing **Save as record** action; system
+notifications and amendment notices do not. Reconnect and live-event processing
+must not emit one warning toast per expiring message.
 
 Saving a message as a record is the mechanism for preserving it beyond the
 messaging retention period. The resulting record and PDF components follow
@@ -913,11 +974,11 @@ remove another recipient's delivery or the sender's Outbox view. Later lawful
 disposition of the captured record remains governed by record rules and is not
 blocked by messaging provenance.
 
-The capture-free exceptions are an envelope with `is_test = true` and an
-`action_amendment_notice`. Their recipients may delete their own Inbox
-references without record capture because neither kind may independently
-become a record. Deleting an amendment notice does not delete its authoritative
-amendment from the retained original message.
+The capture-free exceptions are every `system_notification`, whether production
+or test, and every `action_amendment_notice`. Their recipients may delete their
+own Inbox references without record capture because neither kind may become a
+record. Deleting an amendment notice does not delete its authoritative amendment
+from the retained original message.
 
 Manual deletion and automatic expiry first move the affected mailbox reference
 to **Recently deleted messages** for 30 days. During that period its owner may
@@ -1008,10 +1069,11 @@ states, and date presentation are localized; the sender-authored reason is
 embedded verbatim and is never machine-translated. Toast and later-read variant
 selection and fallback follow the same rules as a system notification.
 
-Saving a system message as a record is already prohibited for test messages.
-For an eligible production system message, record capture renders the variant
-shown under the capturing user's effective language at capture time and records
-that language tag in the PDF metadata and capture provenance.
+System notifications are never eligible for message-to-record capture. Their
+localized variants remain durable messaging content only for the notification's
+retention period. The underlying business object, event history, audit entry,
+or feature-created record—not the notification—is the authoritative evidence of
+the event being reported.
 
 ### MSG-022 — Person-to-person messaging privilege
 
@@ -1245,8 +1307,10 @@ queries. It must not issue one API or database round trip per message or per
 link, and it must not scan the user's complete mailbox.
 
 Inbox exposes **Delete** only when the authenticated recipient has a currently
-retained committed record capture satisfying MSG-020 or the envelope is an
-immutably marked test message. It shows the configured
+retained committed record capture satisfying MSG-020, or the envelope is a
+system notification or action-amendment notice that is ineligible for capture.
+Inbox exposes **Save as record** only for an eligible human-authored message.
+It shows the configured
 expiry date and warning state. A **Recently deleted** view within Inbox lists
 only that recipient's recoverable deleted deliveries and provides Restore; it
 is not a separate navigation-drawer item.
@@ -1274,8 +1338,10 @@ The Compose route, action, and API require
 `messaging.user_messages.exchange`. Hiding the UI is not authorization; the
 server rejects send, reply, and forward requests without the privilege.
 
-Recipient controls shall use bounded remote search for users, roles, and
-organizational units and retain selected values. They must not obtain options
+Recipient controls shall use the current frontend's existing shared user, role,
+and organizational-unit selector components as required by MSG-005A. Those
+components shall use bounded remote search and retain selected values. They must
+not obtain options
 through an unbounded user, role, or organizational-unit list request. Role
 results shall expose whether a role is currently effective; organizational-unit
 results shall expose whether the unit is active. Ineligible choices shall not
@@ -1286,10 +1352,12 @@ recipient-discovery rules may be selected. This specification does not create a
 new privilege or broaden which users, roles, or organizational units a sender
 may discover.
 
-The compose form shall provide a required security-level selector initialized
-to Wathiq's lowest configured level. It shall offer only levels at or below the
-sender's current effective clearance. Changing the selected level shall
-immediately revalidate every existing recipient selector.
+The compose form shall reuse the current frontend's existing shared security-
+level selector, configured as a required value initialized to Wathiq's lowest
+configured level. It shall offer only levels at or below the sender's current
+effective clearance. Changing the selected level shall immediately revalidate
+every existing recipient selector. A messaging-specific security-level
+selector shall not be created.
 
 Recipient search results that are otherwise visible but ineligible at the
 selected message level shall remain understandable rather than silently
@@ -1458,6 +1526,50 @@ outcome, but not protected message content in the list.
 PostgreSQL is the authoritative store. UUID primary keys use PostgreSQL `uuid`
 values generated by the application or an approved database UUID function.
 They are globally unique and opaque to users.
+
+### 7.0 Identifier policy
+
+Messaging uses a deliberate hybrid identifier policy; it does not replace
+Wathiq's general `BIGSERIAL` convention with UUIDs for every messaging table.
+PostgreSQL sequences are safe with concurrent transactions and multiple API
+instances, so horizontal scaling alone is not a reason to use UUIDs.
+
+A UUID is used as the sole primary identifier when Wathiq intentionally exposes
+and later reuses an object's ID outside the table that stores it. Examples are
+an envelope, recipient delivery, draft, action amendment, capture operation, or
+immutable notification-configuration version. An envelope or delivery ID may
+appear in an API response, live event, reply/forward/follow-up relationship, or
+capture provenance. A capture ID appears in its provenance PDF filename. A
+configuration-version ID is returned to and submitted by the administration
+UI.
+
+A draft provides a concrete client example: the backend returns the new draft's
+ID to WebUI, Flutter, or another client. That client retains the ID and sends it
+back in later requests to retrieve, update, discard, restore, or send the same
+draft. The UUID therefore provides one stable, globally unique identifier for
+all of those operations. Returning an ID through an API does not itself require
+a UUID—PostgreSQL `BIGSERIAL` could also identify the row—but UUID is chosen for
+these externally referenced messaging objects to meet their global-identity
+requirements, remain stable if data is moved or combined, and avoid exposing
+adjacent sequence values. Knowledge of a UUID never grants access; every
+operation must still enforce ownership and authorization.
+
+Database-internal child or association rows whose own IDs are never returned to
+clients, placed in live events or links, or written into record provenance do
+not need UUIDs. They shall follow existing Wathiq conventions and use
+`BIGSERIAL`, an existing entity's `BIGINT` identifier, a natural text key, or a
+composite key as defined below. Examples include recipient-selector rows,
+resource-link rows, localization rows, addressee mappings, and capture-component
+mappings. Existing Wathiq user, role, organizational-unit, security-level,
+aggregation, record, and digital-component identifiers remain unchanged.
+
+This policy accepts the larger storage and index cost of a 16-byte UUID only
+for objects that need the externally stable identity. It avoids adding both an
+internal `BIGSERIAL` key and a UUID alias to the same object unless a later,
+approved performance design demonstrates that the additional identifier and
+mapping complexity are necessary. UUID generation shall use the repository's
+approved implementation consistently; identifier format or predictability must
+not be treated as a security control.
 
 The required tables are:
 
@@ -1802,7 +1914,7 @@ URLs must use a normalized resource-link row.
 
 | Column | Type | Rules |
 | --- | --- | --- |
-| `id` | `uuid` | Primary key |
+| `id` | `uuid` | Primary key; stable draft identifier exposed through client APIs |
 | `owner_user_id` | `bigint` | Required FK to `users(id)`; only this user may access the draft |
 | `subject` | `text` | Nullable while saved; required for send; send-time limit applies |
 | `priority` | `text` | Required; same controlled values as envelopes |
@@ -1861,7 +1973,7 @@ the same transaction.
 
 | Column | Type | Rules |
 | --- | --- | --- |
-| `id` | `uuid` | Primary key |
+| `id` | `bigserial` | Primary key; internal capture-component mapping identifier |
 | `capture_id` | `uuid` | Required FK to `message_record_captures(id)` |
 | `component_kind` | `text` | Required; `message` or `provenance` |
 | `envelope_id` | `uuid` | Nullable FK to the captured `message_envelopes(id)`; required only for a message component |
@@ -1889,7 +2001,7 @@ record-draft commit transaction, not when PDFs are merely staged.
 | `producer_code` | `text` | Primary key; stable code registered by application feature code |
 | `feature_code` | `text` | Required owning feature/module identifier |
 | `event_type` | `text` | Required immutable backend event type |
-| `mandatory` | `boolean` | Required immutable feature policy |
+| `required_for_business_commit` | `boolean` | Required immutable feature policy; true means the registered event and its durable notification must commit together |
 | `contract_version` | `integer` | Required positive code-contract version |
 | `contract_definition` | `jsonb` | Required code-owned, schema-validated declaration of placeholders, audience modes, and resource-link kinds; contains no executable expression |
 | `active_configuration_version_id` | `uuid` | Nullable FK to an immutable version belonging to this producer |
@@ -1906,7 +2018,7 @@ configuration:
 | `id` | `uuid` | Primary key |
 | `producer_code` | `text` | Required FK to `system_notification_producers` |
 | `version` | `integer` | Required positive version unique within the producer |
-| `enabled` | `boolean` | Required; mandatory producers cannot be disabled |
+| `enabled` | `boolean` | Required; must be true when the producer has `required_for_business_commit = true` |
 | `subject_template` | `text` | Required bounded canonical English/default template using only declared placeholders |
 | `body_template_rich_text` | `text` | Required bounded canonical English/default sanitized template using only declared placeholders |
 | `priority` | `text` | Required; `normal`, `high`, or `very_high` |
@@ -2274,10 +2386,12 @@ shall provide these authenticated operations:
 - create, list, get, update with optimistic concurrency, send, and discard only
   the authenticated user's own drafts;
 - list the authenticated user's active and recently deleted Inbox and Outbox
-  references, return expiry state, perform capture-gated early deletion, and
-  restore during the recovery period;
-- initialize a message-capture record draft, stage the ordered generated PDFs,
-  and commit capture provenance with the ordinary record transaction;
+  references, return expiry state, perform capture-gated or explicitly capture-
+  free early deletion under MSG-020, and restore during the recovery period;
+- initialize a message-capture record draft only for an eligible human-authored
+  message whose complete relationship chain is also eligible, stage the ordered
+  generated PDFs, and commit capture provenance with the ordinary record
+  transaction;
 - list registered notification producers and preview, version, activate, enable,
   or disable only their permitted configuration fields for callers with
   `messaging.notifications.administer`;
@@ -2480,8 +2594,8 @@ audited migration or administration operation.
 - Delete and restore operations apply only to the authenticated user's own Inbox
   or Outbox reference. Early deletion requires that user's committed record-
   capture provenance and cannot be satisfied by another user's capture, except
-  that a test recipient may delete their own immutable test delivery without a
-  record capture.
+  that a recipient may delete their own system-notification or amendment-notice
+  delivery without record capture because those kinds cannot be captured.
 - Action completion can be created only through an authenticated reply by the
   owner of the original delivery; request-supplied user, completion time, late
   state, or ownership values are never trusted.
@@ -2531,8 +2645,9 @@ available to assistive technology without unexpectedly moving keyboard focus.
 - **AC-MSG-001B:** An authorized client domain action may cause only the
   registered backend notification associated with its successfully committed
   business outcome; rejected and no-op actions create no success notification.
-- **AC-MSG-001C:** A domain transaction and its mandatory direct system
-  notification commit together, or neither commits.
+- **AC-MSG-001C:** When an enabled producer attempts a direct system
+  notification, the domain transaction and durable notification commit
+  together, or neither commits.
 - **AC-MSG-001D:** Retrying the idempotent causing business operation after an
   atomic failure creates at most one domain change and one system envelope.
 - **AC-MSG-001E:** A system producer cannot exceed its registered event,
@@ -2627,8 +2742,9 @@ available to assistive technology without unexpectedly moving keyboard focus.
   message or recipient content, and does not become accessible through
   `audit.view` alone.
 - **AC-MSG-010Q:** An authorized sender or recipient can initialize an ordinary
-  record draft from a message; unauthorized message or destination access fails
-  without staged authoritative content.
+  record draft only from an eligible human-authored message; unauthorized or
+  ineligible message kinds and unauthorized destination access fail without
+  staged authoritative content.
 - **AC-MSG-010R:** Message capture sets the record's initial title, originated
   date, and security level as specified, produces the selected message as PDF
   component 1, and produces each unique linked earlier message as a subsequent
@@ -2704,9 +2820,9 @@ available to assistive technology without unexpectedly moving keyboard focus.
   snapshots; the account cannot receive new messages.
 - **AC-MSG-035:** Before retention expiry, a user can delete only their own
   Inbox or Outbox reference and only after their committed capture of that
-  message as a record; another user's mailbox remains unchanged. An immutable
-  test delivery and an amendment-notice delivery are the only capture-free
-  early-deletion exceptions.
+  eligible human message as a record; another user's mailbox remains unchanged.
+  System-notification and amendment-notice deliveries are capture-free early-
+  deletion exceptions because they are ineligible for record capture.
 - **AC-MSG-036:** Automatic expiry applies after the configured retention period
   whether or not each user captured the message, provides the configured warning
   and recovery periods, and never deletes a captured record.
@@ -2741,8 +2857,11 @@ available to assistive technology without unexpectedly moving keyboard focus.
   locked configuration, resolves the approved audience, renders content, and
   invokes canonical fan-out.
 - **AC-MSG-046:** Startup readiness detects missing, duplicate, unknown, or
-  incompatible producer definitions, and a mandatory production notification
-  failure rolls back the same domain transaction.
+  incompatible producer definitions. When
+  `required_for_business_commit = true`, the producer cannot be disabled and a
+  durable-notification creation failure rolls back the same domain transaction;
+  when false, administrators may disable it and the business operation may then
+  commit without a notification.
 - **AC-MSG-047:** Activating a system-notification configuration requires one
   published, non-blank, placeholder-compatible template for every enabled
   language; adding a language fails release readiness until coverage exists.
@@ -2811,6 +2930,21 @@ available to assistive technology without unexpectedly moving keyboard focus.
   open the linked earlier message only through their own linking delivery and
   while current clearance, retention, and resource authorization permit it;
   knowing either UUID alone grants no access.
+- **AC-MSG-067:** Message-to-record capture accepts only
+  `message_kind = user_message`; it rejects a production or test system
+  notification, an action-amendment notice, or a relationship chain containing
+  either kind without staging or committing a partial record.
+- **AC-MSG-068:** In each frontend, every messaging user, role, organizational-
+  unit, and security-level selector is that frontend's established corresponding
+  component configured for the messaging context, not a messaging-specific copy
+  or fork. WebUI and Flutter are verified independently against their own
+  component systems; no cross-framework UI-component sharing is required, and
+  server-side messaging validation remains authoritative.
+- **AC-MSG-069:** Schema verification confirms that externally referenced
+  messaging domain objects use their specified UUID identities, internal child
+  and association rows retain the specified `BIGSERIAL`, existing `BIGINT`,
+  text, or composite keys, and no duplicate UUID alias is added without a
+  separately approved performance design.
 
 Database-backed verification shall use a new uniquely named disposable
 PostgreSQL database for each run, initialize it from the required canonical
@@ -2839,7 +2973,7 @@ chat.
 | Wathiq resources | Structured links preserve identity and re-run Wathiq authorization on every open | Links or attachments can be copied externally and may become stale or overexposed | Links can be convenient but are generally not part of the target system's governed message model |
 | Attachments | Core subsystem intentionally has no arbitrary file attachments; Wathiq resources remain controlled links | Strong support for attachments, although copies become difficult to govern | Strong support for files and media, subject to the chat service's controls |
 | Records Management | A message chain and provenance can become a governed Wathiq record with archival PDFs | Emails can be captured, but reliable classification and preservation commonly require a separate integration | Chat capture is often difficult because relevant context is distributed across channels, edits, reactions, and threads |
-| System notifications | A business change and its mandatory notification can commit atomically in the same database transaction | Delivery requires an external mail system and cannot normally share the business transaction | Usually requires an external chat API and service availability |
+| System notifications | A business change and its required durable notification can commit atomically in the same database transaction | Delivery requires an external mail system and cannot normally share the business transaction | Usually requires an external chat API and service availability |
 | Offline and external access | Requires an authorized Wathiq client and eventual connection to Wathiq | Excellent offline-client support and external reach | Depends on the chat client and service; often good on mobile devices |
 | Portability | Frontend-neutral Wathiq APIs support NiceGUI, Flutter, and future clients, but the protocol is application-specific | Open, widely interoperable standards and a broad client ecosystem | Commonly proprietary APIs and service-specific clients |
 
@@ -2915,13 +3049,182 @@ Wathiq through a separately governed process.
 The channels are therefore complementary. Wathiq messaging should not be
 presented as a universal replacement for either email or chat.
 
-## 16. Resolved design decisions
+## 16. Phased implementation and verification plan
+
+Implementation shall use the following five phases. The phases follow the
+architecture's dependency order and create independently testable boundaries;
+they are not permission to expose incomplete behavior. A phase is complete only
+when its assigned requirements have implementation and verification evidence.
+
+```text
+Durable kernel -> Human messaging -> Real-time distribution
+                                      |
+                                      v
+                            System notifications
+                                      |
+                                      v
+                    Records and production hardening
+```
+
+### 16.1 Phase 1 — Durable messaging kernel
+
+This phase establishes the PostgreSQL and backend foundation used by every
+sender and frontend.
+
+It shall implement:
+
+- the complete canonical schema and corresponding upgrade migration, including
+  the hybrid identifier policy in section 7.0;
+- the canonical transactional envelope and fan-out service;
+- immutable envelopes, selectors, expanded addressees, deliveries, mailbox
+  sequences, resource links, drafts, completions, and amendments;
+- recipient expansion, deduplication, `To` precedence, eligibility, clearance,
+  security-level, resource-link, and message-size validation;
+- rich-text sanitization, idempotency, snapshotting, stable mailbox ordering,
+  and complete transactional rollback; and
+- bounded frontend-neutral APIs for recipient/resource lookup, send, Inbox,
+  Outbox, message retrieval, read state, and cursor catch-up.
+
+The validation gate shall initialize a new disposable database from
+`database/schema.sql`, separately upgrade a disposable database through the
+migration, compare the resulting structures, and test concurrency, mailbox
+ordering, idempotency, fan-out rollback, selector expansion, authorization,
+sanitization, resource security, and bounded pagination. Every database-backed
+run shall use and subsequently drop a uniquely named disposable database.
+
+The exit condition is that a human message can be committed, fanned out exactly
+once per eligible recipient, retrieved after process restart, and reconciled by
+cursor without relying on WebSocket, NiceGUI, or other process memory.
+
+### 16.2 Phase 2 — Complete human messaging
+
+This phase builds the human-facing workflows on the durable kernel. It shall
+implement the Messages navigation, Compose, Inbox, Outbox, Drafts, privilege
+enforcement, read receipts, reply, Inbox and Outbox forwarding, Outbox follow-
+up, structured resource links, priorities, security levels, action-required
+messages, due dates, completion replies, immutable action amendments, and
+amendment notices.
+
+Each frontend shall reuse its own established user, role, organizational-unit,
+and security-level selectors under MSG-005A. The UI shall include deliberate
+loading, empty, restricted, validation, concurrency-conflict, and failure
+states. It shall not use unbounded tenant collection requests.
+
+The validation gate shall cover object-level API authorization, drafts and
+optimistic concurrency, all relationship kinds, security floors, independent
+recipient state, receipts, action status, due boundaries, completion,
+amendment fairness, withdrawal, amendment concurrency, and idempotency. WebUI
+shall be verified in a live browser in both LTR and RTL, including shared-
+selector regression checks, repeated navigation, background-task abandonment,
+and freshness after mutation. Translation catalogue coverage, ordering,
+placeholder, provenance, and hash checks shall pass.
+
+The exit condition is that every human workflow assigned to this phase behaves
+correctly through the frontend and remains correct after refresh or process
+restart. This is a validation milestone, not authorization for production
+release: Phase 3 must supply live delivery and reconnect behavior, and Phase 5
+must complete the human message's records and retention lifecycle.
+
+### 16.3 Phase 3 — Real-time and multi-instance distribution
+
+This phase adds low-latency presentation without moving correctness out of
+PostgreSQL. It shall implement post-commit `NOTIFY`, one dedicated direct
+listener connection outside each gateway's request pool, the versioned
+frontend-neutral event contract, authenticated WebSocket delivery, subsequent
+SSE support using the same contract, delivery to every connected tab/device,
+cursor reconciliation, reconnect-summary behavior, and bounded slow-client
+handling. NiceGUI shall adapt this contract rather than become the durable
+messaging transport.
+
+The validation environment shall contain multiple API/gateway and frontend
+instances using the same PostgreSQL database, with clients attached through
+different instances. Tests shall verify cross-instance delivery, all-tab/device
+notification, no pre-commit event, no event after rollback, duplicate-event
+idempotence, listener interruption, startup-race recovery, API/frontend
+restart, bounded queues, slow-client isolation, and equivalent WebSocket/SSE
+catch-up without NiceGUI-specific protocol assumptions.
+
+The exit condition is that human messaging meets both durable and near-real-
+time requirements across multiple instances, including recovery after every
+connection gap.
+
+### 16.4 Phase 4 — System notifications and administration
+
+This phase shall implement the code-owned `SystemNotificationDefinition`
+registry, database reconciliation and readiness checks, the internal Python
+notification service, `required_for_business_commit`, immutable configuration
+versions and translations, Notification Administration, reviewed/published
+templates for every enabled language, controlled test sends, and system-only
+Inbox access for users without person-to-person exchange privilege. There shall
+be no production system-send REST endpoint, and system notifications shall
+remain ineligible for record capture.
+
+The validation gate shall verify registry consistency, required-producer
+readiness failure, optional disablement, atomic business-change/notification
+commit, rollback on enabled-notification failure, lowest security level, the
+prohibition on receipts and actions, rejection of undeclared context or
+audiences, complete published language coverage, immutable historic variants,
+test marking and limits, and system-only Inbox behavior without exchange
+privilege.
+
+The exit condition is that approved backend features can emit localized,
+durable system notifications without granting clients or administrators
+arbitrary system-message authority.
+
+### 16.5 Phase 5 — Records, retention, monitoring, and production hardening
+
+This phase shall implement human-message-only record capture, deterministic
+message PDFs, the final provenance PDF, embedded or subset-embedded Changa,
+PDF/A-2u and PDF/UA-1 validation, atomic record/component/provenance commit,
+expiry warnings, capture-gated and capture-free deletion rules, Recently
+deleted restoration, final content purge, tombstones, draft cleanup, bounded
+multi-instance cleanup, the privilege-gated Monitor page/API, operational
+metrics, and alerts.
+
+The validation gate shall use independent PDF conformance tooling and visual
+inspection of English and Arabic output. It shall verify embedded fonts,
+Unicode extraction, tags, reading order, links, filenames, provenance agreement,
+rollback at every capture boundary, record independence after message expiry,
+non-rewriting of earlier captures after amendments, retention/recovery
+boundaries, concurrent cleanup, configured capacity limits, and the complete
+requirement-to-test traceability matrix.
+
+The exit condition is that the subsystem satisfies its records-management,
+retention, accessibility, security, scale, monitoring, and operational
+requirements in addition to its messaging behavior.
+
+### 16.6 Controls applying to every phase
+
+Every phase shall:
+
+- maintain requirement-to-implementation-to-test traceability and remain
+  incomplete while an assigned requirement lacks evidence;
+- use disposable databases for database-backed tests;
+- keep `database/schema.sql` self-contained and repeat upgrade DDL in the
+  migration without `psql` meta-commands;
+- preserve frontend-neutral backend contracts and authoritative server-side
+  authorization;
+- reuse each frontend's established selector and table patterns;
+- keep growing collections server-paginated or bounded by remote search;
+- treat real-time events only as hints to durable state; and
+- keep unfinished later-phase behavior inaccessible rather than presenting it
+  as complete.
+
+## 17. Resolved design decisions
 
 The former implementation decisions are resolved normatively in this revision:
 
 - section 11.5 defines configurable selector, recipient, resource-link, draft,
   linked-message, and generated-PDF limits;
+- section 7.0 defines a hybrid identifier policy: UUIDs are limited to
+  externally referenced messaging domain objects, while internal rows retain
+  Wathiq's established `BIGSERIAL`, `BIGINT`, text, or composite-key
+  conventions;
 - MSG-004 and MSG-005 exclude self-addressing and inactive or suspended users;
+- MSG-005A requires each frontend's messaging user, role, organizational-unit,
+  and security-level controls to reuse and, where necessary, generically extend
+  the corresponding selectors already established in that frontend rather than
+  creating messaging-specific implementations;
 - MSG-020 and sections 11.4–11.5 define three-year sent-message retention,
   capture-gated early deletion, warning and recovery periods, bounded purge,
   record independence, and preservation of required history after user
@@ -2932,14 +3235,18 @@ The former implementation decisions are resolved normatively in this revision:
 - section 9.1 makes WebSocket the first transport and SSE the subsequent
   fallback using the same frontend-neutral event contract;
 - MSG-016 defines draft expiry, recovery, restoration, and purge;
-- MSG-017 requires bounded PDF/A-2u and PDF/UA-1 message capture with the
-  specified safe filename convention and a matching human-readable provenance
-  PDF as the final digital component;
+- MSG-017 permits only human-authored message chains to be captured, using
+  bounded PDF/A-2u and PDF/UA-1 output, the specified safe filename convention,
+  and a matching human-readable provenance PDF as the final digital component;
 - features register immutable system-producer safety contracts, while
   privileged administrators manage versioned templates, audiences, priority,
   enablement, resource presentation, and operational ownership through
   Notification Administration, including bounded and unmistakably marked
   end-to-end test sends; and
+- `system_notification_producers.required_for_business_commit` states whether
+  a producer may be disabled and whether its registered event is forbidden from
+  committing without durable notification creation; it does not express
+  priority, acknowledgment, action, reading, or live-delivery semantics;
 - system templates require published coverage for every enabled language and
   sends store immutable rendered language variants under MSG-021;
 - `messaging.user_messages.exchange` controls person-to-person sending,
@@ -2956,7 +3263,7 @@ The former implementation decisions are resolved normatively in this revision:
   business changes. This revision has no notification-intent queue, retry
   worker, manual intent retry, or intent-retention policy.
 
-## 17. Architecture conclusion
+## 18. Architecture conclusion
 
 NiceGUI is suitable for Wathiq's current near-real-time presentation. Its
 established Socket.IO/WebSocket connection lets a NiceGUI adapter update a
@@ -2975,7 +3282,7 @@ This lets API and frontend instances scale horizontally without shared process
 memory, sticky routing between users, or a dependency on a particular UI
 framework. Correctness remains anchored in the database and catch-up API.
 
-## 18. Technical references
+## 19. Technical references
 
 - [NiceGUI project architecture](https://github.com/zauberzeug/nicegui#architecture)
   documents its FastAPI, Vue/Quasar, Socket.IO, WebSocket, and server-to-client
