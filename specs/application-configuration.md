@@ -90,6 +90,8 @@ The following settings remain environment/`.env` settings.
 
 | Setting | Current default or requirement | Reason |
 | --- | --- | --- |
+| `DATABASE_DISPLAY_NAME` | Required | Default-language deployment identity displayed by the WebUI |
+| `DATABASE_DISPLAY_NAME_<LANGUAGE>` | Optional; falls back to `DATABASE_DISPLAY_NAME` | Localized deployment identity using the uppercase base language tag, for example `DATABASE_DISPLAY_NAME_AR` |
 | `WEBUI_API_URL` | `http://127.0.0.1:8000` | Address used to reach the API or its load balancer |
 | `WEBUI_HOST` | `0.0.0.0` | Per-process network binding |
 | `WEBUI_PORT` | `8080` | Per-process network binding |

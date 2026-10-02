@@ -54,6 +54,7 @@ from frontend.webui.app import native_preview_kind
 from frontend.webui.entities import ENTITIES
 from frontend.webui.config import (
     classification_recent_selection_limit,
+    database_display_name,
     dashboard_favourite_item_limit,
     dashboard_recent_days,
     dashboard_recent_item_limit,
@@ -534,6 +535,23 @@ def test_dashboard_recent_configuration(monkeypatch):
     monkeypatch.setenv("DASHBOARD_RECENT_DAYS", "14")
     assert dashboard_recent_item_limit() == 7
     assert dashboard_recent_days() == 14
+
+
+def test_database_display_name_uses_language_override_and_default_fallback(monkeypatch):
+    monkeypatch.setenv("DATABASE_DISPLAY_NAME", "Production Database")
+    monkeypatch.setenv("DATABASE_DISPLAY_NAME_AR", "قاعدة بيانات الإنتاج")
+    monkeypatch.setenv("DATABASE_DISPLAY_NAME_FR", "Base de données de production")
+    assert database_display_name("en") == "Production Database"
+    assert database_display_name("ar-AE") == "قاعدة بيانات الإنتاج"
+    assert database_display_name("fr-FR") == "Base de données de production"
+    monkeypatch.setenv("DATABASE_DISPLAY_NAME_AR", "  ")
+    assert database_display_name("ar") == "Production Database"
+
+
+def test_database_display_name_is_required(monkeypatch):
+    monkeypatch.delenv("DATABASE_DISPLAY_NAME", raising=False)
+    with pytest.raises(RuntimeError, match="DATABASE_DISPLAY_NAME is required"):
+        database_display_name("en")
 
 
 def test_dashboard_favourite_configuration_and_preview(monkeypatch):
@@ -1369,8 +1387,9 @@ def test_login_session_statuses_and_security_operations_use_compact_cards():
     assert "min-height: 54px; padding: 0 18px;" in source
     assert ".erms-brand-mark { width: 28px; height: 33px;" in source
     assert 'with ui.footer().classes("erms-footer items-center")' in source
-    assert 'ui.label("Designed and built by Sharjah Archives")' in source
+    assert 'f"Database: {database_display_name(initial_language)}"' in source
     assert ".erms-footer-credit" in source
+    assert ".erms-footer-database" in source
     assert 'replace="text-positive text-lg"' in source
     assert "#popup { display: none !important; }" in source
     assert 'ui.label("wathiq").classes("wathiq-login-word")' in source

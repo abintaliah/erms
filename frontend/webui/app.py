@@ -36,6 +36,7 @@ from .config import (
     dashboard_favourite_item_limit,
     dashboard_recent_days,
     dashboard_recent_item_limit,
+    database_display_name,
     default_root_aggregation_medium,
     full_text_search_enabled,
     classification_recent_selection_limit,
@@ -2382,6 +2383,7 @@ def index(q: str = "") -> None:
             border-top: 1px solid var(--erms-border); box-shadow: none !important;
         }
         .erms-footer-credit { font-size: .72rem; letter-spacing: .01em; }
+        .erms-footer-database { font-size: .72rem; letter-spacing: .01em; }
         .erms-dashboard-card .erms-shared-control { display: none !important; }
         .erms-shared-control:empty { display: none !important; }
         .erms-brand { gap: 8px; min-width: 0; }
@@ -3627,6 +3629,10 @@ def index(q: str = "") -> None:
     with ui.footer().classes("erms-footer items-center"):
         with ui.icon("cloud_done").classes("text-positive text-lg") as connection_icon:
             connection_tooltip = ui.tooltip(render_message("webui.index.tooltip.connected_f57ac5a8"))
+        ui.label(render_message(
+            "webui.index.label.database_display_name_31c6f7d2",
+            database_name=database_display_name(initial_language),
+        )).classes("erms-footer-database")
         ui.space()
         ui.label(render_message("webui.index.label.designed_and_built_by_sharjah_archives_742aec80")).classes("erms-footer-credit")
 

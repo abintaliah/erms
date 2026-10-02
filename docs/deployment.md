@@ -226,6 +226,8 @@ the one-shot `cleanup` command hourly; do not use both scheduling models.
 Example `/etc/erms/webui.env`:
 
 ```ini
+DATABASE_DISPLAY_NAME="Production Database"
+DATABASE_DISPLAY_NAME_AR="قاعدة بيانات الإنتاج"
 WEBUI_API_URL=http://127.0.0.1:8000
 WEBUI_HOST=127.0.0.1
 WEBUI_PORT=8080
