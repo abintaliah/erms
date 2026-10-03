@@ -8,6 +8,9 @@
     {"code": "TS", "name": "Top Secret", "level_number": 100, "prevents_disposition": true}
   ],
   "privileges": [
+    {"code": "messaging.user_messages.exchange", "category": "administration"},
+    {"code": "messaging.monitor", "category": "administration"},
+    {"code": "messaging.notifications.administer", "category": "administration"},
     {"code": "authorization.administer", "category": "administration"},
     {"code": "authorization.explain", "category": "administration"},
     {"code": "security_levels.administer", "category": "administration"},
@@ -142,6 +145,8 @@
       "name": "System Administrator",
       "purpose": "Platform administration without governed-content bypass",
       "privilege_codes": [
+        "messaging.monitor",
+        "messaging.notifications.administer",
         "authorization.administer",
         "authorization.explain",
         "security_levels.administer",

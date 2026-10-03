@@ -96,3 +96,35 @@ The script is transactional and refuses to run when its reserved
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f database/seeds/001_seed_gcs_aggregation_tree_load_data.sql
 ```
+
+
+## Messaging privilege catalogue
+
+After creating a new database from `database/schema.sql`, or applying migration
+033 to an existing database, run `database/seeds/messaging.sql` separately.
+The seed is idempotent and records catalogue events with source `seeding`.
+It grants `messaging.user_messages.exchange` only to `ALL_PRIVS` by default,
+and grants `messaging.monitor` and `messaging.notifications.administer` to
+`ALL_PRIVS` and `SYS_ADMIN`. Other profiles require explicit administration.
+The schema and upgrade migration do not invoke this seed.
+
+System notification producer contracts are owned by the features that introduce
+them. Phase 4 supplies the registry and administration infrastructure but no
+unapproved business triggers, so the generic messaging seed does not create a
+sample production producer. Each approved feature must add its matching
+canonical producer seed and upgrade migration together with its explicit Python
+definition. API startup only compares those contracts; it does not rewrite them.
+The test producer under `tools/notification_preview.py` refuses any database
+whose name does not have the disposable messaging-test prefix.
+
+### Legal-hold notification producers
+
+After schema creation or migrations through 039, run `hold-notification-producers.sql`
+separately to register the two optional built-in hold producers. It is
+idempotent and preserves existing administration configuration. Install the
+reviewed English/Arabic template pairs from `hold-notification-templates.json`
+with `python -m tools.configure_hold_notifications --administrator-id ID
+--operational-owner 'Legal governance'` using an authorized administrator.
+The installer uses ordinary configuration validation and activation, preserves
+existing versions, and records source `seeding`. See the deployment guide for
+runtime behavior and language coverage requirements.

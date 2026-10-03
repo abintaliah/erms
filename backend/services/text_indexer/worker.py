@@ -193,8 +193,30 @@ class Worker:
         self_test(self.settings.tika_home)
         removed=self.recover_temporary_files()
         if removed: LOG.warning("removed %s abandoned indexing temporary entries",removed)
+        retry_delay = min(30, max(1, self.settings.poll_seconds))
+        disconnected = False
         while True:
-            jobs = self._claim()
+            try:
+                jobs = self._claim()
+            except (httpx.TransportError, httpx.HTTPStatusError) as error:
+                # Keep the same worker identity/nonce during a temporary API
+                # outage. Authentication and contract errors remain terminal;
+                # an ambiguous claim is left to the API's lease expiry rules.
+                retryable = isinstance(error, httpx.TransportError) or (
+                    error.response.status_code in {429, 502, 503, 504}
+                )
+                if once or not retryable:
+                    raise
+                if not disconnected:
+                    LOG.warning("indexing API unavailable; retrying with backoff (maximum 30 seconds)")
+                disconnected = True
+                time.sleep(retry_delay)
+                retry_delay = min(30, retry_delay * 2)
+                continue
+            if disconnected:
+                LOG.info("indexing API connection restored")
+            disconnected = False
+            retry_delay = min(30, max(1, self.settings.poll_seconds))
             # Every job in a claimed batch is already leased. Keep all leases
             # alive while jobs ahead of them are processed sequentially.
             heartbeats = {job["job_id"]: self._start_heartbeat(job) for job in jobs}

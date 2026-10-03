@@ -1670,6 +1670,8 @@ authorized results.
         "id": 91,
         "record_number": "FIN-R-001",
         "title": "Approved budget",
+        "description": "Annual budget approved by the board",
+        "security_level_id": 1,
         "aggregation_id": 42,
         "aggregation_number": "FIN-2026"
       },
@@ -1689,7 +1691,9 @@ authorized results.
       "aggregation": {
         "id": 42,
         "aggregation_number": "FIN-2026",
-        "title": "Annual financial administration"
+        "title": "Annual financial administration",
+        "description": "Financial planning and reporting records",
+        "security_level_id": 1
       },
       "snippet": "…annual budget and expenditure…",
       "score": 0.75
@@ -1701,6 +1705,11 @@ authorized results.
   }
 }
 ```
+
+Each authorized resource projection includes its `description` (nullable) and
+`security_level_id`. Selection dialogs use these to explain the resource and
+check message-level compatibility without additional per-result requests.
+These fields do not relax the existing resource authorization rules.
 
 The exact numeric score is not a stable API contract. Ranking uses PostgreSQL
 cover-density ranking, configured weights, and deterministic tie-breakers.

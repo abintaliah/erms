@@ -1,20 +1,22 @@
-# Notifications and In-App Messaging — Proposed Specification
+# Notifications and In-App Messaging — Specification
 
-**Status:** Proposed  
+**Status:** Approved
+**Approved:** 2 October 2026
 **Project:** ERMS / Wathiq  
 **Prepared:** 30 September 2026  
-**Revision:** 1.17 — linked user-messaging UI mockup
+**Revision:** 1.20 — editorial clarification; approved behavior unchanged
 
 ## 1. Purpose
 
-This specification defines a durable, asynchronous, in-app notifications and
-messaging subsystem for Wathiq. It allows the system to notify a user and allows
-one user to send a message to one or more other users.
+This specification defines Wathiq's in-app notifications and messaging
+subsystem. Wathiq can send system notifications, and an authorized user can
+send a message to one or more other users. Recipients do not need to be online
+when a message is sent.
 
-Messages are stored before delivery is attempted. A frontend-neutral real-time
-event interface can then notify connected clients with low latency. Each
-frontend decides how to present that event; for example, NiceGUI may show a
-toast and a future Flutter application may show an in-app banner.
+The send transaction stores the message and each recipient's Inbox entry
+together. After it commits, a real-time event can alert connected clients.
+The event interface is independent of the frontend: NiceGUI may show a toast,
+while a future Flutter application may show an in-app banner.
 
 The live connection is an optimization, not the message store and not proof of
 delivery. A temporary network failure, closed client, or restarted application
@@ -22,10 +24,10 @@ must not lose a committed message.
 
 ### 1.1 Non-normative user-interface mockup
 
-The repository includes a
-[clickable user-to-user messaging mockup](../docs/mockups/wathiq-user-messaging.html)
-covering Inbox, Outbox, Drafts, Compose, message reading, replies, forwarding,
-follow-ups, recipient selection, action completion, and action amendments.
+The repository includes a [clickable user-to-user messaging
+mockup](../docs/mockups/wathiq-user-messaging.html) covering Inbox, Outbox,
+Drafts, Compose, message reading, replies, forwarding, follow-ups, recipient
+selection, action completion, and action amendments.
 
 The mockup is a design and review aid only. It does not create an API contract,
 authorize behavior, or override this specification. If the mockup and this
@@ -33,6 +35,25 @@ specification differ, this specification is authoritative. Production user
 interfaces must also comply with the design language, internationalization,
 accessibility, authorization, performance, and frontend-specific requirements
 applicable to that implementation.
+
+### 1.2 How to read this specification
+
+For product behavior, start with the scope and terms in sections 2–3, the core
+rules in section 4, and the user experience in section 6. MSG-020 explains
+expiry, mailbox restoration, and whole-conversation purge.
+
+For implementation, use the database model in section 7, transactions in
+section 8, real-time architecture in section 9, and API responsibilities in
+section 10. Sections 11–13 cover operations, security, internationalization,
+and accessibility. Section 14 provides acceptance criteria; section 16 assigns
+implementation and verification to phases. Read the detailed requirements
+alongside those criteria; a short acceptance statement does not replace them.
+
+“Shall” and “must” express requirements. “May” permits an option; it does not
+require it. Examples explain a rule without adding a new requirement. The UI
+mockup and section 15's channel comparison are explanatory. Requirement IDs,
+field names, privilege codes, and acceptance IDs provide stable references
+for implementation and verification.
 
 ## 2. Scope
 
@@ -86,9 +107,50 @@ selectors, expanded addressee snapshots, and structured resource links. They do
 not include recipient-specific mailbox sequence, read time, action-completion
 state, or deletion state.
 
-**Recipient copy** means the durable inbox item created for exactly one `To` or
-`Cc` recipient. Each recipient copy has its own globally unique ID and its own
-read state.
+**Recipient selector** means a user, role, or organizational unit chosen in
+`To` or `Cc`. **Expansion** resolves those choices to eligible individual
+users. An **addressee** is one of those resolved users. Several selectors may
+resolve to the same user, who still receives only one copy.
+
+**Recipient copy**, also called a **delivery**, means the stored Inbox entry
+for one `To` or `Cc` recipient. It has its own globally unique ID and read
+state, but refers to the envelope's shared content rather than duplicating it.
+**Fan-out** means creating one such delivery for each distinct addressee.
+
+**Mailbox entry** means one user's access to a message through their Inbox or
+Outbox. Inbox entries use delivery rows; the sender's Outbox entry uses the
+envelope. Deleting one entry does not delete shared content or another user's
+entry. “Mailbox reference” elsewhere in this specification has this meaning.
+
+**Immutable** means ordinary operations cannot rewrite the stored value or
+row. It does not mean the data is kept forever: the specified lifecycle may
+still delete it. Action amendments add history without rewriting an original
+message; retention-group purge deletes that history with the group.
+
+**Snapshot** means a value saved as it was at the time of the operation, such
+as a sender's name at send time. Later directory or configuration changes do
+not rewrite that value. Current authorization is still checked separately.
+
+**Expiry** is the end of a message's own configured retention period.
+**Restoration period** is the time during which a deleted Inbox or Outbox entry
+can be restored. **Purge** is permanent database deletion. These are distinct
+steps, governed by MSG-020; none describes recovery of a deleted user account.
+Drafts have their separate expiry and restoration rules in MSG-016.
+
+**Retention group** means all sent messages connected by replies, forwards,
+follow-ups, or action-amendment notices, including every branch. They are kept
+and purged together under MSG-020. Membership does not grant access to other
+messages or participants.
+
+**Linked earlier messages** means the messages reachable by following a
+selected message's references back to their sources. This is the chain used
+for linked-message reading and record capture. It is not the entire retention
+group, which can also contain later messages and other branches.
+
+**Idempotency** means that retrying the same operation with the same key does
+not perform it twice. A **request receipt** is the small operation record used
+to enforce that rule; it is unrelated to a recipient's read receipt. Section 8
+defines the response before and after the result messages are purged.
 
 **System message** means an envelope created by an approved Wathiq process
 rather than by a person. Its displayed sender name is `system`.
@@ -128,14 +190,15 @@ Wathiq may send a system message to a user. An authenticated person user may
 send a user message to one or more users only when they have the
 `messaging.user_messages.exchange` global privilege.
 
-A user message shall store both the sender's user ID and the sender-name
-snapshot that was current when it was sent. A system message has no sending
-user ID and stores the sender-name snapshot `system`. Later changes to a user's
-name or deletion of a user must not rewrite the historical sender name.
+A user message shall store the sender's user ID and their name at send time. A
+system message has no sending user ID and stores the sender-name snapshot
+`system`. Later changes to a user's name or deletion of a user must not rewrite
+the historical sender name.
 
 ### MSG-003 — Required message fields
 
-Every recipient copy shall expose:
+For an authorized reader, each recipient copy shall expose the following
+fields. MSG-014 and section 6.2 define what to show when clearance is insufficient:
 
 - its globally unique ID;
 - sender name;
@@ -172,9 +235,10 @@ A human user lacking `messaging.user_messages.exchange` shall not be returned
 or accepted as a recipient for a human-authored message. This restriction does
 not prevent registered backend producers from delivering system messages.
 
-One send is limited by default to 100 combined `To` and `Cc` selectors and
-2,000 distinct concrete recipients after expansion. The API rejects the send
-atomically when either limit is exceeded; it does not truncate an audience.
+By default, one send allows at most 100 selectors across `To` and `Cc`
+combined, and at most 2,000 distinct users after expansion. If either limit is
+exceeded, the API rejects the whole send and creates no message or deliveries.
+It must not silently shorten the recipient list.
 These are deployment configuration values read from validated environment
 variables. Values must be positive, changing them requires an application
 restart, and increasing them requires transaction, notification-volume, and UI
@@ -207,18 +271,16 @@ Expansion uses one database transaction snapshot. Later changes to users,
 assignments, roles, or organizational units do not add or remove recipients
 from an already-sent message.
 
-The sender's original selectors and their displayed names are preserved as the
-immutable `To` and `Cc` headers. The expanded concrete users are preserved as
-the immutable delivery and receipt-status list available to the sender. A
-recipient does not gain permission to enumerate every expanded user merely
-because they received the message.
+The original selectors and their names at send time become the immutable `To`
+and `Cc` headers. The resolved users form the sender's fixed recipient list for
+delivery and receipt status. A recipient does not gain permission to enumerate
+every expanded user merely because they received the message.
 
-If a user matches several selectors, that user receives one copy only. If the
-user is reached through both `To` and `Cc`, `To` takes precedence. If expansion
-of a human user's role or organizational-unit selector includes the sender,
-the sender is excluded before deduplication and recipient-limit evaluation. If
-expansion produces no eligible concrete user, sending fails without creating
-an envelope or delivery.
+If several selectors resolve to the same user, that user receives one copy.
+If the user appears in both `To` and `Cc`, `To` takes precedence. Role and
+organizational-unit expansion excludes the human sender before removing
+duplicates and checking the recipient limit. If a selector resolves to no
+eligible user, the whole send fails without creating an envelope or delivery.
 
 ### MSG-005A — Shared selector components
 
@@ -231,11 +293,9 @@ Compose, Drafts, recipient validation, Notification Administration audiences,
 controlled test sends, filters, and any later messaging interface that presents
 one of these entity selectors.
 
-This requirement does not require WebUI and Flutter to share UI source code,
-widgets, packages, rendering behavior, or other implementation technology. Each
-frontend reuses and remains consistent with its own component system while all
-frontends consume the same frontend-neutral messaging APIs and server-enforced
-rules.
+WebUI and Flutter do not have to share UI code, widgets, packages, or rendering
+technology. Each reuses its own components. Both use the same messaging APIs
+and server-enforced rules.
 
 The messaging subsystem shall not introduce a messaging-only user selector,
 role selector, organizational-unit selector, or security-level selector, nor
@@ -254,6 +314,25 @@ replace server-side messaging authorization,
 clearance, activity, privilege, expansion, deduplication, or send-time
 validation.
 
+The human message composer always displays separate multiple-recipient `To`
+and `Cc` fields. Selecting a result adds it directly to that field; users do not
+choose an entity type or press a separate Add button. After at least two typed
+characters, shared debounced typeahead searches users, roles and organizational
+units together. Matching is case-insensitive against canonical names and
+descriptions, their translations in enabled supported languages, role and unit
+codes, user external IDs (the existing user identifier field), and user email
+addresses. Results show the localized name and entity type. Each type is searched
+in bounded server pages; users can refine their query for further matches.
+Selected values remain visible as removable chips when the query changes and
+when a draft is reopened.
+
+For users with the existing `organization.browse` privilege, a Browse
+organization structure action below each address field opens the shared,
+lazily paged organizational browser. It navigates units, roles and users
+and can select any eligible entity into that field. Messaging eligibility is
+checked when selected and again at send time. Existing recipient limits, To
+precedence, expansion and draft behavior remain authoritative.
+
 ### MSG-006 — Fan-out
 
 Sending one envelope to multiple addressees shall create exactly one recipient
@@ -269,11 +348,11 @@ for that user's inbox, including recipient user, `To`/`Cc` classification,
 mailbox sequence, creation time, and read time. Reading a recipient copy joins
 that delivery to its message envelope and address rows.
 
-Read state shall be independent. One recipient reading their copy must not mark
-another recipient's copy as read.
+Read state is independent for each recipient. Reading one copy must not mark
+any other recipient's copy as read.
 
-The entire send and fan-out operation shall be atomic: either the envelope and
-all recipient copies are committed, or none of them are.
+The envelope and all recipient copies shall commit in one transaction. If any
+part fails, none of them is committed. This is the send's atomicity guarantee.
 
 ### MSG-007 — Reply
 
@@ -288,17 +367,18 @@ opens the link to it. A recipient of the reply receives the same read-only
 linked-message access defined for a forward; possession of the referenced UUID
 without a delivery of the reply does not grant access.
 
-A message in the sender's Outbox is not replied to. The equivalent sender-side
-operation is **Send follow-up**. The original sender may create a new message
-with relationship kind `follow_up` and `related_envelope_id` pointing to an
-active Outbox envelope they currently own and may read. The follow-up is a new
-immutable envelope with a newly selected recipient list; recipients are not
-automatically inherited from the earlier message. The earlier subject and body
-are linked, not embedded or copied.
+A sender uses **Send follow-up**, rather than Reply, for a message in their
+Outbox. The original sender may create a new message with relationship kind
+`follow_up` and `related_envelope_id` pointing to an active Outbox envelope
+they currently own and may read. The follow-up is a new immutable envelope with
+a newly selected recipient list; recipients are not automatically inherited
+from the earlier message. The earlier subject and body are linked, not embedded
+or copied.
 
 Receiving the follow-up grants the same read-only linked-message access defined
-for a forward, subject to the earlier message's current availability, the
-recipient's current clearance, and all resource-specific authorization checks.
+for a forward, subject to MSG-020 retention-group access, the recipient's current
+clearance, and all resource-specific authorization checks. Individual expiry
+of the earlier message does not break this authorized read-only link.
 The UI shall call this operation **Send follow-up**, not Reply, so it does not
 imply that the sender is replying to themselves.
 
@@ -321,6 +401,11 @@ forward grants that recipient read-only access through the forward to the
 complete earlier message, including its sender, subject, security level,
 priority, action-required flag, body, resource links, and original `To` and `Cc`
 selector headers.
+
+MSG-020 keeps connected messages together and permits this read-only access to
+an earlier expired message while its retention group exists. It does not make
+that message eligible for new reply/forward operations or restore its mailbox
+entry.
 
 This grant does not expose another recipient's delivery row, read state, or the
 sender's read-receipt status because those are recipient-specific operational
@@ -361,9 +446,16 @@ to the sender through the messaging interface.
 
 ### MSG-011 — Resource links
 
-A body may contain structured links to Wathiq resources. A linked resource's
-effective security-level number must be less than or equal to the message's
-security-level number:
+A body may contain structured links to Wathiq records and aggregations. These
+links reference existing resources; they do not copy files into the message or
+grant access to the resources. Digital components are not selectable message
+resources. To refer to a file, the sender selects its containing record; the
+recipient opens the record and accesses its components under the record's
+ordinary authorization rules. Full-text matches within a digital component
+therefore identify its containing record as the selectable result.
+
+A linked resource's effective security-level number must be less than or equal
+to the message's security-level number:
 
 ```text
 linked_resource_security_level_number <= message_security_level_number
@@ -387,11 +479,11 @@ by the compose capabilities API, and is enforced again in the send transaction.
 Ordinary external hyperlinks in rich text remain governed by body-size and
 sanitization rules rather than this structured-link count.
 
-A resource link conveys no continuing access right. On every inbox-page status
-evaluation, message open, and resource open, the server applies the target's
-current authentication, authorization, security-level, lifecycle, and existence
-checks. The link is currently unavailable to a recipient when, among other
-reasons:
+A message link does not grant access to its target resource. Whenever the
+server evaluates link status for an Inbox page, opens a message, or opens a
+resource, it must check the target's current existence, lifecycle, security
+level, authentication, and authorization requirements. The link is currently
+unavailable to a recipient when, among other reasons:
 
 - the recipient no longer has sufficient effective clearance or another
   required permission for the resource;
@@ -424,13 +516,19 @@ security boundary and must not rely only on browser-side code.
 
 After send, the sender, address list, subject, priority, security level, body,
 `action_required`, action due fields, receipt request, reply link, forward link,
-and sent time shall not change. Recipient read timestamps and separately
-recorded action-completion acknowledgments are the only mutable message state
-defined by this specification.
+follow-up link, and sent time shall not change while the send-level content is
+retained. Final purge follows MSG-020: the complete retention group is deleted
+together, without envelope, delivery, or action-amendment tombstones.
 
-This revision does not define editing, recalling, deleting, archiving, or
-expiry of sent messages. Reply-based action completion is defined narrowly by
-MSG-015.
+Recipient first-read timestamps follow MSG-009. Reply-based completion
+acknowledgments follow MSG-015, and append-only action amendments follow MSG-023;
+neither rewrites the original envelope. Mailbox-reference deletion,
+restoration, retention expiry, and final content purge are governed by MSG-020.
+Deleting one mailbox reference does not alter another user's reference or
+authorize premature purge of shared content.
+
+This specification does not permit editing, recalling, or archiving sent
+messages.
 
 ### MSG-014 — Message security level
 
@@ -468,11 +566,10 @@ every expanded recipient in the final send transaction. Client-side filtering
 or an earlier recipient preview is not sufficient authorization.
 
 A secured reply, forward, or follow-up must have a security level at least as
-restrictive
-as every referenced earlier message. The sender must be cleared for that level,
-and every new recipient must satisfy it. A link must not be used to disclose a
-more highly secured earlier message through an unsecured or lower-level reply,
-forward, or follow-up.
+restrictive as every referenced earlier message. The sender must be cleared for
+that level, and every new recipient must satisfy it. A link must not be used to
+disclose a more highly secured earlier message through an unsecured or
+lower-level reply, forward, or follow-up.
 
 When a secured message or linked earlier message is opened, the server shall
 re-evaluate the authenticated user's current effective clearance. A user whose
@@ -496,9 +593,9 @@ working timezone. The server stores:
 - `action_due_at`, the instant at the start of the following local date in that
   timezone.
 
-This makes the entire selected due date available and gives every viewer the
-same objective late boundary. The due date must not precede the sender's current
-local date when the message is sent.
+The recipient has the whole selected local date in which to act. The stored
+boundary gives every viewer the same instant for evaluating lateness. At send
+time, the due date must be today or later in the sender's working timezone.
 
 Action completion is tracked independently for each recipient delivery. When a
 recipient replies to an action-required message and their delivery is not yet
@@ -519,9 +616,9 @@ The completion acknowledgment is permitted only when:
 
 The reply containing the completion acknowledgment informs the original sender
 through the ordinary durable reply delivery and its near-real-time notification.
-The reply shall visibly state **Action completed**, and the original sender's
-sent-message recipient status shall update accordingly. No separate email,
-escalation, or workflow task is created.
+The reply shall visibly state **Action completed**. The original sender's
+per-recipient action status shall update accordingly. This creates no separate
+email, escalation, or workflow task.
 
 For each recipient delivery, the current action status is derived as follows:
 
@@ -537,10 +634,11 @@ For each recipient delivery, the current action status is derived as follows:
 The effective action and due boundary are derived from the immutable original
 fields followed by the amendments in sequence under MSG-023. A later fair
 extension or removal may correct Completed late to Completed, but an amendment
-must never turn Completed into Completed late. `Late` is never stored as an independent boolean. Both the original sender and
-the applicable original recipient shall see the same derived late indicator.
-With multiple recipients, one recipient's completion does not complete or
-change another recipient's status.
+must never turn Completed into Completed late. `Late` is never stored as an
+independent boolean. Both the original sender and the applicable original
+recipient shall see the same derived late indicator. With multiple recipients,
+one recipient's completion does not complete or change another recipient's
+status.
 
 Crossing the due boundary does not create a new message, toast, escalation, or
 background workflow. The indicator is derived whenever the authorized inbox,
@@ -555,9 +653,8 @@ reply must reference the original delivery, never an amendment-notice delivery.
 ### MSG-016 — Outbox and drafts
 
 Every authenticated human user with `messaging.user_messages.exchange` shall
-have an Outbox containing the immutable user messages they previously sent. In
-this specification, **Outbox** means the
-user-facing sent-message collection; it is not a background delivery queue.
+have an Outbox containing their previously sent user messages. **Outbox** here
+means the user's sent-message collection, not a queue waiting for delivery.
 System-produced messages do not appear in a human user's Outbox.
 
 An Outbox item is the original message envelope, not another recipient delivery
@@ -579,11 +676,11 @@ owner when 30 days remain. An expired or explicitly discarded draft moves to a
 private **Recently deleted drafts** view for 30 additional days, during which
 the owner may restore it. Restoration reopens the same draft but does not
 restore stale recipient eligibility, clearance, or resource authorization.
-After the recovery period, the subsystem permanently deletes the draft and its
-draft-only selector and resource-link rows. Draft lifecycle processing creates
-no message, delivery, toast, or record. The 180-day active period, 30-day
-warning, and 30-day recovery period are validated deployment settings, with
-these values as the defaults.
+After the deleted draft's restoration period, the subsystem permanently deletes
+the draft and its draft-only selector and resource-link rows. Draft lifecycle
+processing creates no message, delivery, toast, or record. The 180-day active
+period, 30-day warning, and 30-day deleted-draft restoration period are
+validated deployment settings, with these values as the defaults.
 
 Saving a draft does not reserve recipient membership, authorization, resource
 access, or security clearance. The UI may report its current validation state,
@@ -619,6 +716,8 @@ The user must have:
 
 No new messaging privilege substitutes for these existing record controls.
 
+#### Initialize the record draft
+
 The record draft is initialized as follows:
 
 - record `title` defaults to the selected message subject and remains editable
@@ -627,7 +726,7 @@ The record draft is initialized as follows:
 - record `security_level_id` is fixed initially to the selected message level
   and cannot be lowered below the highest level among included messages;
 - the user chooses the destination aggregation and supplies or confirms every
-  other required record field, including the record number; and
+  other required record field, including the record number;
 - the generated message PDFs are the authoritative message content preserved
   in the record; and
 - separate capture-provenance metadata records the source message-envelope ID,
@@ -636,22 +735,25 @@ The record draft is initialized as follows:
   saved as the record's final digital component. Later expiry or purging of the
   source messaging data does not alter or invalidate the captured record.
 
+#### Message PDFs and provenance
+
 The selected message is rendered as a human-readable PDF and staged as digital
 component 1. The PDF preserves the message's immutable sender, sent time,
 original `To`/`Cc` selector headers, subject, priority, security level,
-original action-required and due-date fields, the chronological action-
-amendment history and effective state at capture time, sanitized body, and
-human-readable structured resource links. Recipient-specific read receipts and other users'
-delivery state are not included.
+original action-required and due-date fields, the chronological
+action-amendment history and effective state at capture time, sanitized body,
+and human-readable structured resource links. Recipient-specific read receipts
+and other users' delivery state are not included.
 
 If the selected message is a reply, forward, or follow-up, every earlier
-message reachable through its relationship references shall also be captured once, provided the
-capturing user is currently authorized to read it. Those linked messages are
-rendered as separate PDFs and staged as subsequent digital components ordered
-by `sent_at` ascending with message ID as the deterministic tie-breaker. The
-selected message remains component 1 as required; chronological ordering
-applies to components 2 onward. A reference cycle or duplicate reference is
-rejected as integrity corruption rather than producing repeated components.
+message reachable through its relationship references shall also be captured
+once, provided the capturing user is currently authorized to read it. Those
+linked messages are rendered as separate PDFs and staged as subsequent digital
+components ordered by `sent_at` ascending with message ID as the deterministic
+tie-breaker. The selected message remains component 1 as required;
+chronological ordering applies to components 2 onward. A reference cycle or
+duplicate reference is rejected as integrity corruption rather than producing
+repeated components.
 
 After all message PDFs, Wathiq shall generate a **Message capture provenance**
 PDF as the final digital component. It contains the capture ID, resulting record
@@ -668,14 +770,15 @@ Both representations are created from the same transaction data and must
 agree. A mismatch or inability to render the provenance PDF fails the capture
 without committing a partial record.
 
+#### Limits, validation, and commit
+
 One capture may include at most 100 linked earlier messages in addition to the
 selected message and final provenance PDF, and all generated PDFs combined may
-not exceed 50 MiB. Both
-limits are checked before record commit. Exceeding either limit blocks capture
-without creating a partial record and tells the user which limit was exceeded.
-The limits are validated deployment settings with these values as defaults;
-raising them requires PDF-renderer, storage, request-duration, and record-view
-performance testing.
+not exceed 50 MiB. Both limits are checked before record commit. Exceeding
+either limit blocks capture without creating a partial record and tells the
+user which limit was exceeded. The limits are validated deployment settings
+with these values as defaults; raising them requires PDF-renderer, storage,
+request-duration, and record-view performance testing.
 
 If any required linked message becomes inaccessible, the message body or
 stored resource-link metadata cannot be rendered faithfully, or any
@@ -692,6 +795,8 @@ existing record draft commits successfully. The resulting record and component
 history shall identify that they were created by the message-capture workflow.
 Saving the same message more than once is permitted when the user deliberately
 creates distinct records; each capture is independently authorized and audited.
+
+#### PDF format and filenames
 
 Every generated component shall conform to both PDF/A-2u and PDF/UA-1. Failure
 to produce or validate either required conformance blocks record commit. The
@@ -740,42 +845,44 @@ contract defines:
 - whether durable notification creation is required for the associated business
   transaction to commit.
 
-The feature-owned boolean `required_for_business_commit` expresses only that
-transactional policy. When true, administrators cannot disable the producer and
-occurrence of the registered event must create the durable envelope and all
-recipient deliveries in the same transaction; failure rolls back the business
-change. When false, administrators may disable the producer, in which case the
-business operation may commit without a notification. If an optional producer
-is enabled, an attempted notification still follows the ordinary atomic send
-rules and a creation failure rolls back the transaction.
+The feature-owned flag `required_for_business_commit` controls whether the
+business change may commit without its notification:
+
+- **Required producer (`true`):** administrators cannot disable it. The
+  registered event, envelope, and all deliveries must commit together. A
+  notification failure rolls back the business change.
+- **Optional producer (`false`), disabled:** the business operation may commit
+  without creating a notification.
+- **Optional producer (`false`), enabled:** the business change and attempted
+  notification still commit together. A notification failure rolls back the
+  transaction.
 
 `required_for_business_commit` does not set message priority, request a read
 receipt or action, require the recipient to read the message, or require a toast
 or live event to reach a connected client before commit. The required outcome
 is durable database creation, not user attention or real-time presentation.
 
-This does not require the product owner to enumerate every future notification
-producer before the messaging subsystem can be implemented. The initial
-registry may be empty. “Registered” means that each feature which introduces a
-system notification declares and tests this small contract in that feature's
-approved specification and backend code before the producer is enabled. The
-registry is an application allowlist: administrators configure registered
+The initial producer registry may be empty. Each feature that later introduces
+a system notification must define and test its producer contract in its
+approved specification and backend code before enabling the producer. The
+messaging subsystem does not require a list of all future producers in advance.
+The registry is an application allowlist: administrators configure registered
 entries through MSG-019 but cannot create a producer, event trigger, resolver,
 placeholder, or executable behavior.
 
 #### Concrete backend integration
 
-In this revision, registration and use are explicit Python application-service
-integration, not REST and not an automatic event-bus subscription.
+Backend Python code registers producers and calls the notification service
+explicitly. Registration is not a REST operation, and the service does not
+automatically subscribe to business events.
 
 Each feature that introduces notifications provides a declarative Python
-`SystemNotificationDefinition`. At minimum it contains the producer code,
-event type, typed placeholder schema, allowed audience resolver names, allowed
+`SystemNotificationDefinition`. At minimum it contains the producer code, event
+type, typed placeholder schema, allowed audience resolver names, allowed
 resource-link kinds, `required_for_business_commit` policy, and contract
-version. The API
-application assembles these definitions into one registry explicitly during
-startup; registration must not depend on an incidental module import or a
-client request.
+version. The API application assembles these definitions into one registry
+explicitly during startup; registration must not depend on an incidental module
+import or a client request.
 
 The feature's canonical catalogue seed creates its producer row for a new
 deployment, while an upgrade migration advances the row for an existing
@@ -820,7 +927,9 @@ the operation has these mandatory semantics:
   language variant, forces the baseline security level and prohibited
   receipt/action fields, and calls the canonical envelope/fan-out writer; and
 - it returns a typed result containing the created envelope and delivery IDs,
-  or a defined `disabled` result for a producer whose
+  the existing result for an identical retry, or `message_result_purged` when
+  that successful result was already purged under section 8; a new event may
+  instead return a defined `disabled` result for a producer whose
   `required_for_business_commit = false` and active configuration is disabled.
   Validation or required-configuration failure raises a domain error and rolls
   back the caller's transaction.
@@ -839,10 +948,9 @@ production operation with a fabricated domain event.
 A producer has no general messaging authority beyond that contract. It cannot
 accept a client-supplied producer code or use a recipient rule or template
 capability outside the active validated administration configuration and
-feature contract. If approved template values contain data
-originally entered by a user, the values are treated as untrusted data,
-strictly bounded, escaped or sanitized, and recorded as part of the resulting
-message; they do not become executable markup or template instructions.
+feature contract. User-entered template values remain untrusted data. They must
+be bounded, escaped or sanitized, and stored as part of the resulting message.
+They must not be interpreted as executable markup or template instructions.
 
 System messages always use the lowest active configured security level as
 required by MSG-014. A producer may include only resource-link kinds explicitly
@@ -853,13 +961,13 @@ bypass of resource authorization. A system message shall always have
 cannot request receipts, set an action due date, or receive action-completion
 acknowledgments.
 
-For this revision, production system notification creation is always atomic
-with the business change that causes it. The domain change and the envelope, concrete
-recipient snapshots, fan-out rows, mailbox sequences, and `NOTIFY` calls are
-written in the same PostgreSQL transaction. If notification validation or
-creation fails, the complete transaction rolls back. The caller may retry the
-ordinary business operation using its stable idempotency key; retrying must not
-create a duplicate domain change or notification.
+Whenever a production system notification is created, it commits in the same
+PostgreSQL transaction as the business change that caused it. That transaction
+includes the envelope, recipient snapshots, deliveries, mailbox sequences, and
+`NOTIFY` calls. If notification validation or creation fails, the complete
+transaction rolls back. The caller may retry the ordinary business operation
+using its stable idempotency key; retrying must not create a duplicate domain
+change or notification.
 
 The explicitly marked administration test in MSG-019 has no domain change. Its
 test envelope, recipients, mailbox sequences, and notifications commit in one
@@ -883,9 +991,11 @@ The administration page operates on producer definitions registered by
 application features. Feature code supplies the immutable `producer_code`,
 event type, allowed template placeholders and their data types, permitted
 audience modes, permitted resource-link kinds, and whether notification is
-`required_for_business_commit`. Administrators cannot create a new executable event, change its
-trigger, submit arbitrary production event data, or directly send a production
-system message from this page.
+`required_for_business_commit`. Administrators cannot create a new executable
+event, change its trigger, submit arbitrary production event data, or directly
+send a production system message from this page.
+
+#### Permitted configuration
 
 For each registered producer, an administrator may:
 
@@ -917,6 +1027,8 @@ resource-presentation changes are also flagged as Security Operations because
 they can change who receives system-authored information. Secrets and example
 protected event data are not stored in configuration history.
 
+#### Controlled test sends
+
 An administrator may test the active or pending valid configuration through a
 dedicated **Send test** action. A test send:
 
@@ -947,11 +1059,14 @@ by color alone. The rendered subject is also prefixed for clarity, but the
 prefix is not the security control.
 
 A test message cannot request receipts or action, cannot be replied to,
-forwarded, or followed up, and cannot be saved as a Wathiq record. It is excluded from
-production notification success/failure rates and business workflow counts but
-included in separate test-send operational metrics. It expires after 30 days,
-may be deleted early from a test recipient's own Inbox without record capture,
-and is purged through the ordinary recovery and content-cleanup mechanism.
+forwarded, or followed up, and cannot be saved as a Wathiq record. It is
+excluded from production notification success/failure rates and business
+workflow counts but included in separate test-send operational metrics. It
+expires after 30 days, may be deleted early from a test recipient's own Inbox
+without record capture, and is purged through the ordinary deleted-message
+restoration and retention-group cleanup mechanism.
+
+#### Use of a configuration in production
 
 When the feature event occurs, the business transaction locks and uses one
 active configuration version, resolves and snapshots the concrete audience,
@@ -966,66 +1081,137 @@ committing.
 
 ### MSG-020 — Sent-message retention and deletion
 
-Sent messages expire by default three years after `sent_at`. Ninety days before
-expiry, Inbox and Outbox show a localized expiry indicator. An eligible human-
-authored message also provides the existing **Save as record** action; system
-notifications and amendment notices do not. Reconnect and live-event processing
-must not emit one warning toast per expiring message.
+#### Message expiry and mailbox restoration
 
-Saving a message as a record is the mechanism for preserving it beyond the
-messaging retention period. The resulting record and PDF components follow
-ordinary record retention, disposition, legal-hold, access, and deletion rules
-independently of the source message.
+Each sent message has its own expiry date, normally three years after
+`sent_at`. Ninety days before that date, Inbox and Outbox show an expiry
+indicator. Eligible human-authored messages also offer **Save as record**;
+system notifications and amendment notices do not. Reconnection must not
+produce one warning toast per expiring message.
 
-Before automatic expiry, a sender or recipient may delete the message from
-their own Outbox or Inbox only after that user has successfully saved that
-message as a record. The server verifies a committed
-`message_record_captures` row for that user and envelope and confirms that the
-resulting record still exists under record governance at deletion time; a
-client assertion, an uncommitted record draft, another user's capture, or a
-record already disposed of is insufficient. Deleting one user's view does not
-remove another recipient's delivery or the sender's Outbox view. Later lawful
-disposition of the captured record remains governed by record rules and is not
-blocked by messaging provenance.
+Expiry removes a message from ordinary Inbox and Outbox views; it does not
+necessarily mean its stored content is ready for permanent deletion. Connected
+messages are kept together under the retention-group rule below.
 
-The capture-free exceptions are every `system_notification`, whether production
-or test, and every `action_amendment_notice`. Their recipients may delete their
-own Inbox references without record capture because neither kind may become a
-record. Deleting an amendment notice does not delete its authoritative amendment
-from the retained original message.
+Manual mailbox deletion and automatic expiry move the affected user's Inbox
+or Outbox entry to **Recently deleted messages**. That entry has a 30-day
+**restoration period**, during which its owner may restore it, subject to
+current authorization. This is the restoration period for a deleted message
+entry, not for a deleted user account. When it ends, that entry is no longer
+available in Recently deleted and cannot be restored, even if its underlying
+message remains stored for the rest of the conversation.
 
-Manual deletion and automatic expiry first move the affected mailbox reference
-to **Recently deleted messages** for 30 days. During that period its owner may
-restore it if the send-level message data has not yet been purged. After the
-recovery period the reference is permanently hidden and cannot be restored
-through the messaging interface.
+Restoring an entry does not change the message's original expiry date or give
+it another three years. An entry restored before expiry returns to its ordinary
+mailbox view until expiry. Restoring an already expired entry makes it available
+only until its existing restoration deadline; at that deadline it leaves both
+ordinary and Recently deleted views. Restoration must not restart the clock.
+The entry's original expiry and restoration deadline must remain available to
+enforce this rule, even when the UI shows it as restored. Repeated deletion and
+restoration after expiry must not extend that deadline. Automatic expiry of an
+entry already deleted early must not reopen or extend its restoration period.
 
-Automatic expiry applies to every remaining Inbox and Outbox reference whether
-or not an individual user saved the message as a record. A user who needs to
-preserve the communication is responsible for saving it as a record before the
-displayed expiry. This rule provides a bounded messaging store rather than
-allowing uncaptured messages to grow without limit.
+Before expiry, a user may delete their own entry for an eligible human-authored
+message only after saving that message as a record. The server must verify a
+committed capture for that user and envelope and confirm that the record still
+exists. A staged draft, another user's capture, or a record already disposed of
+is insufficient. System notifications, including tests, and amendment notices
+are capture-free deletion exceptions. Deleting one person's entry never
+deletes another person's entry or the shared message content.
 
-The send-level message data defined in section 3 is retained while any Inbox or
-Outbox reference is active or recoverable. Deleting one recipient's delivery
-therefore cannot remove the subject, body, or other send-level data still needed
-by the sender or another recipient. An active or recoverable amendment-notice
-delivery also retains its linked original envelope so **Open amended message**
-cannot point to prematurely purged content. Once no active or recoverable
-reference
-remains, a bounded cleanup job purges the subject, body, rendered language
-variants, selector and addressee details, resource-link details, receipt state,
-action-amendment reasons and due-state values, and other message content. It
-retains only a minimal non-content tombstone needed for UUID uniqueness,
-relationship-link unavailability, record-
-capture provenance, idempotency, and event-history integrity. Opening a link to
-a purged earlier message shows a localized non-disclosing **This message has
-expired or was deleted** placeholder.
+Automatic expiry applies whether or not the message has been captured as a
+record. Captured records follow their own records-management rules: message
+purge never deletes them, and record disposition never deletes a retained
+message.
 
-Cleanup runs in bounded batches, is idempotent, and locks candidate rows so
-multiple API or maintenance instances cannot purge the same message
-concurrently. A cleanup failure leaves content retained for a later run; it
-must never partially purge a still-active or recoverable message.
+#### Keep the complete conversation until all its messages have expired
+
+A **retention group** is the complete set of sent message envelopes connected
+by replies, forwards, follow-ups, and action-amendment notices. A delivery-based
+relationship connects the new envelope to the envelope owning the referenced
+delivery. An amendment notice connects to the original envelope through its
+action amendment. A message with no such connections is a one-message group.
+
+Group membership includes every branch, not just the earlier messages visible
+from one reply. If two replies or forwards share an earlier message, they
+belong to the same group. Sending another linked message extends that group.
+An unsent draft, an ordinary resource link, or a captured record is not a member
+and does not extend the group's lifetime. Group membership is a retention rule,
+not a group conversation, participant list, or access grant.
+
+The complete group becomes eligible for permanent purge only when:
+
+1. every message in the group has reached its own `expires_at`; and
+2. every Inbox and Outbox entry in the group has ended its applicable deleted-
+   message restoration period, with no active or restorable entry remaining.
+
+Early mailbox deletion does not shorten this rule: even if everyone deletes
+their entries early, all messages in the group must still reach their expiry
+dates. Adding a later reply, forward, follow-up, or amendment notice can delay
+purge for the entire group, including other branches. A conversation that keeps
+growing can therefore retain older messages for longer than three years. This
+is intentional; individual expiry dates do not promise a maximum physical
+storage lifetime.
+
+For example, a message sent in January and a reply sent in February remain
+stored together until both have expired and all their deleted-message
+restoration periods have ended. Cleanup then deletes both together. It must
+not purge January's content while keeping February's reply with a missing
+original.
+
+#### Read earlier messages without restoring their mailbox entries
+
+While a group remains stored, an authorized reader of a reply, forward, or
+follow-up may open the earlier linked messages under MSG-007 and MSG-008, even
+if those earlier messages have expired or their original mailbox entries are
+no longer restorable. An authorized reader of an amendment notice may similarly
+open its original message. The starting message must be accessible through the
+reader's own active or restorable Inbox or Outbox entry.
+
+Each step still requires current exchange privilege where applicable, message
+clearance, and resource authorization. It reveals only the shared message
+content allowed by the relationship grant, not another person's delivery,
+receipt state, or other conversation branches. Knowing a UUID or belonging to
+the same retention group grants no access. Expiry or deletion of an earlier
+mailbox entry alone shall not break an otherwise-authorized link.
+
+This access is read-only. It does not restore an old Inbox or Outbox entry or
+make an expired/deleted source eligible for a new reply, forward, follow-up,
+action completion, or amendment. Existing source-operation rules still apply.
+Save as record remains subject to MSG-017 and its human-message-only rules.
+
+#### Delete the group together
+
+At final purge, delete all envelopes and their localizations, selectors,
+addressees, deliveries, resource links, action completions, and action
+amendments in the group. Remove their relationships in the same transaction. Do
+not leave envelope, delivery, or action-amendment tombstone rows. Until that
+transaction commits, the group's stored content and relationships remain
+intact; after it commits, none of those message rows remains.
+
+Independent records, capture provenance, required event history, and the
+minimal request-deduplication receipts defined in section 8 survive under their
+own rules. They must not keep the message rows alive. Their preserved
+identifiers are historical references, not permission to retrieve deleted
+messages. An old bookmark or client request for a purged message receives the
+ordinary non-disclosing unavailable-message response. Independently retained
+audit entries must identify deleted messages by historical UUID values, not
+foreign keys that prevent their deletion.
+
+Cleanup must recheck the complete group's membership and purge eligibility
+under locks that also coordinate with message sends, amendments, and mailbox
+restoration. Capture commits and draft sends must coordinate with those same
+locks and revalidate their sources. A concurrent operation either commits first
+and is included in the eligibility decision, or observes the completed purge
+and fails without creating a dangling relationship. Multiple workers must not
+purge the same group concurrently.
+
+Discover candidates in bounded pages and process groups separately. A group
+must never be split merely to meet a cleanup batch target. Large groups require
+bounded discovery memory and an atomic database deletion; they must not be
+loaded as complete message bodies into a worker. A failed or timed-out purge
+rolls back the whole group and leaves it for retry. Operations monitoring must
+report groups whose size or repeated failures delay cleanup.
 
 ### MSG-021 — Localization of system-generated messages
 
@@ -1084,8 +1270,8 @@ embedded verbatim and is never machine-translated. Toast and later-read variant
 selection and fallback follow the same rules as a system notification.
 
 System notifications are never eligible for message-to-record capture. Their
-localized variants remain durable messaging content only for the notification's
-retention period. The underlying business object, event history, audit entry,
+localized variants remain messaging content until their retention group is
+purged under MSG-020. The underlying business object, event history, audit entry,
 or feature-created record—not the notification—is the authoritative evidence of
 the event being reported.
 
@@ -1098,9 +1284,9 @@ explicit profile administration. System producers and system-message receipt
 do not require or inherit this privilege.
 
 A person with the privilege may use Compose, Drafts, and Outbox; send, reply,
-forward, and follow up human-authored messages; be selected directly; and be included by
-human-message role or organizational-unit expansion, subject to every other
-clearance, lifecycle, visibility, and messaging rule.
+forward, and follow up human-authored messages; be selected directly; and be
+included by human-message role or organizational-unit expansion, subject to
+every other clearance, lifecycle, visibility, and messaging rule.
 
 A person without the privilege:
 
@@ -1127,12 +1313,14 @@ person-to-person mailbox access.
 
 ### MSG-023 — Immutable action amendments
 
-Sending never edits an existing message envelope. When an action instruction
-was entered incorrectly, the original human sender may append an immutable
-structured action amendment to the original envelope. The original
-`action_required`, due-date fields, subject, body, sender, recipients, priority,
-security level, resource links, receipt setting, and relationship references
-remain unchanged.
+Sending never edits an existing message envelope. When the action-required
+setting or due date needs correction, the original human sender may append an
+immutable structured action amendment to the original envelope. The original
+`action_required`, due-date fields, subject, body, sender, recipients,
+priority, security level, resource links, receipt setting, and relationship
+references remain unchanged.
+
+#### Permitted amendments
 
 Only these amendments are permitted for an envelope originally sent with
 `action_required = true`:
@@ -1157,7 +1345,9 @@ cannot be edited, replaced, reordered, or deleted through messaging operations.
 The effective action state is derived from the original envelope followed by
 its amendments in sequence; no mutable effective-state column is authoritative.
 
-Fairness rules are mandatory:
+#### Fairness rules
+
+The following fairness rules are mandatory:
 
 - a newly added or changed due boundary must be in the future when the
   amendment commits, using the sender's validated working-timezone snapshot;
@@ -1172,6 +1362,8 @@ Fairness rules are mandatory:
 - withdrawal changes every incomplete recipient to Withdrawn, while recipients
   already completed remain Completed or Completed late under the latest fair
   effective due date preceding withdrawal.
+
+#### Authorization and the amendment notice
 
 The sender must currently own the original envelope, retain access to its
 active Outbox reference, have `messaging.user_messages.exchange`, and satisfy
@@ -1193,13 +1385,14 @@ edited by the sender.
 
 An amendment notice is a delivery mechanism, not the authoritative correction.
 It cannot be replied to, forwarded, followed up, used for action completion, or
-independently
-saved as a record. Opening it marks only that notice delivery as read and
-provides **Open amended message**, which opens the original message with its
-complete action-amendment timeline. Replies and completion acknowledgments
-continue to reference the original recipient delivery. Forwarding the original
-message exposes its current effective action state and amendment history under
-the ordinary linked-message authorization rules.
+independently saved as a record. Opening it marks only that notice delivery as
+read and provides **Open amended message**, which opens the original message
+with its complete action-amendment timeline. Replies and completion
+acknowledgments continue to reference the original recipient delivery.
+Forwarding the original message exposes its current effective action state and
+amendment history under the ordinary linked-message authorization rules.
+
+#### Presentation, retention, and capture
 
 For the sender, an amendment notice does not appear as an unrelated Outbox
 item. The original Outbox detail displays it in the action-amendment timeline.
@@ -1210,9 +1403,11 @@ means only that the correction notice was opened; it is not acceptance.
 
 The amendment notice uses the original envelope's retention expiry and may be
 deleted early by its recipient without record capture because it cannot itself
-become a record. The authoritative amendment is retained and purged with the
-original envelope's send-level message data. Purging a notice never removes the
-amendment timeline from a still-retained original message.
+become a record. The authoritative amendment, notice, and original envelope
+belong to the same retention group and are purged together under MSG-020.
+Deleting a notice from one Inbox never removes the amendment timeline from the
+retained original. There is no separate permanent purge of a notice while its
+group remains.
 
 Capturing the original message as a record includes the immutable original
 action fields and a clearly separated chronological **Action amendments**
@@ -1324,10 +1519,10 @@ Inbox exposes **Delete** only when the authenticated recipient has a currently
 retained committed record capture satisfying MSG-020, or the envelope is a
 system notification or action-amendment notice that is ineligible for capture.
 Inbox exposes **Save as record** only for an eligible human-authored message.
-It shows the configured
-expiry date and warning state. A **Recently deleted** view within Inbox lists
-only that recipient's recoverable deleted deliveries and provides Restore; it
-is not a separate navigation-drawer item.
+It shows the configured expiry date and warning state. A **Recently deleted**
+view within Inbox lists only that user's deleted Inbox entries still within
+their restoration period and provides Restore; it is not a separate
+navigation-drawer item.
 
 ### 6.3 Message view
 
@@ -1354,12 +1549,11 @@ server rejects send, reply, and forward requests without the privilege.
 
 Recipient controls shall use the current frontend's existing shared user, role,
 and organizational-unit selector components as required by MSG-005A. Those
-components shall use bounded remote search and retain selected values. They must
-not obtain options
-through an unbounded user, role, or organizational-unit list request. Role
-results shall expose whether a role is currently effective; organizational-unit
-results shall expose whether the unit is active. Ineligible choices shall not
-be selectable.
+components shall use bounded remote search and retain selected values. They
+must not obtain options through an unbounded user, role, or organizational-unit
+list request. Role results shall expose whether a role is currently effective;
+organizational-unit results shall expose whether the unit is active. Ineligible
+choices shall not be selectable.
 
 Only recipients visible under existing lifecycle, authorization, and
 recipient-discovery rules may be selected. This specification does not create a
@@ -1398,7 +1592,60 @@ When **Action required** is selected, compose shall offer an optional action due
 date using the sender's working timezone and explain that it is informational.
 Clearing **Action required** clears the due date. A past local date is invalid.
 
-The resource-link control shall use bounded authorized search. A visible
+Compose, including an editable draft, shall provide an **Add resources** button
+that opens a search-and-selection dialog. The sender shall not have to choose a
+resource in a separate dropdown before opening the dialog. The dialog shall:
+
+- use a compact dialog approximately half the available desktop width, while
+  remaining usable on narrow screens;
+- offer one text box that always uses the existing combined full-text search,
+  plus a resource-kind filter with **All** (default), **Aggregations**, and
+  **Records**; do not offer a separate number field or full-text checkbox;
+- search record numbers, titles, descriptions and indexed component contents,
+  and the supported indexed aggregation metadata, through that same search;
+- make no search request when the dialog opens, while the sender types, when
+  the filter changes, or for a blank query; execute a nonblank query only on
+  **Search** or **Enter**, and reset pagination when criteria change;
+- show each result with a selection checkbox beside its title, its kind and
+  number together below the title, and its description below those identifiers
+  when one exists; align these consistently in LTR and RTL;
+- show an appropriate record or aggregation icon for every result;
+- make the title open an authorized read-only metadata dialog above the picker,
+  without navigating away. Lay out metadata in two columns, with the description
+  spanning both; collapse to one column on narrow screens. Include the existing digital-content Preview action
+  for authorized digital records, but no resource action panel or digital-contents
+  section. Closing details or preview returns to the underlying dialog without
+  changing the query, filter, page, scroll position, selections or unsaved compose;
+- reuse or extend the frontend's shared search and selection components rather
+  than introduce a separate messaging search implementation;
+- use bounded server-side cursor pagination; changing a search or filter resets the
+  result page but retains the sender's selected resources across pages and
+  searches, with each resource identified by its kind and ID;
+- allow multiple records and aggregations to be selected, show the selection
+  in a bounded, independently scrolling list, and allow individual selections
+  to be removed before confirmation. Keep the selected count and confirmation
+  actions outside that scroll area so adding selections cannot keep growing
+  the dialog. Apply the same bounded scrolling to the attached-resources list
+  in Compose, with the count and send/save actions outside the scroll area;
+- provide an **Add selected** action, disabled when nothing is selected or the
+  selection would exceed the remaining configured resource-link limit; and
+- allow cancellation without changing the message body or its resource links.
+
+On **Add selected**, revalidate all selected resources against current sender
+access and the selected message level. If any selection is invalid or the
+combined link count exceeds the limit, explain the problem and keep the dialog
+open without partially inserting the selection. On success, add each resource to the separate attachment panel and its
+normalized resource-link list, then close the dialog. Never insert resource
+titles into the editable message body. For compatibility, the submitted/stored
+HTML retains one opaque marker per link; the UI hides these markers and renders
+all links in a dedicated panel below the authored body, including older messages. Report lookup and validation failures visibly;
+an enabled action must not silently do nothing. Final send-time validation
+remains mandatory under MSG-011.
+
+Search results, filters, full-text excerpts, and selection details must obey
+the existing search authorization and disclosure rules. A component content
+match must not create a direct component link or reveal content the sender
+cannot read. A visible
 resource whose security level exceeds the selected message level shall be
 disabled rather than silently omitted and shall show a localized explanation
 that the message level must be at least the resource level. A resource the
@@ -1435,8 +1682,8 @@ Catch-up never produces one toast per missed message. If catch-up finds one or
 more new recipient copies, the client shows at most one localized summary such
 as **You have 7 new messages**, updates the unread indicator, and leaves the
 individual messages in Inbox. Repeated reconciliation for the same mailbox
-cursor must not repeat the summary. Live messages committed after catch-up
-returns to normal per-message toast behavior.
+cursor must not repeat the summary. After catch-up completes, newly committed
+live messages use the normal per-message toast behavior.
 
 The unread counter and inbox shall always be obtained from durable server state,
 not calculated solely from toasts received by the current page.
@@ -1465,11 +1712,11 @@ clear reason for a test message, amendment notice, inaccessible or purged
 message, inactive Outbox reference, inadequate clearance, or absent exchange
 privilege.
 
-Outbox shows the configured expiry date and warning state. It exposes **Delete**
-only when the sender has a currently retained committed record capture
-satisfying MSG-020. A **Recently deleted** view within Outbox lists the sender's
-recoverable deleted references and provides Restore. Sender deletion never
-deletes or hides a recipient's delivery.
+Outbox shows the configured expiry date and warning state. It exposes
+**Delete** only when the sender has a currently retained committed record
+capture satisfying MSG-020. A **Recently deleted** view within Outbox lists the
+sender's deleted entries still within their restoration period and provides
+Restore. Sender deletion never deletes or hides a recipient's delivery.
 
 ### 6.7 Drafts
 
@@ -1488,10 +1735,9 @@ save and discard; it does not require automatic keystroke-by-keystroke saving.
 
 For an action-required envelope, the sender's sent view shall show one status
 per concrete recipient: Outstanding, Late, Completed, Completed late, or
-Withdrawn. A
-completion status links to the reply that recorded it. Aggregate wording may
-summarize counts, but it must not conceal the per-recipient state or treat one
-recipient's completion as completion for all recipients.
+Withdrawn. A completion status links to the reply that recorded it. Aggregate
+wording may summarize counts, but it must not conceal the per-recipient state
+or treat one recipient's completion as completion for all recipients.
 
 The original Outbox detail page contains an **Action status** panel showing the
 original and current effective action state, original and effective due date,
@@ -1541,49 +1787,42 @@ PostgreSQL is the authoritative store. UUID primary keys use PostgreSQL `uuid`
 values generated by the application or an approved database UUID function.
 They are globally unique and opaque to users.
 
+In the tables below, **FK** means foreign key: a database-enforced reference
+to another row. **Required** means the value must be present; **nullable** means
+it may be absent (`null`) under the stated rules. A **composite key** uses more
+than one column to identify a row or enforce a relationship.
+
 ### 7.0 Identifier policy
 
-Messaging uses a deliberate hybrid identifier policy; it does not replace
-Wathiq's general `BIGSERIAL` convention with UUIDs for every messaging table.
-PostgreSQL sequences are safe with concurrent transactions and multiple API
-instances, so horizontal scaling alone is not a reason to use UUIDs.
+Messaging uses UUIDs for externally referenced messaging objects and Wathiq's
+existing identifier conventions for internal rows. It does not replace every
+`BIGSERIAL` key with a UUID.
 
-A UUID is used as the sole primary identifier when Wathiq intentionally exposes
-and later reuses an object's ID outside the table that stores it. Examples are
-an envelope, recipient delivery, draft, action amendment, capture operation, or
-immutable notification-configuration version. An envelope or delivery ID may
-appear in an API response, live event, reply/forward/follow-up relationship, or
-capture provenance. A capture ID appears in its provenance PDF filename. A
-configuration-version ID is returned to and submitted by the administration
-UI.
+Use a UUID as the sole primary identifier for an envelope, delivery, draft,
+action amendment, capture operation, or immutable notification-configuration
+version. These IDs are returned to clients and reused in API calls,
+relationships, live events, or capture provenance. For example, a client uses
+the same draft UUID to retrieve, update, discard, restore, or send that draft;
+a capture UUID also appears in its provenance PDF filename.
 
-A draft provides a concrete client example: the backend returns the new draft's
-ID to WebUI, Flutter, or another client. That client retains the ID and sends it
-back in later requests to retrieve, update, discard, restore, or send the same
-draft. The UUID therefore provides one stable, globally unique identifier for
-all of those operations. Returning an ID through an API does not itself require
-a UUID—PostgreSQL `BIGSERIAL` could also identify the row—but UUID is chosen for
-these externally referenced messaging objects to meet their global-identity
-requirements, remain stable if data is moved or combined, and avoid exposing
-adjacent sequence values. Knowledge of a UUID never grants access; every
-operation must still enforce ownership and authorization.
+Internal child and association rows whose own IDs are not exposed in APIs,
+events, links, or provenance use the keys specified below: `BIGSERIAL`, an
+existing entity's `BIGINT`, a natural text key, or a composite key. Examples
+include selectors, resource links, localizations, addressee mappings, and
+capture-component mappings. Existing user, role, organizational-unit,
+security-level, aggregation, record, and digital-component IDs do not change.
 
-Database-internal child or association rows whose own IDs are never returned to
-clients, placed in live events or links, or written into record provenance do
-not need UUIDs. They shall follow existing Wathiq conventions and use
-`BIGSERIAL`, an existing entity's `BIGINT` identifier, a natural text key, or a
-composite key as defined below. Examples include recipient-selector rows,
-resource-link rows, localization rows, addressee mappings, and capture-component
-mappings. Existing Wathiq user, role, organizational-unit, security-level,
-aggregation, record, and digital-component identifiers remain unchanged.
+UUIDs provide stable, globally unique identities if data is moved or combined
+and avoid exposing adjacent sequence values. Returning an ID through an API
+does not itself require a UUID; PostgreSQL sequences already support concurrent
+transactions and multiple API instances. The larger storage and index cost of
+a 16-byte UUID is accepted only for objects that need this external identity.
 
-This policy accepts the larger storage and index cost of a 16-byte UUID only
-for objects that need the externally stable identity. It avoids adding both an
-internal `BIGSERIAL` key and a UUID alias to the same object unless a later,
-approved performance design demonstrates that the additional identifier and
-mapping complexity are necessary. UUID generation shall use the repository's
-approved implementation consistently; identifier format or predictability must
-not be treated as a security control.
+Do not add both an internal `BIGSERIAL` key and a UUID alias for the same object
+without a separately approved performance design justifying the extra storage
+and mapping complexity. Generate UUIDs consistently using the repository's
+approved implementation. Identifier format and predictability are not security
+controls: every operation still enforces ownership and authorization.
 
 The required tables are:
 
@@ -1594,6 +1833,7 @@ The required tables are:
 | `message_recipient_selectors` | Immutable user, role, and organizational-unit choices made by the sender |
 | `message_addressees` | Immutable expanded concrete-user `To` and `Cc` snapshots |
 | `message_mailboxes` | Safe per-user sequence allocation for reconnect catch-up |
+| `message_request_receipts` | Minimal send/amendment deduplication keys; no content or recipient list |
 | `message_deliveries` | One independently readable inbox copy per recipient |
 | `message_action_completions` | One immutable reply-based completion acknowledgment per recipient delivery |
 | `message_action_amendments` | Append-only structured corrections to an original action requirement or due date |
@@ -1619,7 +1859,7 @@ One row represents one immutable send operation.
 | --- | --- | --- |
 | `id` | `uuid` | Primary key; globally unique envelope ID |
 | `sender_user_id` | `bigint` | Nullable FK to `users(id)`; null only for a system message; deletion behavior must preserve message history |
-| `sender_name` | `text` | Non-blank send-time snapshot; exactly `system` for a system message; nullable only after content purge |
+| `sender_name` | `text` | Required non-blank send-time snapshot; exactly `system` for a system message |
 | `sender_kind` | `text` | Required; `user` or `system` |
 | `message_kind` | `text` | Required; `user_message`, `system_notification`, or `action_amendment_notice` |
 | `action_amendment_id` | `uuid` | Nullable unique FK to `message_action_amendments(id)`; required only for an amendment notice |
@@ -1631,35 +1871,34 @@ One row represents one immutable send operation.
 | `is_test` | `boolean` | Required; defaults false and is immutable |
 | `test_run_id` | `uuid` | Required and unique only when `is_test = true` |
 | `test_initiated_by_user_id` | `bigint` | Required history-preserving FK to the administrator only when `is_test = true` |
-| `subject` | `text` | Non-blank while retained; at most 255 Unicode characters after Unicode NFC normalization and trimming; nullable only after content purge |
-| `priority` | `text` | `normal`, `high`, or `very_high` while retained; defaults to `normal`; nullable only after content purge |
-| `body_rich_text` | `text` | Sanitized rich text while retained; at most 65,536 UTF-8 bytes after sanitization; nullable only after content purge |
-| `security_level_id` | `bigint` | FK to `security_levels(id)` with `ON DELETE RESTRICT` while retained; defaults to the lowest configured level; nullable only after content purge |
-| `action_required` | `boolean` | Required while retained; nullable only after content purge |
+| `subject` | `text` | Required non-blank; at most 255 Unicode characters after Unicode NFC normalization and trimming |
+| `priority` | `text` | Required; `normal`, `high`, or `very_high`; defaults to `normal` |
+| `body_rich_text` | `text` | Required sanitized rich text; at most 65,536 UTF-8 bytes after sanitization |
+| `security_level_id` | `bigint` | Required FK to `security_levels(id)` with `ON DELETE RESTRICT`; defaults to the lowest configured level |
+| `action_required` | `boolean` | Required |
 | `action_due_date` | `date` | Nullable informational local date; allowed only with `action_required = true` |
 | `action_due_timezone` | `text` | Nullable validated IANA timezone snapshot; present exactly when a due date is present |
 | `action_due_at` | `timestamptz` | Nullable exclusive late boundary; present exactly when a due date is present |
-| `read_receipt_requested` | `boolean` | Required while retained; nullable only after content purge |
+| `read_receipt_requested` | `boolean` | Required |
 | `relationship_kind` | `text` | Nullable; `reply`, `forward`, or `follow_up` |
 | `related_delivery_id` | `uuid` | Nullable FK to `message_deliveries(id)` for an Inbox-originated reply or forward |
 | `related_envelope_id` | `uuid` | Nullable self-FK to `message_envelopes(id)` for an Outbox-originated forward or follow-up |
 | `sent_at` | `timestamptz` | Required; assigned by the server/database |
 | `expires_at` | `timestamptz` | Required; derived from `sent_at` and configured retention at send time |
-| `sender_deleted_at` | `timestamptz` | Nullable; Outbox reference entered recovery, for a human sender only |
-| `sender_purge_after` | `timestamptz` | Nullable; required with `sender_deleted_at` |
-| `content_purged_at` | `timestamptz` | Nullable; set only after no active or recoverable Inbox/Outbox reference remains |
+| `sender_deleted_at` | `timestamptz` | Nullable; Outbox entry was deleted, starting its restoration period; human sender only |
+| `sender_purge_after` | `timestamptz` | Nullable; required with `sender_deleted_at`; deadline for restoring that deleted Outbox entry, not a guaranteed physical-purge date |
 | `request_id` | `uuid` | Required idempotency key for the send request, unique within the sending principal/system producer |
 
 Constraints shall enforce sender-kind, message-kind, amendment-link, and
 system-provenance consistency. If `relationship_kind` is null, both related IDs
 must be null. A `reply` requires only `related_delivery_id`; a `follow_up`
 requires only `related_envelope_id`; and a `forward` requires exactly one of
-the two. Relationship source and kind are immutable. The API shall reject
-an over-limit subject or body before insertion and shall return a stable
+the two. Relationship source and kind are immutable. The API shall reject an
+over-limit subject or body before insertion and shall return a stable
 validation reason. The body limit is measured after server-side sanitization so
-the stored representation
-is bounded; an implementation shall also impose a slightly larger bounded
-request limit before sanitization to prevent oversized-input abuse.
+the stored representation is bounded; an implementation shall also impose a
+slightly larger bounded request limit before sanitization to prevent
+oversized-input abuse.
 
 For `sender_kind = system`, constraints shall require the configured baseline
 security level, `read_receipt_requested = false`, `action_required = false`, and
@@ -1674,15 +1913,14 @@ message.
 
 Constraints shall permit `is_test = true` only for `sender_kind = system` with a
 registered configuration version, test-run ID, and initiating administrator.
-They require all test fields to be null for a production message. The test flag
-and test provenance survive content purge in the minimal tombstone.
+They require all test fields to be null for a production message. Test provenance
+remains immutable while the envelope exists; independent audit history follows
+its own retention rules.
 
-While `content_purged_at` is null, the ordinary required-content constraints
-apply. When it is non-null, subject, sender-name snapshot, priority, body,
-security level, action fields, and receipt flag must be null, while the minimal
-identity, provenance, idempotency, sent/expiry time, and reference fields remain
-immutable. Purging also removes the envelope's selector, addressee, and resource-
-link child rows and clears recipient read state under MSG-020.
+Required envelope content remains populated while the retention group is
+stored, including after an individual message's expiry. There is no
+`content_purged_at` state or reduced envelope tombstone. Final group purge
+physically deletes the envelopes and their dependent message rows under MSG-020.
 
 A constraint shall require all three action due fields to be null when
 `action_required = false`, and shall require either all three to be null or all
@@ -1718,8 +1956,9 @@ registry snapshot; an ordinary user message must have none.
 
 ### 7.2 `message_recipient_selectors`
 
-This table preserves what the sender selected before expansion without using a
-polymorphic foreign key.
+This table records the sender's original choices before recipient expansion.
+Separate user, role, and organizational-unit foreign keys identify the target;
+there is no generic target ID whose meaning depends on another field.
 
 | Column | Type | Rules |
 | --- | --- | --- |
@@ -1743,8 +1982,8 @@ deleted.
 
 ### 7.3 `message_addressees`
 
-This table stores the immutable expanded concrete-user address snapshot once
-per addressee.
+This table stores one immutable recipient snapshot for each user resolved by
+recipient expansion.
 
 | Column | Type | Rules |
 | --- | --- | --- |
@@ -1760,7 +1999,9 @@ envelope and recipient type shall prevent ambiguous order.
 
 ### 7.4 `message_mailboxes`
 
-This table provides a gap-free, per-recipient ordering boundary for catch-up.
+This table provides a committed, per-recipient ordering boundary for catch-up.
+Sequence allocation is gap-free; later group purge may leave gaps in the stored
+deliveries. Purge never resets or decrements `last_sequence`.
 
 | Column | Type | Rules |
 | --- | --- | --- |
@@ -1772,11 +2013,11 @@ increments `last_sequence`, and assigns that value to the delivery. For a send
 to several users, mailbox rows are locked in ascending user-ID order to avoid
 deadlocks. The mailbox increment and delivery commit together.
 
-This serialization is per recipient, not global. It permits concurrent sends
-to unrelated users while ensuring that a cursor `N` means every delivery for
-that user with sequence `<= N` has committed. A timestamp, UUID, or ordinary
-database sequence alone must not be used as this guarantee because allocation
-order need not equal transaction commit order.
+Only sends to the same recipient must wait for that recipient's mailbox lock.
+Sends to unrelated users can proceed concurrently. A cursor `N` therefore means
+that every delivery allocated to that user with sequence `<= N` has committed.
+A timestamp, UUID, or ordinary database sequence alone must not be used as this
+guarantee because allocation order need not equal transaction commit order.
 
 ### 7.5 `message_deliveries`
 
@@ -1793,7 +2034,7 @@ This table is the fan-out and inbox table. Each row is one recipient's own copy.
 | `language_tag_at_send` | `text` | Required normalized snapshot of the recipient's effective language used for the live toast |
 | `read_at` | `timestamptz` | Nullable; immutable first-read time |
 | `deleted_at` | `timestamptz` | Nullable; set by manual deletion or automatic expiry |
-| `purge_after` | `timestamptz` | Nullable; required with `deleted_at` and derived from the configured recovery period |
+| `purge_after` | `timestamptz` | Nullable; required with `deleted_at`; deadline for restoring the deleted entry, calculated using the configured restoration period |
 | `deletion_reason` | `text` | Nullable; `user_deleted` or `retention_expired`, required with `deleted_at` |
 
 There is exactly one delivery per `(envelope_id, recipient_user_id)`. A
@@ -1801,11 +2042,27 @@ composite foreign key including recipient type shall require the corresponding
 address row and prevent an address/delivery mismatch.
 `(recipient_user_id, mailbox_sequence)` is also unique.
 
-Ordinary Inbox queries exclude deleted rows. Recently deleted message queries
-include only the authenticated recipient's rows whose recovery period has not
-ended. After recovery, a row may remain only as a non-readable reference
-tombstone when required for mailbox cursor, relationship links, idempotency, or event-
-history integrity; it must never make purged content retrievable.
+Ordinary Inbox queries exclude deleted rows. Recently deleted queries include
+only the authenticated user's entries whose deleted-message restoration period
+has not ended. At the end of that period, the entry is no longer restorable or
+visible through its own mailbox path. Its delivery row remains intact while
+the retention group is stored, preserving relationships, sender-visible
+receipts, and action status without restoring the recipient's mailbox access.
+Read-only access through another authorized linked message follows MSG-020.
+
+For sent Inbox and Outbox entries, restoration before expiry clears the
+applicable deletion fields. Restoration after expiry clears `deleted_at` (or
+`sender_deleted_at`) and the Inbox deletion reason but preserves `purge_after`
+(or `sender_purge_after`) as the final access deadline. Ordinary mailbox queries
+may include such a restored expired entry only before that deadline. A later
+deletion sets its deletion timestamp again without extending the preserved
+deadline. These combinations must be supported by the table constraints.
+Draft restoration has its separate fresh-expiry rule in section 7.8.
+
+At group purge, delete all deliveries and addressee rows together. There is no
+delivery tombstone state. The composite address/delivery foreign key remains
+mandatory while rows exist; the purge transaction must remove dependencies in
+a valid order or use deferred constraints. It must not disable integrity checks.
 
 Required indexes include:
 
@@ -1814,9 +2071,9 @@ Required indexes include:
 - `(recipient_user_id, mailbox_sequence)` for cursor-based catch-up;
 - `(envelope_id, recipient_user_id)` for per-recipient send/read status.
 
-The production DDL shall use keyset/cursor pagination indexes appropriate to
-the final inbox query. Offset pagination shall not be the only large-mailbox
-strategy.
+The production schema shall include indexes for keyset/cursor pagination that
+match the final Inbox query. Offset pagination alone is insufficient for large
+mailboxes.
 
 ### 7.6 `message_action_completions`
 
@@ -1830,12 +2087,16 @@ that their action is done.
 | `completed_by_user_id` | `bigint` | Required FK to `users(id)`; must equal the original delivery owner at creation |
 | `completed_at` | `timestamptz` | Required server-assigned completion instant |
 
-Insertion validation shall enforce that the reply envelope's
-`relationship_kind` is `reply` and `related_delivery_id` equals
-`original_delivery_id`, the original envelope
-requires action, and the authenticated completing user owns the original
-delivery. The row and reply fan-out commit atomically. The row is immutable and
-cannot be updated or deleted through ordinary messaging operations.
+On insertion, validation shall confirm all of the following:
+
+- the new envelope's `relationship_kind` is `reply`;
+- its `related_delivery_id` equals `original_delivery_id`;
+- the original envelope requires action; and
+- the authenticated completing user owns the original delivery.
+
+The completion row and reply deliveries commit atomically. The row is immutable
+and cannot be updated or deleted through ordinary messaging operations. Final
+retention-group purge deletes it with the original and reply messages.
 
 An index on `(reply_envelope_id)` is supplied by its uniqueness constraint. An
 index on `(completed_by_user_id, completed_at DESC)` supports the recipient's
@@ -1879,11 +2140,10 @@ notice are committed in the same transaction. The foreign-key arrangement may
 be deferred within that transaction, but no committed amendment may exist
 without its notice or vice versa.
 
-When the original message's send-level content is finally purged under
-MSG-020, its amendment reasons and due-state values are purged in the same
-operation. Minimal amendment identity, sequence, kind, actor, time, and
-idempotency provenance may remain as non-content tombstones needed for audit
-and referential integrity.
+Action amendments remain intact while their retention group is stored. Final
+group purge deletes amendments, their notices, and the original envelopes in
+the same transaction; it leaves no amendment tombstones. Request deduplication
+follows section 8.
 
 ### 7.7 `message_resource_links`
 
@@ -1897,19 +2157,17 @@ text on inbox-render paths.
 | `envelope_id` | `uuid` | Required FK to `message_envelopes(id)` |
 | `link_token` | `uuid` | Required opaque token referenced by the sanitized body; unique within the envelope |
 | `ordinal` | `integer` | Required non-negative body order |
-| `resource_kind` | `text` | Required controlled supported Wathiq resource kind |
+| `resource_kind` | `text` | Required; `record` or `aggregation` |
 | `target_id_snapshot` | `bigint` | Required immutable original target ID for diagnostics without granting access |
 | `aggregation_id` | `bigint` | Nullable FK to `aggregations(id)` with `ON DELETE SET NULL` |
 | `record_id` | `bigint` | Nullable FK to `records(id)` with `ON DELETE SET NULL` |
-| `digital_component_id` | `bigint` | Nullable FK to `digital_components(id)` with `ON DELETE SET NULL` |
 | `security_level_id_at_send` | `bigint` | Required FK to `security_levels(id)`; immutable validation/audit snapshot |
 
 On insert, validation shall require exactly one target foreign key to be
 non-null, to agree with `resource_kind`, and to equal `target_id_snapshot`. A
 later target deletion sets the live foreign key to null while preserving the
-link row as an unavailable historical reference. A digital component uses its
-containing record's effective security level and authorization. Supporting
-another Wathiq resource kind requires an explicit schema column, foreign key,
+link row as an unavailable historical reference. Direct digital-component
+links are not supported. Supporting another Wathiq resource kind requires an explicit schema column, foreign key,
 security-level resolution rule, and authorization rule; a generic unchecked
 polymorphic target ID must not be introduced.
 
@@ -1919,8 +2177,17 @@ send-time check but is not an authorization cache. Required indexes support
 lookup by `(envelope_id, ordinal)` and by each non-null target foreign key.
 
 Ordinary sanitized external hyperlinks may remain in the rich-text body but do
-not become Wathiq resource links. Internal aggregation, record, and component
-URLs must use a normalized resource-link row.
+not become Wathiq resource links. Internal aggregation and record URLs must
+use a normalized resource-link row. A raw internal digital-component URL must
+not bypass the supported-kind restriction; reject it rather than treat it as an
+external hyperlink. Apply the same restriction to drafts and final sends,
+including manually constructed API requests.
+
+No existing human messages or component links require compatibility handling
+for this revision. Remove component targets from message and draft link storage
+and validation rather than retaining a legacy-link path. This does not remove
+digital components from records or from message-to-record capture: the PDF
+components and provenance mappings in section 7.9 remain required.
 
 ### 7.8 Draft tables
 
@@ -1939,14 +2206,14 @@ URLs must use a normalized resource-link row.
 | `action_due_timezone` | `text` | Nullable validated IANA working-timezone snapshot paired with a due date |
 | `read_receipt_requested` | `boolean` | Required |
 | `relationship_kind` | `text` | Nullable draft value; `reply`, `forward`, or `follow_up` |
-| `related_delivery_id` | `uuid` | Nullable FK to `message_deliveries(id)` for an Inbox source |
-| `related_envelope_id` | `uuid` | Nullable FK to `message_envelopes(id)` for an Outbox source |
+| `related_delivery_id` | `uuid` | Nullable source-delivery UUID for an Inbox source; validated on use, not an FK |
+| `related_envelope_id` | `uuid` | Nullable source-envelope UUID for an Outbox source; validated on use, not an FK |
 | `version` | `bigint` | Required positive optimistic-concurrency version |
 | `date_created` | `timestamptz` | Required |
 | `date_updated` | `timestamptz` | Required |
 | `expires_at` | `timestamptz` | Required; derived from the last update and configured active period |
 | `deleted_at` | `timestamptz` | Nullable; set on expiry or explicit discard |
-| `purge_after` | `timestamptz` | Nullable; required with `deleted_at` and derived from the configured recovery period |
+| `purge_after` | `timestamptz` | Nullable; required with `deleted_at`; deadline for restoring the deleted entry, calculated using the configured restoration period |
 | `deletion_reason` | `text` | Nullable; `expired` or `discarded`, required with `deleted_at` |
 
 `message_draft_recipient_selectors` mirrors the selector kind, foreign-key,
@@ -1957,6 +2224,12 @@ addressee or delivery rows.
 `message_draft_resource_links` mirrors the normalized target and body-token
 structure of `message_resource_links`, but its validation status is advisory
 until send. Current resource authorization and security are always rechecked.
+
+An unsent draft never prevents purge of a sent retention group. Its source
+UUIDs are saved compose references, not foreign keys that retain sent messages.
+Every source read and send revalidates availability and authorization. If the
+source group has been purged, show an unavailable-source state and reject send;
+do not silently remove the relationship or recreate the source message.
 
 Draft edits use optimistic concurrency. A successful draft send locks the
 draft, validates its version and ownership, creates the complete envelope and
@@ -1976,7 +2249,8 @@ the same transaction.
 | Column | Type | Rules |
 | --- | --- | --- |
 | `id` | `uuid` | Primary key |
-| `selected_envelope_id` | `uuid` | Required FK to `message_envelopes(id)` |
+| `selected_envelope_id` | `uuid` | Nullable live FK to `message_envelopes(id)` with `ON DELETE SET NULL` |
+| `selected_envelope_id_at_capture` | `uuid` | Required immutable source-envelope UUID; survives source-message purge |
 | `record_id` | `bigint` | Nullable current FK to `records(id)` with `ON DELETE SET NULL`; unique while present |
 | `record_id_at_capture` | `bigint` | Required immutable record-ID snapshot used for provenance after governed record disposition |
 | `captured_by_user_id` | `bigint` | Required FK to `users(id)` with history-preserving behavior |
@@ -1990,20 +2264,24 @@ the same transaction.
 | `id` | `bigserial` | Primary key; internal capture-component mapping identifier |
 | `capture_id` | `uuid` | Required FK to `message_record_captures(id)` |
 | `component_kind` | `text` | Required; `message` or `provenance` |
-| `envelope_id` | `uuid` | Nullable FK to the captured `message_envelopes(id)`; required only for a message component |
+| `envelope_id` | `uuid` | Nullable live FK to the captured `message_envelopes(id)` with `ON DELETE SET NULL`; null for provenance |
+| `envelope_id_at_capture` | `uuid` | Immutable source-envelope UUID; required for a message component and null for provenance |
 | `digital_component_id` | `bigint` | Nullable current FK to `digital_components(id)` with `ON DELETE SET NULL`; unique while present |
 | `digital_component_id_at_capture` | `bigint` | Required immutable component-ID snapshot used for provenance after governed disposition |
 | `component_order` | `integer` | Required positive order matching the committed component |
 | `is_selected_message` | `boolean` | Required; true only for message component 1 |
 
 Constraints require exactly one provenance component per capture, with null
-`envelope_id`, `is_selected_message = false`, and the greatest component order.
-A partial unique `(capture_id, envelope_id)` constraint for message components
-prevents duplicate message PDFs. A unique `(capture_id, component_order)`
-constraint preserves deterministic ordering. `record_id_at_capture` and
-`digital_component_id_at_capture` remain uniquely associated with their
-capture provenance even after governed deletion nulls the current foreign key.
-Capture rows and the authoritative record and components are written in the
+`envelope_id` and `envelope_id_at_capture`, `is_selected_message = false`, and
+the greatest component order. At capture commit, live envelope IDs must equal
+their immutable capture snapshots and identify existing authorized messages.
+Group purge clears only the live FKs; it never changes the snapshots, PDFs,
+records, or component order. A partial unique `(capture_id, envelope_id_at_capture)` constraint for message components prevents duplicate
+message PDFs. A unique `(capture_id, component_order)` constraint preserves
+deterministic ordering. `record_id_at_capture` and
+`digital_component_id_at_capture` remain uniquely associated with their capture
+provenance even after governed deletion nulls the current foreign key. Capture
+rows and the authoritative record and components are written in the
 record-draft commit transaction, not when PDFs are merely staged.
 
 ### 7.10 System notification administration tables
@@ -2073,14 +2351,51 @@ and Security Operations entry in one transaction. Versions referenced by sent
 envelopes cannot be changed or deleted. Configuration APIs use optimistic
 concurrency so two administrators cannot silently overwrite one another.
 
+### 7.10A `message_request_receipts`
+
+A request receipt prevents a retry of an old send from recreating a message
+after its conversation has been purged. It is one small operation record, not
+an envelope or a recipient copy. It is never readable through mailbox APIs and
+has no foreign key to a message or delivery. It stores no subject, body,
+recipient list, or delivery IDs.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `id` | `bigserial` | Internal primary key; not exposed to clients |
+| `operation_kind` | `text` | Required; `send` or `amendment` |
+| `principal_user_id` | `bigint` | Required history-preserving user FK for a human operation; null for a system producer |
+| `producer_code` | `text` | Registered producer FK for a system send; null for a human operation |
+| `request_id` | `uuid` | Required original idempotency key |
+| `request_fingerprint` | `text` | Required digest of the canonical request, not a copy of its content |
+| `source_event_type` | `text` | Required for a production system send; otherwise null |
+| `source_event_id` | `text` | Required for a production system send; otherwise null |
+| `result_envelope_id` | `uuid` | Required immutable result UUID snapshot; notice-envelope UUID for an amendment; not an FK |
+| `result_amendment_id` | `uuid` | Required only for an amendment; immutable UUID snapshot, not an FK |
+| `created_at` | `timestamptz` | Required server-assigned successful-operation time |
+| `result_purged_at` | `timestamptz` | Null until the result's retention group is physically purged |
+
+Exactly one of `principal_user_id` and `producer_code` must be populated.
+Amendments require a human principal. Unique constraints cover operation kind,
+principal, and request ID; production system sends also have a unique producer,
+source-event type, and source-event ID. System test sends use their distinct
+request keys and do not reserve a production domain-event identity.
+
+The receipt is inserted atomically with the successful send or amendment.
+Failed transactions leave no receipt. All fields except `result_purged_at` are
+immutable; group purge sets that field in the same transaction that deletes the
+result messages. Receipts remain to enforce the existing no-duplicate-send
+contract after purge. This retains one small row per successful operation,
+not one row per recipient, and does not imply that all operational metadata
+has a bounded lifetime. Receipt storage shall be included in capacity planning.
+
 ### 7.11 Why the model is separated
 
 The envelope prevents one copy of a large rich-text body per recipient while
 preserving one immutable send operation. A human message stores one authored
 body; a system message stores one rendered body per enabled language rather
-than per recipient. The selector table preserves exactly what the sender
-placed in the `To` and `Cc` headers. The address table freezes the expanded
-concrete users. The delivery table supplies the required globally unique copy
+than per recipient. The selector table preserves exactly what the sender placed
+in the `To` and `Cc` headers. The addressee table records the fixed list of
+resolved users. The delivery table supplies the required globally unique copy
 ID and isolates read state for each recipient. The resource-link table permits
 bounded live authorization checks without duplicating or reparsing message
 content. The completion table records the one permitted per-recipient action
@@ -2090,6 +2405,8 @@ This is preferable to putting one `is_read` flag on a shared message row, which
 cannot represent multiple recipients correctly.
 
 ## 8. Send transaction and idempotency
+
+### 8.1 Send transaction
 
 The server shall process a send as one database transaction:
 
@@ -2122,23 +2439,36 @@ The server shall process a send as one database transaction:
 10. insert all selector, expanded-address, and normalized resource-link
     snapshots;
 11. lock recipient mailbox rows in stable order and allocate each recipient's
-   next mailbox sequence;
+    next mailbox sequence;
 12. insert one delivery copy per address with the recipient's effective-
     language snapshot;
 13. when requested, insert the action-completion row linking the original
     recipient delivery to the new reply envelope;
 14. issue one PostgreSQL `NOTIFY` per delivery on Wathiq's dedicated message
-   notification channel, carrying only the delivery ID, recipient user ID, and
-   mailbox sequence; and
+    notification channel, carrying only the delivery ID, recipient user ID, and
+    mailbox sequence; and
 15. commit once, causing PostgreSQL to release the notifications only after
     the message rows have committed.
 
 No toast or event shall be emitted before the transaction commits.
 
-The caller shall supply a stable idempotency key for each intended send. A
-retry using the same authenticated principal and key returns the already
-created result and must not create duplicate recipient copies. Reusing the key
-with different content shall fail as a conflict.
+### 8.2 Retries and idempotency
+
+The caller shall supply one stable idempotency key for each intended send and
+reuse it when retrying that send. The server shall check and reserve the key
+through `message_request_receipts` in the send transaction. Concurrent retries
+of the same operation must produce one committed result. Reusing the key with
+different request content shall fail as a conflict. Compare the canonical
+caller request, not a freshly expanded audience or other mutable directory
+state.
+
+While the result's retention group exists, an authorized retry returns the
+original envelope and recipient-copy IDs. After group purge, an authenticated,
+authorized retry by that same principal returns `410 Gone` with stable reason
+code `message_result_purged`; it never creates another envelope, regenerates
+delivery IDs, or returns protected content. Different-content reuse still
+fails as a conflict. The internal system-producer service returns an equivalent
+already-processed/result-purged outcome without repeating the notification.
 
 For a system notification, its registered producer and domain-event identity
 form this stable idempotency key. A retry of the causing business operation
@@ -2146,6 +2476,8 @@ does not invent a new notification key.
 
 The send response shall identify the envelope and the recipient-copy IDs so the
 result of fan-out is explicit and traceable.
+
+### 8.3 Action-amendment transaction
 
 An action amendment uses a separate atomic transaction:
 
@@ -2167,9 +2499,12 @@ An action amendment uses a separate atomic transaction:
    recipient, and issue the ordinary post-commit `NOTIFY` wake-up signals; and
 8. commit the amendment, notice, variants, and deliveries together.
 
-A retry with the same sender and amendment idempotency key returns the existing
-result. Reuse with a different requested transition or reason fails as a
-conflict. Failure before commit leaves neither an amendment nor a notice.
+An amendment uses the same request-receipt rules, with operation kind
+`amendment`. A retry returns the existing result while its group remains;
+after group purge it returns `message_result_purged` without recreating the
+amendment or notice. Reuse with a different requested transition or reason
+fails as a conflict. Failure before commit leaves neither an amendment, a
+notice, nor a request receipt.
 
 ## 9. Frontend-neutral real-time architecture
 
@@ -2333,9 +2668,17 @@ approved specification.
 
 When any client or frontend adapter connects or reconnects, it shall call a
 bounded catch-up endpoint using its last durable mailbox cursor. The server
-returns committed recipient copies after that cursor. The client updates its
-unread indicator and, when new copies exist, displays only the single reconnect
-summary defined in section 6.5 rather than individual missed-message toasts.
+returns committed recipient copies after that cursor. Missing sequence values
+left by group purge are normal and do not require tombstones. Each page returns
+a safe continuation cursor: it must not advance past an eligible delivery
+omitted by the page limit. Once the snapshot has no more eligible deliveries,
+it may advance to that snapshot's committed mailbox high-water mark, including
+when all intervening deliveries were purged. Catch-up must not return deleted
+or expired entries merely because their group still exists. The only expiry
+exception is an explicitly restored entry still within its preserved
+restoration deadline under MSG-020. The client updates its unread indicator
+and, when new copies exist, displays only the single reconnect summary defined
+in section 6.5 rather than individual missed-message toasts.
 
 Therefore:
 
@@ -2363,25 +2706,29 @@ notification listener, real-time gateway, or frontend adapter is unhealthy.
 
 ## 10. API responsibilities
 
-Exact endpoint names may follow the repository's API conventions, but the API
-shall provide these authenticated operations:
+Exact endpoint names may follow the repository's API conventions. The API
+shall provide all the authenticated operations below.
 
-- send a human-authored message with an idempotency key only when the
-  authenticated user has `messaging.user_messages.exchange`;
+### 10.1 Recipient and resource selection
+
 - validate user, role, and organizational-unit recipient selectors and return
   the committed expanded-recipient count;
 - provide bounded recipient-selector search without returning complete
   tenant-grown collections;
-- provide bounded, authorization-filtered Wathiq resource search and validate
-  structured links against the selected message level;
+- provide bounded, authorization-filtered record and aggregation search,
+  including existing metadata filters and full-text search, for the multi-select
+  dialog; validate its structured links against the selected message level;
+- reject digital-component targets in resource selection, draft resource links,
+  and send requests, including raw internal component URLs;
 - list selectable message security levels at or below the current sender's
   effective clearance;
 - return stable, localized reason codes when a recipient selector is
-  ineligible for the selected message security level;
-- list the current user's inbox using server-side cursor pagination and
-  filters, returning system messages only when exchange privilege is absent;
-- get one current-user recipient copy;
-- mark one current-user copy read, idempotently;
+  ineligible for the selected message security level.
+
+### 10.2 Sending, relationships, and action status
+
+- send a human-authored message with an idempotency key only when the
+  authenticated user has `messaging.user_messages.exchange`;
 - send a reply that may atomically acknowledge completion of the authenticated
   recipient's own action-required delivery;
 - start and send a forward from either an authorized Inbox delivery or an
@@ -2392,7 +2739,19 @@ shall provide these authenticated operations:
   idempotency key, and return the resulting amendment and notice identities;
 - return the ordered action-amendment history and effective action state as
   part of authorized original-message and Outbox-detail responses;
-- obtain a bounded catch-up page after a mailbox cursor;
+- return per-recipient Outstanding, Late, Completed, Completed late, or
+  Withdrawn action status for the original sender and the applicable recipient;
+- resolve/open reply, forward, and follow-up links only when the requester owns
+  the linking delivery or sent the linking envelope, and may read the referenced
+  message under the applicable relationship grant, current clearance,
+  retention-group access rules in MSG-020, and resource rules.
+
+### 10.3 Mailboxes, drafts, and restoration
+
+- list the current user's inbox using server-side cursor pagination and
+  filters, returning system messages only when exchange privilege is absent;
+- get one current-user recipient copy;
+- mark one current-user copy read, idempotently;
 - return non-disclosing message and resource-link availability state for the
   bounded current inbox page using batched authorization evaluation;
 - list and get the authenticated human user's Outbox with server-side
@@ -2401,11 +2760,20 @@ shall provide these authenticated operations:
   the authenticated user's own drafts;
 - list the authenticated user's active and recently deleted Inbox and Outbox
   references, return expiry state, perform capture-gated or explicitly capture-
-  free early deletion under MSG-020, and restore during the recovery period;
+  free early deletion under MSG-020, and restore during the deleted entry's
+  restoration period;
+- list the current sender's sent envelopes and per-recipient receipt status;
+- get a sent envelope created by the current sender.
+
+### 10.4 Record capture
+
 - initialize a message-capture record draft only for an eligible human-authored
   message whose complete relationship chain is also eligible, stage the ordered
   generated PDFs, and commit capture provenance with the ordinary record
-  transaction;
+  transaction.
+
+### 10.5 Notification administration and monitoring
+
 - list registered notification producers and preview, version, activate, enable,
   or disable only their permitted configuration fields for callers with
   `messaging.notifications.administer`;
@@ -2414,22 +2782,20 @@ shall provide these authenticated operations:
 - send and list bounded, explicitly marked notification tests under MSG-019 for
   callers with `messaging.notifications.administer`;
 - return sanitized messaging operational health only to callers with
-  `messaging.monitor`;
-- establish an authenticated, versioned real-time event stream;
-- list the current sender's sent envelopes and per-recipient receipt status;
-- return per-recipient Outstanding, Late, Completed, Completed late, or
-  Withdrawn action status for the original sender and the applicable recipient;
-- get a sent envelope created by the current sender; and
-- resolve/open reply, forward, and follow-up links only when the requester owns
-  the linking delivery or sent the linking envelope, and may read the referenced
-  message under the applicable relationship grant, current clearance,
-  retention, and resource rules.
+  `messaging.monitor`.
+
+### 10.6 Real-time events and catch-up
+
+- obtain a bounded catch-up page after a mailbox cursor;
+- establish an authenticated, versioned real-time event stream.
+
+### 10.7 Authorization and sender boundaries
 
 There is no generic message-edit endpoint. The API shall reject reply,
 forward, completion, and independent record-capture operations whose target is
 an amendment notice. Opening such a notice resolves its linked original only
-after ordinary ownership, exchange-privilege, clearance, retention, and
-content-availability checks.
+after the ownership, exchange-privilege, clearance, retained-group link-access,
+and resource checks in MSG-020.
 
 For a system envelope, Inbox, message view, toast preparation, and capture APIs
 select the immutable language variant under MSG-021. They must not perform
@@ -2438,11 +2804,10 @@ authorized administration operation needs them.
 
 System producers shall use the internal application-service boundary in
 MSG-018, not a public request field that lets an ordinary user claim to be
-`system`. The
-ordinary client send endpoint always creates a user message attributed to its
-authenticated human sender. Domain APIs may cause only their registered
-backend notification events; they must not expose a generic client-controlled
-system-send proxy.
+`system`. The ordinary client send endpoint always creates a user message
+attributed to its authenticated human sender. Domain APIs may cause only their
+registered backend notification events; they must not expose a generic
+client-controlled system-send proxy.
 
 Specifically, production feature code uses the internal Python
 `emit_system_notification` application-service contract in MSG-018. It is not
@@ -2493,9 +2858,12 @@ Operational health shall report, without exposing message content:
   code, without subject, body, recipient, or resource content;
 - separate test-send count, failure count, rate-limit rejection count, and
   processing latency by producer code;
-- messages approaching retention expiry, active/recoverable references, purge
+- messages approaching retention expiry, active or restorable mailbox entries, purge
   candidates, content purged, cleanup failures, and oldest unprocessed eligible
-  purge, without message or recipient content.
+  purge, without message or recipient content;
+- retention-group size, expired messages retained by later group members,
+  group-purge duration/failures, and groups delayed by size or repeated cleanup
+  failures, without exposing participants or message content.
 
 Logs shall include request/correlation IDs, envelope ID, delivery ID, and safe
 status metadata. They shall not include rich-text bodies or protected linked
@@ -2503,17 +2871,19 @@ resource data.
 
 ### 11.4 Retention and user deletion
 
-Sent-message expiry, per-user deletion, recovery, content purge, and record
-preservation follow MSG-020. Draft lifecycle follows MSG-016. The messaging
-subsystem has no separate legal-hold mechanism: information requiring governed
-retention must be saved as a record, after which the record copy is governed by
-the existing record rules. Record disposition never deletes a still-retained
-source message, and message expiry never deletes the captured record.
+Sent-message expiry, per-user mailbox deletion, deleted-message restoration,
+whole-group purge, and record preservation follow MSG-020. Draft lifecycle
+follows MSG-016. The messaging subsystem has no separate legal-hold mechanism:
+information requiring governed retention must be saved as a record, after which
+the record copy is governed by the existing record rules. Record disposition
+never deletes a still-retained source message, and message expiry never deletes
+the captured record.
 
 Permanent deletion of a user shall not cascade to envelopes, addressee
 snapshots, deliveries, receipts, or messages that user sent to other people.
 Historical sender and recipient names and identifiers needed to understand the
-communication remain in immutable snapshots. Foreign-key handling must preserve
+communication remain in immutable snapshots while the retention group is
+stored; they are deleted with that group. Foreign-key handling must preserve
 the message history while preventing a deleted account from authenticating or
 receiving new messages. Inactive and suspended users likewise remain visible in
 historical message snapshots but are not selectable for new sends.
@@ -2524,7 +2894,9 @@ tombstone for referential integrity after removing credentials, assignments,
 active profile state, and other data not required by an approved historical
 contract. The message snapshots—not the tombstone's mutable profile—remain the
 source for historical display. Messaging foreign keys use deletion restriction
-and never cascade into message history.
+and never cascade into retained message history. This user-identity rule is
+separate from deleted-message restoration and does not authorize message or
+delivery tombstones after group purge.
 
 ### 11.5 Deployment-configurable limits
 
@@ -2537,31 +2909,36 @@ The following limits are environment variables with validated startup defaults:
 | `MESSAGING_MAX_RESOURCE_LINKS` | `50` | Structured Wathiq resource links in one message |
 | `MESSAGING_DRAFT_ACTIVE_DAYS` | `180` | Inactivity period before a draft expires |
 | `MESSAGING_DRAFT_WARNING_DAYS` | `30` | Warning interval before draft expiry |
-| `MESSAGING_DRAFT_RECOVERY_DAYS` | `30` | Restore period after expiry or discard |
+| `MESSAGING_DRAFT_RECOVERY_DAYS` | `30` | Restoration period for a deleted draft after expiry or discard |
 | `MESSAGING_CAPTURE_MAX_LINKED_MESSAGES` | `100` | Earlier linked messages allowed in one record capture |
 | `MESSAGING_CAPTURE_MAX_PDF_BYTES` | `52428800` | Combined generated-PDF limit of 50 MiB |
 | `MESSAGING_RETENTION_DAYS` | `1095` | Sent-message retention period of three years |
 | `MESSAGING_RETENTION_WARNING_DAYS` | `90` | Advance warning before automatic expiry |
-| `MESSAGING_DELETION_RECOVERY_DAYS` | `30` | Recovery period before permanent mailbox-reference purge |
+| `MESSAGING_DELETION_RECOVERY_DAYS` | `30` | Restoration period for a deleted Inbox or Outbox entry; physical deletion waits for the whole retention group |
 | `MESSAGING_CLEANUP_INTERVAL_SECONDS` | `3600` | Interval between retention/draft cleanup runs |
-| `MESSAGING_CLEANUP_BATCH_SIZE` | `500` | Maximum candidate rows claimed by one cleanup batch |
+| `MESSAGING_CLEANUP_BATCH_SIZE` | `500` | Candidate-discovery page size; never permits splitting a retention group during purge |
 | `MESSAGING_TEST_MAX_RECIPIENTS` | `10` | Explicit individual recipients allowed for one test send |
 | `MESSAGING_TEST_SENDS_PER_HOUR` | `20` | Test sends allowed per initiating administrator in a rolling hour |
 | `MESSAGING_TEST_RETENTION_DAYS` | `30` | Retention period for unmistakably marked test messages |
 
+The existing environment names containing `RECOVERY` mean deleted-message or
+deleted-draft restoration periods; they do not concern account recovery.
+`purge_after` and `sender_purge_after` likewise mark entry-restoration deadlines,
+not guaranteed dates of physical group deletion.
+
 Missing variables use these defaults. Non-integer, zero, negative, internally
 inconsistent, or administratively unsafe values shall fail application startup
-with a clear configuration error rather than silently changing behavior.
-Every API and worker instance in one deployment must use identical effective
-values. Limits relevant to compose or capture are returned by an authenticated
+with a clear configuration error rather than silently changing behavior. Every
+API and worker instance in one deployment must use identical effective values.
+Limits relevant to compose or capture are returned by an authenticated
 capabilities endpoint; clients do not read environment variables directly.
 Changing a value requires restarting the affected instances. An increase is a
 capacity and abuse-risk change and requires performance verification rather
 than being treated as an unrestricted administrator preference. Retention and
-recovery values are snapshotted into new rows; changing an environment value
-does not silently shorten or lengthen already stored expiry or purge dates.
-Applying a retention change retrospectively requires a separate deliberate,
-audited migration or administration operation.
+deleted-entry restoration values are snapshotted into new rows; changing an
+environment value does not silently shorten or lengthen already stored expiry
+dates or restoration deadlines. Applying a retention change retrospectively
+requires a separate deliberate, audited migration or administration operation.
 
 ## 12. Security requirements
 
@@ -2636,12 +3013,13 @@ All user-visible messaging UI text shall follow the Wathiq internationalization
 specification and catalogue workflow. User-authored subjects and bodies are not
 catalogue strings and shall be displayed as authored.
 
-System-generated subjects and bodies follow MSG-021's versioned notification-
-template and rendered-variant model. Action-amendment notices use the governed
-UI-catalogue templates and immutable rendered variants specified there. They are not generated dynamically by the
-UI catalogue and are never machine-translated at delivery or read time. The
-administration page's labels, validation explanations, review states, TEST
-indicator, and fallback notices remain ordinary UI catalogue strings.
+System-generated subjects and bodies follow MSG-021's versioned
+notification-template and rendered-variant model. Action-amendment notices use
+the governed UI-catalogue templates and immutable rendered variants specified
+there. They are not generated dynamically by the UI catalogue and are never
+machine-translated at delivery or read time. The administration page's labels,
+validation explanations, review states, TEST indicator, and fallback notices
+remain ordinary UI catalogue strings.
 
 The compose, inbox, message view, priority indicators, action-required state,
 toasts, and unread counter shall work in LTR and RTL. Priority and read state
@@ -2700,14 +3078,39 @@ available to assistive technology without unexpectedly moving keyboard focus.
   metadata; sufficient restored clearance restores the ordinary row.
 - **AC-MSG-008E:** Inbox availability evaluation is bounded to the current page
   and performs no per-message or per-link network/database round trip.
+- **AC-MSG-008F:** Add resources opens the dialog without a prior selection.
+  The sender can search, filter, page, and retain multiple record and aggregation
+  selections across searches. All is the default kind filter; Aggregations and
+  Records restrict the same combined full-text search. There is one query box,
+  no separate number field or full-text toggle, and no request before explicit
+  nonblank Search/Enter. Cancel changes neither body nor resource links.
+  Result cards show a checkbox beside the linked title, type and number together,
+  and the description when present. Each result has a record/aggregation icon. Details open in a read-only metadata
+  overlay with an authorized Preview button and no action panel or component
+  section. Closing it retains the picker page, scroll position, selections and
+  unsaved Compose dialog. The compact
+  dialog and result alignment work in both English and Arabic.
+- **AC-MSG-008G:** A full-text hit in indexed component contents selects the
+  containing record. Aggregation search uses its supported metadata. Search
+  results and excerpts disclose only information the sender may read.
+- **AC-MSG-008H:** Add selected adds the entire valid selection to the separate resources
+  panel without inserting titles in the editable body. Empty selections cannot be submitted; stale access, changed
+  security levels, lookup failures, and exceeded link limits receive visible
+  feedback without partial insertion. Final send repeats authorization checks.
+- **AC-MSG-008I:** No digital-component option is offered. Direct component IDs
+  and raw internal component URLs are rejected for drafts and sends. Record
+  component access and message-to-record PDF capture continue to work.
 - **AC-MSG-009:** Unsafe rich text cannot execute in another user's client.
 - **AC-MSG-009A:** A subject longer than 255 Unicode characters after NFC
   normalization and trimming is rejected with a stable validation error.
 - **AC-MSG-009B:** A sanitized rich-text body larger than 65,536 UTF-8 bytes is
   rejected with a stable validation error, and oversized unsanitized requests
   are bounded before sanitization.
-- **AC-MSG-010:** Repeating a send with the same idempotency key creates no
-  duplicate envelope or delivery.
+- **AC-MSG-010:** Concurrent and repeated sends with the same principal and
+  idempotency key create one envelope and fan-out. After its group is purged,
+  replay returns `message_result_purged` and creates nothing. Different-content
+  reuse conflicts both before and after purge. Equivalent system-event and
+  amendment retries are verified, including receipt rollback on failure.
 - **AC-MSG-010A:** Every message has a non-null security level. A user sender
   defaults to the lowest configured level and may select a level at or below
   their greatest current effective-role level, but cannot select a higher one.
@@ -2822,8 +3225,8 @@ available to assistive technology without unexpectedly moving keyboard focus.
 - **AC-MSG-030:** WebSocket and subsequent SSE fallback clients consume the same
   authenticated event contract and recover through the same mailbox cursor.
 - **AC-MSG-031:** A draft expires after configured inactivity, remains visible
-  only to its owner during the recovery interval, restores without trusting
-  stale authorization, and is permanently purged after that interval.
+  only to its owner during the deleted draft's restoration period, restores
+  without trusting stale authorization, and is permanently purged after that interval.
 - **AC-MSG-032:** Message-to-record capture rejects more than the configured
   linked-message or combined-PDF limit without committing a partial record.
 - **AC-MSG-033:** Every captured message and provenance component validates as
@@ -2837,12 +3240,39 @@ available to assistive technology without unexpectedly moving keyboard focus.
   eligible human message as a record; another user's mailbox remains unchanged.
   System-notification and amendment-notice deliveries are capture-free early-
   deletion exceptions because they are ineligible for record capture.
-- **AC-MSG-036:** Automatic expiry applies after the configured retention period
-  whether or not each user captured the message, provides the configured warning
-  and recovery periods, and never deletes a captured record.
-- **AC-MSG-037:** Send-level message data remains available while any active or
-  recoverable reference exists and is purged atomically only after none remains;
-  relationship links then show the non-disclosing expired/deleted placeholder.
+- **AC-MSG-036:** Each message expires on its own configured date, regardless
+  of capture. Expiry warnings and deleted-entry restoration periods work for
+  both Inbox and Outbox. Restoring an expired entry does not extend its original
+  restoration deadline; at that deadline it becomes unavailable through its
+  mailbox path. Early deletion does not shorten group retention. Expiry and
+  group purge never delete a captured record.
+- **AC-MSG-037:** A linear or branched retention group is purged only after every
+  member has expired and no entry is active or restorable. A later reply,
+  forward, follow-up, or amendment notice delays purge for the entire group.
+  No member is independently content-purged. The final transaction physically
+  deletes all group envelopes, deliveries, localizations, selectors, addressees,
+  resource links, completions, and amendments, leaving no message tombstones.
+- **AC-MSG-037A:** Authorized links from active or restorable mailbox entries
+  can read expired/non-restorable earlier messages while the group exists.
+  Clearance and resource revocation still apply. Group membership does not
+  expose sibling branches, another user's mailbox state, or sources for new
+  sends that are otherwise ineligible.
+- **AC-MSG-037B:** Group purge racing with a send, amendment, restoration, draft
+  send, or capture either observes the committed dependency/state change or
+  completes first and causes the conflicting operation to fail safely. Fault
+  injection at each purge boundary leaves the whole group intact after rollback;
+  multiple workers cannot partially or concurrently purge the same group.
+- **AC-MSG-037C:** A saved draft does not block source-group purge and cannot be
+  sent with its now-missing source. Captured records and PDFs remain unchanged;
+  live source FKs become null while immutable captured UUIDs remain correct.
+- **AC-MSG-037D:** Catch-up crosses gaps left by group purge without delivery
+  tombstones, skipped eligible messages, or a reset mailbox counter. Empty pages
+  advance safely to the snapshot high-water mark. Merely retained expired
+  entries are excluded; explicitly restored entries obey their final deadline.
+- **AC-MSG-037E:** A group larger than the cleanup page size is discovered with
+  bounded memory and purged atomically without splitting the group. Size,
+  retries, duration, and delayed-group metrics are verified. Request receipts
+  contain no message content, recipient list, or delivery IDs after purge.
 - **AC-MSG-038:** Only `messaging.notifications.administer` can change a
   registered producer's configuration, and it cannot create events, triggers,
   executable expressions, undeclared placeholders, or direct system sends.
@@ -2861,7 +3291,9 @@ available to assistive technology without unexpectedly moving keyboard focus.
   it.
 - **AC-MSG-043:** Test messages cannot request receipts or actions, be replied
   to, forwarded, followed up, or captured as records; they are separately metered,
-  rate-limited, audited, and purged after the configured test retention period.
+  rate-limited, and audited. They expire after the configured test retention
+  period and are purged after their deleted-entry restoration periods end under
+  MSG-020.
 - **AC-MSG-044:** There is no production system-send REST route. An approved
   feature explicitly calls the internal Python application service with its
   open transaction, registered producer code, stable event ID, typed context,
@@ -2942,7 +3374,8 @@ available to assistive technology without unexpectedly moving keyboard focus.
   amendment-notice sources are rejected server-side.
 - **AC-MSG-066:** A recipient of an Outbox-originated forward or follow-up can
   open the linked earlier message only through their own linking delivery and
-  while current clearance, retention, and resource authorization permit it;
+  while current clearance, MSG-020 retained-group link access, and resource
+  authorization permit it, including when the earlier message has expired;
   knowing either UUID alone grants no access.
 - **AC-MSG-067:** Message-to-record capture accepts only
   `message_kind = user_message`; it rejects a production or test system
@@ -3091,7 +3524,8 @@ It shall implement:
   the hybrid identifier policy in section 7.0;
 - the canonical transactional envelope and fan-out service;
 - immutable envelopes, selectors, expanded addressees, deliveries, mailbox
-  sequences, resource links, drafts, completions, and amendments;
+  sequences, resource links, drafts, completions, amendments, and transactional
+  request-deduplication receipts;
 - recipient expansion, deduplication, `To` precedence, eligibility, clearance,
   security-level, resource-link, and message-size validation;
 - rich-text sanitization, idempotency, snapshotting, stable mailbox ordering,
@@ -3190,17 +3624,19 @@ arbitrary system-message authority.
 This phase shall implement human-message-only record capture, deterministic
 message PDFs, the final provenance PDF, embedded or subset-embedded Changa,
 PDF/A-2u and PDF/UA-1 validation, atomic record/component/provenance commit,
-expiry warnings, capture-gated and capture-free deletion rules, Recently
-deleted restoration, final content purge, tombstones, draft cleanup, bounded
-multi-instance cleanup, the privilege-gated Monitor page/API, operational
-metrics, and alerts.
+expiry warnings, capture-gated and capture-free deletion rules, restoration
+from Recently deleted, atomic whole-group purge without message tombstones,
+draft cleanup, bounded multi-instance cleanup, the privilege-gated Monitor
+page/API, operational metrics, and alerts.
 
 The validation gate shall use independent PDF conformance tooling and visual
 inspection of English and Arabic output. It shall verify embedded fonts,
 Unicode extraction, tags, reading order, links, filenames, provenance agreement,
 rollback at every capture boundary, record independence after message expiry,
-non-rewriting of earlier captures after amendments, retention/recovery
-boundaries, concurrent cleanup, configured capacity limits, and the complete
+non-rewriting of earlier captures after amendments, individual expiry and
+deleted-entry restoration boundaries, branched-group retention, authorized
+access to expired ancestors, concurrent atomic group purge, post-purge request
+replay, capture/draft independence, configured capacity limits, and the complete
 requirement-to-test traceability matrix.
 
 The exit condition is that the subsystem satisfies its records-management,
@@ -3226,7 +3662,8 @@ Every phase shall:
 
 ## 17. Resolved design decisions
 
-The former implementation decisions are resolved normatively in this revision:
+The following decisions are requirements. Their detailed rules appear in the
+referenced sections:
 
 - section 11.5 defines configurable selector, recipient, resource-link, draft,
   linked-message, and generated-PDF limits;
@@ -3240,15 +3677,16 @@ The former implementation decisions are resolved normatively in this revision:
   the corresponding selectors already established in that frontend rather than
   creating messaging-specific implementations;
 - MSG-020 and sections 11.4–11.5 define three-year sent-message retention,
-  capture-gated early deletion, warning and recovery periods, bounded purge,
-  record independence, and preservation of required history after user
+  capture-gated early deletion, expiry warnings, deleted-message restoration
+  periods, whole-group purge without message tombstones, independent records
+  and request-deduplication receipts, and preservation of required history after user
   deletion;
 - section 6.5 sends live toasts to every connected tab/device and collapses all
   reconnect discoveries into at most one summary;
 - MSG-018 prohibits system-message read receipts and action-required state;
 - section 9.1 makes WebSocket the first transport and SSE the subsequent
   fallback using the same frontend-neutral event contract;
-- MSG-016 defines draft expiry, recovery, restoration, and purge;
+- MSG-016 defines draft expiry, the deleted-draft restoration period, and purge;
 - MSG-017 permits only human-authored message chains to be captured, using
   bounded PDF/A-2u and PDF/UA-1 output, the specified safe filename convention,
   and a matching human-readable provenance PDF as the final digital component;
@@ -3312,3 +3750,54 @@ framework. Correctness remains anchored in the database and catch-up API.
 - Wathiq's existing [deployment guidance](../docs/deployment.md#nicegui-instances)
   defines instance affinity, WebSocket upgrade, and shared-storage constraints
   for this repository.
+
+### Producer display names (approved 3 October 2026)
+
+Registered producers have a canonical English `name` and localized names in the
+same `translations` object used by other named Wathiq entities. These display
+values are separate from stable producer codes, event contracts, and notification
+subject/body templates. Built-in names are supplied by their feature catalogue
+seed; rerunning it must preserve existing localized wording.
+
+Notification Administration lists, detail headings, configuration/test dialogs,
+and Monitor display the name in the viewer's effective language, with the shared
+regional-language and canonical-English fallback. Legacy producers without a
+name retain their code as a final fallback. The stable code remains secondary
+information in the administration detail view and remains the API identifier.
+Producer search matches the effective localized name, canonical English name,
+and code without replacing server-side pagination or its stable code cursor.
+No new entity-name editing workflow or UI terminology keys are introduced.
+
+
+### Resource-selection revision (approved 3 October 2026)
+
+The approved dialog and record/aggregation-only link rules are specified in
+MSG-011, the compose requirements in section 6, sections 7.7–7.8 and 10.1, and
+AC-MSG-008F–008I. There are no existing human-message links to preserve. This
+revision supersedes direct component selection and the separate resource-kind,
+resource dropdown, and Add workflow. It does not change capture-generated PDFs.
+
+Implementation and requirement-to-test evidence for this revision are recorded
+in [the resource-picker verification report](../docs/messaging-resource-picker.md).
+The report covers dialog interaction, LTR/RTL browser inspection, authorized
+full-text search, all-or-nothing insertion, component-target rejection, capture
+preservation, and disposable-database schema/upgrade checks. Deployment requires
+migration 040 and the normal catalogue synchronization/review workflow; those
+persistent-database operations are separate from implementation verification.
+
+### Message presentation revision (approved 3 October 2026)
+
+Outbox list items show the selected To/Cc recipient names rather than the
+sender's own name. Keep them on one line and truncate overflow with an ellipsis;
+make the full list available in a tooltip and message details. Inbox continues
+to show the sender. Sender and recipient user/role/unit display names use the
+viewer's effective language and shared language fallback. Resolve existing
+translations for these identities in bounded batches; fall back to the stored
+send-time name when translation or the live identity is unavailable. Do not
+rewrite immutable send-time snapshots. Restricted messages disclose no names.
+
+Display message security as code, localized name and numeric level. Compose
+and read views show resources in a distinct bounded panel below the authored
+body, with type icons and consistent title/remove alignment. Internal storage
+markers do not appear in the editor or message body. Existing messages retain
+their stored content and links; no data migration is required.

@@ -1310,14 +1310,14 @@ class ErmsApiClient:
         await self.request("DELETE", f"/api/v1/record-drafts/{draft_id}/components/{component_id}")
 
     async def commit_record_draft(
-        self, draft_id: int, creator_acl_role_id: int | None = None,
+        self, draft_id: int, creator_acl_role_id: int | None = None, *, capture: bool = False,
     ) -> dict[str, Any]:
         params = (
             {"creator_acl_role_id": creator_acl_role_id}
             if creator_acl_role_id is not None else None
         )
         return await self.request(
-            "POST", f"/api/v1/record-drafts/{draft_id}/commit", params=params,
+            "POST", f"/api/v1/record-drafts/{draft_id}/commit", params=params, timeout=660 if capture else 30,
         )
 
     async def discard_record_draft(self, draft_id: int) -> None:

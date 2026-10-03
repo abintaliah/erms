@@ -10,7 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .audit_context import decode_change_reason
 from .concurrency import expected_version
-from .database import get_connection
+from .database import get_connection, get_consistent_connection
+from .hold_notifications import notify_assignments
 from .entity_localization import localize_rows, localized_projection, preferred_language
 from .resource_authorization import require_resource_operation
 from .authorization_policy import require_global_privilege
@@ -375,7 +376,7 @@ def list_holds(
 
 
 @router.post("/holds", status_code=201, dependencies=[Depends(require_holds_administer)], response_model=HoldResponse)
-def create_hold(payload: HoldCreate, request: Request, connection: Connection = Depends(get_connection, scope="function")):
+def create_hold(payload: HoldCreate, request: Request, connection: Connection = Depends(get_consistent_connection, scope="function")):
     _require_admin(connection)
     connection.execute(
         "SELECT set_config('app.hold_contributor_ids',%s,true)",
@@ -390,6 +391,7 @@ def create_hold(payload: HoldCreate, request: Request, connection: Connection = 
     ).fetchone()
     for user_id in payload.contributor_user_ids:
         connection.execute("INSERT INTO hold_contributors(hold_id,user_id) VALUES (%s,%s)", (row["id"], user_id))
+    notify_assignments(connection, row["id"], [payload.owner_user_id, *payload.contributor_user_ids], _user_id(connection))
     return _serialize_hold(connection, row, preferred_language(connection, request))
 
 
@@ -414,7 +416,7 @@ def get_hold(hold_id: int, request: Request, connection: Connection = Depends(ge
 
 
 @router.patch("/holds/{hold_id}", dependencies=[Depends(require_holds_administer)], response_model=HoldResponse)
-def update_hold(hold_id: int, payload: HoldUpdate, request: Request, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+def update_hold(hold_id: int, payload: HoldUpdate, request: Request, version: int = Depends(expected_version), connection: Connection = Depends(get_consistent_connection, scope="function")):
     _require_admin(connection); _reason(request)
     existing = _hold(connection, hold_id, lock=True)
     if existing["version"] != version:
@@ -427,6 +429,8 @@ def update_hold(hold_id: int, payload: HoldUpdate, request: Request, version: in
     assignments = ",".join(f"{key}=%s" for key in values)
     row = connection.execute(f"UPDATE holds SET {assignments} WHERE id=%s AND version=%s RETURNING *,CURRENT_TIMESTAMP server_time", (*values.values(),hold_id,version)).fetchone()
     if row is None: raise HTTPException(status_code=409, detail={"code": "stale_version"})
+    if row["owner_user_id"] != existing["owner_user_id"]:
+        notify_assignments(connection, hold_id, [row["owner_user_id"]], _user_id(connection))
     return _serialize_hold(connection, row, preferred_language(connection, request))
 
 
@@ -453,7 +457,7 @@ def list_contributors(hold_id: int, request: Request, connection: Connection = D
 
 
 @router.put("/holds/{hold_id}/contributors", dependencies=[Depends(require_holds_administer)])
-def replace_contributors(hold_id: int, payload: ContributorReplace, request: Request, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
+def replace_contributors(hold_id: int, payload: ContributorReplace, request: Request, version: int = Depends(expected_version), connection: Connection = Depends(get_consistent_connection, scope="function")):
     _require_admin(connection); reason = _reason(request); hold = _hold(connection, hold_id, lock=True)
     if hold["version"] != version: raise HTTPException(status_code=409, detail={"code": "stale_version"})
     if len(set(payload.user_ids)) != len(payload.user_ids) or hold["owner_user_id"] in payload.user_ids:
@@ -471,6 +475,7 @@ def replace_contributors(hold_id: int, payload: ContributorReplace, request: Req
                               "removed_user_ids": sorted(set(old_ids) - set(payload.user_ids)),
                               "before_user_ids": old_ids, "after_user_ids": sorted(payload.user_ids)}), reason),
     )
+    notify_assignments(connection, hold_id, set(payload.user_ids) - set(old_ids), _user_id(connection))
     return _serialize_hold(connection,row,preferred_language(connection, request))
 
 
@@ -716,3 +721,7 @@ def remove_all_record_holds(resource_id:int,request:Request,connection:Connectio
 def hold_history(hold_id:int,limit:int=Query(100,ge=1,le=500),connection:Connection=Depends(get_connection,scope="function")):
     _hold(connection,hold_id)
     return list(connection.execute("SELECT *,occurred_at AS event_timestamp FROM event_history WHERE (entity_type='hold' AND entity_id=%s) OR metadata->>'hold_id'=%s ORDER BY occurred_at DESC,id DESC LIMIT %s",(hold_id,str(hold_id),limit)).fetchall())
+
+
+def _user_id(connection):
+    return connection.execute("SELECT current_setting('app.user_id')::bigint AS id").fetchone()['id']

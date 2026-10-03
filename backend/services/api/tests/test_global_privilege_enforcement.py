@@ -230,7 +230,7 @@ def test_principal_exposes_effective_global_capabilities(client):
     assert "identity.users.administer" in principal.json()["global_privileges"]
 
 
-def test_every_phase_4_registry_route_has_the_matching_dependency():
+def test_every_unconditional_global_registry_route_has_the_matching_dependency():
     registry = json.loads(open("security/operation-policy-registry.json", encoding="utf-8").read())
     def expanded(routes):
         for route in routes:
@@ -255,3 +255,36 @@ def test_every_phase_4_registry_route_has_the_matching_dependency():
         }
         expected = f"require_{operation['global_privilege'].replace('.', '_')}"
         assert expected in dependency_names, operation
+
+
+@pytest.mark.parametrize("privileges", [
+    (),
+    ("aggregation.acl.manage",),
+    ("record.acl.manage",),
+    ("aggregation.acl.manage", "record.acl.manage"),
+    ("authorization.administer",),
+])
+def test_permission_catalogue_conditional_global_privileges(client, privileges):
+    """Catalogue access needs global privileges, not a resource-instance grant."""
+    token, _, _ = _account(client, privileges=privileges, suffix="catalogue-reader")
+    for resource_type in (None, "aggregation", "record"):
+        params = {} if resource_type is None else {"resource_type": resource_type}
+        response = client.get("/api/v1/permissions", params=params, headers=_bearer(token))
+        allowed = "authorization.administer" in privileges or (
+            resource_type is not None and f"{resource_type}.acl.manage" in privileges
+        )
+        assert response.status_code == (200 if allowed else 403), response.text
+        if allowed:
+            assert response.json(), "Authorized catalogue must not be empty"
+            kinds = {item["resource_type"] for item in response.json()}
+            assert kinds == ({resource_type} if resource_type else {"aggregation", "record"})
+    assert client.get(
+        "/api/v1/permissions", params={"resource_type": "unsupported"}, headers=_bearer(token)
+    ).status_code == 422
+
+
+def test_permission_catalogue_requires_authentication(client):
+    client.cookies.clear()
+    client.headers.pop("X-CSRF-Token", None)
+    for params in ({}, {"resource_type": "aggregation"}, {"resource_type": "record"}):
+        assert client.get("/api/v1/permissions", params=params).status_code == 401

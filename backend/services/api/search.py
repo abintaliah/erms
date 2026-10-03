@@ -942,6 +942,8 @@ def global_search_rows(connection: Connection, request: GlobalSearchRequest) -> 
             ).fetchone()
             merged.append({"type":"record","record":{
                 "id":record["id"],"record_number":record["record_number"],"title":record["title"],
+                "security_level_id":record["security_level_id"],
+                "description":record.get("description"),
                 "aggregation_id":record.get("aggregation_id"),
                 "aggregation_number":aggregation["aggregation_number"] if aggregation else None,
                 "date_originated":record.get("date_originated"),
@@ -967,6 +969,8 @@ def global_search_rows(connection: Connection, request: GlobalSearchRequest) -> 
             merged.append({"type":"aggregation","aggregation":{
                 "id":aggregation["id"],"aggregation_number":aggregation["aggregation_number"],
                 "title":aggregation["title"],"date_opened":aggregation.get("date_opened"),
+                "security_level_id":aggregation["security_level_id"],
+                "description":aggregation.get("description"),
                 "is_vital":aggregation.get("is_vital",False),
                 "on_effective_hold":aggregation.get("on_effective_hold",False),
             },"snippet":snippet,"score":search["relevance"],
