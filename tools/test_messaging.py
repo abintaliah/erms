@@ -80,6 +80,7 @@ def main():
                     connection.execute((ROOT / "database/migrations/041_to_recipient_action_completion.sql").read_text())
                     connection.execute((ROOT / "database/migrations/042_messaging_everyone.sql").read_text())
                     connection.execute((ROOT / "database/migrations/043_legal_hold_notification_governors.sql").read_text())
+                    connection.execute((ROOT / "database/migrations/044_hold_assignment_recipient_only.sql").read_text())
                     assert (
                         connection.execute(
                             "SELECT count(*) FROM users WHERE name='Upgrade preservation fixture'"

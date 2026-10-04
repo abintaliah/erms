@@ -863,8 +863,10 @@ not configure the application, and should not be used as a permanent path.
 ### Legal-hold information governors (migration 043)
 
 Apply `043_legal_hold_notification_governors.sql` before deploying producer
-contract version 2. Both legal-hold producers now include all active people with
-effective information-governance roles. Existing configuration versions and
+contract version 2. Approaching-expiry notifications include all active people with
+effective information-governance roles. Apply migration 044 with the revised
+assignment producer (contract version 3): assignment notifications go only to
+the newly assigned person. Existing configuration versions and
 wording are preserved; review existing personal-assignment wording before using
 it for governors. New configurations use the neutral English/Arabic templates
 in `database/seeds/hold-notification-templates.json`. New databases still use the
