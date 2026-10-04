@@ -1027,8 +1027,12 @@ removals, rejected changes, and changes to unrelated fields create no assignment
 notification. Each newly assigned person receives a separate envelope so that
 one assignment does not disclose other responsible people.
 
-The audience is the newly assigned active person, resolved by backend code from
-the persisted hold responsibility. Clients cannot supply notification audiences
+Approved audience extension, 4 October 2026: the audience includes the newly
+assigned active person and all active person accounts with a currently effective
+information-governance role (`roles.is_information_governance`), deduplicated by
+person. Role and assignment validity are evaluated at emission time. Each
+assignment remains a separate event; governors receive each assignment event.
+The backend resolves the audience from persisted responsibilities and roles. Clients cannot supply notification audiences
 or content. The event identifier combines the committed hold event-history ID
 and the assigned user ID. Typed context consists of integer `hold_id` and
 `user_id`; neither appears in the supplied template. Retries of the same event
@@ -1039,7 +1043,8 @@ must not create a second delivery.
 An active hold becomes eligible when its non-null end timestamp is no more than
 seven days away and remains strictly later than the current database time.
 Scheduled holds, expired holds, and holds without an end date are excluded.
-One reminder is sent to the current active owner and active contributors,
+One reminder is sent to the current active owner, active contributors, and all
+active people with a currently effective information-governance role,
 deduplicated by person. If no eligible person exists, no reminder is recorded;
 the worker may try again while the hold remains eligible.
 
