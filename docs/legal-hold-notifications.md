@@ -112,3 +112,32 @@ unchanged submitted values; 10 backend regression tests; catalogue validation;
 and live Arabic browser inspection passed. Screenshot:
 `docs/verification/producer-names/recipient-rule-ar.png`. No database migration
 was needed for this correction.
+
+## Information-governor audience extension — 4 October 2026
+
+The user approved including all information governors in both producers.
+Contract version 2 resolves active person accounts with a currently valid
+assignment to an effectively active `is_information_governance` role, together
+with the existing responsible-person audience. Each assignment event remains
+separate; recipient IDs are deduplicated within each event. Expiry reminders
+also run when only governors are eligible. Supplied English/Arabic templates
+use neutral wording suitable for both responsibilities and governance oversight.
+Existing administrator versions and translations are preserved.
+
+Traceability: the audience extension in `specs/legal-holds.md` is implemented in
+`hold_notifications.py`; migration 043 advances existing producer contracts,
+and the separate producer seed registers version 2 for new installations.
+No schema DDL is required, so canonical schema creation remains self-contained.
+The disposable runner applies 043 on its upgrade path.
+
+Verification: 11 legal-hold notification tests passed, including both governor
+notification types, expired assignments, recipient deduplication, and reminder
+eligibility without active responsible people. Fresh/upgrade schema parity and
+data preservation passed; both unique test databases were dropped. No tests ran
+against the persistent database. UI catalogue artifacts and keys are unchanged;
+the changed templates are versioned notification configuration.
+
+Local deployment: migration 043 and separate seeds were applied to `erms`;
+both producers were activated under administrator `yya@sa.gov.ae` with operational
+owner `Legal governance`. Both requested accounts were verified as active,
+effective governors. API health reports notification readiness without issues.
