@@ -74,6 +74,14 @@ database/backups/
 *.key
 .secrets/
 
+# Local developer tooling and machine-specific editor state
+.local-tools/
+.kilo/
+.kile.jsonc
+.kilo/kilo.jsonc
+kilo.jsonc
+kile.jsonc
+
 # Editor and IDE settings
 .idea/
 .vscode/
