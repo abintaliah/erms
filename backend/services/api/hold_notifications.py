@@ -29,16 +29,13 @@ def _people(c, hold_id):
 
 
 def assigned_audience(c, context):
-    rows = c.execute(
-        f"""SELECT u.id FROM users u WHERE u.status='active'
-        AND u.account_type='person' AND (
-        (u.id=%s AND (EXISTS(SELECT 1 FROM holds WHERE id=%s AND owner_user_id=u.id)
-        OR EXISTS(SELECT 1 FROM hold_contributors WHERE hold_id=%s AND user_id=u.id)))
-        OR {GOVERNOR}) ORDER BY u.id LIMIT %s""",
-        (context["user_id"], context["hold_id"], context["hold_id"],
-         LIMITS["MAX_SELECTORS_PER_SEND"] + 1),
-    ).fetchall()
-    return [Selector(selector_kind="user", target_id=row["id"]) for row in rows]
+    row = c.execute(
+        """SELECT u.id FROM users u WHERE u.id=%s AND u.status='active'
+        AND u.account_type='person' AND (EXISTS(SELECT 1 FROM holds WHERE id=%s AND owner_user_id=u.id)
+        OR EXISTS(SELECT 1 FROM hold_contributors WHERE hold_id=%s AND user_id=u.id))""",
+        (context["user_id"], context["hold_id"], context["hold_id"]),
+    ).fetchone()
+    return [Selector(selector_kind="user", target_id=row["id"])] if row else []
 
 
 def ending_audience(c, context):
@@ -54,7 +51,7 @@ def definitions():
             producer_code=ASSIGNED,
             feature_code="holds",
             event_type="responsibility_assigned",
-            contract_version=2,
+            contract_version=3,
             required_for_business_commit=False,
             allow_static_audience=False,
             placeholders={

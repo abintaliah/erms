@@ -1027,12 +1027,11 @@ removals, rejected changes, and changes to unrelated fields create no assignment
 notification. Each newly assigned person receives a separate envelope so that
 one assignment does not disclose other responsible people.
 
-Approved audience extension, 4 October 2026: the audience includes the newly
-assigned active person and all active person accounts with a currently effective
-information-governance role (`roles.is_information_governance`), deduplicated by
-person. Role and assignment validity are evaluated at emission time. Each
-assignment remains a separate event; governors receive each assignment event.
-The backend resolves the audience from persisted responsibilities and roles. Clients cannot supply notification audiences
+Revised audience approval, 4 October 2026: the assignment audience is only the
+newly assigned active person, resolved from the persisted hold responsibility.
+Information governors are not included solely because of their governance role;
+a governor who is personally assigned still receives their own assignment
+notification. Clients cannot supply notification audiences
 or content. The event identifier combines the committed hold event-history ID
 and the assigned user ID. Typed context consists of integer `hold_id` and
 `user_id`; neither appears in the supplied template. Retries of the same event
