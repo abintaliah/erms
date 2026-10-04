@@ -458,3 +458,19 @@ fields, and preservation of pagination and filters.
 
 Classification workspace cache, paging, RTL evidence and regression results are
 recorded in [the redesign verification report](classification-workspace-redesign-verification.md).
+
+### Collection guidance localization during background refreshes
+
+Aggregations/Records personal-section refreshes call `render_table` from a
+background task without an inherited NiceGUI slot. Enter the owning
+`table_container` before resolving translated guidance and subtitle text, as
+well as before rendering its children. Resolving text before entering the slot
+can read an empty task catalogue and overwrite Arabic labels with English.
+The client catalogue remains the existing per-page, language-scoped registry;
+no extra catalogue parsing, cache or API request is introduced.
+
+`test_collection_refresh_localization.py` runs the real callback with an empty
+inherited catalogue for Aggregations and Records in both English and Arabic.
+All four cases pass. A database-free browser preview confirmed repeated refresh
+and navigation retain the expected English and Arabic labels. No translation
+keys or wording changed. The owned preview process and tab were shut down.

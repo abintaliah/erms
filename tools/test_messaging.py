@@ -77,6 +77,7 @@ def main():
                     connection.execute((ROOT / "database/migrations/038_legal_hold_notifications.sql").read_text())
                     connection.execute((ROOT / "database/migrations/039_localized_notification_producer_names.sql").read_text())
                     connection.execute((ROOT / "database/migrations/040_message_record_aggregation_links.sql").read_text())
+                    connection.execute((ROOT / "database/migrations/041_to_recipient_action_completion.sql").read_text())
                     assert (
                         connection.execute(
                             "SELECT count(*) FROM users WHERE name='Upgrade preservation fixture'"

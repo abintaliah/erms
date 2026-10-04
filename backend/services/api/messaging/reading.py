@@ -64,7 +64,7 @@ def links_for(c, rows):
             targets[kind] = {
                 r["id"]: r
                 for r in c.execute(
-                    f"""SELECT t.id,{label} AS title,l.level_number
+                    f"""SELECT t.id,{label} AS title,t.{kind}_number AS number,l.level_number
                 FROM {source} JOIN security_levels l ON l.id={security}
                 WHERE t.id=ANY(%s::bigint[]) AND {permission}""",
                     (selected,),
@@ -82,7 +82,7 @@ def links_for(c, rows):
         }
         if item["available"]:
             item.update(
-                resource_kind=kind, target_id=target["id"], title=target["title"]
+                resource_kind=kind, target_id=target["id"], title=target["title"], number=target["number"]
             )
         else:
             item["reason_code"] = "message_resource_unavailable"
@@ -228,7 +228,7 @@ def present(c, user, rows, *, detail=False):
             item["toast_language_tag"] = r.get("language_tag_at_send")
         if "recipient_type" in r:
             item["recipient_type"] = r["recipient_type"]
-        if r["action_required"] and "delivery_id" in r:
+        if r["action_required"] and "delivery_id" in r and r.get("recipient_type") == "to":
             item["action_status"] = (
                 "late"
                 if r["action_due_at"] and r["action_due_at"] <= r["now"]
@@ -252,7 +252,7 @@ def present(c, user, rows, *, detail=False):
     return output
 
 
-def inbox(c, user, limit, cursor=None, after=None, is_read=None, priority=None):
+def inbox(c, user, limit, cursor=None, after=None, is_read=None, priority=None, recipient_kind=None, recipient_id=None):
     person(c, user)
     clauses = ["d.recipient_user_id=%s", ACTIVE_INBOX, VISIBLE]
     args = [user, user]
@@ -271,6 +271,12 @@ def inbox(c, user, limit, cursor=None, after=None, is_read=None, priority=None):
             "(messaging_user_clearance(%s)>=l.level_number AND e.priority=%s)"
         )
         args.extend((user, priority))
+    if (recipient_kind is None) != (recipient_id is None):
+        invalid("message_recipient_filter_invalid")
+    if recipient_kind:
+        column = {"user": "user_id", "role": "role_id", "org_unit": "org_unit_id"}[recipient_kind]
+        clauses.append(f"(messaging_user_clearance(%s)>=l.level_number AND EXISTS(SELECT 1 FROM message_recipient_selectors s WHERE s.envelope_id=e.id AND s.{column}=%s))")
+        args.extend((user, recipient_id))
     order = (
         "d.mailbox_sequence ASC" if after is not None else "d.created_at DESC,d.id DESC"
     )
@@ -375,7 +381,7 @@ def outbox(
         )
         args.append(user)
         clauses.append(
-            "EXISTS(SELECT 1 FROM message_deliveries delivery LEFT JOIN message_action_completions completion ON completion.original_delivery_id=delivery.id WHERE delivery.envelope_id=e.id AND completion.original_delivery_id IS NULL)"
+            "EXISTS(SELECT 1 FROM message_deliveries delivery LEFT JOIN message_action_completions completion ON completion.original_delivery_id=delivery.id WHERE delivery.envelope_id=e.id AND delivery.recipient_type='to' AND completion.original_delivery_id IS NULL)"
         )
         clauses.append(
             "(CASE WHEN am.id IS NULL THEN e.action_due_at ELSE am.new_due_at END)<CURRENT_TIMESTAMP"
@@ -426,7 +432,7 @@ def receipts(c, user, identity, limit, after):
     for row in rows:
         row["recipient_name"] = localized_projection({"name": row["recipient_name"], "translations": row.pop("translations")}, language, "name")["name"]
         row["action_status"] = status(
-            message["action_required"],
+            message["action_required"] and row["recipient_type"] == "to",
             message["effective_action"],
             row["completed_at"],
             now,

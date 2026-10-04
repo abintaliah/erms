@@ -4430,6 +4430,20 @@
     "is_html": false
   },
   {
+    "message_key": "components.field.storage_backend",
+    "context_group": "components.field",
+    "default_text": "Storage backend",
+    "semantic_meaning": "Storage implementation used for the digital component, such as database or filesystem.",
+    "common_locations": [
+      "Shared digital component cards"
+    ],
+    "translator_guidance": "This identifies the storage backend, not an organizational unit or a storage-size chart.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Storage backend",
+    "is_html": false
+  },
+  {
     "message_key": "dashboard.activity.created",
     "context_group": "dashboard",
     "default_text": "Created",
@@ -9155,6 +9169,20 @@
     "is_html": false
   },
   {
+    "message_key": "messaging.capture.error.message_capture_medium_fixed_digital",
+    "context_group": "messaging.capture.error",
+    "default_text": "A message capture must use Digital medium. It cannot be changed to Mixed or Physical.",
+    "semantic_meaning": "A message capture draft and committed capture require Digital medium.",
+    "common_locations": [
+      "Message capture API validation"
+    ],
+    "translator_guidance": "Use the existing translations for Digital, Mixed and Physical media. This concerns the record medium, not the parent aggregation medium.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "A message capture must use Digital medium. It cannot be changed to Mixed or Physical.",
+    "is_html": false
+  },
+  {
     "message_key": "messaging.capture.error.message_capture_pdf_limit",
     "context_group": "messaging.capture.error",
     "default_text": "The generated PDFs exceed the configured combined size limit.",
@@ -9320,6 +9348,20 @@
     "grammatical_role": "label or message",
     "parameter_schema": {},
     "rendered_example": "Component order",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.preparing",
+    "context_group": "messaging.capture",
+    "default_text": "Preparing and validating message PDFs. You can edit the record details while you wait.",
+    "semantic_meaning": "Capture conversion progress; metadata remains editable, and creation waits for validated PDFs.",
+    "common_locations": [
+      "WebUI message stream adapter"
+    ],
+    "translator_guidance": "Use singular wording. This summary is shown only when the new-message count is exactly one.",
+    "grammatical_role": "instruction",
+    "parameter_schema": {},
+    "rendered_example": "Preparing and validating message PDFs. You can edit the record details while you wait.",
     "is_html": false
   },
   {
@@ -10054,15 +10096,15 @@
   {
     "message_key": "messaging.help.completion",
     "context_group": "messaging.help",
-    "default_text": "Completing the action requires the original sender in To.",
-    "semantic_meaning": "Human messaging interface: Completing the action requires the original sender in To.",
+    "default_text": "Check “Is the action done?” to tell the sender you have completed the requested action. Your reply will be sent to them.",
+    "semantic_meaning": "Explains that checking the action-completed control records completion and informs the original sender through this reply.",
     "common_locations": [
-      "Messages workspace"
+      "Reply composer for an incomplete action-required To delivery"
     ],
-    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
-    "grammatical_role": "label",
+    "translator_guidance": "Use the same wording as messaging.field.complete for the checkbox. Explain that the reply informs the original sender; there is no separate notification or send.",
+    "grammatical_role": "guidance",
     "parameter_schema": {},
-    "rendered_example": "Completing the action requires the original sender in To.",
+    "rendered_example": "Check “Is the action done?” to tell the sender you have completed the requested action. Your reply will be sent to them.",
     "is_html": false
   },
   {
@@ -10096,15 +10138,15 @@
   {
     "message_key": "messaging.help.linked",
     "context_group": "messaging.help",
-    "default_text": "Earlier content is linked and is not copied into this message.",
-    "semantic_meaning": "Human messaging interface: Earlier content is linked and is not copied into this message.",
+    "default_text": "The earlier message’s body is linked without being copied into this message.",
+    "semantic_meaning": "Explains that the previous message body remains accessible by its relationship link and is not quoted into the new body.",
     "common_locations": [
       "Messages workspace"
     ],
-    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "translator_guidance": "This guidance refers to the body only. A new reply may prefill its subject separately.",
     "grammatical_role": "label",
     "parameter_schema": {},
-    "rendered_example": "Earlier content is linked and is not copied into this message.",
+    "rendered_example": "The earlier message’s body is linked without being copied into this message.",
     "is_html": false
   },
   {
@@ -10119,6 +10161,20 @@
     "grammatical_role": "help",
     "parameter_schema": {},
     "rendered_example": "Type at least two characters to find users, roles or organization units by name, description, code, user external ID or email. Refine your search if needed.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.linked.title",
+    "context_group": "messaging.linked",
+    "default_text": "Earlier linked message",
+    "semantic_meaning": "Dialog heading identifying a linked earlier message while the latest message stays in the mailbox reading pane.",
+    "common_locations": [
+      "Earlier message dialog"
+    ],
+    "translator_guidance": "Make clear this is an earlier linked message, not the currently selected latest message.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Earlier linked message",
     "is_html": false
   },
   {
@@ -10163,6 +10219,20 @@
       "count": "integer"
     },
     "rendered_example": "You have 3 new messages",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.live.summary_one",
+    "context_group": "messaging.live",
+    "default_text": "You have 1 new message",
+    "semantic_meaning": "Reconnect summary for exactly one newly discovered message.",
+    "common_locations": [
+      "WebUI message stream adapter"
+    ],
+    "translator_guidance": "Use singular wording. This summary is shown only when the new-message count is exactly one.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "You have 1 new message",
     "is_html": false
   },
   {
@@ -11050,6 +11120,20 @@
     "grammatical_role": "label",
     "parameter_schema": {},
     "rendered_example": "This resource is no longer available to you.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.reply.subject_prefix",
+    "context_group": "messaging.reply",
+    "default_text": "Re:",
+    "semantic_meaning": "Conventional prefix for the editable subject of a new reply.",
+    "common_locations": [
+      "New reply composer"
+    ],
+    "translator_guidance": "Retain the conventional email-style Re: prefix in every language, as expressly approved. The original user-authored subject is appended separately and is not translated.",
+    "grammatical_role": "value",
+    "parameter_schema": {},
+    "rendered_example": "Re:",
     "is_html": false
   },
   {

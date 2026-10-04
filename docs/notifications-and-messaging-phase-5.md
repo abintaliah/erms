@@ -142,3 +142,77 @@ Raising configured capture limits, unusually large connected groups, and a
 production concurrency target require deployment-specific capacity testing;
 acceptance evidence covers configured boundaries and atomic behavior, not a
 claim of unlimited throughput.
+
+## Capture preparation dialog — 4 October 2026
+
+Save Record opens the shared Create Record dialog immediately. A non-mutating,
+relationship-authorized capture-preview endpoint supplies the ordered component
+manifest and initial metadata. Conversion continues while metadata can be edited;
+Create Record stays disabled until validated PDFs are loaded. Completion preserves
+user edits. Cancellation or workspace abandonment discards the completed draft
+and never reopens the dialog. Commit still rechecks the chain and regenerates the
+message and provenance PDFs atomically. No persistent conversion job or cache was
+introduced; the manifest is scoped to one dialog and is rechecked by capture and
+commit. The operation policy registry includes the preview route.
+
+Verification: 48 frontend/live checks passed, including five blocked-conversion
+interaction tests in `test_capture_preparation.py`. Six API/catalogue checks passed
+with actual veraPDF validation; both uniquely named fresh and upgrade databases
+were dropped. The browser preview used the actual shared editor with fake bounded
+data and conversion blocked deliberately. English and Arabic placeholders,
+editable fields and disabled creation were inspected using the shared direction
+configuration. Placeholder headers use the standard native NiceGUI grid to keep
+the progress indicator at the reading start in both directions.
+
+One new key, `messaging.capture.preparing`, was merged into English and the
+canonical Arabic artifact without changing existing text or provenance. Coverage,
+ordering, placeholders, terminology and hashes passed. The Arabic draft was seeded
+to demo while preserving all existing translation rows; it awaits administrator
+review/publication. No schema migration is needed.
+
+The ten operation-policy checks passed after registering and sorting the preview
+route; their fresh/upgrade test databases were also dropped. The separate broad
+SQL portability scan still fails on pre-existing ignored pg_dump backups in
+`.cache/demo-before-040-20261003T041038Z`, not on canonical schema or migration
+SQL. Those backups were left intact. All temporary preview processes and tabs
+were closed. Overall, 64 distinct frontend, capture, catalogue and policy checks
+passed; the backup-file scan is the remaining unrelated verification issue.
+
+## Resource descriptions in capture PDFs — 4 October 2026
+
+Accessible resource references now include the record/aggregation number and
+current title in every captured message PDF, including earlier linked messages.
+The existing permission- and clearance-filtered, batched resource projection
+supplies both fields. Unavailable references still expose only a stored kind/ID
+and the unavailable indication. Commit regenerates the descriptions under its
+existing authorization checks. Resource content is never copied.
+
+Three targeted checks passed: actual authorized and inaccessible PDF generation
+with independent veraPDF validation and text extraction, the existing resource
+permission/batching test, and the full validated capture/commit test. All fresh
+and upgrade disposable databases were dropped. No UI wording, translation keys,
+schema migrations or temporary stack instances were needed. Previously committed
+capture PDFs remain immutable; another deliberate capture uses the revised text.
+
+## Entity-name localization in capture PDFs — 4 October 2026
+
+Sender names, To/Cc selector names for users/roles/units, security-level names,
+and the capturing user's provenance name now use the saved capture language.
+The shared entity projection handles regional-language fallback and missing
+translations. Sender and recipient fallbacks retain immutable message names,
+including when current canonical names change. Selector translations are read
+with one bounded joined query per message; no membership expansion or unbounded
+entity collection loading was introduced. Commit resolves translations again
+and preserves the captured-by name alongside the immutable generated PDFs.
+Authored message text, reasons and resource titles are preserved verbatim.
+
+Four targeted checks passed: real Arabic message/provenance PDFs with independent
+validation and extracted-name assertions, saved-language and committed-PDF
+immutability, missing-name/base-language/English fallbacks, authorized resource
+references, and the existing complete capture/commit workflow (the language and
+immutability cases share one test). A fallback fixture initially tried an empty
+translated name; the database correctly rejected it. The corrected fixture uses
+a valid translation containing only a description to verify missing-name
+fallback. Both runs' fresh/upgrade disposable databases were dropped. No stack
+was launched, no migration or new translation key is required, and no capture
+localization issue remains from these checks.

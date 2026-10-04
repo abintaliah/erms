@@ -23,7 +23,7 @@ def validate_source(c, user, payload):
         invalid("message_completion_requires_reply")
     if delivery:
         row = c.execute(
-            f"""SELECT e.*,l.level_number FROM message_envelopes e
+            f"""SELECT e.*,l.level_number,d.recipient_type AS source_recipient_type FROM message_envelopes e
             JOIN message_deliveries d ON d.envelope_id=e.id JOIN security_levels l ON l.id=e.security_level_id
             WHERE d.id=%s AND d.recipient_user_id=%s AND {ACTIVE_INBOX} AND e.expires_at>CURRENT_TIMESTAMP
             FOR UPDATE OF e,d""",

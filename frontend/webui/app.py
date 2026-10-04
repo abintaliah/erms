@@ -20,7 +20,7 @@ from .remote_select import RemoteSelect
 from .classification_workspace import classification_workspace
 from .messaging_workspace import messaging_workspace
 from .resource_inspector import resource_inspector
-from .messaging_live import LiveMailbox, stream_events
+from .messaging_live import LiveMailbox, stream_events, mailbox_cursor_key
 from .notification_administration import notification_administration
 from .messaging_monitor import messaging_monitor
 from .audit_labels import audit_entity_type_label
@@ -907,7 +907,7 @@ def render_component_cards(
                 for label, value in (
                     (render_message("entity_metadata.field.date_originated"), format_timestamp(component.get("date_originated"))),
                     (render_message("advanced_search.field.date_created"), format_timestamp(component.get("date_created"))),
-                    (render_message("webui.load_dashboard.label.digital_storage_by_organizational_unit_e4533a05"), str(component.get("storage_backend") or "—")),
+                    (render_message("components.field.storage_backend"), str(component.get("storage_backend") or "—")),
                     (component.get("checksum_algo") or render_message("advanced_search.field.checksum_value"), checksum_short),
                 ):
                     with ui.column().classes("gap-0 min-w-0"):
@@ -7486,7 +7486,7 @@ def index(q: str = "") -> None:
         state["recent_created"] = await decorate_for_spec(spec, created)
         state["recent_updated"] = await decorate_for_spec(spec, updated)
 
-    async def browse_advanced_aggregation(target_control: Any) -> None:
+    async def browse_advanced_aggregation(target_control: Any, *, record_creation=False, digital_only=False) -> None:
         dialog = ui.dialog()
         content: Any = None
         scheme_control: Any = None
@@ -7496,6 +7496,7 @@ def index(q: str = "") -> None:
             current = browser["collections"].setdefault(path, {"items": [], "next_cursor": None})
             page = await api.browse_page(
                 path, cursor=current["next_cursor"] if append else None, limit=50,
+                **({"record_creation": True, "digital_only": digital_only} if record_creation and (path.endswith("/aggregations") or path.startswith("aggregations/")) else {}),
             )
             current["items"] = [*current["items"], *page["items"]] if append else list(page["items"])
             current["next_cursor"] = page.get("next_cursor")
@@ -7625,6 +7626,7 @@ def index(q: str = "") -> None:
 
     async def open_record_draft_editor(
         target_aggregation_id: int | None = None, on_committed=None, existing_capture_draft=None, capture_active=None,
+        capture_loader=None, capture_dialog=None,
     ) -> None:
         spec = ENTITIES["records"]
         try:
@@ -7642,13 +7644,18 @@ def index(q: str = "") -> None:
                 if target_aggregation is not None else {}
             )
         except ApiError as error:
+            if capture_dialog is not None:capture_dialog.close()
             if capture_active is not None and not capture_active():return
             ui.notify(error_message(error), color="negative", close_button=True)
             return
 
-        if capture_active is not None and not capture_active():return
+        if capture_active is not None and not capture_active():
+            if capture_dialog is not None:capture_dialog.close()
+            return
 
-        dialog = ui.dialog().props("persistent")
+        dialog = capture_dialog or ui.dialog().props("persistent")
+        dialog.clear()
+        capture_preparation = {"closed": False, "ready": capture_loader is None}
         controls: dict[str, Any] = {}
         current_rows: list[dict[str, Any]] = []
         component_area: Any = None
@@ -7657,7 +7664,7 @@ def index(q: str = "") -> None:
         action_controls: dict[str, Any] = {}
         uploader_control: dict[str, Any] = {}
 
-        async def refresh_draft_components() -> None:
+        async def refresh_draft_components() -> bool:
             try:
                 rows = await api.draft_components(draft["id"])
                 if capture_active is not None and not capture_active():return
@@ -7668,10 +7675,12 @@ def index(q: str = "") -> None:
                 with component_area:
                     if rows:
                         render_component_cards(rows, move_draft_component, remove_draft_component, readonly=existing_capture_draft is not None)
+                return True
             except ApiError as error:
                 if capture_active is not None and not capture_active():return
                 with component_area:
                     ui.notify(error_message(error), color="negative")
+                return False
 
         async def move_draft_component(component: dict[str, Any], direction: int) -> None:
             index = next((i for i, item in enumerate(current_rows) if item["id"] == component["id"]), -1)
@@ -7749,6 +7758,10 @@ def index(q: str = "") -> None:
             )
 
         async def discard() -> None:
+            capture_preparation["closed"] = True
+            if draft.get("id") is None:
+                dialog.close()
+                return
             try:
                 await api.discard_record_draft(draft["id"])
             except ApiError as error:
@@ -7758,6 +7771,8 @@ def index(q: str = "") -> None:
             dialog.close()
 
         async def commit() -> None:
+            if not capture_preparation["ready"] or capture_preparation["closed"]:
+                return
             if existing_capture_draft is not None:
                 action_controls["commit"].disable()
                 action_controls["commit"].props("loading")
@@ -7821,20 +7836,30 @@ def index(q: str = "") -> None:
                             aggregation_field.lookup_label_fields,
                         ),
                     )
-                    controls["aggregation_id"].classes("col-span-2")
+                    controls["aggregation_id"].classes("col-span-2").props("clearable")
                     style_relationship_chip_select(
                         controls["aggregation_id"], "aggregation_id",
                     )
                     if target_aggregation_id is None:
+                        async def destinations(query):
+                            if len(query.strip()) < 2:
+                                return {"items": []}
+                            return await api.search_request("aggregations", {
+                                "where": {"or": [{"field": field, "operator": "contains_ci", "value": query.strip()}
+                                    for field in ("aggregation_number", "title", "description")]},
+                                "sort": [{"field": "aggregation_number", "direction": "asc"}], "limit": 25,
+                            }, record_creation=True, digital_only=existing_capture_draft is not None)
                         bind_remote_relationship_select(
                             controls["aggregation_id"], "aggregations",
                             ("aggregation_number", "title"),
                             aggregation_field.lookup_label_fields,
+                            page_loader=destinations,
+                            active=lambda: dialog.value and (capture_active is None or capture_active()),
                         )
                         ui.button(
                             render_message("webui.show_memberships.button.browse_aed12689"),
                             icon="account_tree",
-                            on_click=lambda: browse_advanced_aggregation(controls["aggregation_id"]),
+                            on_click=lambda: browse_advanced_aggregation(controls["aggregation_id"], record_creation=True, digital_only=existing_capture_draft is not None),
                         ).props("flat dense no-caps").classes("col-span-2 justify-self-start")
                     if target_aggregation_id is not None:
                         # Read-only keeps the selected parent visible in the
@@ -7913,8 +7938,13 @@ def index(q: str = "") -> None:
                     def constrain_record_medium() -> None:
                         parent = aggregations_by_id.get(controls["aggregation_id"].value)
                         medium_control = controls["medium"]
+                        if existing_capture_draft is not None:
+                            medium_control.set_options({"digital": medium_options()["digital"]}, value="digital")
+                            medium_control.disable()
+                            return
                         if not parent:
-                            medium_control.set_options({}, value=None)
+                            medium_control.set_options({"digital": medium_options()["digital"]} if existing_capture_draft is not None else {},
+                                                       value="digital" if existing_capture_draft is not None else None)
                             medium_control.disable()
                             return
                         parent_medium = parent.get("medium", "mixed")
@@ -7942,6 +7972,8 @@ def index(q: str = "") -> None:
                             return
                         try:
                             rows = await api.creation_role_options(int(aggregation_id))
+                            if controls["aggregation_id"].value != aggregation_id or (capture_active is not None and not capture_active()):
+                                return
                         except ApiError as error:
                             ui.notify(error_message(error), color="negative", close_button=True)
                             return
@@ -7995,6 +8027,8 @@ def index(q: str = "") -> None:
                             except ApiError as error:
                                 ui.notify(error_message(error), color="negative", close_button=True)
                                 return
+                        if controls["aggregation_id"].value != aggregation_id or (capture_active is not None and not capture_active()):
+                            return
                         with dialog:
                             constrain_record_medium()
                             await refresh_record_creation_roles()
@@ -8030,7 +8064,16 @@ def index(q: str = "") -> None:
                 update_draft_component_controls()
                 with ui.element("div").classes("component-list w-full mt-3") as component_list:
                     component_area = ui.element("div").classes("component-grid w-full")
-                component_list.set_visibility(False)
+                component_list.set_visibility(capture_loader is not None)
+                if capture_loader is not None:
+                    with component_area:
+                        for component in draft.get("components", []):
+                            with ui.card().classes("w-full gap-1").props("flat bordered"):
+                                with ui.grid(columns="auto minmax(0, 1fr)").classes("w-full items-center gap-2"):
+                                    ui.spinner(size="sm")
+                                    ui.label(component["title"]).classes("font-semibold grow break-words")
+                                ui.label(component["file_name"]).classes("text-xs text-slate-500 break-all")
+                                ui.label(render_message("messaging.capture.preparing")).classes("text-sm text-slate-500")
             ui.separator()
             with ui.row().classes("w-full justify-end gap-2 px-6 py-4"):
                 with ui.row().classes(
@@ -8040,9 +8083,43 @@ def index(q: str = "") -> None:
                     ui.label(RECORD_UPLOAD_WAIT_MESSAGE)
                 upload_wait.set_visibility(False)
                 action_controls["upload_wait"] = upload_wait
-                ui.button(render_message("webui.open_record_draft_editor.button.cancel_draft_84ea17b5"), on_click=discard).props("flat color=grey-7")
+                ui.button(render_message("webui.open_record_draft_editor.button.cancel_draft_84ea17b5"), on_click=discard).props("flat color=grey-7").mark("capture-cancel" if capture_loader is not None else "record-draft-cancel")
                 action_controls["commit"] = ui.button(render_message("webui.open_record_draft_editor.button.create_record_dd0193d6"), icon="check", on_click=commit).props("unelevated")
+                if capture_loader is not None:
+                    action_controls["commit"].disable()
+                    action_controls["commit"].mark("capture-create")
         dialog.open()
+        if capture_loader is not None:
+            try:
+                prepared = await capture_loader()
+            except ApiError as error:
+                if not capture_preparation["closed"] and (capture_active is None or capture_active()):
+                    action_controls["upload_wait"].set_visibility(False)
+                    component_area.clear()
+                    with component_area:
+                        ui.label(error_message(error)).classes("text-negative").mark("capture-preparation-error")
+                else:
+                    dialog.close()
+                return
+            if capture_preparation["closed"] or (capture_active is not None and not capture_active()):
+                await api.discard_record_draft(prepared["id"])
+                dialog.close()
+                return
+            # Keep metadata the user has edited while conversion was running.
+            # The server rechecks the chain and its security floor at commit.
+            draft = prepared
+            components_loaded = await refresh_draft_components()
+            if capture_preparation["closed"] or (capture_active is not None and not capture_active()):
+                if not capture_preparation["closed"]:
+                    await api.discard_record_draft(prepared["id"])
+                dialog.close()
+                return
+            if not components_loaded:
+                return
+            capture_preparation["ready"] = True
+            action_controls["upload_wait"].set_visibility(False)
+            action_controls["commit"].enable()
+            return
         await refresh_draft_components()
 
     async def open_editor(
@@ -10840,13 +10917,16 @@ def index(q: str = "") -> None:
         render_results()
 
     def render_table(spec: EntitySpec) -> None:
-        if spec.key in {"aggregations", "records"}:
-            guidance.text = "" if state["searched"] else render_message(
-                "webui.select_entity.text.large_collections_are_search_first_to_avoi_717a0f77"
-            )
-            subtitle.text = "" if state["searched"] else render_message(
-                "webui.select_entity.text.search_required_before_loading_results_88549c49"
-            )
+        # Background personal-section refreshes do not inherit a NiceGUI slot.
+        # Resolve translations in the owning page before updating its labels.
+        with table_container:
+            if spec.key in {"aggregations", "records"}:
+                guidance.text = "" if state["searched"] else render_message(
+                    "webui.select_entity.text.large_collections_are_search_first_to_avoi_717a0f77"
+                )
+                subtitle.text = "" if state["searched"] else render_message(
+                    "webui.select_entity.text.search_required_before_loading_results_88549c49"
+                )
         table_container.clear()
         with table_container:
             if spec.key in {"aggregations", "records"} and spec.search_first and not state["searched"]:
@@ -18791,15 +18871,40 @@ def index(q: str = "") -> None:
                     error_message(error), color="negative", close_button=True))
 
         async def capture_message(envelope_id, root_id):
+            capture_dialog = ui.dialog().props("persistent")
+            opening = {"closed": False}
+            def capture_active():
+                return (not opening["closed"] and auth_state.get("principal") is principal
+                        and state.get("messaging_workspace_token") is token)
+            def cancel_opening():
+                opening["closed"] = True
+                capture_dialog.close()
+            with capture_dialog, ui.card().classes("w-full gap-4").style("width: 1050px; max-width: calc(100vw - 32px)"):
+                ui.label(render_message("webui.open_record_draft_editor.label.create_record_080740e1")).classes("text-xl font-semibold")
+                with ui.row().classes("w-full items-center"):
+                    ui.spinner(size="sm")
+                    ui.label(render_message("messaging.capture.preparing")).classes("grow")
+                ui.skeleton().classes("w-full h-24")
+                with ui.row().classes("w-full justify-end"):
+                    ui.button(render_message("webui.open_record_draft_editor.button.cancel_draft_84ea17b5"), on_click=cancel_opening).props("flat")
+                    ui.button(render_message("webui.open_record_draft_editor.button.create_record_dd0193d6"), icon="check").disable()
+            capture_dialog.open()
+            params = {"root_id":root_id} if root_id else {}
             try:
-                draft = await api.request("POST", f"/api/v1/messages/{envelope_id}/capture",
-                                          params={"root_id":root_id} if root_id else {},timeout=660)
+                draft = await api.request("GET", f"/api/v1/messages/{envelope_id}/capture-preview", params=params)
             except ApiError as error:
-                if auth_state.get("principal") is principal and state.get("messaging_workspace_token") is token:
+                capture_dialog.close()
+                if capture_active():
                     ui.notify(error_message(error),color="negative",close_button=True)
                 return
-            if auth_state.get("principal") is principal and state.get("messaging_workspace_token") is token:
-                await open_record_draft_editor(existing_capture_draft=draft,on_committed=lambda _:select_messages(mailbox),capture_active=lambda:auth_state.get("principal") is principal and state.get("messaging_workspace_token") is token)
+            if not capture_active():
+                capture_dialog.close()
+                return
+            async def prepare_pdfs():
+                return await api.request("POST", f"/api/v1/messages/{envelope_id}/capture", params=params,timeout=660)
+            await open_record_draft_editor(existing_capture_draft=draft,
+                on_committed=lambda _:select_messages(mailbox),capture_active=capture_active,
+                capture_loader=prepare_pdfs,capture_dialog=capture_dialog)
 
         if mailbox == "monitor":
             await messaging_monitor(api=api,container=table_container,
@@ -20645,16 +20750,20 @@ def index(q: str = "") -> None:
             return
         stop_message_stream()
         import hashlib
-        cursor_key = "wathiq-message-cursor:" + str(principal["user"]["id"]) + ":" + hashlib.sha256(token.encode()).hexdigest()[:24]
+        cursor_key = mailbox_cursor_key(api_url(), principal["user"]["id"])
+        legacy_cursor_key = "wathiq-message-cursor:" + str(principal["user"]["id"]) + ":" + hashlib.sha256(token.encode()).hexdigest()[:24]
         message_live["token"] = token
         is_active = lambda: auth_state.get("principal") is principal and message_live["token"] == token and page_client.has_socket_connection
 
         async def load_cursor():
-            return await page_client.run_javascript("sessionStorage.getItem(" + json.dumps(cursor_key) + ")", timeout=5)
+            return await page_client.run_javascript("localStorage.getItem(" + json.dumps(cursor_key) + ") ?? sessionStorage.getItem(" + json.dumps(legacy_cursor_key) + ")", timeout=5)
 
         async def save_cursor(value):
             if is_active():
-                await page_client.run_javascript("sessionStorage.setItem(" + json.dumps(cursor_key) + ", " + json.dumps(str(value)) + "); true", timeout=5)
+                # Browser execution is synchronous: another tab cannot regress
+                # this account's persisted checkpoint with an older page.
+                script = "(() => { const key = " + json.dumps(cursor_key) + "; const incoming = BigInt(" + json.dumps(str(value)) + "); const stored = localStorage.getItem(key); const previous = stored && /^[0-9]+$/.test(stored) ? BigInt(stored) : 0n; localStorage.setItem(key, String(incoming > previous ? incoming : previous)); return true; })()"
+                await page_client.run_javascript(script, timeout=5)
 
         async def present_message(kind, value):
             if not is_active():
@@ -20664,7 +20773,7 @@ def index(q: str = "") -> None:
                     message_unread_button.text = render_message("messaging.live.unread", count=value)
                     message_unread_button.set_visibility(True)
                 elif kind == "summary":
-                    label = render_message("messaging.live.test_summary", **value) if isinstance(value, dict) else render_message("messaging.live.summary", count=value)
+                    label = render_message("messaging.live.test_summary", **value) if isinstance(value, dict) else (render_message("messaging.live.summary_one") if value == 1 else render_message("messaging.live.summary", count=value))
                     show_message_notification(label, None)
                 elif kind == "message":
                     # Content was freshly authorized by catch-up. Restricted

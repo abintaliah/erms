@@ -164,12 +164,16 @@ async def messaging_workspace(
 ):
     view = {
         "revision": 0,
+        "detail_revision": 0,
         "cursor": None,
         "previous": [],
         "next": None,
         "deleted": False,
         "mode": "list",
     }
+    read_badges = {}
+    message_rows = {}
+    selected_message = None
     base = "/api/v1/messages"
 
     def current(revision):
@@ -245,6 +249,8 @@ async def messaging_workspace(
 
                     async def deleted_changed(e):
                         view["deleted"] = e.value
+                        view["detail_revision"] += 1
+                        detail.set_visibility(False)
                         await load(reset=True)
 
                     deleted.on_value_change(deleted_changed)
@@ -309,42 +315,51 @@ async def messaging_workspace(
                         security, "security-levels", ("name",), ("name",), active=active
                     )
                     filters["security_level_id"] = security
-                    recipient_kind = ui.select(
-                        choices("field.", ("user", "role", "org_unit")),
-                        value="user",
-                        label=text("field.kind"),
-                    ).props("outlined dense")
-                    recipient = relationship_select(text("field.recipient"), {})
+                if mailbox in ("inbox", "outbox") and can_exchange:
+                    filter_kinds = ("user", "role", "org_unit")
+                    filter_labels = [plain_text("field." + kind) for kind in filter_kinds]
+                    recipient = relationship_select(text("field.recipient"), {}, remote=True)
                     recipient.classes("max-w-xs")
 
-                    active_label = plain_text("state.active")
+                    def filter_option(row, index):
+                        return dict(row, id=row["id"] * 3 + index,
+                                    name=filter_labels[index] + " · " + row["name"])
 
-                    async def filter_recipients(q):
-                        result = await request(
-                            "GET",
-                            "/recipients/" + recipient_kind.value,
-                            params={"q": q, "limit": 25},
-                        )
-                        if recipient_kind.value != "user":
-                            for row in result["items"]:
-                                row["lifecycle_label"] = active_label
-                        return result
+                    async def filter_recipients(query):
+                        if len(query.strip()) < 2:
+                            return {"items": []}
+                        pages = await asyncio.gather(*(request("GET", "/recipients/" + kind,
+                            params={"q": query.strip(), "limit": 25, "purpose": "filter"}) for kind in filter_kinds))
+                        return {"items": [filter_option(row, index)
+                            for index, page in enumerate(pages) for row in page["items"]]}
 
-                    loader = bind_relationship(
-                        recipient,
-                        "users",
-                        ("name",),
-                        ("name", "lifecycle_label"),
-                        page_loader=filter_recipients,
-                        active=active,
-                    )
+                    async def selected_filter_recipient(identity):
+                        target, index = divmod(int(identity), 3)
+                        page = await request("GET", "/recipients/" + filter_kinds[index],
+                            params={"target_id": target, "limit": 1, "purpose": "filter"})
+                        row = next(iter(page["items"]), {"id": target, "name": plain_text("state.unavailable")})
+                        return filter_option(row, index)
 
-                    async def recipient_kind_changed():
-                        recipient.value = None
-                        recipient.options = {}
-                        await loader()
-
-                    recipient_kind.on_value_change(recipient_kind_changed)
+                    bind_relationship(recipient, "users", ("name",), ("name",),
+                        page_loader=filter_recipients, selected_loader=selected_filter_recipient,
+                        active=active)
+                    if browse_recipients:
+                        async def browse_filter():
+                            async def choose(node):
+                                if not active():
+                                    return False
+                                index = filter_kinds.index(node["type"])
+                                identity = node["id"] * 3 + index
+                                row = await selected_filter_recipient(identity)
+                                if not active():
+                                    return False
+                                recipient.options = {identity: row["name"]}
+                                recipient.value = identity
+                                recipient.update()
+                                return True
+                            await browse_recipients(selection_mode="all", on_selection=choose)
+                        ui.button(text("action.browse_recipients"), icon="account_tree",
+                                  on_click=browse_filter).props("flat no-caps")
                 if mailbox != "drafts":
                     ui.button(
                         text("field.search"),
@@ -352,18 +367,16 @@ async def messaging_workspace(
                         on_click=lambda: load(reset=True),
                     ).props("flat no-caps")
             progress = ui.label(text("state.loading")).props("role=status")
-            content = ui.column().classes(
-                "w-full gap-0 rounded-xl border border-slate-200 overflow-hidden bg-white"
-            )
-            with ui.row().classes("w-full items-center gap-2") as pagination:
-                previous = ui.button(
-                    text("action.previous"), on_click=lambda: page(False)
-                ).props("outline no-caps")
-                next_button = ui.button(
-                    text("action.next"), on_click=lambda: page(True)
-                ).props("outline no-caps")
-            detail = ui.column().classes("w-full gap-3")
-            detail.set_visibility(False)
+            with ui.grid().classes("w-full grid-cols-1 lg:grid-cols-2 gap-4 items-start"):
+                with ui.column().classes("w-full min-w-0 gap-3"):
+                    content = ui.column().classes(
+                        "w-full gap-0 rounded-xl border border-slate-200 overflow-hidden bg-white"
+                    )
+                    with ui.row().classes("w-full items-center gap-2") as pagination:
+                        previous = ui.button(text("action.previous"), on_click=lambda: page(False)).props("outline no-caps")
+                        next_button = ui.button(text("action.next"), on_click=lambda: page(True)).props("outline no-caps")
+                detail = ui.column().classes("w-full min-w-0 gap-3")
+                detail.set_visibility(False)
 
     async def page(forward):
         if forward:
@@ -379,7 +392,6 @@ async def messaging_workspace(
         view["mode"] = "list"
         if reset:
             view.update(cursor=None, previous=[])
-        detail.set_visibility(False)
         content.set_visibility(True)
         filters_host.set_visibility(not view["deleted"])
         pagination.set_visibility(True)
@@ -400,10 +412,9 @@ async def messaging_workspace(
             for key in ("sent_from", "sent_before"):
                 if key in params:
                     params[key] += "T00:00:00Z"
-            if mailbox == "outbox" and recipient.value:
-                params.update(
-                    recipient_kind=recipient_kind.value, recipient_id=recipient.value
-                )
+            if mailbox in ("inbox", "outbox") and can_exchange and recipient.value:
+                target, index = divmod(int(recipient.value), 3)
+                params.update(recipient_kind=filter_kinds[index], recipient_id=target)
         try:
             result = await request(
                 "GET",
@@ -426,6 +437,8 @@ async def messaging_workspace(
             return
         progress.text = ""
         content.clear()
+        read_badges.clear()
+        message_rows.clear()
         with content:
             with ui.column(align_items="start").classes(
                 "w-full bg-blue-50 border-b border-blue-100 px-4 py-3"
@@ -438,7 +451,16 @@ async def messaging_workspace(
             for item in result["items"]:
                 with ui.row().classes(
                     "w-full items-start justify-between gap-3 p-4 border-b border-slate-100 hover:bg-blue-50/30"
-                ):
+                ) as message_row:
+                    if item.get("availability") != "restricted" or mailbox != "drafts":
+                        message_rows[str(item["id"])] = message_row
+                        if str(item["id"]) == selected_message:
+                            message_row.classes("bg-blue-50")
+                        message_row.props("tabindex=0 role=button").classes("cursor-pointer")
+                        message_row.mark("message-row-" + str(item["id"]))
+                        message_row.on("click", lambda _, row=item: open_item(row))
+                        message_row.on("keydown.enter", lambda _, row=item: open_item(row))
+                        message_row.on("keydown.space", lambda _, row=item: open_item(row))
                     with ui.column().classes("grow min-w-0 gap-1"):
                         if item.get("availability") == "restricted":
                             ui.label(text("state.restricted")).classes("font-semibold")
@@ -458,7 +480,7 @@ async def messaging_workspace(
                                 if names:
                                     ui.label(names).classes('text-sm truncate w-full min-w-0').tooltip(names)
                                 if "is_read" in item:
-                                    ui.badge(
+                                    read_badges[str(item["id"])] = ui.badge(
                                         text(
                                             "field.read"
                                             if item["is_read"]
@@ -489,7 +511,7 @@ async def messaging_workspace(
                                             else "blue"
                                         ),
                                     )
-                                if not item.get("action_status") and item.get(
+                                if item.get("recipient_type") != "cc" and not item.get("action_status") and item.get(
                                     "effective_action", {}
                                 ).get("action_required"):
                                     ui.badge(
@@ -522,18 +544,15 @@ async def messaging_workspace(
                                 item.get("sent_at") or item.get("date_updated")
                             )
                         ).classes("text-xs text-slate-500")
-                    if item.get("availability") != "restricted":
-                        ui.button(
-                            text("action.open"),
-                            icon="open_in_new",
-                            on_click=lambda _, row=item: open_item(row),
-                        ).props("flat no-caps")
         view["next"] = result.get("next_cursor")
         previous.set_enabled(bool(view["previous"]))
         next_button.set_enabled(bool(result.get("has_more")))
 
     async def open_item(item):
+        nonlocal selected_message
         if mailbox == "drafts":
+            view["detail_revision"] += 1
+            opening_revision = view["detail_revision"]
             try:
                 draft = await request(
                     "GET", "/drafts/" + item["id"], params={"deleted": view["deleted"]}
@@ -541,15 +560,56 @@ async def messaging_workspace(
             except ApiError as error:
                 warn(error)
                 return
-            if active():
+            if active() and opening_revision == view["detail_revision"]:
+                selected_message = str(item["id"])
+                for row_id, row in message_rows.items():
+                    row.classes(add="bg-blue-50" if row_id == selected_message else "", remove="bg-blue-50" if row_id != selected_message else "")
                 await compose(draft=draft)
         else:
             await show_message(item["id"], mailbox)
 
-    async def show_message(identity, source, *, root=None):
-        view["revision"] += 1
-        revision = view["revision"]
-        progress.text = text("state.loading")
+    async def open_linked(identity, source, root, overlay=None):
+        if overlay is None:
+            dialog = ui.dialog().props("persistent")
+            overlay = dict(revision=0, closed=False, owner_revision=view["detail_revision"], history=[])
+            def close_linked():
+                overlay["closed"] = True
+                overlay["revision"] += 1
+                dialog.close()
+            async def back_linked():
+                if len(overlay["history"]) > 1:
+                    overlay["history"].pop()
+                    previous_identity, previous_source, previous_root = overlay["history"][-1]
+                    overlay["back"].set_visibility(len(overlay["history"]) > 1)
+                    await show_message(previous_identity, previous_source, root=previous_root, overlay=overlay)
+            with dialog, ui.card().classes("gap-3").style("width: 672px; max-width: calc(100vw - 32px)"):
+                with ui.row().classes("w-full items-center justify-between gap-2"):
+                    ui.label(render_message("messaging.linked.title")).classes("text-xl font-semibold")
+                    ui.button(render_message("messaging.live.close"), icon="close", on_click=close_linked).props("flat no-caps").mark("linked-message-close")
+                overlay["back"] = ui.button(text("action.previous"), icon="arrow_back", on_click=back_linked).props("flat no-caps").mark("linked-message-back")
+                overlay["status"] = ui.label().props("role=status")
+                overlay["host"] = ui.column().classes("w-full min-w-0 gap-3")
+            dialog.open()
+        overlay["history"].append((identity, source, root))
+        overlay["back"].set_visibility(len(overlay["history"]) > 1)
+        await show_message(identity, source, root=root, overlay=overlay)
+
+    async def show_message(identity, source, *, root=None, overlay=None):
+        nonlocal selected_message
+        if root and overlay is None:
+            await open_linked(identity, source, root)
+            return
+        state = overlay if overlay is not None else view
+        revision_key = "revision" if overlay is not None else "detail_revision"
+        state[revision_key] += 1
+        revision = state[revision_key]
+        def detail_current(revision):
+            return active() and revision == state[revision_key] and (overlay is None or
+                (not overlay["closed"] and overlay["owner_revision"] == view["detail_revision"]))
+
+        host = overlay["host"] if overlay is not None else detail
+        status = overlay["status"] if overlay is not None else progress
+        status.text = text("state.loading")
         try:
             if root:
                 message = await request("GET", f"/linked/{root}/{identity}")
@@ -564,28 +624,27 @@ async def messaging_workspace(
         except asyncio.CancelledError:
             return
         except ApiError as error:
-            if current(revision):
-                progress.text = text("error.failed")
+            if detail_current(revision):
+                status.text = text("error.failed")
                 warn(error)
             return
-        if not current(revision):
+        if not detail_current(revision):
             return
-        progress.text = ""
-        content.set_visibility(False)
-        filters_host.set_visibility(False)
-        pagination.set_visibility(False)
-        detail.clear()
-        detail.set_visibility(True)
+        status.text = ""
+        if overlay is None:
+            selected_message = str(identity)
+            for row_id, row in message_rows.items():
+                row.classes(add="bg-blue-50" if row_id == selected_message else "", remove="bg-blue-50" if row_id != selected_message else "")
+            if source == "inbox" and not root and not view["deleted"] and str(identity) in read_badges:
+                read_badges[str(identity)].set_text(text("field.read"))
+                read_badges[str(identity)].props("color=grey")
+        host.clear()
+        host.set_visibility(True)
         if message["availability"] != "available":
-            with detail:
+            with host:
                 ui.label(text("state.restricted"))
             return
-        with detail:
-            ui.button(
-                text("action.previous"),
-                icon="arrow_back",
-                on_click=lambda: load(reset=True),
-            ).props("flat no-caps")
+        with host:
             with ui.card().classes("w-full shadow-none border border-slate-200 gap-3"):
                 ui.label(message["subject"]).classes(
                     "text-xl font-semibold break-words"
@@ -641,6 +700,8 @@ async def messaging_workspace(
                     if active():
                         if on_read is not None:
                             await on_read()
+                        view["detail_revision"] += 1
+                        detail.set_visibility(False)
                         await load(reset=True)
 
                 with ui.row().classes("detail-action-row gap-2"):
@@ -652,7 +713,7 @@ async def messaging_workspace(
                             try:
                                 await capture_record(message["envelope_id"], root)
                             finally:
-                                if current(revision):
+                                if detail_current(revision):
                                     capture_button.props(remove="loading")
                                     capture_button.enable()
 
@@ -689,10 +750,10 @@ async def messaging_workspace(
                             else "action.open_original"
                         ),
                         icon="link",
-                        on_click=lambda: show_message(
-                            parent, source, root=root or message["envelope_id"]
+                        on_click=lambda: open_linked(
+                            parent, source, root or message["envelope_id"], overlay
                         ),
-                    ).props("outline no-caps")
+                    ).props("outline no-caps").mark("earlier-link-" + str(message["envelope_id"]))
                 if root:
                     ui.label(text("help.linked")).classes("text-sm text-slate-500")
                 eligible = (
@@ -786,7 +847,7 @@ async def messaging_workspace(
                         except ApiError as error:
                             warn(error)
                             return
-                        if current(revision):
+                        if detail_current(revision):
                             with history_host:
                                 for row in result["items"]:
                                     render_amendment(row)
@@ -813,7 +874,7 @@ async def messaging_workspace(
                         except ApiError as error:
                             warn(error)
                             return
-                        if not current(revision):
+                        if not detail_current(revision):
                             return
                         receipts_host.clear()
                         with receipts_host:
@@ -823,7 +884,8 @@ async def messaging_workspace(
                                 ):
                                     ui.label(row["recipient_name"])
                                     ui.badge(text("field." + row["recipient_type"]))
-                                    ui.label(state_label(row.get("action_status")))
+                                    if row.get("action_status"):
+                                        ui.label(state_label(row["action_status"]))
                                     if "read_at" in row:
                                         ui.label(
                                             format_timestamp(row["read_at"])
@@ -856,7 +918,7 @@ async def messaging_workspace(
             with ui.card().classes('w-full border border-blue-100 shadow-none gap-2'):
                 ui.label(render_message('messaging.field.resources')).classes('font-semibold')
                 with ui.scroll_area().props('visible').classes('w-full').style(f'height: {min(len(links) * 52, 208)}px'):
-                    with ui.column().classes('w-full gap-2'):
+                    with ui.column().classes('w-full gap-0'):
                         for link in links:
                             if link.get('available'):
                                 async def open_link(link=link):
@@ -867,10 +929,11 @@ async def messaging_workspace(
                                             await open_resource(link['resource_kind'], link['target_id'])
                                     except ApiError as error:
                                         warn(error)
-                                ui.button(link['title'], icon='folder' if link['resource_kind'] == 'aggregation' else 'description',
-                                          on_click=open_link).props('flat no-caps').classes('text-start')
+                                with ui.grid(columns='auto minmax(0, 1fr)').classes('w-full items-start gap-3 border-b border-blue-50 py-2'):
+                                    ui.icon('folder' if link['resource_kind'] == 'aggregation' else 'description', color='primary').classes('shrink-0 mt-1')
+                                    ui.button(link['title'], on_click=open_link).props('flat no-caps align=left').classes('grow min-w-0 text-start whitespace-normal justify-start')
                             else:
-                                with ui.row().classes('items-center gap-2'):
+                                with ui.grid(columns='auto minmax(0, 1fr)').classes('w-full items-start gap-3 border-b border-blue-50 py-2'):
                                     ui.icon('link_off', color='grey')
                                     ui.label(text('state.unavailable')).classes('text-slate-500')
 
@@ -1005,18 +1068,30 @@ async def messaging_workspace(
     ):
         if not can_exchange or not active():
             return
+        inline = mailbox == "drafts"
+        if inline:
+            view["detail_revision"] += 1
+        compose_revision = view["detail_revision"]
         revision = view["revision"]
         try:
             capabilities = await request("GET", "/capabilities")
         except ApiError as error:
             warn(error)
             return
-        if not current(revision):
+        if not active() or (inline and compose_revision != view["detail_revision"]) or (not inline and not current(revision)):
             return
-        dialog = ui.dialog().props("persistent")
+        dialog = None if inline else ui.dialog().props("persistent")
+        if inline:
+            detail.clear()
+            detail.set_visibility(True)
         saved = dict(draft or {})
+        if draft is None and source and relationship == "reply":
+            saved["subject"] = render_message_plain("messaging.reply.subject_prefix") + " " + source["subject"]
         selectors = list(saved.get("selectors", []))
         resources = list(saved.get("resource_links", []))
+        if source and relationship == "reply" and source.get("sender_kind") == "user":
+            selectors = [{"recipient_type": "to", "selector_kind": "user",
+                          "target_id": source["sender_user_id"]}]
         relationship_fields = {
             k: saved.get(k)
             for k in ("relationship_kind", "related_delivery_id", "related_envelope_id")
@@ -1032,6 +1107,8 @@ async def messaging_workspace(
                 source = await request("GET", "/inbox/" + saved["related_delivery_id"])
             except ApiError:
                 source = None  # Saving remains possible; send revalidates the source.
+        if inline and compose_revision != view["detail_revision"]:
+            return
         form = {
             "revision": 0,
             "valid": False,
@@ -1039,11 +1116,17 @@ async def messaging_workspace(
             "request_id": str(uuid4()),
             "signature": None,
         }
-        form_active = lambda: active() and not form["closed"]
+        form_active = lambda: active() and not form["closed"] and (not inline or compose_revision == view["detail_revision"])
 
         def close():
             form["closed"] = True
-            dialog.close()
+            if inline:
+                if compose_revision == view["detail_revision"]:
+                    view["detail_revision"] += 1
+                    detail.clear()
+                    detail.set_visibility(False)
+            else:
+                dialog.close()
 
         reason_labels = {
             key: plain_text("reason." + key)
@@ -1062,7 +1145,7 @@ async def messaging_workspace(
                 row.get("reason_code") or "message_resource_unavailable"
             ]
 
-        with dialog, ui.card().classes("w-[960px] max-w-full gap-3"):
+        with (detail if inline else dialog), ui.card().classes("w-full shadow-none border border-slate-200 gap-3" if inline else "w-[960px] max-w-full gap-3"):
             ui.label(text("action.compose")).classes("text-xl font-semibold")
             if relationship_fields["relationship_kind"]:
                 ui.label(text("help.linked")).classes("text-sm text-slate-600")
@@ -1194,6 +1277,7 @@ async def messaging_workspace(
                 source
                 and relationship_fields["relationship_kind"] == "reply"
                 and source.get("sender_kind") == "user"
+                and source.get("recipient_type") == "to"
                 and source.get("action_status") in ("outstanding", "late")
             )
             completion.set_visibility(can_complete)
@@ -1475,7 +1559,7 @@ async def messaging_workspace(
                     saved.update(result)
                     ui.notify(text("state.saved"), color="positive")
                     if mailbox == "drafts" and active():
-                        await load(reset=True)
+                        await load()
                 except ApiError as error:
                     warn(error)
                 finally:
@@ -1609,14 +1693,15 @@ async def messaging_workspace(
             completion.on_value_change(completion_changed)
             action.on_value_change(action_changed)
             action_changed()
-        dialog.open()
+        if dialog is not None:
+            dialog.open()
         await validate()
 
     await load()
 
     async def refresh_live():
         if active() and content.visible:
-            await load(reset=True)
+            await load()
 
     return {
         "refresh": refresh_live,

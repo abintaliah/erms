@@ -690,9 +690,11 @@ def list_aggregations(
 )
 def search_aggregations(
     payload: SearchRequest,
+    record_creation: bool = False,
+    digital_only: bool = False,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return search_rows(connection, "aggregations", payload, endpoint="/api/v1/aggregations/search")
+    return search_rows(connection, "aggregations", payload, endpoint="/api/v1/aggregations/search", record_creation=record_creation, digital_only=digital_only)
 
 
 @app.get("/api/v1/aggregations/{aggregation_id}", response_model=AggregationRead, tags=["aggregations"])
@@ -1374,6 +1376,7 @@ def get_record_draft(draft_id: int, connection: Connection = Depends(get_connect
 def update_record_draft(draft_id: int, payload: RecordDraftUpdate, connection: Connection = Depends(get_connection, scope="function")):
     draft = _open_draft(connection, draft_id)
     values = payload.model_dump(exclude_unset=True)
+    messaging_capture.validate_medium(connection, draft_id, values.get("medium", draft["medium"]))
     aggregation_id = values.get("aggregation_id", draft["aggregation_id"])
     if aggregation_id is not None:
         parent = connection.execute(

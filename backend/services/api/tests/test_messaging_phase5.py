@@ -122,7 +122,19 @@ def test_capture_commits_ordered_validated_record_and_survives_purge(
     )
     assert response.status_code == 201, response.text
     draft = response.json()
+    assert draft['medium'] == 'digital'
+    with db() as c:
+        selected_row = c.execute('SELECT sent_at,security_level_id FROM message_envelopes WHERE id=%s',
+                                 (selected['envelope_id'],)).fetchone()
+    from datetime import datetime
+    assert datetime.fromisoformat(draft['date_originated'].replace('Z','+00:00')) == selected_row['sent_at']
+    assert draft['security_level_id'] == selected_row['security_level_id']
     path = "/api/v1/record-drafts/" + str(draft["id"])
+    for invalid_medium in ('mixed', 'physical', None):
+        rejected = client.patch(path, headers=_bearer(admin), json={'medium':invalid_medium})
+        assert rejected.status_code == 409, rejected.text
+        assert rejected.json()['detail']['code'] == 'message_capture_medium_fixed_digital'
+    assert client.get(path, headers=_bearer(admin)).json()['medium'] == 'digital'
     assert (
         client.patch(
             path,
@@ -891,3 +903,220 @@ def test_disposed_record_no_longer_satisfies_personal_capture_gate(client, aggre
         response.status_code == 409
         and response.json()["detail"]["code"] == "message_capture_required"
     )
+
+
+def test_record_destination_search_filters_before_pagination_and_browse(client, aggregation):
+    child = client.post('/api/v1/aggregations', json=dict(aggregation_number='DEST-CHILD', title='Child',
+                                                        parent_aggregation_id=aggregation['id'])).json()
+    query = dict(limit=1, sort=[dict(field='aggregation_number', direction='asc')])
+    url = '/api/v1/aggregations/search?record_creation=true&digital_only=true'
+    response = client.post(url, json=query)
+    assert response.status_code == 200, response.text
+    assert response.json()['items']
+    browse = client.get('/api/v1/browse/aggregations/'+str(aggregation['id'])+'/children',
+                        params=dict(record_creation=True, digital_only=True))
+    assert browse.status_code == 200, browse.text
+    assert [r['id'] for r in browse.json()['items']] == [child['id']]
+    closed = client.patch('/api/v1/aggregations/'+str(aggregation['id']),
+                          headers={'If-Match':str(client.get('/api/v1/aggregations/'+str(aggregation['id'])).json()['version'])},
+                          json=dict(date_closed=aggregation['date_created']))
+    assert closed.status_code == 200, closed.text
+    assert client.post(url, json=query).json()['items'] == []
+    assert client.get('/api/v1/browse/aggregations/'+str(aggregation['id'])+'/children',
+                      params=dict(record_creation=True, digital_only=True)).json()['items'] == []
+    # Ordinary view search remains available for closed items.
+    assert client.post('/api/v1/aggregations/search', json=query).json()['items']
+
+
+def test_record_destination_excludes_visible_but_unusable_aggregations(client, aggregation):
+    token, uid, role_id = account(client, privileges=('record.create','aggregation.view'))
+    query = dict(limit=25)
+    with db() as c:
+        c.execute("INSERT INTO aggregation_acl_grants(aggregation_id,principal_type,permission_id) SELECT %s,'everyone',id FROM permissions WHERE code IN ('aggregation.view','aggregation.add_record') ON CONFLICT DO NOTHING", (aggregation['id'],))
+    headers = _bearer(token)
+    normal = client.post('/api/v1/aggregations/search',json=query,headers=headers)
+    assert normal.status_code==200, normal.text
+    assert aggregation['id'] in [r['id'] for r in normal.json()['items']]
+    url='/api/v1/aggregations/search?record_creation=true'
+    # This user's effective role belongs to another owner unit.
+    assert client.post(url,json=query,headers=headers).json()['items']==[]
+    with db() as c:
+        c.execute('UPDATE roles SET org_unit_id=%s WHERE id=%s',(aggregation['owning_org_unit_id'],role_id))
+    assert aggregation['id'] in [r['id'] for r in client.post(url,json=query,headers=headers).json()['items']]
+    with db() as c:
+        c.execute("DELETE FROM aggregation_acl_grants WHERE aggregation_id=%s AND principal_type='everyone' AND permission_id=(SELECT id FROM permissions WHERE code='aggregation.add_record')",(aggregation['id'],))
+    assert client.post(url,json=query,headers=headers).json()['items']==[]
+
+
+def test_capture_preview_is_authorized_ordered_and_does_not_convert_or_create(client, monkeypatch):
+    from backend.services.api.messaging import capture
+    admin=client.cookies['erms_session']
+    sender,uid,_=account(client)
+    original=post(client,sender,payload(1)).json()
+    selected=post(client,admin,payload(uid,relationship_kind='reply',
+        related_delivery_id=original['deliveries'][0]['id'])).json()
+    def unexpected_conversion(*args,**kwargs):
+        raise AssertionError('Preview must not render or stage PDFs')
+    monkeypatch.setattr(capture,'stage_messages',unexpected_conversion)
+    response=client.get(PREFIX+'/'+selected['envelope_id']+'/capture-preview',headers=_bearer(admin))
+    assert response.status_code==200,response.text
+    manifest=response.json()
+    assert manifest['medium']=='digital' and manifest['security_level_id']==1
+    assert len(manifest['components'])==2
+    assert selected['envelope_id'] in manifest['components'][0]['file_name']
+    assert original['envelope_id'] in manifest['components'][1]['file_name']
+    with db() as c:
+        row=c.execute('SELECT subject,sent_at FROM message_envelopes WHERE id=%s',(selected['envelope_id'],)).fetchone()
+        assert manifest['title']==row['subject']
+        from datetime import datetime
+        assert datetime.fromisoformat(manifest['date_originated'])==row['sent_at']
+        for table in ('record_drafts','record_draft_components','message_capture_drafts','message_record_captures'):
+            assert c.execute('SELECT count(*) AS n FROM '+table).fetchone()['n']==0
+    outsider,_,_=account(client)
+    denied=client.get(PREFIX+'/'+selected['envelope_id']+'/capture-preview',headers=_bearer(outsider))
+    assert denied.status_code in (403,404),denied.text
+
+
+def test_capture_pdf_resource_names_are_authorized_for_earlier_messages(client,record,aggregation,monkeypatch,tmp_path):
+    from uuid import uuid4
+    from backend.services.api.messaging import capture,reading
+    admin=client.cookies['erms_session']
+    recipient,uid,_=account(client)
+    tokens=[str(uuid4()),str(uuid4())]
+    original=post(client,admin,payload(uid,
+        body_rich_text='<p>Resources</p>'+''.join('<span data-wathiq-link="'+t+'"></span>' for t in tokens),
+        resource_links=[{'link_token':tokens[0],'resource_kind':'record','target_id':record['id']},
+                        {'link_token':tokens[1],'resource_kind':'aggregation','target_id':aggregation['id']}])).json()
+    selected=post(client,recipient,payload(1,relationship_kind='reply',
+        related_delivery_id=original['deliveries'][0]['id'])).json()
+    import subprocess
+    from time import monotonic
+    rendered=[]
+    pdfs=[]
+    real_render=capture.capture_pdf.render
+    def render(title,html,*args,**kwargs):
+        rendered.append(html)
+        pdfs.append(real_render(title,html,*args,**kwargs))
+        return pdfs[-1]
+    monkeypatch.setattr(capture.capture_pdf,'render',render)
+    with db() as c:
+        c.execute("SELECT set_config('app.user_id','1',true)")
+        rows=capture.sources(c,1,selected['envelope_id'],selected['envelope_id'])
+        earlier=rows[1]
+        text=capture.labels(c,'en')
+        capture.message_pdf(c,earlier,'en','ltr',text,monotonic()+600)
+        assert 'REC-001 — Example record' in rendered[-1]
+        assert 'AGG-001 — Root aggregation' in rendered[-1]
+        pdf_path=tmp_path/'authorized.pdf'
+        pdf_path.write_bytes(pdfs[-1])
+        extracted=subprocess.check_output(['pdftotext',str(pdf_path),'-'],text=True)
+        assert 'REC-001' in extracted and 'Example record' in extracted
+        assert 'AGG-001' in extracted and 'Root aggregation' in extracted
+        # The exact authorization projection removes inaccessible metadata.
+        c.execute("SELECT set_config('app.user_id',%s,true)",(str(uid),))
+        inaccessible=reading.links_for(c,[dict(earlier,readable=True)])[earlier['id']]
+        assert all(not item['available'] and 'number' not in item and 'title' not in item for item in inaccessible)
+        capture.message_pdf(c,earlier,'en','ltr',text,monotonic()+600)
+        assert 'REC-001' not in rendered[-1] and 'Example record' not in rendered[-1]
+        assert 'AGG-001' not in rendered[-1] and 'Root aggregation' not in rendered[-1]
+        assert text['unavailable'] in rendered[-1]
+        pdf_path=tmp_path/'unavailable.pdf'
+        pdf_path.write_bytes(pdfs[-1])
+        extracted=subprocess.check_output(['pdftotext',str(pdf_path),'-'],text=True)
+        assert 'REC-001' not in extracted and 'Example record' not in extracted
+        assert 'AGG-001' not in extracted and 'Root aggregation' not in extracted
+
+
+def test_capture_localizes_all_entity_names_and_provenance_in_saved_language(client,aggregation,monkeypatch,tmp_path):
+    import subprocess
+    import unicodedata
+    from psycopg.types.json import Jsonb
+    from backend.services.api.messaging import capture_pdf
+    from backend.services.api.content_storage import configured_storage
+    admin=client.cookies['erms_session']
+    recipient,uid,role=account(client)
+    with db() as c:
+        unit=c.execute('SELECT org_unit_id FROM roles WHERE id=%s',(role,)).fetchone()['org_unit_id']
+        c.execute("SELECT set_config('app.change_reason','Verify localized capture entity names',true)")
+        for table,identity,name,arabic in [('users',1,'English Sender','مرسل'),('users',uid,'English Recipient','مستخدم'),
+                ('roles',role,'English Role','دور'),('org_units',unit,'English Unit','وحدة'),
+                ('security_levels',1,'English Security','سرية')]:
+            c.execute(f'UPDATE {table} SET name=%s,translations=%s WHERE id=%s',(name,Jsonb({'ar':{'name':arabic}}),identity))
+        c.execute("INSERT INTO user_preferences(user_id,language_tag,working_timezone) VALUES(1,'ar','Asia/Dubai') ON CONFLICT(user_id) DO UPDATE SET language_tag='ar'")
+    original=post(client,admin,payload(uid,subject='Authored subject',body_rich_text='<p>Authored body</p>',selectors=[
+        {'selector_kind':'user','target_id':uid,'recipient_type':'to'},
+        {'selector_kind':'role','target_id':role,'recipient_type':'cc'},
+        {'selector_kind':'org_unit','target_id':unit,'recipient_type':'cc'}])).json()
+    selected=post(client,recipient,payload(1,relationship_kind='reply',related_delivery_id=original['deliveries'][0]['id'])).json()
+    # Observe the renderer input without replacing conversion or validation.
+    rendered=[]
+    real_render=capture_pdf.render
+    def render(title,html,language,direction,**kwargs):
+        rendered.append((html,language,direction))
+        return real_render(title,html,language,direction,**kwargs)
+    monkeypatch.setattr(capture_pdf,'render',render)
+    result=client.post(PREFIX+'/'+selected['envelope_id']+'/capture',headers=_bearer(admin))
+    assert result.status_code==201,result.text
+    draft=result.json()
+    with db() as c:
+        assert c.execute('SELECT language_tag FROM message_capture_drafts WHERE draft_id=%s',(draft['id'],)).fetchone()['language_tag']=='ar'
+        c.execute("UPDATE user_preferences SET language_tag='en' WHERE user_id=1")
+    path='/api/v1/record-drafts/'+str(draft['id'])
+    assert client.patch(path,headers=_bearer(admin),json={'aggregation_id':aggregation['id'],'record_number':'AR-CAPTURE'}).status_code==200
+    committed=client.post(path+'/commit',headers=_bearer(admin))
+    assert committed.status_code==201,committed.text
+    assert all(language=='ar' and direction=='rtl' for _,language,direction in rendered)
+    original_html=next(html for html,_,_ in rendered if 'Authored body' in html)
+    for name in ['مرسل','مستخدم','دور','وحدة','سرية']:
+        assert name in original_html
+    assert not any(name in original_html for name in ['English Sender','English Recipient','English Role','English Unit','English Security'])
+    with db() as c:
+        capture=c.execute('SELECT * FROM message_record_captures WHERE record_id=%s',(committed.json()['id'],)).fetchone()
+        assert capture['captured_by_name']=='مرسل'
+        components=c.execute('SELECT * FROM message_record_capture_components WHERE capture_id=%s ORDER BY component_order',(capture['id'],)).fetchall()
+        preserved={}
+        for component in components:
+            data=configured_storage().read(c,component['digital_component_id'])
+            preserved[component['digital_component_id']]=data
+            pdf=tmp_path/(str(component['component_order'])+'.pdf');pdf.write_bytes(data)
+            text=unicodedata.normalize('NFKC',subprocess.check_output(['pdftotext',str(pdf),'-'],text=True))
+            if component['component_kind']=='provenance':
+                assert 'مرسل' in text and 'AR-CAPTURE' in text
+            elif not component['is_selected_message']:
+                assert 'Authored subject' in text and 'Authored body' in text
+                for name in ['مرسل','مستخدم','دور','وحدة','سرية']:assert name in text
+        c.execute("SELECT set_config('app.change_reason','Verify committed capture names stay fixed',true)")
+        c.execute('UPDATE users SET translations=%s WHERE id=1',(Jsonb({'ar':{'name':'اسم جديد'}}),))
+        for identity,data in preserved.items():assert configured_storage().read(c,identity)==data
+        assert c.execute('SELECT captured_by_name FROM message_record_captures WHERE id=%s',(capture['id'],)).fetchone()['captured_by_name']=='مرسل'
+
+
+def test_capture_entity_names_fall_back_to_message_snapshots_and_base_language(client,monkeypatch):
+    from psycopg.types.json import Jsonb
+    from backend.services.api.messaging import capture
+    from time import monotonic
+    admin=client.cookies['erms_session']
+    _,uid,role=account(client)
+    with db() as c:
+        unit=c.execute('SELECT org_unit_id FROM roles WHERE id=%s',(role,)).fetchone()['org_unit_id']
+        c.execute("SELECT set_config('app.change_reason','Prepare capture fallback names',true)")
+        for table,identity,name in [('users',1,'Original Sender'),('users',uid,'Original Recipient'),('roles',role,'Original Role'),('org_units',unit,'Original Unit')]:
+            c.execute(f'UPDATE {table} SET name=%s,translations=%s WHERE id=%s',(name,Jsonb({}),identity))
+    result=post(client,admin,payload(uid,selectors=[{'selector_kind':'user','target_id':uid,'recipient_type':'to'},
+        {'selector_kind':'role','target_id':role,'recipient_type':'cc'},{'selector_kind':'org_unit','target_id':unit,'recipient_type':'cc'}]))
+    assert result.status_code==200,result.text
+    rendered=[]
+    monkeypatch.setattr(capture.capture_pdf,'render',lambda title,html,*args,**kwargs:rendered.append(html) or b'renderer-input-only')
+    with db() as c:
+        c.execute("SELECT set_config('app.user_id','1',true)")
+        c.execute("SELECT set_config('app.change_reason','Change live names after immutable send',true)")
+        c.execute('UPDATE users SET name=%s,translations=%s WHERE id=1',('Changed Sender',Jsonb({'ar':{'description':'وصف'}})))
+        rows=capture.sources(c,1,result.json()['envelope_id'],result.json()['envelope_id'])
+        capture.message_pdf(c,rows[0],'ar','rtl',capture.labels(c,'ar'),monotonic()+600)
+        for name in ['Original Sender','Original Recipient','Original Role','Original Unit']:assert name in rendered[-1]
+        assert 'Changed Sender' not in rendered[-1]
+        c.execute('UPDATE users SET translations=%s WHERE id=1',(Jsonb({'ar':{'name':'مرسل'}}),))
+        capture.message_pdf(c,rows[0],'ar-OM','rtl',capture.labels(c,'ar'),monotonic()+600)
+        assert 'مرسل' in rendered[-1] and 'Original Sender' not in rendered[-1]
+        capture.message_pdf(c,rows[0],'en','ltr',capture.labels(c,'en'),monotonic()+600)
+        assert 'Original Sender' in rendered[-1] and 'مرسل' not in rendered[-1]

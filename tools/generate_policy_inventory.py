@@ -45,7 +45,7 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         return "relationship_scoped", None, None
     if path.startswith("/api/v1/messages/monitor"):
         return "globally_privileged", "messaging.monitor", None
-    if path == "/api/v1/messages/{envelope_id}/capture":
+    if path in {"/api/v1/messages/{envelope_id}/capture", "/api/v1/messages/{envelope_id}/capture-preview"}:
         return "relationship_scoped", "record.create", None
     if path.startswith("/api/v1/messages/recently-deleted/") or path in {"/api/v1/messages/{mailbox}/{identity}", "/api/v1/messages/{mailbox}/{identity}/restore"}:
         return "relationship_scoped", None, None

@@ -690,6 +690,25 @@ def _relevance_expression(resource: str, leaves: list[tuple[str, Any]]) -> tuple
     return (sql.SQL(" + ").join(terms) if terms else sql.SQL("0.0")),parameters
 
 
+def record_destination_clause(alias: str, *, digital_only: bool = False) -> str:
+    # Aliases are internal constants, never request input.
+    if alias not in {"resource", "a"}:
+        raise ValueError("unsupported destination alias")
+    return f"""current_user_can_aggregation_operation({alias}.id,'record.create','aggregation.add_record')
+        AND EXISTS (SELECT 1 FROM user_role_assignments assignment
+          JOIN roles role ON role.id=assignment.role_id
+          WHERE assignment.user_id=current_user_id() AND role.org_unit_id={alias}.owning_org_unit_id
+            AND assignment.valid_from<=CURRENT_TIMESTAMP
+            AND (assignment.valid_until IS NULL OR CURRENT_TIMESTAMP<assignment.valid_until)
+            AND role_effectively_active(role.id))
+        AND NOT EXISTS (WITH RECURSIVE ancestors AS (
+          SELECT id,parent_aggregation_id,date_closed FROM aggregations WHERE id={alias}.id
+          UNION ALL SELECT parent.id,parent.parent_aggregation_id,parent.date_closed
+            FROM aggregations parent JOIN ancestors child ON parent.id=child.parent_aggregation_id)
+          SELECT 1 FROM ancestors WHERE date_closed IS NOT NULL)""" + (
+              f" AND {alias}.medium IN ('digital','mixed')" if digital_only else "")
+
+
 def search_rows(
     connection: Connection,
     table: str,
@@ -698,6 +717,8 @@ def search_rows(
     include_system_roles: bool = False,
     localized_sort_language: str | None = None,
     eligible_classifications: bool = False,
+    record_creation: bool = False,
+    digital_only: bool = False,
 ) -> dict[str, Any]:
     if _full_text_leaves(request.where) and not boolean_environment("FULL_TEXT_SEARCH_ENABLED", True):
         raise HTTPException(status_code=503, detail={
@@ -715,6 +736,10 @@ def search_rows(
         "roles": None if include_system_roles else sql.SQL("NOT is_system"),
     }.get(table)
     clauses: list[sql.Composable] = []
+    if record_creation:
+        if table != "aggregations":
+            raise ValueError("record destinations require aggregations")
+        clauses.append(sql.SQL(record_destination_clause("resource", digital_only=digital_only)))
     if eligible_classifications:
         if table != "classifications":
             raise ValueError("classification eligibility requires classifications")

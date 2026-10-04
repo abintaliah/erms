@@ -61,6 +61,7 @@ def validate(
 @router.get("/recipients/{kind}", dependencies=[Depends(require_exchange_privilege)])
 def recipients(
     kind: Literal["user", "role", "org_unit"],
+    purpose: Literal["compose", "filter"] = "compose",
     q: str = Query("", max_length=120),
     target_id: int | None = Query(None, gt=0),
     security_level_id: int | None = Query(None, gt=0),
@@ -70,17 +71,17 @@ def recipients(
 ):
     def operation(c):
         require_exchange(c, principal.user_id)
-        selected = level(c, principal.user_id, security_level_id)
+        selected = level(c, principal.user_id, security_level_id) if purpose == "compose" else None
         table = {"user": "users", "role": "roles", "org_unit": "org_units"}[kind]
         live = {
-            "user": "t.status='active' AND t.account_type='person' AND t.id<>%s",
+            "user": "t.status='active' AND t.account_type='person'" + (" AND t.id<>%s" if purpose == "compose" else ""),
             "role": "role_effectively_active(t.id)",
             "org_unit": "org_unit_effectively_active(t.id)",
         }[kind]
         # Directory identity fields include email for person recipients.
         # Messaging further excludes inactive entities and self, and never lists
         # concrete members of role/unit selectors to a recipient.
-        params = [principal.user_id] if kind == "user" else []
+        params = [principal.user_id] if kind == "user" and purpose == "compose" else []
         rows = c.execute(
             f"""SELECT t.id,t.name,t.description,t.translations,
             {"t.email" if kind == "user" else "NULL::text"} AS email
@@ -97,6 +98,14 @@ def recipients(
         ).fetchall()
         more = len(rows) > limit
         rows = rows[:limit]
+        if purpose == "filter":
+            language = preferred_language_for_user(c, principal.user_id)
+            for row in rows:
+                row["name"] = localized_projection(row, language, "name")["name"]
+                row.pop("translations", None)
+                row.pop("description", None)
+            return {"items": rows, "has_more": more,
+                    "next_cursor": rows[-1]["id"] if more else None}
         ids = [r["id"] for r in rows]
         if kind == "user":
             membership = "u.id=t.id"
@@ -196,6 +205,8 @@ def inbox(
     cursor: str | None = Query(None, max_length=200),
     is_read: bool | None = None,
     priority: Priority | None = None,
+    recipient_kind: Literal["user", "role", "org_unit"] | None = None,
+    recipient_id: int | None = Query(None, gt=0),
     principal: Principal = Depends(principal_from_request),
 ):
     return run(
@@ -207,6 +218,8 @@ def inbox(
             cursor=cursor,
             is_read=is_read,
             priority=priority,
+            recipient_kind=recipient_kind,
+            recipient_id=recipient_id,
         ),
     )
 
@@ -454,6 +467,13 @@ def restore_entry(mailbox: Literal['inbox','outbox'], identity: UUID,
                   principal: Principal = Depends(principal_from_request)):
     from .retention import mailbox_change
     return run(principal.user_id,lambda c:mailbox_change(c,principal.user_id,mailbox,identity,True))
+
+
+@router.get('/{envelope_id}/capture-preview')
+def preview_capture(envelope_id: UUID, root_id: UUID | None = None,
+                    principal: Principal = Depends(principal_from_request)):
+    from .capture import preview
+    return run(principal.user_id,lambda c:preview(c,principal.user_id,envelope_id,root_id))
 
 
 @router.post('/{envelope_id}/capture',status_code=201)

@@ -51,7 +51,7 @@ class Api:
                     "MAX_RECIPIENTS_PER_SEND": 2000,
                     "MAX_RESOURCE_LINKS": 50,
                 },
-                "security_levels": [{"id": 1, "name": "General"}],
+                "security_levels": [{"id": 1, "name": "General", "level_number": 0}],
                 "default_security_level_id": 1,
             }
         if path.endswith("/recipients/validate"):
@@ -87,8 +87,8 @@ class Api:
         return {"id": 1, "name": "General", "level_number": 0}
 
 
-async def setup(user, language="en", exchange=True, browse=None):
-    api = Api()
+async def setup(user, language="en", exchange=True, browse=None, mailbox="inbox", api=None):
+    api = api or Api()
     alive = {"value": True}
     scope = dict(
         ui=ui,
@@ -127,7 +127,7 @@ async def setup(user, language="en", exchange=True, browse=None):
         await messaging_workspace(
             api=api,
             container=ui.column(),
-            mailbox="inbox",
+            mailbox=mailbox,
             can_exchange=exchange,
             relationship_select=relationship_select,
             bind_relationship=scope["bind_remote_relationship_select"],
@@ -371,7 +371,7 @@ async def test_shared_browser_can_add_to_either_address_field(user: User):
     api, _ = await setup(user, browse=browse)
     user.find('Compose').click()
     await user.should_see('Subject')
-    buttons = list(user.find('Browse organization structure',kind=ui.button).elements)
+    buttons = sorted(user.find('Browse organization structure',kind=ui.button).elements, key=lambda c:c.id)[-2:]
     assert len(buttons)==2
     for i,button in enumerate(sorted(buttons,key=lambda x:x.id)):
         button.mark('browse'+str(i))
@@ -478,3 +478,221 @@ async def test_resource_markers_do_not_become_authored_body():
     stored = body_with_resource_markers(legacy, [{'link_token': 'new'}])
     assert 'Old record title' not in stored
     assert stored == '<p>Authored text</p><p>After</p><span data-wathiq-link="new"></span>'
+
+
+@pytest.mark.parametrize('mailbox', ['inbox', 'outbox'])
+async def test_mailbox_recipient_filter_search_browse_and_clear(user: User, mailbox):
+    async def browse(**kwargs):
+        assert kwargs['selection_mode'] == 'all'
+        assert await kwargs['on_selection']({'type': 'org_unit', 'id': 2})
+    api, _ = await setup(user, mailbox=mailbox, browse=browse)
+    controls = {c.label: c for c in user.find(ui.select).elements}
+    assert 'Recipient kind' not in controls
+    recipient = controls['Recipient']
+    await emit_query(recipient, 'R')
+    assert not any('/recipients/' in path for _, path, _ in api.calls)
+    await emit_query(recipient, 'Re')
+    assert set(recipient.options) == {6, 7, 8, 9, 10, 11}
+    recipient.value = 7
+    user.find('Search subject', kind=ui.button).click()
+    await asyncio.sleep(.1)
+    params = [kwargs['params'] for method,path,kwargs in api.calls if path.endswith('/'+mailbox)][-1]
+    assert params['recipient_kind'] == 'role' and params['recipient_id'] == 2
+    user.find('Browse organization structure',kind=ui.button).click()
+    await asyncio.sleep(.1)
+    assert recipient.value == 8
+    recipient.value = None
+    user.find('Search subject',kind=ui.button).click()
+    await asyncio.sleep(.1)
+    params = [kwargs['params'] for method,path,kwargs in api.calls if path.endswith('/'+mailbox)][-1]
+    assert 'recipient_id' not in params and 'recipient_kind' not in params
+
+
+@pytest.mark.parametrize('recipient_type', ['to', 'cc'])
+@pytest.mark.parametrize('language', ['en', 'ar'])
+async def test_reply_prefills_sender_and_cc_has_no_completion_prompt(user: User, recipient_type, language):
+    api = Api()
+    original = api.request
+    message = dict(id='delivery', envelope_id='envelope', subject='Original subject', availability='available',
+        sender_name='Original sender', sender_user_id=2, sender_kind='user', sent_at='2026-10-03',
+        priority='high', security_level_id=1, security_level_name='General', selectors=[],
+        body_rich_text='<p>Original body</p>', resource_links=[], is_test=False, message_kind='user_message',
+        expires_at='2029-10-03T00:00:00Z', action_required=True, action_due_date=None, action_due_timezone=None,
+        recipient_type=recipient_type, action_status='outstanding' if recipient_type=='to' else None,
+        effective_action=dict(action_required=True, due_date=None, due_timezone=None))
+    async def request(method, path, **kwargs):
+        if path.endswith('/inbox'): return dict(items=[message], has_more=False)
+        if path.endswith('/inbox/delivery/read'): return message
+        return await original(method,path,**kwargs)
+    api.request = request
+    await setup(user, api=api, language=language)
+    if language == 'ar':
+        set_active_messages({r['message_key']: r['translated_text'] for r in
+            json.loads((ROOT / 'i18n/messages.ar.generated.json').read_text())['items']})
+    user.find(marker='message-row-delivery').click()
+    await user.should_see('Original subject')
+    assert not any(c.props.get('label') == ('Open' if language == 'en' else 'فتح') for c in user.find(ui.button).elements)
+    await user.should_see(kind=ui.button, content='Reply' if language=='en' else 'رد')
+    reply_button = next(c for c in user.find(ui.button).elements if c.props.get('label') == ('Reply' if language=='en' else 'رد'))
+    reply_button.mark('reply-action')
+    user.find(marker='reply-action').click()
+    await user.should_see('Current recipient count: 1' if language=='en' else 'عدد المستلمين الحالي: 1')
+    to = next(c for c in user.find(ui.select).elements if c.label==('To' if language=='en' else 'إلى'))
+    assert to.value == [6]
+    subject = next(c for c in user.find(ui.input).elements if c.label==('Subject' if language=='en' else 'الموضوع'))
+    assert subject.value == 'Re: Original subject'
+    priority = max((c for c in user.find(ui.select).elements if c.label==('Priority' if language=='en' else 'الأولوية')), key=lambda c:c.id)
+    assert priority.value == 'normal'
+    security = next(c for c in user.find(ui.select).elements if c.label==('Security level' if language=='en' else 'درجة السرية'))
+    assert security.value == 1
+    assert next(iter(user.find(ui.editor).elements)).value == ''
+    prompts = [c for c in user.find(ui.checkbox).elements if c.text==('Is the action done?' if language=='en' else 'هل اكتمل الإجراء؟')]
+    if recipient_type == 'cc':
+        assert prompts == []
+    else:
+        assert len(prompts) == 1 and prompts[0].value is False
+        await user.should_see(render_message_plain('messaging.help.completion'))
+    subject.value = 'Edited reply subject'
+    user.find('Save draft' if language=='en' else 'حفظ المسودة',kind=ui.button).click()
+    await asyncio.sleep(.1)
+    saved = next(kwargs['json'] for method,path,kwargs in reversed(api.calls) if method=='POST' and path.endswith('/drafts'))
+    assert saved['subject'] == 'Edited reply subject'
+
+
+async def test_reopening_reply_draft_preserves_edited_subject(user: User):
+    api = Api()
+    original = api.request
+    draft = dict(id='draft', subject='Previously edited subject', body_rich_text='<p>Saved body</p>',
+        security_level_id=1, priority='high', selectors=[], resource_links=[], version=1,
+        relationship_kind='reply', related_delivery_id='original', related_envelope_id=None)
+    async def request(method, path, **kwargs):
+        if path.endswith('/drafts'): return dict(items=[draft], has_more=False)
+        if path.endswith('/drafts/draft'): return draft
+        if path.endswith('/inbox/original'): return dict(subject='Original subject', security_level_id=1)
+        return await original(method,path,**kwargs)
+    api.request = request
+    await setup(user, api=api, mailbox='drafts')
+    user.find(marker='message-row-draft').click()
+    await user.should_see('Subject')
+    subject = next(c for c in user.find(ui.input).elements if c.label=='Subject')
+    assert next(iter(user.find(marker='message-row-draft').elements)).visible
+    assert not any(c.props.get('label') == 'Open' for c in user.find(ui.button).elements)
+    assert not any(isinstance(c, ui.dialog) for c in subject.client.elements.values())
+    assert subject.value == 'Previously edited subject'
+    assert next(iter(user.find(ui.editor).elements)).value == '<p>Saved body</p>'
+
+@pytest.mark.parametrize('mailbox', ['inbox', 'outbox'])
+@pytest.mark.parametrize('language', ['en', 'ar'])
+async def test_mailbox_row_keeps_page_and_discards_stale_detail(user: User, mailbox, language):
+    api = Api()
+    original = api.request
+    list_cursors = []
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    async def request(method, path, **kwargs):
+        if path.endswith('/' + mailbox):
+            list_cursors.append(kwargs.get('params', {}).get('cursor'))
+            return dict(items=[dict(id='first', availability='restricted'),
+                               dict(id='second', availability='restricted')], has_more=True, next_cursor='page-two')
+        if '/first' in path:
+            first_started.set()
+            await release_first.wait()
+            return dict(availability='available', subject='Stale response must never render')
+        if '/second' in path:
+            return dict(availability='restricted')
+        return await original(method, path, **kwargs)
+    api.request = request
+    await setup(user, api=api, language=language, mailbox=mailbox)
+    user.find('Next' if language == 'en' else 'التالي', kind=ui.button).click()
+    await asyncio.sleep(.05)
+    assert list_cursors == [None, 'page-two']
+    user.find(marker='message-row-first').click()
+    await first_started.wait()
+    user.find(marker='message-row-second').click()
+    await asyncio.sleep(.05)
+    release_first.set()
+    await asyncio.sleep(.05)
+    assert 'Stale response must never render' not in [getattr(c, 'text', '') for c in user.find(ui.label).elements]
+    assert next(iter(user.find(marker='message-row-second').elements)).visible
+    assert next(iter(user.find('Previous' if language == 'en' else 'السابق', kind=ui.button).elements)).enabled
+
+@pytest.mark.parametrize('language', ['en', 'ar'])
+async def test_draft_panel_switch_save_and_cancel_keep_listing(user: User, language):
+    api = Api()
+    original = api.request
+    started, release = asyncio.Event(), asyncio.Event()
+    cursors, saved = [], []
+    async def request(method, path, **kwargs):
+        if path.endswith('/drafts'):
+            cursors.append(kwargs['params'].get('cursor'))
+            return dict(items=[dict(id='first', subject='First draft'), dict(id='second', subject='Second draft')],
+                        has_more=True, next_cursor='page-two')
+        if path.endswith('/drafts/first'):
+            started.set()
+            await release.wait()
+        if '/drafts/' in path:
+            if method == 'PUT':
+                saved.append(kwargs['json'])
+                return dict(id='second', version=2)
+            return dict(id=path.rsplit('/',1)[1], subject='First draft' if path.endswith('/first') else 'Second draft',
+                        body_rich_text='<p>Draft body</p>', security_level_id=1, priority='normal',
+                        selectors=[], resource_links=[], version=1, relationship_kind=None,
+                        related_delivery_id=None, related_envelope_id=None)
+        return await original(method,path,**kwargs)
+    api.request = request
+    await setup(user, api=api, mailbox='drafts', language=language)
+    user.find('Next' if language=='en' else 'التالي', kind=ui.button).click()
+    await asyncio.sleep(.05)
+    user.find(marker='message-row-first').click()
+    await started.wait()
+    user.find(marker='message-row-second').click()
+    await user.should_see(kind=ui.input, content='Subject' if language=='en' else 'الموضوع')
+    release.set()
+    await asyncio.sleep(.05)
+    subject = next(c for c in user.find(ui.input).elements if c.label==('Subject' if language=='en' else 'الموضوع'))
+    assert subject.value == 'Second draft'
+    subject.value = 'Updated draft'
+    user.find('Save draft' if language=='en' else 'حفظ المسودة', kind=ui.button).click()
+    await asyncio.sleep(.1)
+    assert saved[0]['subject'] == 'Updated draft'
+    assert cursors == [None, 'page-two', 'page-two']
+    assert subject.visible
+    user.find('Cancel' if language=='en' else 'إلغاء', kind=ui.button).click()
+    assert next(iter(user.find(marker='message-row-second').elements)).visible
+
+@pytest.mark.parametrize('language', ['en', 'ar'])
+async def test_earlier_dialog_preserves_latest_and_navigates_back(user: User, language):
+    api = Api()
+    original = api.request
+    linked_requests = []
+    def message(identity, parent=None):
+        return dict(id=identity, envelope_id=identity, subject=identity + ' subject', availability='available',
+            sender_name='Sender', sender_kind='user', sender_user_id=2, sent_at='2026-10-04', priority='normal',
+            security_level_id=1, security_level_name='General', selectors=[], body_rich_text='<p>'+identity+' body</p>',
+            resource_links=[], is_test=False, message_kind='user_message', expires_at='2029-10-04T00:00:00Z',
+            action_required=False, action_due_date=None, action_due_timezone=None, recipient_type='to',
+            effective_action=dict(action_required=False, due_date=None), linked_envelope_id=parent)
+    async def request(method, path, **kwargs):
+        if path.endswith('/inbox'): return dict(items=[message('latest','earlier')], has_more=False)
+        if path.endswith('/inbox/latest/read'): return message('latest','earlier')
+        if '/linked/' in path:
+            linked_requests.append(path)
+            identity = path.rsplit('/',1)[1]
+            return message(identity, 'oldest' if identity=='earlier' else None)
+        return await original(method,path,**kwargs)
+    api.request = request
+    await setup(user,api=api,language=language)
+    user.find(marker='message-row-latest').click()
+    await user.should_see('latest body')
+    # Use the pane's link, then the dialog's link, without touching the listing.
+    user.find(marker='earlier-link-latest').click()
+    await user.should_see('earlier body')
+    assert next(iter(user.find(marker='message-row-latest').elements)).visible
+    user.find(marker='earlier-link-earlier').click()
+    await user.should_see('oldest body')
+    user.find(marker='linked-message-back').click()
+    await user.should_see('earlier body')
+    assert all('/linked/latest/' in path for path in linked_requests)
+    user.find(marker='linked-message-close').click()
+    await user.should_see('latest body')
+    assert not any(c.value for c in next(iter(user.find(marker='message-row-latest').elements)).client.elements.values() if isinstance(c,ui.dialog))

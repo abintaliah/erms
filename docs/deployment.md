@@ -848,3 +848,9 @@ The Add resources dialog uses the existing record/aggregation search API and
 full-text index, including its rollout setting, authorization, and indexing
 freshness. No new search service or database connection pool is required.
 See [implementation and verification](messaging-resource-picker.md).
+
+For the local checkout on this machine, veraPDF 1.30.2 is installed in
+`.local-tools/verapdf` (ignored by Git). The root `.env` sets
+`MESSAGING_PDF_VALIDATOR` to its absolute executable path. Restart the API
+after changing this setting. A temporary test installation under `/tmp` does
+not configure the application, and should not be used as a permanent path.

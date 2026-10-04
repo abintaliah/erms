@@ -9,7 +9,7 @@ from time import monotonic
 from uuid import uuid4
 from fastapi import UploadFile
 from ..resource_authorization import require_global, require_resource_operation
-from ..entity_localization import preferred_language_for_user
+from ..entity_localization import preferred_language_for_user, localized_projection
 from ..content_storage import configured_storage
 from . import reading, relationships, capture_pdf
 from .content import body, invalid
@@ -54,6 +54,18 @@ def sources(c, user, selected, root):
     return [rows[0]] + sorted(rows[1:], key=lambda r: (r["sent_at"], r["id"]))
 
 
+def preview(c, user, selected, root=None):
+    """Read an authorized manifest; create no draft, files or conversion job."""
+    require_global(c, "record.create")
+    rows = sources(c, user, selected, root or selected)
+    highest = max(rows, key=lambda r: r["level_number"])
+    return {
+        "title": rows[0]["subject"], "date_originated": rows[0]["sent_at"],
+        "security_level_id": highest["security_level_id"], "medium": "digital",
+        "components": [{"file_name": filename(row), "title": row["subject"]} for row in rows],
+    }
+
+
 def initialize(c, user, selected, root=None):
     require_global(c, "record.create")
     rows = sources(c, user, selected, root or selected)
@@ -84,6 +96,11 @@ def initialize(c, user, selected, root=None):
     return draft
 
 
+def validate_medium(c, draft_id, medium):
+    if capture_draft(c, draft_id) and medium != "digital":
+        invalid("message_capture_medium_fixed_digital", 409)
+
+
 def capture_draft(c, identity):
     return c.execute(
         "SELECT * FROM message_capture_drafts WHERE draft_id=%s", (identity,)
@@ -108,13 +125,16 @@ def prepare(c, draft):
     configured = level(c, draft["owner_user_id"], draft["security_level_id"])
     if configured["level_number"] < max(r["level_number"] for r in rows):
         invalid("message_capture_security_floor", 409)
-    if draft["medium"] not in ("digital", "mixed"):
-        invalid("message_capture_digital_required", 409)
+    if draft["medium"] != "digital":
+        invalid("message_capture_medium_fixed_digital", 409)
     capture["rows"] = rows
     capture["captured_at"] = c.execute("SELECT CURRENT_TIMESTAMP AS t").fetchone()["t"]
-    capture["captured_by_name"] = c.execute(
-        "SELECT name FROM users WHERE id=%s", (draft["owner_user_id"],)
-    ).fetchone()["name"]
+    capturer = c.execute(
+        "SELECT name,translations FROM users WHERE id=%s", (draft["owner_user_id"],)
+    ).fetchone()
+    capture["captured_by_name"] = localized_projection(
+        capturer, capture["language_tag"], "name"
+    )["name"]
     return capture
 
 
@@ -164,9 +184,31 @@ def field(label, value):
 
 def message_pdf(c, row, tag, direction, text, deadline):
     headers = c.execute(
-        "SELECT recipient_type,display_name FROM message_recipient_selectors WHERE envelope_id=%s ORDER BY recipient_type DESC,ordinal",
+        """SELECT s.recipient_type,s.display_name,
+            COALESCE(u.translations,r.translations,o.translations,'{}'::jsonb) AS translations
+            FROM message_recipient_selectors s
+            LEFT JOIN users u ON u.id=s.user_id
+            LEFT JOIN roles r ON r.id=s.role_id
+            LEFT JOIN org_units o ON o.id=s.org_unit_id
+            WHERE s.envelope_id=%s ORDER BY s.recipient_type DESC,s.ordinal""",
         (row["id"],),
     ).fetchall()
+    for header in headers:
+        header["display_name"] = localized_projection(
+            {"name": header["display_name"], "translations": header["translations"]}, tag, "name"
+        )["name"]
+    metadata = c.execute(
+        """SELECT u.translations AS sender_translations,l.translations AS security_translations
+            FROM message_envelopes e JOIN security_levels l ON l.id=e.security_level_id
+            LEFT JOIN users u ON u.id=e.sender_user_id WHERE e.id=%s""",
+        (row["id"],),
+    ).fetchone()
+    sender_name = localized_projection(
+        {"name": row["sender_name"], "translations": metadata["sender_translations"]}, tag, "name"
+    )["name"]
+    security_name = localized_projection(
+        {"name": row["security_level_name"], "translations": metadata["security_translations"]}, tag, "name"
+    )["name"]
     links = c.execute(
         "SELECT * FROM message_resource_links WHERE envelope_id=%s ORDER BY ordinal",
         (row["id"],),
@@ -179,11 +221,12 @@ def message_pdf(c, row, tag, direction, text, deadline):
     }
     for link in links:
         current = available[str(link["link_token"])]
-        # The immutable kind/identifier are safe stored link descriptions. Never
-        # fetch resource content or replace inaccessible metadata with a live title.
-        description = f"{link['resource_kind']} #{link['target_id_snapshot']}"
-        if not current["available"]:
-            description += " — " + text["unavailable"]
+        # The batched read projection checks current view permission and clearance.
+        # Never disclose live metadata for an unavailable target or copy its content.
+        if current["available"]:
+            description = f"{current['number']} — {current['title']}"
+        else:
+            description = f"{link['resource_kind']} #{link['target_id_snapshot']} — {text['unavailable']}"
         clean = clean.replace(
             f'<span data-wathiq-link="{link["link_token"]}"></span>',
             f"<span>{escape(description)}</span>",
@@ -196,7 +239,7 @@ def message_pdf(c, row, tag, direction, text, deadline):
     output = "".join(
         field(text[k], v)
         for k, v in [
-            ("sender", row["sender_name"]),
+            ("sender", sender_name),
             ("sent_at", row["sent_at"].isoformat()),
             (
                 "to",
@@ -211,7 +254,7 @@ def message_pdf(c, row, tag, direction, text, deadline):
                 ),
             ),
             ("priority", localized("messaging.priority." + row["priority"])),
-            ("security", row["security_level_name"]),
+            ("security", security_name),
             (
                 "action",
                 localized("messaging.value." + str(row["action_required"]).lower()),

@@ -33,7 +33,7 @@ def effective(c, envelope):
 
 
 def validate_completion(c, user, payload, source, addresses):
-    if not source or source["sender_kind"] != "user" or not source["action_required"]:
+    if not source or source["sender_kind"] != "user" or not source["action_required"] or source.get("source_recipient_type") != "to":
         invalid("message_completion_unavailable")
     if not effective(c, source)["action_required"]:
         invalid("message_action_withdrawn", 409)
@@ -281,7 +281,7 @@ def decorate(c, user, rows, detail=False):
         }
         if r.get("delivery_id"):
             item["action_status"] = status(
-                r["action_required"],
+                r["action_required"] and r.get("recipient_type") == "to",
                 state,
                 completion["completed_at"] if completion else None,
                 r["now"],

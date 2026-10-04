@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "5dbcb56b8476b2438cd27e1a2d1045421ccde77e3ebe0fcc114f41fd6770d910",
+  "catalogue_sha256": "713f8a5cf37728a981ffe5ccc747ee0f31ed190f43431137a471d899f8e31f01",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260929040036",
   "generated_at": "2026-09-29T04:00:36.438919+04:00",
@@ -135,6 +135,15 @@
     ],
     "messaging.help.recipient_search": [
       "اكتب حرفين على الأقل للبحث عن المستخدمين أو الأدوار أو الوحدات التنظيمية بالاسم أو الوصف أو البريد الإلكتروني للمستخدم. حدّد البحث أكثر عند الحاجة."
+    ],
+    "messaging.help.completion": [
+      "يتطلب إكمال الإجراء إدراج المرسل الأصلي في «إلى»."
+    ],
+    "messaging.help.linked": [
+      "يُربط المحتوى السابق بهذه الرسالة دون نسخه إليها."
+    ],
+    "messaging.capture.error.message_capture_medium_fixed_digital": [
+      "يجب أن يكون وسيط السجل المنشأ من الرسالة رقميًا. لا يمكن تغييره إلى مختلط أو مادي."
     ]
   },
   "items": [
@@ -3630,6 +3639,25 @@
         "source_status": "published",
         "date_reviewed": "2026-09-27T05:36:02.357506+00:00",
         "date_published": "2026-09-27T05:36:02.357506+00:00"
+      }
+    },
+    {
+      "message_key": "components.field.storage_backend",
+      "translated_text": "محرك التخزين",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "capture-picker-layout-20261004",
+        "generated_at": "2026-10-03T22:21:23.839683+00:00",
+        "batch_id": "capture-picker-layout-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "275d877615dcd3e59f66c40d98d224afa0104288dfdc0ecb7ba95d002237e8b7",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
       }
     },
     {
@@ -7461,6 +7489,25 @@
       }
     },
     {
+      "message_key": "messaging.capture.error.message_capture_medium_fixed_digital",
+      "translated_text": "يجب استخدام الوسيط «رقمي» للسجل المنشأ من الرسالة. لا يمكن تغييره إلى «هجين» أو «مادي».",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "mailbox-checkpoint-20261004",
+        "generated_at": "2026-10-03T22:44:38.899788+00:00",
+        "batch_id": "mailbox-checkpoint-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "fbbbe8b5f1196fb9ba838aed74e1dff5ed4d3681fd415533ff134031d4acd8a7",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
+      }
+    },
+    {
       "message_key": "messaging.capture.error.message_capture_pdf_limit",
       "translated_text": "تتجاوز ملفات PDF المنشأة حد الحجم الإجمالي المسموح.",
       "quality_flags": [],
@@ -7602,6 +7649,25 @@
         "source_origin": "generated",
         "source_status": "draft",
         "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.preparing",
+      "translated_text": "جارٍ إعداد ملفات PDF للرسائل والتحقق منها. يمكنك تعديل بيانات الوثيقة أثناء الانتظار.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "capture-preparation-20261004",
+        "generated_at": "2026-10-03T23:01:43.747375+00:00",
+        "batch_id": "capture-preparation-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "713f8a5cf37728a981ffe5ccc747ee0f31ed190f43431137a471d899f8e31f01",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
       }
     },
     {
@@ -8230,14 +8296,21 @@
     },
     {
       "message_key": "messaging.help.completion",
-      "translated_text": "يتطلب إكمال الإجراء إدراج المرسل الأصلي في «إلى».",
+      "translated_text": "حدّد «هل اكتمل الإجراء؟» لإبلاغ المرسل بأنك أكملت الإجراء المطلوب. سيُرسَل ردّك إليه.",
       "quality_flags": [],
       "provenance": {
         "kind": "generated",
         "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "messaging-reply-guidance-2026-10-03",
+        "generated_at": "2026-10-03T20:16:46.970845+04:00",
+        "batch_id": "messaging-reply-20261003",
         "source_origin": "generated",
         "source_status": "draft",
-        "review_required": true
+        "review_required": true,
+        "catalogue_sha256": "ead24e2a7611f39662cabfdd8bd8ea808c4dfd4100ae741eb71e035f3726a7fc",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
       }
     },
     {
@@ -8266,14 +8339,21 @@
     },
     {
       "message_key": "messaging.help.linked",
-      "translated_text": "يُربط المحتوى السابق بهذه الرسالة دون نسخه إليها.",
+      "translated_text": "يُربط نص الرسالة السابقة بهذه الرسالة دون نسخه إليها.",
       "quality_flags": [],
       "provenance": {
         "kind": "generated",
         "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "messaging-reply-guidance-2026-10-03",
+        "generated_at": "2026-10-03T20:16:46.970845+04:00",
+        "batch_id": "messaging-reply-20261003",
         "source_origin": "generated",
         "source_status": "draft",
-        "review_required": true
+        "review_required": true,
+        "catalogue_sha256": "ead24e2a7611f39662cabfdd8bd8ea808c4dfd4100ae741eb71e035f3726a7fc",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
       }
     },
     {
@@ -8286,6 +8366,25 @@
         "source_origin": "generated",
         "source_status": "draft",
         "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.linked.title",
+      "translated_text": "الرسالة السابقة المرتبطة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "linked-message-dialog-20261004",
+        "generated_at": "2026-10-03T21:58:09.818558+00:00",
+        "batch_id": "linked-message-dialog-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "5d3cd66cf122123bb4320c4cb9dbf15259623a06c06df11d6e96aea667e1c08f",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
       }
     },
     {
@@ -8322,6 +8421,25 @@
         "source_origin": "generated",
         "source_status": "draft",
         "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.live.summary_one",
+      "translated_text": "لديك رسالة جديدة واحدة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "mailbox-checkpoint-20261004",
+        "generated_at": "2026-10-03T22:41:38.025607+00:00",
+        "batch_id": "mailbox-checkpoint-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "f39e21d8207a384ecde17fea08bdfe5fbc30f449df4032c7aaad213233127608",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
       }
     },
     {
@@ -9078,6 +9196,25 @@
         "source_origin": "generated",
         "source_status": "draft",
         "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.reply.subject_prefix",
+      "translated_text": "Re:",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "messaging-reply-guidance-2026-10-03",
+        "generated_at": "2026-10-03T20:16:46.970845+04:00",
+        "batch_id": "messaging-reply-20261003",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "ead24e2a7611f39662cabfdd8bd8ea808c4dfd4100ae741eb71e035f3726a7fc",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
       }
     },
     {

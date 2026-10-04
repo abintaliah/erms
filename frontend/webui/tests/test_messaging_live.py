@@ -190,3 +190,31 @@ def test_reconnect_summary_marks_test_notifications():
         await live.reconcile(summary=True)
         assert ('summary',{'count':2,'test_count':1}) in output
     run(scenario())
+
+
+def test_checkpoint_survives_new_login_and_isolates_api_and_user():
+    from frontend.webui.messaging_live import mailbox_cursor_key
+    async def scenario():
+        storage = {}
+        key = mailbox_cursor_key('http://api.example', 7)
+        assert key == mailbox_cursor_key('http://api.example/', 7)
+        assert key != mailbox_cursor_key('http://another-api.example', 7)
+        assert key != mailbox_cursor_key('http://api.example', 8)
+        outputs = []
+        # Separate adapters represent separate authenticated logins; both use
+        # the same account checkpoint, despite having different session tokens.
+        for pages in ([page(1,'old')], [page(1)], [page(2,'new')]):
+            live, output, _, active = adapter(FakeApi(pages))
+            async def load(): return storage.get(key, 0)
+            async def save(value): storage[key] = value
+            async def events(transport):
+                yield {'schema_version':1,'event_type':'reconciliation_required'}
+                active['value'] = False
+            live.load_cursor, live.save_cursor, live.events = load, save, events
+            await live.run()
+            outputs.append(output)
+        assert [v for k,v in outputs[0] if k=='summary']==[1]
+        assert not [v for k,v in outputs[1] if k in ('summary','message')]
+        assert [v for k,v in outputs[2] if k=='summary']==[1]
+        assert storage[key]==2
+    run(scenario())

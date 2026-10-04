@@ -361,7 +361,21 @@ reply to a recipient copy they are allowed to read. The new envelope shall
 store relationship kind `reply` and that copy's globally unique ID in
 `related_delivery_id`.
 
-The earlier subject or body shall not be embedded automatically in the reply.
+Opening Reply to a human-authored message automatically adds the original
+sender as a user selector in the To field. An ordinary reply allows that
+selection to be changed; a completion acknowledgment keeps the original
+sender in To as required below. Reopening a saved reply preserves its saved
+recipient choices.
+
+A new reply prefills its editable Subject with `Re: [original subject]`, using
+`Re: ` followed by the original subject exactly. `Re:` remains the conventional
+reply prefix in every interface language. The user may edit the subject;
+reopening a saved reply preserves the saved subject. The existing subject
+length limit still applies. Reply priority starts at Normal. The initial
+security level is the original message's level and cannot be lowered below
+its required security floor under MSG-014.
+
+The earlier body shall not be embedded automatically in the reply.
 The earlier message remains a separate item and is loaded only when the user
 opens the link to it. A recipient of the reply receives the same read-only
 linked-message access defined for a forward; possession of the referenced UUID
@@ -597,8 +611,13 @@ The recipient has the whole selected local date in which to act. The stored
 boundary gives every viewer the same instant for evaluating lateness. At send
 time, the due date must be today or later in the sender's working timezone.
 
-Action completion is tracked independently for each recipient delivery. When a
-recipient replies to an action-required message and their delivery is not yet
+Action requirements apply only to concrete To recipients. Cc means an
+informational copy: its owner has no action to complete, no Outstanding or
+Late status, and no completion control. If the same person is expanded through
+both To and Cc selectors, the existing To precedence makes them a To recipient.
+
+Action completion is tracked independently for each To delivery. When a
+To recipient replies to an action-required message and their delivery is not yet
 completed, the compose UI shall prompt **Is the action done?** The default is
 unchecked. If checked, sending the reply atomically records one immutable
 completion acknowledgment for that recipient's original delivery and links it
@@ -606,7 +625,7 @@ to the reply envelope.
 
 The completion acknowledgment is permitted only when:
 
-- the authenticated user owns the original recipient delivery;
+- the authenticated user owns the original recipient delivery and it is To;
 - the reply's `relationship_kind` is `reply` and its `related_delivery_id` is
   that delivery ID;
 - the original user sender is a `To` recipient of the reply and cannot be
@@ -614,17 +633,22 @@ The completion acknowledgment is permitted only when:
 - the original envelope has `action_required = true`; and
 - no completion has already been recorded for that delivery.
 
+The completion control's guidance shall say: **Check “Is the action done?” to
+tell the sender you have completed the requested action. Your reply will be
+sent to them.** This explains the existing completion acknowledgment rule;
+it does not create an additional notification or a separate send operation.
+
 The reply containing the completion acknowledgment informs the original sender
 through the ordinary durable reply delivery and its near-real-time notification.
 The reply shall visibly state **Action completed**. The original sender's
 per-recipient action status shall update accordingly. This creates no separate
 email, escalation, or workflow task.
 
-For each recipient delivery, the current action status is derived as follows:
+For each delivery, the current action status is derived as follows:
 
 | Condition | Status |
 | --- | --- |
-| The original envelope has `action_required = false` | Not applicable |
+| The delivery is Cc, or the original envelope has `action_required = false` | Not applicable (API `action_status = null`) |
 | Completion exists and the latest fair effective due boundary is null or was not passed | Completed |
 | Completion exists and `completed_at` passed the latest fair effective due boundary | Completed late |
 | No completion exists and the effective action has been withdrawn | Withdrawn |
@@ -1534,7 +1558,8 @@ non-disclosing restricted-message state; opening it must not reveal its subject,
 body, headers, sender, or resource links and must not mark it read.
 
 Reply and forward controls shall create a new compose operation with the
-appropriate link; they shall not quote or embed the old content.
+appropriate link. Reply prefills the editable subject as specified in MSG-007;
+neither operation quotes or embeds the earlier body.
 
 Replying to an incomplete action-required delivery shall show the explicit
 unchecked **Is the action done?** prompt. After an acknowledgment is recorded,
@@ -1734,8 +1759,10 @@ save and discard; it does not require automatic keystroke-by-keystroke saving.
 ### 6.8 Sent-message action status
 
 For an action-required envelope, the sender's sent view shall show one status
-per concrete recipient: Outstanding, Late, Completed, Completed late, or
-Withdrawn. A completion status links to the reply that recorded it. Aggregate
+per concrete To recipient: Outstanding, Late, Completed, Completed late, or
+Withdrawn. Cc recipients remain visible for delivery/read receipts but have no
+action status and do not contribute to action counts or Outstanding/Late
+filter matches. A completion status links to the reply that recorded it. Aggregate
 wording may summarize counts, but it must not conceal the per-recipient state
 or treat one recipient's completion as completion for all recipients.
 
@@ -2092,7 +2119,8 @@ On insertion, validation shall confirm all of the following:
 - the new envelope's `relationship_kind` is `reply`;
 - its `related_delivery_id` equals `original_delivery_id`;
 - the original envelope requires action; and
-- the authenticated completing user owns the original delivery.
+- the authenticated completing user owns the original delivery, which must
+  have `recipient_type = to`.
 
 The completion row and reply deliveries commit atomically. The row is immutable
 and cannot be updated or deleted through ordinary messaging operations. Final
@@ -3059,7 +3087,9 @@ available to assistive technology without unexpectedly moving keyboard focus.
   expanded-address, delivery, or receipt rows of the sent message.
 - **AC-MSG-004:** Reading one copy does not change another copy.
 - **AC-MSG-005:** A reply links to the earlier delivery ID without copying its
-  body.
+  body. A new reply prefills an editable `Re: [original subject]`; reopening
+  a saved reply preserves its saved subject. Priority defaults to Normal and
+  security starts at the original level, with the server enforcing its floor.
 - **AC-MSG-006:** An Inbox forward links to the earlier delivery ID and an
   Outbox forward links to the earlier envelope ID, without copying its body.
 - **AC-MSG-007:** Requested read receipts expose first-read status to the
@@ -3131,7 +3161,7 @@ available to assistive technology without unexpectedly moving keyboard focus.
 - **AC-MSG-010G:** An action-required message may have a non-past local due date;
   a non-action message cannot retain due fields, and all viewers use the same
   stored `action_due_at` boundary.
-- **AC-MSG-010H:** Replying to an incomplete action-required delivery prompts
+- **AC-MSG-010H:** Replying to an incomplete action-required To delivery prompts
   with an unchecked completion control; checking it atomically creates the
   reply and exactly one completion acknowledgment owned by that recipient.
 - **AC-MSG-010I:** A user cannot complete another recipient's action, complete
@@ -3801,3 +3831,171 @@ and read views show resources in a distinct bounded panel below the authored
 body, with type icons and consistent title/remove alignment. Internal storage
 markers do not appear in the editor or message body. Existing messages retain
 their stored content and links; no data migration is required.
+
+
+### Addressing and mailbox filters revision (approved 3 October 2026)
+
+Inbox and Outbox provide a single Recipient filter that searches users, roles
+and organizational units together after two characters, using the same
+localized names, descriptions, codes and user email matching as Compose.
+There is no separate recipient-kind dropdown. Each result identifies its type.
+A Browse organization structure button opens the existing bounded shared
+browser, allowing selection of a unit, role or user. Selection remains visible
+until changed or cleared. Applying Search resets pagination and requests a
+fresh server-filtered page; browsing itself does not load a mailbox page.
+
+The filter matches the original envelope's To/Cc selectors of the chosen type
+and ID. It does not expand a role or unit again using current membership. The
+API accepts the paired `recipient_kind` and `recipient_id` parameters on Inbox
+and Outbox and rejects an incomplete pair. Filtering protected selector
+headers requires current message clearance and retains normal mailbox
+ownership/visibility rules. The selector search/browser keeps the existing
+exchange-privilege gate.
+
+Verification covers automatic Reply addressing; informational Cc state in
+Inbox, Outbox receipts and completion enforcement; To-over-Cc precedence;
+role/user/unit filter selection and clearing; and bounded queries with stale
+response suppression in both English and Arabic.
+
+Recipient lookup requests used by a mailbox filter carry `purpose=filter`.
+They include the authenticated person and do not apply send-time recipient
+eligibility: finding a past message is independent of sending a new one.
+Compose keeps its default `purpose=compose`, excludes self, and retains all
+existing eligibility rules. Both lookup purposes keep the existing active
+directory and exchange-privilege rules.
+
+### Mailbox reading panels (approved 4 October 2026)
+
+Inbox and Outbox open a message when the user clicks anywhere on its listing
+row, or activates the focused row with Enter or Space. There is no separate
+Open control. Drafts use the same row activation and panel layout, opening the
+selected draft’s existing compose controls in the adjacent panel rather than
+a modal dialog. Keep the listing, filters and pagination visible beside the
+message, preserving the current listing page when another message is opened.
+The listing appears on the left in LTR and on the right in RTL. On narrow
+screens, stack the listing above the message. The reading panel retains all
+existing message views and permitted controls. Drafts retain save, send,
+discard/restore and cancel controls; saving preserves the listing page.
+Switching drafts abandons stale requests for the previously selected draft. Independent list and detail requests must discard stale responses
+without abandoning the other panel.
+
+### Inspecting earlier linked messages (approved 4 October 2026)
+
+Opening an earlier linked message displays it in a dialog over the reading
+pane, headed “Earlier linked message”, with its subject, sender, date, body,
+resources and permitted controls. The selected latest message, mailbox page
+and row selection remain unchanged behind the dialog. Close returns directly
+to that latest message. Opening another earlier link uses the same dialog;
+Back returns to the preceding linked message. Existing linked-access checks
+continue to use the original root envelope. Closing the dialog or abandoning
+its owning message invalidates pending dialog requests.
+
+### Capture destination and presentation clarifications (4 October 2026)
+
+The earlier-message dialog is 672 pixels wide, capped by the viewport
+(20% wider than its previous rendered 560-pixel width). Linked resources use a consistent
+row layout with a type icon and a wrapping title in a separate resources panel.
+
+A capture draft starts with Digital medium, including before a destination is
+selected. Its title is the selected message subject; Date originated is that
+message’s sent instant, displayed in the working timezone. Security is the
+highest level among the captured chain, never lower than any included message.
+
+The record-creation destination selector is clearable. Search begins at two
+characters and returns at most 25 results, filtered on the server before
+pagination. Search and paged hierarchy browsing include only visible
+aggregations where the user currently has record.create, aggregation.add_record
+(or the existing governance authorization), and an effective role in the owning
+organizational unit. Exclude aggregations closed directly or through an ancestor;
+capture destinations must also accept digital records (Digital or Mixed medium).
+Existing commit-time authorization, closure and medium checks remain mandatory.
+The search API accepts record_creation and digital_only query filters; the
+corresponding hierarchy branches use the same filters and bind cursors to them.
+The shared component card labels its storage_backend value “Storage backend”;
+it does not introduce a different storage model for message capture.
+
+### Persistent notification checkpoint and Digital capture (4 October 2026)
+
+The browser retains its last reconciled mailbox sequence across logout/login
+for the same API and user. The checkpoint key is isolated by API URL and user
+identity, never by the changing login token; it stores only the numeric sequence,
+not message content or credentials. Reconciliation updates it after each bounded
+page. It survives language changes and logout until browser storage is cleared.
+No other account may reuse it. Browser storage failure retains the existing
+durable REST reconciliation behavior and in-page sequence protection. A known
+checkpoint for the current legacy session may initialize the new key. Previously
+presented messages do not become new again merely because the user signs in.
+The one-message summary uses singular wording.
+
+Message capture’s Medium is fixed to Digital. The editor displays it read-only
+and APIs reject changing a capture draft to Mixed, Physical or null; commit
+independently enforces Digital. A Digital capture may be placed in a Digital or
+Mixed aggregation. Ordinary record creation retains its existing medium choices.
+
+### Show capture metadata while PDFs are prepared (4 October 2026)
+
+Clicking Save Record opens Create Record immediately, before PDF conversion.
+The dialog initially shows a loading placeholder while authorized capture
+metadata is read. It then displays editable record metadata and a placeholder
+for each message PDF in the selected chain. Each placeholder shows the message
+subject, planned filename and a preparation/validation indicator. Medium remains
+fixed to Digital. The initial security level is the highest in the authorized
+chain, and Date Originated is the selected message's sent time.
+
+`GET /api/v1/messages/{envelope_id}/capture-preview?root_id=...` returns
+`title`, `date_originated`, `security_level_id`, `medium` and ordered
+`components` containing `title` and `file_name`. It performs the same chain,
+permission, clearance and size-of-chain checks as capture initialization. It
+creates no draft, files or conversion job. Its result is a presentation snapshot;
+the capture and commit operations independently recheck authorization and chain
+state. The existing POST capture endpoint still atomically stages validated PDFs.
+
+Users can edit metadata while conversion runs. Create Record remains disabled
+until every message PDF has been generated, independently validated and loaded
+into the component panel. Completion replaces placeholders without resetting
+metadata the user has edited. A failure displays the error and keeps creation
+disabled; the user can cancel and start again. Cancelling or leaving the messaging
+workspace while preparation runs must not reopen the dialog when it finishes;
+any resulting uncommitted draft is discarded. No record is created by this
+background preparation. The provenance PDF continues to be generated during the
+existing authoritative commit, together with revalidation of the message PDFs.
+
+Verification: `test_capture_preparation.py` covers immediate dialog display,
+editable metadata, disabled creation, completion, cancellation, abandonment and
+failure. The Phase 5 API tests cover the non-mutating authorized preview and the
+existing validated, atomic capture and commit behavior.
+
+### Meaningful resource references in capture PDFs (4 October 2026)
+
+For the selected message and every captured earlier linked message, an accessible
+record reference shows its record number and title; an accessible aggregation
+reference shows its aggregation number and title. These values are read at PDF
+render time using the saving user's current view authorization and the existing
+message-link clearance checks. HTML-sensitive characters are escaped. Commit
+rechecks access and regenerates the PDFs, so access lost during preparation does
+not disclose metadata in the committed capture. An unavailable target retains
+only the safe stored kind/identifier and the existing unavailable indication;
+its live number and title must not appear. Linked resource content is not copied.
+The authorized resource-link read projection exposes `number` alongside `title`
+only for available targets; unavailable targets expose neither field.
+
+### Localized entity names in capture PDFs (4 October 2026)
+
+All message PDFs in a capture, including earlier linked messages, use the
+capture draft's saved language for sender names, To/Cc selector names (users,
+roles and organizational units), and security-level names. The provenance PDF
+and its persisted captured-by name use the same language for the capturing user.
+Use the shared entity localization rules: the requested language, its base
+language when applicable, then the original stored name when a translation is
+missing or blank. For deleted sender/recipient entities, use the immutable name
+stored with the message. Do not invent or automatically translate missing names.
+
+Capture authorization and resource-link disclosure checks continue to apply.
+Entity names identify the sender and explicitly selected recipients already
+visible in the authorized message; localization must not enumerate role or unit
+membership or expose additional recipients. At authoritative commit, resolve
+translations again in the saved capture language and freeze them in the PDFs.
+Later changes to names, translations or UI language never rewrite a committed
+capture. Subjects, bodies, amendment reasons and linked record/aggregation titles
+retain their authored wording. No new translation catalogue keys are required;
+these are existing entity translations, not interface-message translations.

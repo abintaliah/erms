@@ -1,3 +1,5 @@
+import psycopg
+import pytest
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 from .test_messaging import account, payload, post, db, PREFIX
@@ -930,3 +932,57 @@ def test_component_targets_and_internal_urls_are_rejected_for_send_and_drafts(cl
         columns = c.execute("SELECT table_name,column_name FROM information_schema.columns WHERE table_name IN ('message_resource_links','message_draft_resource_links') AND column_name='digital_component_id'").fetchall()
         assert not columns
         assert c.execute("SELECT 1 FROM information_schema.columns WHERE table_name='message_record_capture_components' AND column_name='digital_component_id'").fetchone()
+
+
+def test_cc_is_informational_and_cannot_complete_or_keep_action_outstanding(client):
+    sender, uid, _ = account(client)
+    to_token, to_id, _ = account(client)
+    cc_token, cc_id, _ = account(client)
+    selectors = [dict(selector_kind='user', target_id=to_id, recipient_type='to'),
+                 dict(selector_kind='user', target_id=cc_id, recipient_type='cc')]
+    response = post(client, sender, payload(action_required=True, selectors=selectors))
+    assert response.status_code == 200, response.text
+    result = response.json()
+    deliveries = {d['recipient_user_id']: d['id'] for d in result['deliveries']}
+    cc = client.get(PREFIX + '/inbox/' + deliveries[cc_id], headers=_bearer(cc_token)).json()
+    assert cc['recipient_type'] == 'cc' and cc['action_status'] is None
+    assert client.get(PREFIX + '/inbox', headers=_bearer(cc_token)).json()['items'][0]['action_status'] is None
+    attempted = post(client, cc_token, payload(uid, relationship_kind='reply', related_delivery_id=deliveries[cc_id], complete_action=True))
+    assert attempted.status_code == 422, attempted.text
+    assert attempted.json()['detail']['code'] == 'message_completion_unavailable'
+    # Cc can send an ordinary reply.
+    ordinary = post(client, cc_token, payload(uid, relationship_kind='reply', related_delivery_id=deliveries[cc_id]))
+    assert ordinary.status_code == 200
+    with pytest.raises(psycopg.errors.CheckViolation, match='message_completion_invalid'):
+        with db() as c:
+            c.execute("SELECT set_config('app.user_id',%s,true)", (str(cc_id),))
+            c.execute('INSERT INTO message_action_completions(original_delivery_id,reply_envelope_id,completed_by_user_id) VALUES (%s,%s,%s)', (deliveries[cc_id], ordinary.json()['envelope_id'], cc_id))
+    assert post(client, to_token, payload(uid, relationship_kind='reply', related_delivery_id=deliveries[to_id], complete_action=True)).status_code == 200
+    receipts = client.get(PREFIX + '/outbox/' + result['envelope_id'] + '/recipients', headers=_bearer(sender)).json()['items']
+    assert {r['recipient_user_id']: r['action_status'] for r in receipts} == {to_id: 'completed', cc_id: None}
+    outstanding = client.get(PREFIX + '/outbox', params={'action_state': 'outstanding'}, headers=_bearer(sender)).json()['items']
+    assert all(row['id'] != result['envelope_id'] for row in outstanding)
+
+
+@pytest.mark.parametrize('kind', ['user', 'role', 'org_unit'])
+def test_inbox_and_outbox_recipient_selector_filter(client, kind):
+    sender, uid, _ = account(client)
+    recipient, rid, role = account(client)
+    with db() as c:
+        org = c.execute('SELECT org_unit_id FROM roles WHERE id=%s', (role,)).fetchone()['org_unit_id']
+    target = {'user': rid, 'role': role, 'org_unit': org}[kind]
+    if kind == 'user':
+        own_option = client.get(PREFIX + '/recipients/user', params={'purpose': 'filter', 'target_id': rid}, headers=_bearer(recipient))
+        assert [row['id'] for row in own_option.json()['items']] == [rid]
+        assert client.get(PREFIX + '/recipients/user', params={'target_id': rid}, headers=_bearer(recipient)).json()['items'] == []
+    matched = post(client, sender, payload(selectors=[dict(selector_kind=kind, target_id=target, recipient_type='to')]))
+    assert matched.status_code == 200, matched.text
+    if kind != 'user':
+        assert post(client, sender, payload(rid)).status_code == 200
+    for mailbox, token in (('inbox', recipient), ('outbox', sender)):
+        url = PREFIX + '/' + mailbox
+        filtered = client.get(url, params={'recipient_kind': kind, 'recipient_id': target}, headers=_bearer(token))
+        assert filtered.status_code == 200, filtered.text
+        assert len(filtered.json()['items']) == 1
+        assert client.get(url, params={'recipient_kind': kind}, headers=_bearer(token)).status_code == 422
+        assert client.get(url, params={'recipient_kind': kind, 'recipient_id': target + 1000000}, headers=_bearer(token)).json()['items'] == []

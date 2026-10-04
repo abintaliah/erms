@@ -604,6 +604,7 @@ class ErmsApiClient:
     async def browse_page(
         self, path: str, *, cursor: str | None = None, query: str = "", limit: int = 50,
         owning_org_unit_id: int | None = None,
+        record_creation: bool = False, digital_only: bool = False,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {"limit": limit}
         if cursor:
@@ -612,6 +613,8 @@ class ErmsApiClient:
             params["query"] = query
         if owning_org_unit_id is not None:
             params["owning_org_unit_id"] = owning_org_unit_id
+        if record_creation:
+            params.update(record_creation=True, digital_only=digital_only)
         return await self.request("GET", f"/api/v1/browse/{path}", params=params)
 
     async def history(self, resource: str, entity_id: int, *, limit: int = 200) -> list[dict[str, Any]]:

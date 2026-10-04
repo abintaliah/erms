@@ -1,12 +1,13 @@
 """Portable consumer: hints trigger durable reads; cursors are presentation checkpoints.
 
 One instance per browser page. No shared content cache, no direct database use.
-The caller persists only the cursor in identity/session-scoped browser storage.
+The caller persists only the cursor in API/user-scoped browser storage across logins.
 """
 
 import asyncio
 import json
 import logging
+import hashlib
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
@@ -16,6 +17,12 @@ from .api_client import ApiError
 
 logger = logging.getLogger(__name__)
 PREFIX = "/api/v1/messages"
+
+
+def mailbox_cursor_key(base_url, user_id):
+    """A metadata-only checkpoint scoped to this API and account, not a login token."""
+    api_namespace = hashlib.sha256(base_url.rstrip("/").encode()).hexdigest()[:24]
+    return f"wathiq-message-cursor:v2:{api_namespace}:{int(user_id)}"
 
 
 async def stream_events(base_url, token, transport="ws"):
