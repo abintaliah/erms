@@ -25,6 +25,11 @@ Open `http://localhost:8080`. The launcher creates a dedicated virtual
 environment under `frontend/webui/.venv` and installs only the frontend's
 dependencies.
 
+Message **Save record** capture also needs local veraPDF/Java tooling. Follow
+[the tooling guide](../../docs/local-tooling.md) and
+[the upgrade note](../../docs/upgrades/message-capture-validator.md).
+The stack launcher warns if this optional feature prerequisite is missing.
+
 To start the complete local stack instead, run:
 
 ```bash

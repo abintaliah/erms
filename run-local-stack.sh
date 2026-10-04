@@ -31,6 +31,10 @@ if [[ -f "${PROJECT_ENV_FILE}" ]]; then
     unset INHERITED_EXPORTED_ENVIRONMENT ALLEXPORT_WAS_ENABLED
 fi
 
+# Optional feature prerequisite, checked even when services are reused.
+# This reads the resolved environment and never blocks unrelated features.
+python3 "${PROJECT_DIR}/tools/check_local_pdf_validator.py"
+
 readonly STACK_DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:5433/erms}"
 readonly STACK_DB_CONTAINER="${ERMS_LOCAL_DB_CONTAINER:-erms-postgres-local}"
 readonly STACK_DB_VOLUME="${ERMS_LOCAL_DB_VOLUME:-erms-postgres-local-data}"

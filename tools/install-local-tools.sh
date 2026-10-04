@@ -18,17 +18,21 @@ veraPDF is intentionally kept out of Git because it is local developer tooling.
 
 To install it for this repository:
 
-1. Visit the official veraPDF releases page:
-   https://github.com/veraPDF/veraPDF-validation/releases
-2. Download the latest stable CLI archive for your platform.
-3. Extract it into this repo's .local-tools directory:
-      mkdir -p .local-tools
-      unzip /path/to/verapdf-archive.zip -d .local-tools/
-   or unpack the tarball into the same folder.
-4. Ensure the CLI is available at:
-      ./.local-tools/verapdf/verapdf
+1. Install Java supported by your veraPDF package (local setup documents Java 17).
+2. Download a stable Greenfield installer from the official guide:
+   https://docs.verapdf.org/install/
+3. Extract the installer, run vera-install (macOS/Linux) or vera-install.bat
+   (Windows), and choose this repository's .local-tools/verapdf as the target.
+   Include the CLI/startup scripts; extracting the archive alone is not enough.
+4. Verify the installation:
+      java -version
+      ./.local-tools/verapdf/verapdf --version
 5. Copy .env.example to .env if needed, and set:
       MESSAGING_PDF_VALIDATOR=.local-tools/verapdf/verapdf
+   Use the exact executable path if your package installs it elsewhere.
+
+This helper displays steps only; it does not download or install software.
+See docs/local-tooling.md for details and the standalone availability check.
 
 The repo ignores .local-tools and .kile.jsonc so local-only settings stay out of Git.
 EOF

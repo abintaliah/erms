@@ -725,6 +725,11 @@ Upgrade an existing Phase 4 database with
 synchronize the new catalogue definitions and generated Arabic drafts through the
 normal seed/review workflow. No persistent database is upgraded by the test runner.
 
+For colleagues syncing existing forks, see the
+[message capture validator upgrade note](upgrades/message-capture-validator.md)
+and [local tooling guide](local-tooling.md). The local stack performs a
+non-blocking availability check; production capture still validates every PDF.
+
 Capture uses WeasyPrint 68.1 from the API requirements and the bundled Changa
 fonts in `backend/services/api/messaging/pdf_assets`. Install WeasyPrint's native
 Pango/font dependencies for the deployment platform. Install the independent
