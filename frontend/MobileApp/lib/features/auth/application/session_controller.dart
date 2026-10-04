@@ -49,11 +49,62 @@ class SessionController extends ChangeNotifier {
   AuthPrincipal? principal;
   ApiFailure? failure;
   String effectiveLanguageTag = 'en';
+  UserPreferences? preferences;
+  List<SupportedLanguage> supportedLanguages = const [];
+  bool preferencesBusy = false;
+  ApiFailure? preferencesFailure;
   String? _token;
   DateTime? _backgroundedAt;
   int _generation = 0;
 
   bool get hasProtectedState => principal != null && _token != null;
+
+  Future<void> loadPreferences() async {
+    final token = _token;
+    if (token == null || preferencesBusy) return;
+    preferencesBusy = true;
+    preferencesFailure = null;
+    notifyListeners();
+    try {
+      final results = await Future.wait<Object>([
+        _api.preferences(token),
+        _api.supportedLanguages(token),
+      ]);
+      preferences = results[0] as UserPreferences;
+      supportedLanguages = results[1] as List<SupportedLanguage>;
+    } on ApiFailure catch (error) {
+      preferencesFailure = error;
+    } finally {
+      preferencesBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateLanguage(String languageTag) async {
+    final token = _token;
+    final current = preferences;
+    if (token == null || current == null || preferencesBusy) return false;
+    preferencesBusy = true;
+    preferencesFailure = null;
+    notifyListeners();
+    try {
+      final updated = await _api.updatePreferences(
+        token: token,
+        languageTag: languageTag,
+        workingTimezone: current.workingTimezone,
+        version: current.version,
+      );
+      preferences = updated;
+      effectiveLanguageTag = updated.languageTag;
+      return true;
+    } on ApiFailure catch (error) {
+      preferencesFailure = error;
+      return false;
+    } finally {
+      preferencesBusy = false;
+      notifyListeners();
+    }
+  }
 
   Future<void> signIn({required String email, required String password}) async {
     final generation = ++_generation;
@@ -182,5 +233,9 @@ class SessionController extends ChangeNotifier {
     _token = null;
     _backgroundedAt = null;
     effectiveLanguageTag = 'en';
+    preferences = null;
+    supportedLanguages = const [];
+    preferencesBusy = false;
+    preferencesFailure = null;
   }
 }

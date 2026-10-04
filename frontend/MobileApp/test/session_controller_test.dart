@@ -161,6 +161,41 @@ class _FakeAuthApi implements AuthApi {
   Future<String> effectiveLanguage(String token) async => 'en';
 
   @override
+  Future<List<SupportedLanguage>> supportedLanguages(String token) async =>
+      const [
+        SupportedLanguage(
+          languageTag: 'en',
+          englishName: 'English',
+          nativeName: 'English',
+        ),
+        SupportedLanguage(
+          languageTag: 'ar',
+          englishName: 'Arabic',
+          nativeName: 'العربية',
+        ),
+      ];
+
+  @override
+  Future<UserPreferences> preferences(String token) async =>
+      const UserPreferences(
+        languageTag: 'en',
+        workingTimezone: 'Asia/Dubai',
+        version: 1,
+      );
+
+  @override
+  Future<UserPreferences> updatePreferences({
+    required String token,
+    required String languageTag,
+    required String workingTimezone,
+    required int version,
+  }) async => UserPreferences(
+    languageTag: languageTag,
+    workingTimezone: workingTimezone,
+    version: version + 1,
+  );
+
+  @override
   Future<void> changePassword({
     required String token,
     required String currentPassword,

@@ -6,6 +6,7 @@ import '../core/localization/message_catalogue.dart';
 import '../features/auth/application/session_controller.dart';
 import '../features/auth/presentation/authentication_screen.dart';
 import '../features/auth/presentation/password_change_screen.dart';
+import '../features/shell/presentation/authenticated_shell.dart';
 
 class WathiqApp extends StatelessWidget {
   const WathiqApp({
@@ -39,7 +40,7 @@ class WathiqApp extends StatelessWidget {
             controller: sessionController,
           ),
           SessionStatus.authenticated ||
-          SessionStatus.signingOut => _FoundationScreen(
+          SessionStatus.signingOut => AuthenticatedShell(
             catalogue: catalogue,
             controller: sessionController,
           ),
@@ -48,45 +49,6 @@ class WathiqApp extends StatelessWidget {
             controller: sessionController,
           ),
         },
-      ),
-    );
-  }
-}
-
-class _FoundationScreen extends StatelessWidget {
-  const _FoundationScreen({required this.catalogue, required this.controller});
-
-  final MessageCatalogue catalogue;
-  final SessionController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final locale = Localizations.localeOf(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          catalogue.text('webui.index.label.wathiq_d1dfb800', locale),
-        ),
-        actions: [
-          IconButton(
-            onPressed: controller.status == SessionStatus.signingOut
-                ? null
-                : controller.signOut,
-            tooltip: catalogue.text(
-              'webui.index.button.sign_out_a4610dd4',
-              locale,
-            ),
-            icon: const Icon(Icons.logout),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Center(
-          child: Text(
-            catalogue.text('navigation.item.dashboard', locale),
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-        ),
       ),
     );
   }

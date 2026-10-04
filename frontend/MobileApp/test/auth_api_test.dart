@@ -55,7 +55,33 @@ void main() {
       } else if (request.uri.path == '/api/v1/i18n/bootstrap') {
         request.response
           ..headers.contentType = ContentType.json
-          ..write(jsonEncode({'effective_language': 'ar'}));
+          ..write(
+            jsonEncode({
+              'effective_language': 'ar',
+              'supported_languages': [
+                {
+                  'language_tag': 'en',
+                  'english_name': 'English',
+                  'native_name': 'English',
+                },
+                {
+                  'language_tag': 'ar',
+                  'english_name': 'Arabic',
+                  'native_name': 'العربية',
+                },
+              ],
+            }),
+          );
+      } else if (request.uri.path == '/api/v1/preferences') {
+        request.response
+          ..headers.contentType = ContentType.json
+          ..write(
+            jsonEncode({
+              'language_tag': request.method == 'PUT' ? 'ar' : 'en',
+              'working_timezone': 'Asia/Dubai',
+              'version': request.method == 'PUT' ? 2 : 1,
+            }),
+          );
       } else {
         request.response.statusCode = HttpStatus.noContent;
       }
@@ -69,6 +95,20 @@ void main() {
 
     await api.currentPrincipal('memory-token');
     expect(await api.effectiveLanguage('memory-token'), 'ar');
+    expect(
+      (await api.supportedLanguages('memory-token'))
+          .map((language) => language.languageTag),
+      ['en', 'ar'],
+    );
+    expect((await api.preferences('memory-token')).version, 1);
+    final updated = await api.updatePreferences(
+      token: 'memory-token',
+      languageTag: 'ar',
+      workingTimezone: 'Asia/Dubai',
+      version: 1,
+    );
+    expect(updated.languageTag, 'ar');
+    expect(updated.version, 2);
     await api.changePassword(
       token: 'memory-token',
       currentPassword: 'current-secret',
@@ -79,6 +119,9 @@ void main() {
     expect(requests.map((request) => request.uri.path), [
       '/api/v1/auth/me',
       '/api/v1/i18n/bootstrap',
+      '/api/v1/i18n/bootstrap',
+      '/api/v1/preferences',
+      '/api/v1/preferences',
       '/api/v1/auth/change-password',
       '/api/v1/auth/logout',
     ]);
@@ -92,6 +135,7 @@ void main() {
         'WathiqMobile/0.1 (ios)',
       );
     }
+    expect(requests[4].headers.value(HttpHeaders.ifMatchHeader), '"1"');
   });
 
   test('authentication failure remains non-disclosing category', () async {

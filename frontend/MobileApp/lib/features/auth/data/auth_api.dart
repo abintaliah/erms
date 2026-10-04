@@ -15,6 +15,17 @@ abstract interface class AuthApi {
 
   Future<String> effectiveLanguage(String token);
 
+  Future<List<SupportedLanguage>> supportedLanguages(String token);
+
+  Future<UserPreferences> preferences(String token);
+
+  Future<UserPreferences> updatePreferences({
+    required String token,
+    required String languageTag,
+    required String workingTimezone,
+    required int version,
+  });
+
   Future<void> changePassword({
     required String token,
     required String currentPassword,
@@ -29,6 +40,30 @@ class AuthSession {
 
   final AuthPrincipal principal;
   final String token;
+}
+
+class UserPreferences {
+  const UserPreferences({
+    required this.languageTag,
+    required this.workingTimezone,
+    required this.version,
+  });
+
+  final String languageTag;
+  final String workingTimezone;
+  final int version;
+}
+
+class SupportedLanguage {
+  const SupportedLanguage({
+    required this.languageTag,
+    required this.englishName,
+    required this.nativeName,
+  });
+
+  final String languageTag;
+  final String englishName;
+  final String nativeName;
 }
 
 class IoAuthApi implements AuthApi {
@@ -88,6 +123,57 @@ class IoAuthApi implements AuthApi {
   }
 
   @override
+  Future<List<SupportedLanguage>> supportedLanguages(String token) async {
+    final response = await _request(
+      'GET',
+      '/api/v1/i18n/bootstrap',
+      token: token,
+    );
+    final payload = response.payload;
+    final languages = payload is Map ? payload['supported_languages'] : null;
+    if (languages is! List) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    try {
+      return List.unmodifiable(
+        languages.map((value) {
+          final item = value as Map;
+          return SupportedLanguage(
+            languageTag: item['language_tag'] as String,
+            englishName: item['english_name'] as String,
+            nativeName: item['native_name'] as String,
+          );
+        }),
+      );
+    } on TypeError catch (_) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+  }
+
+  @override
+  Future<UserPreferences> preferences(String token) async {
+    final response = await _request('GET', '/api/v1/preferences', token: token);
+    return _preferences(response.payload);
+  }
+
+  @override
+  Future<UserPreferences> updatePreferences({
+    required String token,
+    required String languageTag,
+    required String workingTimezone,
+    required int version,
+  }) async {
+    final response = await _request(
+      'PUT',
+      '/api/v1/preferences',
+      token: token,
+      ifMatch: version,
+      body: {'language_tag': languageTag, 'working_timezone': workingTimezone},
+    );
+    return _preferences(response.payload);
+  }
+
+  @override
   Future<void> changePassword({
     required String token,
     required String currentPassword,
@@ -110,6 +196,7 @@ class IoAuthApi implements AuthApi {
     String method,
     String path, {
     String? token,
+    int? ifMatch,
     Map<String, Object?>? body,
   }) async {
     try {
@@ -122,6 +209,9 @@ class IoAuthApi implements AuthApi {
         ..set(HttpHeaders.userAgentHeader, userAgent);
       if (token != null) {
         request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      }
+      if (ifMatch != null) {
+        request.headers.set(HttpHeaders.ifMatchHeader, '"$ifMatch"');
       }
       if (body != null) {
         request.headers.contentType = ContentType.json;
@@ -168,6 +258,20 @@ class IoAuthApi implements AuthApi {
     } on FormatException catch (_) {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
+  }
+
+  UserPreferences _preferences(Object? payload) {
+    if (payload is! Map ||
+        payload['language_tag'] is! String ||
+        payload['working_timezone'] is! String ||
+        payload['version'] is! int) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    return UserPreferences(
+      languageTag: payload['language_tag'] as String,
+      workingTimezone: payload['working_timezone'] as String,
+      version: payload['version'] as int,
+    );
   }
 
   ApiFailureKind _failureKind(int statusCode) => switch (statusCode) {
