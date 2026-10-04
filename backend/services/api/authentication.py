@@ -323,6 +323,23 @@ def me(
     return principal_response(principal, connection)
 
 
+@router.get("/me/mobile-capabilities", response_model=list[str])
+def mobile_capabilities(principal: Principal = Depends(principal_from_request)):
+    """Approved mobile navigation availability, never a resource-access grant.
+
+    These existing personal/browse contracts are open to authenticated people;
+    their returned content remains filtered by the server's resource policy.
+    """
+    destinations = []
+    if boolean_environment("FULL_TEXT_SEARCH_ENABLED", True):
+        destinations.append("global-search")
+    destinations.extend([
+        "dashboard", "classification-browser", "favourites", "recent-activity",
+        "user-profile", "sign-out",
+    ])
+    return destinations
+
+
 @router.get("/me/recent-activity", response_model=list[SelfRecentActivityRead])
 def my_recent_activity(
     limit: int = Query(6, ge=1, le=50),

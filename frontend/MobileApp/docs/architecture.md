@@ -38,3 +38,19 @@ cannot be met cleanly with the pinned SDK.
 API base URLs and other environment values must be supplied at build or launch
 time. Production credentials, session material, API tokens, and protected
 content must never be committed to the repository or compiled as constants.
+
+## Phase 1 session and native-warning scope
+
+Preferences, capabilities, principal and locale are process-memory state owned
+by the current session generation. Freshness comes from sign-in, explicit
+Preferences reads/mutations, and foreground session validation. Logout,
+revocation and background expiry clear that state; obsolete requests cannot
+write into a later generation. Errors retain existing in-memory data behind a
+noninteractive gate and never populate persistent caches. English is restored
+when identity clears; saved language remains server-authoritative.
+
+The dependency-free warning bridge sends only generic localized title/body and
+a relative delay to the OS. Neither tokens nor personal data cross or persist
+through that bridge. The native notification identifier is fixed, so another
+schedule replaces the previous warning. OS permission and scheduling failures
+are best effort. Android needs no exact-alarm or reboot scheduling permission.

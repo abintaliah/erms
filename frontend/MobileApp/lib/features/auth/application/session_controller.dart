@@ -11,6 +11,7 @@ enum SessionStatus {
   authenticated,
   changingPassword,
   signingOut,
+  validatingSession,
 }
 
 abstract interface class SessionWarningScheduler {
@@ -48,7 +49,9 @@ class SessionController extends ChangeNotifier {
   SessionStatus status = SessionStatus.signedOut;
   AuthPrincipal? principal;
   ApiFailure? failure;
+  String? signInNoticeKey;
   String effectiveLanguageTag = 'en';
+  List<String> destinations = const [];
   UserPreferences? preferences;
   List<SupportedLanguage> supportedLanguages = const [];
   bool preferencesBusy = false;
@@ -56,12 +59,16 @@ class SessionController extends ChangeNotifier {
   String? _token;
   DateTime? _backgroundedAt;
   int _generation = 0;
+  int? _validationGeneration;
+
+  int get sessionGeneration => _generation;
 
   bool get hasProtectedState => principal != null && _token != null;
 
   Future<void> loadPreferences() async {
     final token = _token;
     if (token == null || preferencesBusy) return;
+    final generation = _generation;
     preferencesBusy = true;
     preferencesFailure = null;
     notifyListeners();
@@ -70,13 +77,25 @@ class SessionController extends ChangeNotifier {
         _api.preferences(token),
         _api.supportedLanguages(token),
       ]);
+      if (generation != _generation) return;
       preferences = results[0] as UserPreferences;
       supportedLanguages = results[1] as List<SupportedLanguage>;
     } on ApiFailure catch (error) {
-      preferencesFailure = error;
+      if (generation != _generation) return;
+      if (error.kind == ApiFailureKind.unauthenticated) {
+        clearForRevocation();
+      } else {
+        preferencesFailure = error;
+        if (error.kind == ApiFailureKind.offline) {
+          status = SessionStatus.validatingSession;
+          failure = error;
+        }
+      }
     } finally {
-      preferencesBusy = false;
-      notifyListeners();
+      if (generation == _generation) {
+        preferencesBusy = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -84,6 +103,7 @@ class SessionController extends ChangeNotifier {
     final token = _token;
     final current = preferences;
     if (token == null || current == null || preferencesBusy) return false;
+    final generation = _generation;
     preferencesBusy = true;
     preferencesFailure = null;
     notifyListeners();
@@ -94,15 +114,27 @@ class SessionController extends ChangeNotifier {
         workingTimezone: current.workingTimezone,
         version: current.version,
       );
+      if (generation != _generation) return false;
       preferences = updated;
       effectiveLanguageTag = updated.languageTag;
       return true;
     } on ApiFailure catch (error) {
-      preferencesFailure = error;
+      if (generation != _generation) return false;
+      if (error.kind == ApiFailureKind.unauthenticated) {
+        clearForRevocation();
+      } else {
+        preferencesFailure = error;
+        if (error.kind == ApiFailureKind.offline) {
+          status = SessionStatus.validatingSession;
+          failure = error;
+        }
+      }
       return false;
     } finally {
-      preferencesBusy = false;
-      notifyListeners();
+      if (generation == _generation) {
+        preferencesBusy = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -110,6 +142,7 @@ class SessionController extends ChangeNotifier {
     final generation = ++_generation;
     status = SessionStatus.signingIn;
     failure = null;
+    signInNoticeKey = null;
     notifyListeners();
     try {
       final session = await _api.signIn(email: email, password: password);
@@ -118,9 +151,15 @@ class SessionController extends ChangeNotifier {
       }
       _token = session.token;
       principal = session.principal;
-      effectiveLanguageTag = await _api.effectiveLanguage(session.token);
+      final language = await _api.effectiveLanguage(session.token);
       if (generation != _generation) {
         return;
+      }
+      effectiveLanguageTag = language;
+      if (!session.principal.mustChangePassword) {
+        final capabilities = await _api.mobileCapabilities(session.token);
+        if (generation != _generation) return;
+        destinations = capabilities;
       }
       status = session.principal.mustChangePassword
           ? SessionStatus.passwordChangeRequired
@@ -158,11 +197,20 @@ class SessionController extends ChangeNotifier {
       if (generation != _generation) {
         return;
       }
+      final capabilities = await _api.mobileCapabilities(token);
+      if (generation != _generation) return;
       principal = refreshed;
-      status = SessionStatus.authenticated;
+      destinations = capabilities;
+      status = refreshed.mustChangePassword
+          ? SessionStatus.passwordChangeRequired
+          : SessionStatus.authenticated;
       notifyListeners();
     } on ApiFailure catch (error) {
       if (generation != _generation) {
+        return;
+      }
+      if (error.kind == ApiFailureKind.unauthenticated) {
+        clearForRevocation();
         return;
       }
       failure = error;
@@ -173,7 +221,7 @@ class SessionController extends ChangeNotifier {
 
   Future<void> signOut() async {
     final token = _token;
-    ++_generation;
+    final generation = ++_generation;
     status = SessionStatus.signingOut;
     notifyListeners();
     try {
@@ -183,14 +231,22 @@ class SessionController extends ChangeNotifier {
     } on ApiFailure catch (_) {
       // Local protected state is cleared even when server sign-out fails.
     } finally {
-      await _warningScheduler.cancel();
-      _clear();
-      notifyListeners();
+      if (generation == _generation) {
+        try {
+          await _warningScheduler.cancel();
+        } catch (_) {
+          // Best-effort platform cancellation cannot prevent local sign-out.
+        }
+        if (generation == _generation) {
+          _clear();
+          notifyListeners();
+        }
+      }
     }
   }
 
   Future<void> onBackgrounded() async {
-    if (!hasProtectedState) {
+    if (!hasProtectedState || _backgroundedAt != null) {
       return;
     }
     _backgroundedAt = _clock();
@@ -213,23 +269,67 @@ class SessionController extends ChangeNotifier {
       return false;
     }
     if (_clock().difference(backgroundedAt) < expireAfter) {
-      return false;
+      await validateSession();
+      return !hasProtectedState;
     }
     ++_generation;
     _clear();
+    signInNoticeKey = 'common.error.authentication_required';
     notifyListeners();
     return true;
+  }
+
+  Future<void> validateSession() async {
+    final token = _token;
+    if (token == null || _validationGeneration == _generation) return;
+    final generation = _generation;
+    _validationGeneration = generation;
+    status = SessionStatus.validatingSession;
+    failure = null;
+    notifyListeners();
+    try {
+      final refreshed = await _api.currentPrincipal(token);
+      if (generation != _generation) return;
+      // A session may never silently switch identity.
+      if (refreshed.user.id != principal?.user.id) {
+        clearForRevocation();
+        return;
+      }
+      final capabilities = refreshed.mustChangePassword
+          ? const <String>[]
+          : await _api.mobileCapabilities(token);
+      if (generation != _generation) return;
+      principal = refreshed;
+      destinations = capabilities;
+      status = refreshed.mustChangePassword
+          ? SessionStatus.passwordChangeRequired
+          : SessionStatus.authenticated;
+    } on ApiFailure catch (error) {
+      if (generation != _generation) return;
+      if (error.kind == ApiFailureKind.unauthenticated) {
+        clearForRevocation();
+        return;
+      }
+      failure = error;
+    } finally {
+      if (_validationGeneration == generation) _validationGeneration = null;
+    }
+    notifyListeners();
   }
 
   void clearForRevocation() {
     ++_generation;
     _clear();
+    signInNoticeKey = 'common.error.authentication_required';
     notifyListeners();
   }
 
   void _clear() {
     status = SessionStatus.signedOut;
+    failure = null;
+    signInNoticeKey = null;
     principal = null;
+    destinations = const [];
     _token = null;
     _backgroundedAt = null;
     effectiveLanguageTag = 'en';

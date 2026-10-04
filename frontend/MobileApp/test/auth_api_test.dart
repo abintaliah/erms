@@ -186,6 +186,50 @@ void main() {
       ),
     );
   });
+  test(
+    'mobile destinations come from the approved bearer-authenticated response',
+    () async {
+      late HttpRequest received;
+      final server = await _server((request) async {
+        received = request;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode(['dashboard', 'user-profile', 'sign-out']),
+        );
+        await request.response.close();
+      });
+      addTearDown(() => server.close(force: true));
+      final api = IoAuthApi(
+        Uri.parse('http://${server.address.address}:${server.port}'),
+      );
+      expect(await api.mobileCapabilities('session-token'), [
+        'dashboard',
+        'user-profile',
+        'sign-out',
+      ]);
+      expect(received.uri.path, '/api/v1/auth/me/mobile-capabilities');
+      expect(
+        received.headers.value(HttpHeaders.authorizationHeader),
+        'Bearer session-token',
+      );
+    },
+  );
+
+  test('malformed mobile destination response is rejected', () async {
+    final server = await _server((request) async {
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode(['dashboard', 42]));
+      await request.response.close();
+    });
+    addTearDown(() => server.close(force: true));
+    final api = IoAuthApi(
+      Uri.parse('http://${server.address.address}:${server.port}'),
+    );
+    expect(
+      () => api.mobileCapabilities('session-token'),
+      throwsA(isA<ApiFailure>()),
+    );
+  });
 }
 
 Future<HttpServer> _server(

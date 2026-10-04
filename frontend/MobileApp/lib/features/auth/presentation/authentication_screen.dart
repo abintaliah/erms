@@ -105,6 +105,14 @@ class _AuthenticationScreenState extends State<AuthenticationScreen> {
                             ),
                           ),
                         ),
+                        if (widget.controller.signInNoticeKey
+                            case final notice?) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            text(notice),
+                            key: const ValueKey('sign-in-notice'),
+                          ),
+                        ],
                         if (failure != null) ...[
                           const SizedBox(height: 14),
                           Text(
@@ -148,7 +156,7 @@ class _AuthenticationScreenState extends State<AuthenticationScreen> {
   );
 
   String _failureKey(ApiFailureKind kind) => switch (kind) {
-    ApiFailureKind.offline ||
+    ApiFailureKind.offline => 'mobile.state.offline',
     ApiFailureKind.server => 'common.error.service_unavailable',
     ApiFailureKind.forbidden => 'common.error.forbidden',
     _ => 'common.error.bad_request',

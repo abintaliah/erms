@@ -26,6 +26,7 @@ class AuthenticatedShell extends StatelessWidget {
     final dashboard = text('navigation.item.dashboard');
     final signOut = text('webui.index.button.sign_out_a4610dd4');
     final preferences = text('preferences.action.open');
+    final profile = text('mobile.navigation.user_profile');
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -34,6 +35,10 @@ class AuthenticatedShell extends StatelessWidget {
           appName: appName,
           dashboardLabel: dashboard,
           preferencesLabel: preferences,
+          profileLabel: profile,
+          showDashboard: controller.destinations.contains('dashboard'),
+          showProfile: controller.destinations.contains('user-profile'),
+          showSignOut: controller.destinations.contains('sign-out'),
           signOutLabel: signOut,
           userName: principal.user.localizedName ?? principal.user.name,
           userEmail: principal.user.email,
@@ -74,8 +79,8 @@ class AuthenticatedShell extends StatelessWidget {
                     child: DecoratedBox(
                       decoration: const BoxDecoration(
                         color: Colors.white,
-                        border: Border(
-                          right: BorderSide(color: Color(0xFFE2E8F0)),
+                        border: BorderDirectional(
+                          end: BorderSide(color: Color(0xFFE2E8F0)),
                         ),
                       ),
                       child: Material(color: Colors.white, child: navigation),
@@ -100,6 +105,10 @@ class AuthenticatedShell extends StatelessWidget {
 class _ShellNavigation extends StatelessWidget {
   const _ShellNavigation({
     required this.appName,
+    required this.profileLabel,
+    required this.showDashboard,
+    required this.showProfile,
+    required this.showSignOut,
     required this.dashboardLabel,
     required this.preferencesLabel,
     required this.signOutLabel,
@@ -111,6 +120,10 @@ class _ShellNavigation extends StatelessWidget {
   });
 
   final String appName;
+  final String profileLabel;
+  final bool showDashboard;
+  final bool showProfile;
+  final bool showSignOut;
   final String dashboardLabel;
   final String preferencesLabel;
   final String signOutLabel;
@@ -130,48 +143,79 @@ class _ShellNavigation extends StatelessWidget {
           child: WathiqBrand(name: appName, markSize: 38),
         ),
         const Divider(height: 1),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: ListTile(
-            key: const ValueKey('shell-dashboard'),
-            selected: true,
-            selectedColor: const Color(0xFF087AC1),
-            selectedTileColor: const Color(0xFFE0F2FE),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+        if (showDashboard)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: ListTile(
+              key: const ValueKey('shell-dashboard'),
+              selected: true,
+              selectedColor: const Color(0xFF087AC1),
+              selectedTileColor: const Color(0xFFE0F2FE),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              leading: const Icon(Icons.home_outlined),
+              title: Text(dashboardLabel),
+              onTap: onDashboard,
             ),
-            leading: const Icon(Icons.home_outlined),
-            title: Text(dashboardLabel),
-            onTap: onDashboard,
           ),
-        ),
         const Spacer(),
         const Divider(height: 1),
-        ListTile(
-          leading: CircleAvatar(
-            backgroundColor: const Color(0xFFE0F2FE),
-            foregroundColor: const Color(0xFF087AC1),
-            child: Text(_initials(userName)),
+        if (showProfile)
+          ListTile(
+            key: const ValueKey('shell-profile'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(title: Text(profileLabel)),
+                  body: SafeArea(
+                    child: ListView(
+                      padding: const EdgeInsets.all(24),
+                      children: [
+                        Text(
+                          userName,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(userEmail),
+                        const SizedBox(height: 24),
+                        ListTile(
+                          title: Text(preferencesLabel),
+                          leading: const Icon(Icons.language),
+                          onTap: onPreferences,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            leading: CircleAvatar(
+              backgroundColor: const Color(0xFFE0F2FE),
+              foregroundColor: const Color(0xFF087AC1),
+              child: Text(_initials(userName)),
+            ),
+            title: Text(userName, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text(
+              userEmail,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          title: Text(userName, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(
-            userEmail,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+        if (showProfile)
+          ListTile(
+            key: const ValueKey('shell-preferences'),
+            leading: const Icon(Icons.language),
+            title: Text(preferencesLabel),
+            onTap: onPreferences,
           ),
-        ),
-        ListTile(
-          key: const ValueKey('shell-preferences'),
-          leading: const Icon(Icons.language),
-          title: Text(preferencesLabel),
-          onTap: onPreferences,
-        ),
-        ListTile(
-          key: const ValueKey('shell-sign-out'),
-          leading: const Icon(Icons.logout),
-          title: Text(signOutLabel),
-          onTap: onSignOut,
-        ),
+        if (showSignOut)
+          ListTile(
+            key: const ValueKey('shell-sign-out'),
+            leading: const Icon(Icons.logout),
+            title: Text(signOutLabel),
+            onTap: onSignOut,
+          ),
         const SizedBox(height: 8),
       ],
     ),

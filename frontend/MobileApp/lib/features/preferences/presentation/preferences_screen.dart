@@ -52,8 +52,18 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                         widget.controller.preferencesBusy)
                       const Center(child: CircularProgressIndicator())
                     else if (preferences == null)
-                      Text(text('common.error.service_unavailable'))
+                      Column(
+                        children: [
+                          Text(text('common.error.service_unavailable')),
+                          TextButton(
+                            onPressed: widget.controller.loadPreferences,
+                            child: Text(text('classification_browser.retry')),
+                          ),
+                        ],
+                      )
                     else ...[
+                      if (widget.controller.preferencesFailure != null)
+                        Text(text('common.error.service_unavailable')),
                       Text(
                         text('preferences.field.language'),
                         style: Theme.of(context).textTheme.titleMedium,

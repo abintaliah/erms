@@ -1269,3 +1269,18 @@ The mobile product conforms to this specification when:
    failures produce truthful, recoverable mobile states; and
 10. every identified API gap remains a proposal for separate review rather
     than an assumed dependency.
+
+## Approved Phase 1 capability response — 4 October 2026
+
+The user approved adding a read-only server response for mobile destination
+availability. `GET /api/v1/auth/me/mobile-capabilities` returns an ordered JSON
+array of destination identifiers: `global-search`, `dashboard`,
+`classification-browser`, `favourites`, `recent-activity`, `user-profile`,
+`sign-out`. It requires the ordinary authenticated person session and existing
+credential-change gate. Global Search is omitted while server full-text search
+is disabled. The remaining destinations use existing authenticated personal or
+browse contracts; resource visibility stays governed by their existing server
+policy. This is a presentation capability response, not a grant of resource
+access. Flutter must not infer these destinations from role/profile names or
+reconstruct resource authorization. Refresh it after sign-in and session
+revalidation; failures must not disclose stale protected destinations.

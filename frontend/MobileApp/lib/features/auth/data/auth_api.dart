@@ -13,6 +13,8 @@ abstract interface class AuthApi {
 
   Future<AuthPrincipal> currentPrincipal(String token);
 
+  Future<List<String>> mobileCapabilities(String token);
+
   Future<String> effectiveLanguage(String token);
 
   Future<List<SupportedLanguage>> supportedLanguages(String token);
@@ -102,6 +104,20 @@ class IoAuthApi implements AuthApi {
   Future<AuthPrincipal> currentPrincipal(String token) async {
     final response = await _request('GET', '/api/v1/auth/me', token: token);
     return _principal(response.payload);
+  }
+
+  @override
+  Future<List<String>> mobileCapabilities(String token) async {
+    final response = await _request(
+      'GET',
+      '/api/v1/auth/me/mobile-capabilities',
+      token: token,
+    );
+    if (response.payload is! List ||
+        (response.payload as List).any((item) => item is! String)) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    return List<String>.unmodifiable((response.payload as List).cast<String>());
   }
 
   @override
@@ -220,10 +236,9 @@ class IoAuthApi implements AuthApi {
       final response = await request.close().timeout(
         const Duration(seconds: 30),
       );
-      final bytes = await response.fold<List<int>>(
-        <int>[],
-        (buffer, chunk) => buffer..addAll(chunk),
-      );
+      final bytes = await response
+          .fold<List<int>>(<int>[], (buffer, chunk) => buffer..addAll(chunk))
+          .timeout(const Duration(seconds: 30));
       final payload = bytes.isEmpty
           ? null
           : jsonDecode(utf8.decode(bytes, allowMalformed: false));
@@ -237,6 +252,10 @@ class IoAuthApi implements AuthApi {
     } on ApiFailure {
       rethrow;
     } on SocketException catch (_) {
+      throw const ApiFailure(ApiFailureKind.offline);
+    } on HttpException catch (_) {
+      throw const ApiFailure(ApiFailureKind.offline);
+    } on TlsException catch (_) {
       throw const ApiFailure(ApiFailureKind.offline);
     } on TimeoutException catch (_) {
       throw const ApiFailure(ApiFailureKind.offline);

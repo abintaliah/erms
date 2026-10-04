@@ -172,6 +172,52 @@ void main() {
     expect(tester.getCenter(find.text('English')).dx, englishBefore);
     expect(tester.getCenter(find.text('العربية')).dx, arabicBefore);
   });
+  testWidgets(
+    'revocation removes pushed preferences and prevents back into identity',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final controller = SessionController(_FakeAuthApi());
+      await controller.signIn(email: 'user@example.test', password: 'secret');
+      await tester.pumpWidget(
+        WathiqApp(catalogue: _catalogue, sessionController: controller),
+      );
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('shell-preferences')));
+      await tester.pumpAndSettle();
+      expect(find.text('Working timezone'), findsOneWidget);
+      controller.clearForRevocation();
+      await tester.pumpAndSettle();
+      expect(find.text('Working timezone'), findsNothing);
+      expect(find.byKey(const ValueKey('authenticated-shell')), findsNothing);
+      expect(find.byKey(const ValueKey('sign-in-notice')), findsOneWidget);
+      await tester.state<NavigatorState>(find.byType(Navigator)).maybePop();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('authenticated-shell')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'lifecycle delegates backgrounding and resume to the session boundary',
+    (tester) async {
+      var now = DateTime.utc(2026, 10, 4);
+      final controller = SessionController(_FakeAuthApi(), clock: () => now);
+      await controller.signIn(email: 'user@example.test', password: 'secret');
+      await tester.pumpWidget(
+        WathiqApp(catalogue: _catalogue, sessionController: controller),
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump();
+      now = now.add(const Duration(minutes: 15));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('authenticated-shell')), findsNothing);
+      expect(find.byKey(const ValueKey('sign-in-notice')), findsOneWidget);
+    },
+  );
 }
 
 const _catalogue = MessageCatalogue(
@@ -182,6 +228,11 @@ const _catalogue = MessageCatalogue(
     'common.error.validation_failed': 'Review the information',
     'navigation.item.dashboard': 'Dashboard',
     'preferences.action.open': 'Preferences',
+    'mobile.navigation.user_profile': 'User/Profile',
+    'mobile.state.offline': 'Unable to connect.',
+    'mobile.state.validating_session': 'Checking your session…',
+    'common.error.authentication_required': 'Sign in to continue.',
+    'classification_browser.retry': 'Retry',
     'preferences.field.language': 'Language',
     'preferences.field.working_timezone': 'Working timezone',
     'preferences.guidance.personal':
@@ -213,6 +264,11 @@ const _catalogue = MessageCatalogue(
     'common.error.validation_failed': 'راجع المعلومات',
     'navigation.item.dashboard': 'لوحة المعلومات',
     'preferences.action.open': 'التفضيلات',
+    'mobile.navigation.user_profile': 'المستخدم/الملف الشخصي',
+    'mobile.state.offline': 'تعذّر الاتصال.',
+    'mobile.state.validating_session': 'جارٍ التحقّق من جلستك…',
+    'common.error.authentication_required': 'سجّل الدخول للمتابعة.',
+    'classification_browser.retry': 'إعادة المحاولة',
     'preferences.field.language': 'اللغة',
     'preferences.field.working_timezone': 'المنطقة الزمنية للعمل',
     'preferences.guidance.personal': 'اختر اللغة والمنطقة الزمنية للعمل.',
@@ -255,6 +311,17 @@ class _FakeAuthApi implements AuthApi {
     lastEmail = email;
     return AuthSession(principal: principal, token: 'memory-token');
   }
+
+  @override
+  Future<List<String>> mobileCapabilities(String token) async => const [
+    'global-search',
+    'dashboard',
+    'classification-browser',
+    'favourites',
+    'recent-activity',
+    'user-profile',
+    'sign-out',
+  ];
 
   @override
   Future<AuthPrincipal> currentPrincipal(String token) async => principal;

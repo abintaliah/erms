@@ -42,11 +42,54 @@ Started: 30 September 2026
   Dashboard and persisted `AUTHENTICATION_SUCCEEDED` with source `mobile` and
   user agent `WathiqMobile/0.1 (ios)`.
 
+## MobileFlutterV0.2 — session and capability continuation, 4 October 2026
+
+- The user confirmed successful v0.1 authentication testing; this continuation
+  keeps that boundary and remains on `MobileFlutterV0.2`.
+- The user approved the read-only `/api/v1/auth/me/mobile-capabilities` response.
+  It returns server-owned destination availability, respects the existing
+  credential-change gate, and hides Global Search when disabled. It grants no
+  resource access. The mobile client does not reconstruct authorization from
+  role names or privilege combinations.
+- Implemented destinations (Dashboard, User/Profile, Preferences, Sign out)
+  disclose navigation from that response. The tablet separator uses directional
+  borders, and the profile displays only authenticated response data.
+- Flutter lifecycle observation starts one continuous background interval;
+  repeated hidden/paused callbacks cannot restart the 15-minute clock.
+- Returning before the limit revalidates the principal and capabilities; server
+  revocation clears the session immediately. Offline/error revalidation uses a
+  nondismissible centered gate retaining rendered content underneath, with
+  explicit safe-read Retry and Sign out. A single foreground-only 30-second
+  probe revalidates connectivity without mutation retries or overlapping reads. Sign-out also gates interaction.
+- Native iOS/Android adapters schedule one best-effort local warning at ten
+  background minutes using generic localized text only. Android uses inexact
+  scheduling without exact-alarm permissions and suppresses warnings delivered
+  after the fifteen-minute boundary. Resume, sign-out, and process startup
+  cancel stale warnings; permission denial cannot change the timeout.
+- Session generations prevent delayed preference/bootstrap/capability responses
+  from restoring cleared identity, language, destination, or preference state.
+  Revocation replaces the Navigator, removing pushed protected routes.
+- Added five `mobile.*` contextual keys to the authoritative English catalogue
+  and merged only their missing Arabic drafts into the canonical artifact.
+  Existing translation text and per-item provenance are unchanged. Both mobile
+  language assets are synchronized to 2,899 active keys. No administrator export
+  was promoted; the five new Arabic drafts require administrator review.
+- Corrected a catalogue-validator false positive: MSG-007 explicitly requires
+  the conventional `Re:` reply prefix in every language. Its existing artifact
+  text/provenance are preserved and the exception is exact-key/exact-value.
+- Verification: 52 Flutter unit/widget checks pass; Flutter analysis reports no
+  issues; Android debug APK and iOS simulator native builds passed. Two backend
+  capability tests passed using unique disposable fresh/upgrade databases;
+  schema parity passed and both databases were dropped. Three database-free
+  invariant-prefix validator tests and full catalogue coverage/order/placeholder/
+  blank/terminology/stale-key/hash checks passed.
+
 ## Pending
 
-- Implement authenticated phone and tablet shell layouts, destination
-  disclosure, sign-out, and central loading/error/offline/revocation states.
-- Connect lifecycle handling to Flutter application lifecycle events and add
-  the platform notification implementation for the best-effort warning.
+- Global Search entry and the remaining approved drawer destinations need
+  their shell integration; downstream content workflows remain assigned to
+  their specified phases.
 - Complete English, Arabic, LTR, RTL, iOS, Android, phone, and tablet runtime
-  verification for all delivered Phase 1 screens.
+  verification, including actual OS warning permission/delivery and cancellation.
+  Compiled native adapters and mocked channel checks do not establish OS delivery.
+- Phase 1 remains in progress; its complete exit gate is not yet claimed.

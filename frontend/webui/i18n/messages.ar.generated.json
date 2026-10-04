@@ -1,13 +1,13 @@
 {
   "generator": "Wathiq Translation Administration with OpenAI Codex key merge",
   "model": "OpenAI Codex",
-  "model_version": "2026-09-30",
-  "prompt_version": "wathiq-arabic-contextual-key-merge-v1",
+  "model_version": "2026-10-04",
+  "prompt_version": "mobile-phase1-contextual-ar-v1",
   "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
-  "catalogue_sha256": "ec3374c443b6d0305ae737f93431a490d8b9b3c2491419d5bca1146d0c36812b",
+  "catalogue_sha256": "0597c6263c2013574b1a59c6da6e99605f731da0572555a2f653c7b8199cd5a5",
   "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
-  "batch_id": "codex-mobile-audit-source-ar-20260930T195315Z",
-  "generated_at": "2026-09-30T19:53:15Z",
+  "batch_id": "codex-mobile-phase1-key-merge-20261004",
+  "generated_at": "2026-10-04T10:36:09.246749+00:00",
   "artifact_type": "wathiq_translation_administration_export",
   "language_tag": "ar",
   "language_metadata": {
@@ -9593,6 +9593,81 @@
         "source_status": "draft",
         "review_required": true
       }
+    },
+    {
+      "message_key": "mobile.navigation.user_profile",
+      "translated_text": "المستخدم/الملف الشخصي",
+      "provenance": {
+        "source_origin": "generated",
+        "generator": "OpenAI Codex",
+        "model": "OpenAI Codex",
+        "model_version": "2026-10-04",
+        "prompt_version": "mobile-phase1-contextual-ar-v1",
+        "generated_at": "2026-10-04T10:25:52.405979+00:00",
+        "batch_id": "mobile-phase1-session-20261004",
+        "kind": "machine_generated"
+      },
+      "quality_flags": []
+    },
+    {
+      "message_key": "mobile.session.warning_body",
+      "translated_text": "سيُطلب تسجيل الدخول بعد بقاء التطبيق في الخلفية لمدة 15 دقيقة.",
+      "provenance": {
+        "source_origin": "generated",
+        "generator": "OpenAI Codex",
+        "model": "OpenAI Codex",
+        "model_version": "2026-10-04",
+        "prompt_version": "mobile-phase1-contextual-ar-v1",
+        "generated_at": "2026-10-04T10:25:52.405979+00:00",
+        "batch_id": "mobile-phase1-session-20261004",
+        "kind": "machine_generated"
+      },
+      "quality_flags": []
+    },
+    {
+      "message_key": "mobile.session.warning_title",
+      "translated_text": "جلسة وثق",
+      "provenance": {
+        "source_origin": "generated",
+        "generator": "OpenAI Codex",
+        "model": "OpenAI Codex",
+        "model_version": "2026-10-04",
+        "prompt_version": "mobile-phase1-contextual-ar-v1",
+        "generated_at": "2026-10-04T10:25:52.405979+00:00",
+        "batch_id": "mobile-phase1-session-20261004",
+        "kind": "machine_generated"
+      },
+      "quality_flags": []
+    },
+    {
+      "message_key": "mobile.state.offline",
+      "translated_text": "تعذّر الاتصال. تحقّق من اتصالك وحاول مرة أخرى.",
+      "provenance": {
+        "source_origin": "generated",
+        "generator": "OpenAI Codex",
+        "model": "OpenAI Codex",
+        "model_version": "2026-10-04",
+        "prompt_version": "mobile-phase1-contextual-ar-v1",
+        "generated_at": "2026-10-04T10:25:52.405979+00:00",
+        "batch_id": "mobile-phase1-session-20261004",
+        "kind": "machine_generated"
+      },
+      "quality_flags": []
+    },
+    {
+      "message_key": "mobile.state.validating_session",
+      "translated_text": "جارٍ التحقّق من جلستك…",
+      "provenance": {
+        "source_origin": "generated",
+        "generator": "OpenAI Codex",
+        "model": "OpenAI Codex",
+        "model_version": "2026-10-04",
+        "prompt_version": "mobile-phase1-contextual-ar-v1",
+        "generated_at": "2026-10-04T10:25:52.405979+00:00",
+        "batch_id": "mobile-phase1-session-20261004",
+        "kind": "machine_generated"
+      },
+      "quality_flags": []
     },
     {
       "message_key": "navigation.item.advanced_search",

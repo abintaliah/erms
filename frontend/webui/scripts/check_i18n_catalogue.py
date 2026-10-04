@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -17,6 +18,8 @@ from frontend.webui.i18n_catalogue import load_english_manifest  # noqa: E402
 def referenced_keys() -> set[str]:
     # The renderer itself uses this key for unknown keys and parameter failures.
     keys: set[str] = {"shared.errors.unexpected"}
+    for path in (PROJECT_DIR / "frontend/MobileApp/lib").rglob("*.dart"):
+        keys.update(re.findall(r"['\"](mobile\.[a-z0-9_.]+)['\"]", path.read_text()))
     roots = (PROJECT_DIR / "frontend" / "webui", PROJECT_DIR / "backend" / "services" / "api")
     for root in roots:
         for path in root.rglob("*.py"):

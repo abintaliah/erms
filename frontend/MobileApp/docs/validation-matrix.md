@@ -39,3 +39,14 @@ rule, state transition, adapter, widget, route, responsive layout, platform
 setting, and generated artifact before reporting that unit complete. Rows must
 name concrete test files and may not use a phase-wide manual statement as a
 substitute for automated unit evidence.
+
+### MobileFlutterV0.2 continuation — 4 October 2026
+
+| Requirement | Implementation | Evidence | Status |
+| --- | --- | --- | --- |
+| Approved server-owned navigation availability | `authentication.mobile_capabilities`, `AuthApi.mobileCapabilities`, `SessionController.destinations`, shell disclosure | Two disposable-database endpoint tests; existing mobile HTTP/widget suites | Implemented destination subset verified; remaining shell destinations pending |
+| Continuous background limit and server precedence (§8.3) | `WathiqApp` lifecycle observer; session resume validation | Repeated callback, 14:59/15:00, early revocation, offline retry, lifecycle widget tests | Automated verified |
+| User state isolation and safe revocation (§§8.2, 17.4, 19) | Session generation guards and generation-owned Navigator | Delayed preferences after revocation; pushed Preferences removed and Back cannot restore identity | Automated verified |
+| Best-effort ten-minute device warning (§8.3) | Native iOS UserNotifications / Android AlarmManager adapters; localized method-channel scheduler | Android/iOS debug builds and channel payload/cancellation test | Device permission/delivery matrix pending |
+| Central loading, error, offline and explicit retry (§§16–17) | Nondismissible overlay retaining current Navigator; safe principal retry; preference read retry | Session offline/retry tests and shell widget checks | Explicit Retry and bounded foreground monitoring implemented |
+| Contextual localization (§6) | Five new mobile keys; preserved canonical Arabic merge; synchronized mobile assets | 2,899-key coverage; full catalogue and Arabic/hash checks; three invariant-prefix tests | Automated verified; new Arabic drafts await administrator review |

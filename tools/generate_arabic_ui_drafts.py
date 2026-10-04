@@ -79,12 +79,18 @@ def validate(definitions: list[dict], candidates: list[dict]) -> None:
         if not isinstance(text, str) or not text.strip():
             failures.append(f"{definition['message_key']}: blank translation")
             continue
-        if text == definition["default_text"] and unexplained_latin(text):
+        # MSG-007 explicitly requires the conventional Re: prefix in every
+        # language. Limit the exception to that exact contextual key and value.
+        invariant_reply_prefix = (
+            definition["message_key"] == "messaging.reply.subject_prefix"
+            and text == "Re:"
+        )
+        if text == definition["default_text"] and unexplained_latin(text) and not invariant_reply_prefix:
             failures.append(f"{definition['message_key']}: unchanged English source copy")
         if placeholders(text) != placeholders(definition["default_text"]):
             failures.append(f"{definition['message_key']}: placeholder mismatch")
         latin = unexplained_latin(text)
-        if latin:
+        if latin and not invariant_reply_prefix:
             failures.append(
                 f"{definition['message_key']}: unexplained Latin text {', '.join(latin)}"
             )

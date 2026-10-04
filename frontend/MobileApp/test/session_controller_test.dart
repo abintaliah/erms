@@ -123,6 +123,105 @@ void main() {
     expect(await controller.onResumed(), isTrue);
     expect(controller.status, SessionStatus.signedOut);
   });
+  test(
+    'repeated background callbacks do not restart the expiry clock',
+    () async {
+      var now = DateTime.utc(2026, 10, 4);
+      final controller = SessionController(_FakeAuthApi(), clock: () => now);
+      await controller.signIn(email: 'user@example.test', password: 'password');
+      await controller.onBackgrounded();
+      now = now.add(const Duration(minutes: 9));
+      await controller.onBackgrounded();
+      now = now.add(const Duration(minutes: 6));
+      expect(await controller.onResumed(), isTrue);
+      expect(controller.hasProtectedState, isFalse);
+    },
+  );
+
+  test(
+    'warning cancellation failure cannot retain signed-out identity',
+    () async {
+      final controller = SessionController(
+        _FakeAuthApi(),
+        warningScheduler: _FakeWarningScheduler(throwOnCancel: true),
+      );
+      await controller.signIn(email: 'user@example.test', password: 'password');
+      await controller.signOut();
+      expect(controller.hasProtectedState, isFalse);
+      expect(controller.destinations, isEmpty);
+    },
+  );
+
+  test(
+    'server revocation takes precedence before the background limit',
+    () async {
+      final api = _FakeAuthApi();
+      final controller = SessionController(api);
+      await controller.signIn(email: 'user@example.test', password: 'password');
+      await controller.onBackgrounded();
+      api.principalFailure = const ApiFailure(ApiFailureKind.unauthenticated);
+      expect(await controller.onResumed(), isTrue);
+      expect(controller.status, SessionStatus.signedOut);
+    },
+  );
+
+  test(
+    'offline revalidation gates protected routes until explicit retry',
+    () async {
+      final api = _FakeAuthApi();
+      final controller = SessionController(api);
+      await controller.signIn(email: 'user@example.test', password: 'password');
+      await controller.onBackgrounded();
+      api.principalFailure = const ApiFailure(ApiFailureKind.offline);
+      await controller.onResumed();
+      expect(controller.status, SessionStatus.validatingSession);
+      expect(controller.failure?.kind, ApiFailureKind.offline);
+      api.principalFailure = null;
+      await controller.validateSession();
+      expect(controller.status, SessionStatus.authenticated);
+    },
+  );
+
+  test(
+    'delayed preference response cannot repopulate a revoked session',
+    () async {
+      final api = _FakeAuthApi();
+      final controller = SessionController(api);
+      await controller.signIn(email: 'user@example.test', password: 'password');
+      api.preferenceCompletion = Completer<UserPreferences>();
+      final pending = controller.loadPreferences();
+      controller.clearForRevocation();
+      api.preferenceCompletion!.complete(
+        const UserPreferences(
+          languageTag: 'ar',
+          workingTimezone: 'Asia/Dubai',
+          version: 1,
+        ),
+      );
+      await pending;
+      expect(controller.preferences, isNull);
+      expect(controller.supportedLanguages, isEmpty);
+      expect(controller.effectiveLanguageTag, 'en');
+    },
+  );
+  test(
+    'delayed localization bootstrap cannot restore a revoked language',
+    () async {
+      final api = _FakeAuthApi()..languageCompletion = Completer<String>();
+      final controller = SessionController(api);
+      final signingIn = controller.signIn(
+        email: 'user@example.test',
+        password: 'password',
+      );
+      await Future<void>.delayed(Duration.zero);
+      controller.clearForRevocation();
+      api.languageCompletion!.complete('ar');
+      await signingIn;
+      expect(controller.hasProtectedState, isFalse);
+      expect(controller.effectiveLanguageTag, 'en');
+      expect(controller.destinations, isEmpty);
+    },
+  );
 }
 
 class _FakeAuthApi implements AuthApi {
@@ -138,6 +237,9 @@ class _FakeAuthApi implements AuthApi {
   final ApiFailure? signOutFailure;
   final Completer<AuthSession>? signInCompletion;
   String? lastEmail;
+  ApiFailure? principalFailure;
+  Completer<String>? languageCompletion;
+  Completer<UserPreferences>? preferenceCompletion;
 
   @override
   Future<AuthSession> signIn({
@@ -155,10 +257,25 @@ class _FakeAuthApi implements AuthApi {
   }
 
   @override
-  Future<AuthPrincipal> currentPrincipal(String token) async => principal;
+  Future<List<String>> mobileCapabilities(String token) async => const [
+    'global-search',
+    'dashboard',
+    'classification-browser',
+    'favourites',
+    'recent-activity',
+    'user-profile',
+    'sign-out',
+  ];
 
   @override
-  Future<String> effectiveLanguage(String token) async => 'en';
+  Future<AuthPrincipal> currentPrincipal(String token) async {
+    if (principalFailure case final error?) throw error;
+    return principal;
+  }
+
+  @override
+  Future<String> effectiveLanguage(String token) async =>
+      languageCompletion != null ? await languageCompletion!.future : 'en';
 
   @override
   Future<List<SupportedLanguage>> supportedLanguages(String token) async =>
@@ -177,11 +294,13 @@ class _FakeAuthApi implements AuthApi {
 
   @override
   Future<UserPreferences> preferences(String token) async =>
-      const UserPreferences(
-        languageTag: 'en',
-        workingTimezone: 'Asia/Dubai',
-        version: 1,
-      );
+      preferenceCompletion != null
+      ? await preferenceCompletion!.future
+      : const UserPreferences(
+          languageTag: 'en',
+          workingTimezone: 'Asia/Dubai',
+          version: 1,
+        );
 
   @override
   Future<UserPreferences> updatePreferences({
@@ -211,9 +330,13 @@ class _FakeAuthApi implements AuthApi {
 }
 
 class _FakeWarningScheduler implements SessionWarningScheduler {
-  _FakeWarningScheduler({this.throwOnSchedule = false});
+  _FakeWarningScheduler({
+    this.throwOnSchedule = false,
+    this.throwOnCancel = false,
+  });
 
   final bool throwOnSchedule;
+  final bool throwOnCancel;
   Duration? scheduledDelay;
   bool cancelled = false;
 
@@ -227,6 +350,7 @@ class _FakeWarningScheduler implements SessionWarningScheduler {
 
   @override
   Future<void> cancel() async {
+    if (throwOnCancel) throw StateError('unavailable');
     cancelled = true;
   }
 }
