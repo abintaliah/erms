@@ -836,6 +836,40 @@ or documented style surface rather than duplicating them.
 
 ### 19.1 NiceGUI-first layout and RTL troubleshooting
 
+The sign-in page restores document and dialog direction before authentication,
+using the remembered localization context. Previously the direction script
+ran during authenticated bootstrap, leaving signed-out portal content without
+the full RTL setup. The native login card explicitly carries `dir` and `lang`;
+its standard NiceGUI fields and layout inherit these settings. Direction-only checks initially confirmed RTL inheritance but missed physical
+placement. Follow-up browser inspection on 4 October found the global RTL
+`.row { flex-direction: row-reverse }` double-reversed native RTL flex rows,
+and Quasar floating labels retained a physical left anchor. NiceGUI document
+direction, native card `dir`/`lang`, and standard Row/Input/Select configuration
+do not override those existing stylesheet rules or expose label-anchor spacing.
+A narrowly scoped correction inside `.wathiq-login-card` and
+`.messaging-workspace` restores native `row` flow in RTL, right-anchors field
+labels and mirrors append/prepend padding. Native components and keyboard
+behavior remain intact. Browser measurements confirmed Arabic password append
+on the left, labels on the right, and mailbox actions flowing right to left.
+The login button retains the Material login glyph: native `icon-right=login`
+places it left of Arabic text, and a button-scoped RTL horizontal transform
+mirrors the arrow. NiceGUI icon naming/position props expose no mirrored
+variant of this glyph. English keeps the original icon and position.
+Credential inputs use the native QInput `input-style` property to set
+`direction: ltr; unicode-bidi: isolate` on the editable input only. Browser
+inspection found these inputs previously inherited RTL with normal bidi.
+The field wrapper, Arabic labels and password visibility control retain RTL;
+no custom CSS is needed for credential text direction. No text, translation
+key or credential validation rule changes.
+English remains LTR. Rejected credentials use a specific neutral login error rather than
+the generic expired-session prompt, consistently for wrong names and passwords.
+Four feedback cases and two shared direction tests passed. The new English key
+`authentication.error.credentials_not_accepted` has a generated Arabic draft;
+2893-key coverage, ordering, placeholder, terminology and artifact validation
+passed. Existing translation wording/provenance was preserved; no administrator
+export was promoted. The draft was seeded to demo for review/publication while
+all 2935 previously protected translation rows remained unchanged.
+
 Saved-search cards keep the Mine/Shared badge at the top trailing edge (right
 in English, left in Arabic). A native NiceGUI three-column grid reserves space
 for the resource icon, wrapping metadata, and badge; Open occupies its own line.
@@ -981,3 +1015,17 @@ A new WebUI screen is complete only when:
     and stale-key checks pass; and
 12. this document and its reference map are updated if the approved design
     system genuinely changed.
+
+Recipient chip remove-icon spacing (4 October 2026): inspection of the shared
+remote QSelect's default removable chip found its physical negative right
+margin overlapping the Arabic label by 4.375px. NiceGUI Select's documented
+`multiple`/`use-chips`/`dense` configuration controls selection or overall sizing,
+not internal remove-icon spacing. Keeping the native chip preserves keyboard,
+removal and disabled behavior; a custom selected-item slot is unnecessary.
+The narrowly scoped remote-selector correction resets the icon margins and
+adds a 6px logical trailing margin to multiple-chip content. The logical margin
+belongs to content because Material icon elements force LTR direction even in
+an RTL field. English/LTR and Arabic/RTL browser measurements confirmed a 6px
+label/icon gap at desktop and 360px widths without chip overflow. No UI text,
+translation artifact, data request, cache or database change was introduced.
+The database-free preview was stopped and its temporary tab closed.

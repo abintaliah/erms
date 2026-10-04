@@ -28,6 +28,29 @@ defined separately in
 
 ## 2. User authentication states
 
+### Sign-in feedback and language direction
+
+When a sign-in attempt is rejected with HTTP 401, the form explains that the
+credentials were not accepted and asks the user to check the login name and
+password and retry. Use identical wording for an unknown login name and an
+incorrect password. The generic session prompt “Sign in to continue” remains
+appropriate for unauthenticated protected requests, not a failed sign-in attempt.
+Other failures retain their specific existing error handling.
+
+The sign-in panel, its labels, fields and actions follow the remembered UI
+language and direction before authentication. Arabic uses RTL. Apply direction
+to the document and dialog portal as well as the panel; do not wait for the
+authenticated localization bootstrap. This keeps signed-out and signed-in
+presentation consistent without requiring authentication to restore direction.
+At desktop width the Arabic brand/marketing panel is on the right and the form
+on the left. Field labels and placeholders align right; the password visibility
+control appears at the field’s left edge. English mirrors these positions.
+The entered login name and password use an isolated LTR text direction in
+every UI language, so ASCII punctuation retains its entered order. This
+applies to masked and revealed password text and does not restrict the
+accepted character set or alter submitted credentials. Arabic field labels
+and surrounding controls remain RTL.
+
 ### 2.1 Active
 
 An active person account may authenticate and use an otherwise valid session.

@@ -773,6 +773,9 @@ def create_language(
         raise _error(422, "invalid_direction", "localization.validation.direction.invalid")
     if payload.is_default and not payload.is_enabled:
         raise _error(422, "default_language_disabled", "localization.validation.default_language.disabled")
+    if payload.is_enabled:
+        from .messaging.notification_configuration import language_ready
+        language_ready(connection, tag)
     if payload.is_default:
         connection.execute("UPDATE supported_languages SET is_default=false WHERE is_default")
     try:
@@ -820,6 +823,9 @@ def update_language(
         raise _error(422, "default_language_required", "localization.validation.language.configuration_invalid")
     if current["version"] != expected:
         raise _stale_version(expected, current["version"], dict(current))
+    if payload.is_enabled:
+        from .messaging.notification_configuration import language_ready
+        language_ready(connection, current["language_tag"])
     if payload.is_default:
         connection.execute("UPDATE supported_languages SET is_default=false WHERE is_default AND id<>%s", (current["id"],))
     row = connection.execute(

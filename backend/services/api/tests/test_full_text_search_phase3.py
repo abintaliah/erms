@@ -129,6 +129,10 @@ def test_global_search_requires_matching_branches_and_returns_opaque_cursor_cont
     assert set(body["index_freshness"])=={"has_pending_content"}
     second=client.post("/api/v1/full-text-search",json={**payload,"cursor":body["next_cursor"]})
     assert second.status_code==200 and len(second.json()["items"])==1
+    for item in body["items"] + second.json()["items"]:
+        resource = item[item["type"]]
+        assert isinstance(resource["security_level_id"], int)
+        assert "description" in resource
     mismatch=client.post("/api/v1/full-text-search",json={
         "record_where":payload["record_where"],"result_types":["records","aggregations"]
     })

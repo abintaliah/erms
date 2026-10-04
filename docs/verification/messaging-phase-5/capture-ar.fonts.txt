@@ -1,0 +1,6 @@
+name                                 type              encoding         emb sub uni object ID
+------------------------------------ ----------------- ---------------- --- --- --- ---------
+LFLDTQ+ChangaArabic-Bold             CID TrueType      Identity-H       yes yes yes     18  0
+AKXJGB+ChangaLatin-Bold              CID TrueType      Identity-H       yes yes yes     22  0
+QENHHX+ChangaArabic                  CID TrueType      Identity-H       yes yes yes     26  0
+WINJYC+ChangaLatin                   CID TrueType      Identity-H       yes yes yes     30  0

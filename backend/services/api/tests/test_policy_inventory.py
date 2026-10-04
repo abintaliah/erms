@@ -181,3 +181,25 @@ def test_phase_zero_current_access_characterization(client: TestClient):
     assert client.get("/api/v1/aggregations").status_code == 401
     assert client.get("/api/v1/users").status_code == 401
     assert client.get("/api/v1/event-history").status_code == 401
+
+
+def test_permission_catalogue_records_conditional_policy():
+    assert _target_policy("GET", "/api/v1/permissions") == ("relationship_scoped", None, None)
+    registry = build_inventory()
+    conditional = [operation for operation in registry["api_operations"]
+                   if "conditional_global_privileges" in operation]
+    assert [operation["id"] for operation in conditional] == ["GET:/api/v1/permissions"]
+    assert conditional[0]["conditional_global_privileges"] == {
+        "query_parameter": "resource_type",
+        "match": "any",
+        "when_omitted": ["authorization.administer"],
+        "by_value": {
+            "aggregation": ["authorization.administer", "aggregation.acl.manage"],
+            "record": ["authorization.administer", "record.acl.manage"],
+        },
+    }
+    seed = json.loads(SEED_PATH.read_text(encoding="utf-8"))
+    privileges = {item["code"] for item in seed["privileges"]}
+    rule = conditional[0]["conditional_global_privileges"]
+    assert set(rule["when_omitted"]) <= privileges
+    assert all(set(alternatives) <= privileges for alternatives in rule["by_value"].values())

@@ -4,6 +4,10 @@ from collections.abc import Iterable, Mapping
 
 
 NAVIGATION_PRIVILEGES = {
+    "messages-monitor": "messaging.monitor",
+    "messages-notifications": "messaging.notifications.administer",
+    "messages-outbox": "messaging.user_messages.exchange",
+    "messages-drafts": "messaging.user_messages.exchange",
     "aggregations": "aggregation.view",
     "records": "record.view",
     "classification-schemes": "classifications.administer",
