@@ -2,7 +2,11 @@
 
 This is the complete macOS checklist for a new contributor. Python
 `requirements.txt` files do not install Java, Tesseract, its language packs,
-Poppler, LibreOffice, or PostgreSQL.
+Poppler, LibreOffice, or PostgreSQL. Message capture additionally requires
+veraPDF and Java: follow [the local tooling guide](local-tooling.md) after
+cloning and [the upgrade note](upgrades/message-capture-validator.md) when
+syncing an existing fork. veraPDF is a capture requirement, not a requirement
+for every application feature.
 
 1. Install Homebrew if it is not already available:
 

@@ -1434,6 +1434,62 @@
     "is_html": false
   },
   {
+    "message_key": "audit.event.notification_configuration_activated",
+    "context_group": "audit.event",
+    "default_text": "Notification configuration activated",
+    "semantic_meaning": "Notification administration: notification_configuration_activated.",
+    "common_locations": [
+      "Notification Administration"
+    ],
+    "translator_guidance": "Preserve placeholders and the stated limits.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Notification configuration activated",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.notification_configuration_saved",
+    "context_group": "audit.event",
+    "default_text": "Notification configuration saved",
+    "semantic_meaning": "Notification administration: notification_configuration_saved.",
+    "common_locations": [
+      "Notification Administration"
+    ],
+    "translator_guidance": "Preserve placeholders and the stated limits.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Notification configuration saved",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.notification_test_failed",
+    "context_group": "audit.event",
+    "default_text": "Test notification failed",
+    "semantic_meaning": "Notification administration: notification_test_failed.",
+    "common_locations": [
+      "Notification Administration"
+    ],
+    "translator_guidance": "Preserve placeholders and the stated limits.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Test notification failed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.event.notification_test_sent",
+    "context_group": "audit.event",
+    "default_text": "Test notification sent",
+    "semantic_meaning": "Notification administration: notification_test_sent.",
+    "common_locations": [
+      "Notification Administration"
+    ],
+    "translator_guidance": "Preserve placeholders and the stated limits.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Test notification sent",
+    "is_html": false
+  },
+  {
     "message_key": "audit.event.ownership_corrected",
     "context_group": "audit.events",
     "default_text": "Ownership Corrected",
@@ -1813,6 +1869,20 @@
     "grammatical_role": "label",
     "parameter_schema": {},
     "rendered_example": "Mobile",
+    "is_html": false
+  },
+  {
+    "message_key": "authentication.error.credentials_not_accepted",
+    "context_group": "authentication.error",
+    "default_text": "Your sign-in credentials weren’t accepted. Check your login name and password and try again.",
+    "semantic_meaning": "Login attempt rejected; deliberately does not identify whether the login name or password was incorrect.",
+    "common_locations": [
+      "Sign-in form"
+    ],
+    "translator_guidance": "Use the same neutral explanation for an unknown login name and an incorrect password; ask the user to check both.",
+    "grammatical_role": "complete sentence",
+    "parameter_schema": {},
+    "rendered_example": "Your sign-in credentials weren’t accepted. Check your login name and password and try again.",
     "is_html": false
   },
   {
@@ -4385,6 +4455,20 @@
     "grammatical_role": "value",
     "parameter_schema": {},
     "rendered_example": "No expiry",
+    "is_html": false
+  },
+  {
+    "message_key": "components.field.storage_backend",
+    "context_group": "components.field",
+    "default_text": "Storage backend",
+    "semantic_meaning": "Storage implementation used for the digital component, such as database or filesystem.",
+    "common_locations": [
+      "Shared digital component cards"
+    ],
+    "translator_guidance": "This identifies the storage backend, not an organizational unit or a storage-size chart.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Storage backend",
     "is_html": false
   },
   {
@@ -7759,6 +7843,23 @@
     "rendered_example": "The message key navigation.records was not found."
   },
   {
+    "message_key": "localization.validation.notification_coverage",
+    "context_group": "localization.validation",
+    "default_text": "Publish a {language} notification template for producer {producer} before enabling this language.",
+    "semantic_meaning": "Notification administration: notification_coverage.",
+    "common_locations": [
+      "Notification Administration"
+    ],
+    "translator_guidance": "Preserve placeholders and the stated limits.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {
+      "language": "text",
+      "producer": "identifier"
+    },
+    "rendered_example": "Publish a {language} notification template for producer {producer} before enabling this language.",
+    "is_html": false
+  },
+  {
     "message_key": "localization.validation.origin.invalid",
     "context_group": "localization",
     "default_text": "Select a valid translation origin.",
@@ -7870,6 +7971,3607 @@
     "grammatical_role": "imperative sentence",
     "parameter_schema": {},
     "rendered_example": "Enter and save a translation before publishing."
+  },
+  {
+    "message_key": "messaging.action.add",
+    "context_group": "messaging.action",
+    "default_text": "Add",
+    "semantic_meaning": "Human messaging interface: Add",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Add",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.amend",
+    "context_group": "messaging.action",
+    "default_text": "Amend action",
+    "semantic_meaning": "Human messaging interface: Amend action",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Amend action",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.browse_recipients",
+    "context_group": "messaging.action",
+    "default_text": "Browse organization structure",
+    "semantic_meaning": "Open the shared organization browser to choose a recipient for the field above.",
+    "common_locations": [
+      "Message composer: To and Cc"
+    ],
+    "translator_guidance": "Preserve the distinction between users, roles and organization units.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Browse organization structure",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.cancel",
+    "context_group": "messaging.action",
+    "default_text": "Cancel",
+    "semantic_meaning": "Human messaging interface: Cancel",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Cancel",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.compose",
+    "context_group": "messaging.action",
+    "default_text": "Compose",
+    "semantic_meaning": "Human messaging interface: Compose",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Compose",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.discard",
+    "context_group": "messaging.action",
+    "default_text": "Discard draft",
+    "semantic_meaning": "Human messaging interface: Discard draft",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Discard draft",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.follow_up",
+    "context_group": "messaging.action",
+    "default_text": "Send follow-up",
+    "semantic_meaning": "Human messaging interface: Send follow-up",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Send follow-up",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.forward",
+    "context_group": "messaging.action",
+    "default_text": "Forward",
+    "semantic_meaning": "Human messaging interface: Forward",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Forward",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.next",
+    "context_group": "messaging.action",
+    "default_text": "Next",
+    "semantic_meaning": "Human messaging interface: Next",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Next",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.open",
+    "context_group": "messaging.action",
+    "default_text": "Open",
+    "semantic_meaning": "Human messaging interface: Open",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Open",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.open_amended",
+    "context_group": "messaging.action",
+    "default_text": "Open amended message",
+    "semantic_meaning": "Human messaging interface: Open amended message",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Open amended message",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.open_original",
+    "context_group": "messaging.action",
+    "default_text": "Open earlier message",
+    "semantic_meaning": "Human messaging interface: Open earlier message",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Open earlier message",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.previous",
+    "context_group": "messaging.action",
+    "default_text": "Previous",
+    "semantic_meaning": "Human messaging interface: Previous",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Previous",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.recently_deleted",
+    "context_group": "messaging.action",
+    "default_text": "Recently deleted drafts",
+    "semantic_meaning": "Human messaging interface: Recently deleted drafts",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Recently deleted drafts",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.refresh",
+    "context_group": "messaging.action",
+    "default_text": "Refresh",
+    "semantic_meaning": "Human messaging interface: Refresh",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Refresh",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.remove",
+    "context_group": "messaging.action",
+    "default_text": "Remove",
+    "semantic_meaning": "Human messaging interface: Remove",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Remove",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.reply",
+    "context_group": "messaging.action",
+    "default_text": "Reply",
+    "semantic_meaning": "Human messaging interface: Reply",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Reply",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.restore",
+    "context_group": "messaging.action",
+    "default_text": "Restore",
+    "semantic_meaning": "Human messaging interface: Restore",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Restore",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.save_draft",
+    "context_group": "messaging.action",
+    "default_text": "Save draft",
+    "semantic_meaning": "Human messaging interface: Save draft",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Save draft",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.action.send",
+    "context_group": "messaging.action",
+    "default_text": "Send",
+    "semantic_meaning": "Human messaging interface: Send",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Send",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.activate",
+    "context_group": "messaging.admin",
+    "default_text": "Activate this saved version",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: activate.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Activate this saved version",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.activated",
+    "context_group": "messaging.admin",
+    "default_text": "Configuration version activated.",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: activated.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Configuration version activated.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.active",
+    "context_group": "messaging.admin",
+    "default_text": "Active version",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: active.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Active version",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.audience",
+    "context_group": "messaging.admin",
+    "default_text": "Audience rule",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: audience.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Audience rule",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.audience.current_responsible_people",
+    "context_group": "messaging.admin.audience",
+    "default_text": "Current owner and contributors",
+    "semantic_meaning": "Display label for the backend legal-hold recipient resolver current_responsible_people.",
+    "common_locations": [
+      "Notification Administration recipient rule selector"
+    ],
+    "translator_guidance": "Use existing legal-hold owner and contributor terminology. This is a recipient selection rule, not a person name or editable code.",
+    "grammatical_role": "option label",
+    "parameter_schema": {},
+    "rendered_example": "Current owner and contributors",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.audience.newly_assigned_person",
+    "context_group": "messaging.admin.audience",
+    "default_text": "Newly assigned owner or contributor",
+    "semantic_meaning": "Display label for the backend legal-hold recipient resolver newly_assigned_person.",
+    "common_locations": [
+      "Notification Administration recipient rule selector"
+    ],
+    "translator_guidance": "Use existing legal-hold owner and contributor terminology. This is a recipient selection rule, not a person name or editable code.",
+    "grammatical_role": "option label",
+    "parameter_schema": {},
+    "rendered_example": "Newly assigned owner or contributor",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.back",
+    "context_group": "messaging.admin",
+    "default_text": "Back to producers",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: back.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Back to producers",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.confirm_test",
+    "context_group": "messaging.admin",
+    "default_text": "Confirm and send test",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: confirm_test.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Confirm and send test",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.conflict",
+    "context_group": "messaging.admin",
+    "default_text": "The configuration changed or is not ready for activation. Refresh and check language publication and audience eligibility.",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: conflict.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "The configuration changed or is not ready for activation. Refresh and check language publication and audience eligibility.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.draft",
+    "context_group": "messaging.admin",
+    "default_text": "Draft",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: draft.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Draft",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.empty",
+    "context_group": "messaging.admin",
+    "default_text": "No entries to display.",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: empty.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "No entries to display.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.enabled",
+    "context_group": "messaging.admin",
+    "default_text": "Enabled",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: enabled.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Enabled",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.failed",
+    "context_group": "messaging.admin",
+    "default_text": "The operation failed. Refresh and try again.",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: failed.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "The operation failed. Refresh and try again.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.failure",
+    "context_group": "messaging.admin",
+    "default_text": "Failed",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: failure.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Failed",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.history",
+    "context_group": "messaging.admin",
+    "default_text": "Test-send history",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: history.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Test-send history",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.initiator",
+    "context_group": "messaging.admin",
+    "default_text": "Initiated by",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: initiator.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Initiated by",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.loading",
+    "context_group": "messaging.admin",
+    "default_text": "Loading notification configuration…",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: loading.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Loading notification configuration…",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.locked",
+    "context_group": "messaging.admin",
+    "default_text": "Feature-owned contract — these fields cannot be changed here.",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: locked.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Feature-owned contract — these fields cannot be changed here.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.new",
+    "context_group": "messaging.admin",
+    "default_text": "New configuration version",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: new.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "New configuration version",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.none",
+    "context_group": "messaging.admin",
+    "default_text": "Not configured",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: none.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Not configured",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.optional",
+    "context_group": "messaging.admin",
+    "default_text": "Optional notification",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: optional.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Optional notification",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.owner",
+    "context_group": "messaging.admin",
+    "default_text": "Operational owner or team",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: owner.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Operational owner or team",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.placeholder",
+    "context_group": "messaging.admin",
+    "default_text": "Placeholder: {name}; type: {type}.",
+    "semantic_meaning": "Notification administration: placeholder.",
+    "common_locations": [
+      "Notification Administration"
+    ],
+    "translator_guidance": "Preserve placeholders and the stated limits.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {
+      "name": "text",
+      "type": "text"
+    },
+    "rendered_example": "Placeholder: name; type: text.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.preview",
+    "context_group": "messaging.admin",
+    "default_text": "Preview without sending",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: preview.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Preview without sending",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.published",
+    "context_group": "messaging.admin",
+    "default_text": "Reviewed and published",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: published.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Reviewed and published",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.recipient_count",
+    "context_group": "messaging.admin",
+    "default_text": "Recipient count",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: recipient_count.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Recipient count",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.required",
+    "context_group": "messaging.admin",
+    "default_text": "Required for the business transaction",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: required.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Required for the business transaction",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.resources",
+    "context_group": "messaging.admin",
+    "default_text": "Resource-link presentation",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: resources.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Resource-link presentation",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.review",
+    "context_group": "messaging.admin",
+    "default_text": "Template review status",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: review.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Template review status",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.review_preview",
+    "context_group": "messaging.admin",
+    "default_text": "Review the previews below, then save again to confirm this version. Editing a value requires a new preview.",
+    "semantic_meaning": "Notification administration: review_preview.",
+    "common_locations": [
+      "Notification Administration"
+    ],
+    "translator_guidance": "Preserve placeholders and the stated limits.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Review the previews below, then save again to confirm this version. Editing a value requires a new preview.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.reviewed",
+    "context_group": "messaging.admin",
+    "default_text": "Reviewed",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: reviewed.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Reviewed",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.save",
+    "context_group": "messaging.admin",
+    "default_text": "Save as a new version",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: save.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Save as a new version",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.saved",
+    "context_group": "messaging.admin",
+    "default_text": "Configuration version saved.",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: saved.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Configuration version saved.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.search",
+    "context_group": "messaging.admin",
+    "default_text": "Search producers",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: search.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Search producers",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.sent",
+    "context_group": "messaging.admin",
+    "default_text": "Test notification sent.",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: sent.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Test notification sent.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.static",
+    "context_group": "messaging.admin",
+    "default_text": "Selected users, roles and units",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: static.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Selected users, roles and units",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.success",
+    "context_group": "messaging.admin",
+    "default_text": "Succeeded",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: success.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Succeeded",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.templates_help",
+    "context_group": "messaging.admin",
+    "default_text": "Use only the declared named placeholders. Saving creates a new immutable version. Review and publish every enabled language before activation.",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: templates_help.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Use only the declared named placeholders. Saving creates a new immutable version. Review and publish every enabled language before activation.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.test",
+    "context_group": "messaging.admin",
+    "default_text": "Send test of this saved version",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: test.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Send test of this saved version",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.test_help",
+    "context_group": "messaging.admin",
+    "default_text": "This sends a permanently marked test of the saved version to the individual users selected below. Unsaved edits are not included.",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: test_help.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "This sends a permanently marked test of the saved version to the individual users selected below. Unsaved edits are not included.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.test_limits",
+    "context_group": "messaging.admin",
+    "default_text": "Maximum {recipients} recipients per test; {rate} test sends per administrator per hour.",
+    "semantic_meaning": "Notification administration: test_limits.",
+    "common_locations": [
+      "Notification Administration"
+    ],
+    "translator_guidance": "Preserve placeholders and the stated limits.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {
+      "recipients": "integer",
+      "rate": "integer"
+    },
+    "rendered_example": "Maximum 10 recipients per test; 20 test sends per administrator per hour.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.title",
+    "context_group": "messaging.admin",
+    "default_text": "Notification Administration",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: title.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Notification Administration",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.validation",
+    "context_group": "messaging.admin",
+    "default_text": "Check the templates, declared values, recipients, owner and reason. Test sends must stay within the displayed limits.",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: validation.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Check the templates, declared values, recipients, owner and reason. Test sends must stay within the displayed limits.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.values",
+    "context_group": "messaging.admin",
+    "default_text": "Declared example values",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: values.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Declared example values",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.version",
+    "context_group": "messaging.admin",
+    "default_text": "Version",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: version.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Version",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.admin.versions",
+    "context_group": "messaging.admin",
+    "default_text": "Configuration versions",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: versions.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Configuration versions",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.amendment.action_withdrawn",
+    "context_group": "messaging.amendment",
+    "default_text": "Withdraw action",
+    "semantic_meaning": "Human messaging interface: Withdraw action",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Withdraw action",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.amendment.due_date_added",
+    "context_group": "messaging.amendment",
+    "default_text": "Add due date",
+    "semantic_meaning": "Human messaging interface: Add due date",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Add due date",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.amendment.due_date_changed",
+    "context_group": "messaging.amendment",
+    "default_text": "Change due date",
+    "semantic_meaning": "Human messaging interface: Change due date",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Change due date",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.amendment.due_date_removed",
+    "context_group": "messaging.amendment",
+    "default_text": "Remove due date",
+    "semantic_meaning": "Human messaging interface: Remove due date",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Remove due date",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.action",
+    "context_group": "messaging.capture",
+    "default_text": "Original action required",
+    "semantic_meaning": "Message preservation and operations: Original action required",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Original action required",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.amendments",
+    "context_group": "messaging.capture",
+    "default_text": "Action amendments and effective state",
+    "semantic_meaning": "Message preservation and operations: Action amendments and effective state",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Action amendments and effective state",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.body",
+    "context_group": "messaging.capture",
+    "default_text": "Message",
+    "semantic_meaning": "Message preservation and operations: Message",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Message",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.capture_id",
+    "context_group": "messaging.capture",
+    "default_text": "Capture identifier",
+    "semantic_meaning": "Message preservation and operations: Capture identifier",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Capture identifier",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.captured_at",
+    "context_group": "messaging.capture",
+    "default_text": "Captured at (with timezone)",
+    "semantic_meaning": "Message preservation and operations: Captured at (with timezone)",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Captured at (with timezone)",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.captured_by",
+    "context_group": "messaging.capture",
+    "default_text": "Captured by",
+    "semantic_meaning": "Message preservation and operations: Captured by",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Captured by",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.cc",
+    "context_group": "messaging.capture",
+    "default_text": "Cc",
+    "semantic_meaning": "Message preservation and operations: Cc",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Cc",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.components",
+    "context_group": "messaging.capture",
+    "default_text": "Ordered message components",
+    "semantic_meaning": "Message preservation and operations: Ordered message components",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Ordered message components",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.creator_role_cleared",
+    "context_group": "messaging.capture",
+    "default_text": "Your previous Create for selection was cleared because it does not belong to the parent aggregation's organizational unit.",
+    "semantic_meaning": "Your previous Create for selection was cleared because it does not belong to the parent aggregation's organizational unit.",
+    "common_locations": [
+      "Record draft editor"
+    ],
+    "translator_guidance": "Explain why the selected creator role was cleared after changing the destination aggregation.",
+    "grammatical_role": "status explanation",
+    "parameter_schema": {},
+    "rendered_example": "Your previous Create for selection was cleared because it does not belong to the parent aggregation's organizational unit.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.due",
+    "context_group": "messaging.capture",
+    "default_text": "Original deadline",
+    "semantic_meaning": "Message preservation and operations: Original deadline",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Original deadline",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.effective",
+    "context_group": "messaging.capture",
+    "default_text": "Effective action state at capture",
+    "semantic_meaning": "Effective action state at capture",
+    "common_locations": [
+      "Captured message PDF"
+    ],
+    "translator_guidance": "Action state includes required flag and local due date, time zone, and instant. Preserve the chronology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Effective action state at capture",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.envelope_id",
+    "context_group": "messaging.capture",
+    "default_text": "Envelope identifier",
+    "semantic_meaning": "Message preservation and operations: Envelope identifier",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Envelope identifier",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_chain_limit",
+    "context_group": "messaging.capture.error",
+    "default_text": "This capture exceeds the configured number of linked messages.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: This capture exceeds the configured number of linked messages.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "This capture exceeds the configured number of linked messages.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_components_fixed",
+    "context_group": "messaging.capture.error",
+    "default_text": "Generated message components have a fixed order and cannot be replaced or removed.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: Generated message components have a fixed order and cannot be replaced or removed.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "Generated message components have a fixed order and cannot be replaced or removed.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_digital_required",
+    "context_group": "messaging.capture.error",
+    "default_text": "Message capture requires a destination that accepts digital components.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: Message capture requires a destination that accepts digital components.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "Message capture requires a destination that accepts digital components.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_integrity",
+    "context_group": "messaging.capture.error",
+    "default_text": "Capture stopped because the message references are inconsistent or cyclic.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: Capture stopped because the message references are inconsistent or cyclic.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "Capture stopped because the message references are inconsistent or cyclic.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_kind_ineligible",
+    "context_group": "messaging.capture.error",
+    "default_text": "Only human-authored messages can be captured. The linked chain includes an ineligible message.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: Only human-authored messages can be captured. The linked chain includes an ineligible message.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "Only human-authored messages can be captured. The linked chain includes an ineligible message.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_medium_fixed_digital",
+    "context_group": "messaging.capture.error",
+    "default_text": "A message capture must use Digital medium. It cannot be changed to Mixed or Physical.",
+    "semantic_meaning": "A message capture draft and committed capture require Digital medium.",
+    "common_locations": [
+      "Message capture API validation"
+    ],
+    "translator_guidance": "Use the existing translations for Digital, Mixed and Physical media. This concerns the record medium, not the parent aggregation medium.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "A message capture must use Digital medium. It cannot be changed to Mixed or Physical.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_pdf_limit",
+    "context_group": "messaging.capture.error",
+    "default_text": "The generated PDFs exceed the configured combined size limit.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: The generated PDFs exceed the configured combined size limit.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "The generated PDFs exceed the configured combined size limit.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_pdf_nonconforming",
+    "context_group": "messaging.capture.error",
+    "default_text": "The generated PDF failed archival or accessibility validation. No record was committed.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: The generated PDF failed archival or accessibility validation. No record was committed.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "The generated PDF failed archival or accessibility validation. No record was committed.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_render_failed",
+    "context_group": "messaging.capture.error",
+    "default_text": "The message could not be rendered faithfully. No record was committed.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: The message could not be rendered faithfully. No record was committed.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "The message could not be rendered faithfully. No record was committed.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_renderer_unavailable",
+    "context_group": "messaging.capture.error",
+    "default_text": "The PDF renderer is unavailable or exceeded its time limit. No record was committed.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: The PDF renderer is unavailable or exceeded its time limit. No record was committed.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "The PDF renderer is unavailable or exceeded its time limit. No record was committed.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_required",
+    "context_group": "messaging.capture.error",
+    "default_text": "Save this message as a record before deleting your mailbox entry.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: Save this message as a record before deleting your mailbox entry.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "Save this message as a record before deleting your mailbox entry.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_security_floor",
+    "context_group": "messaging.capture.error",
+    "default_text": "The record security level cannot be lower than any included message.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: The record security level cannot be lower than any included message.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "The record security level cannot be lower than any included message.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.error.message_capture_validator_unavailable",
+    "context_group": "messaging.capture.error",
+    "default_text": "The independent PDF validator is unavailable. Capture cannot commit.",
+    "semantic_meaning": "Explanation of blocked message preservation or deletion: The independent PDF validator is unavailable. Capture cannot commit.",
+    "common_locations": [
+      "Capture and mailbox error feedback"
+    ],
+    "translator_guidance": "Preserve the distinction between staged work and a committed record. Do not imply that any partial record remains.",
+    "grammatical_role": "error explanation",
+    "parameter_schema": {},
+    "rendered_example": "The independent PDF validator is unavailable. Capture cannot commit.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.filename",
+    "context_group": "messaging.capture",
+    "default_text": "Filename",
+    "semantic_meaning": "Message preservation and operations: Filename",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Filename",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.linked",
+    "context_group": "messaging.capture",
+    "default_text": "Linked earlier message",
+    "semantic_meaning": "Message preservation and operations: Linked earlier message",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Linked earlier message",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.new",
+    "context_group": "messaging.capture",
+    "default_text": "Amended action state",
+    "semantic_meaning": "Amended action state",
+    "common_locations": [
+      "Captured message PDF"
+    ],
+    "translator_guidance": "Action state includes required flag and local due date, time zone, and instant. Preserve the chronology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Amended action state",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.none",
+    "context_group": "messaging.capture",
+    "default_text": "None",
+    "semantic_meaning": "Message preservation and operations: None",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "None",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.order",
+    "context_group": "messaging.capture",
+    "default_text": "Component order",
+    "semantic_meaning": "Message preservation and operations: Component order",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Component order",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.preparing",
+    "context_group": "messaging.capture",
+    "default_text": "Preparing and validating message PDFs. You can edit the record details while you wait.",
+    "semantic_meaning": "Capture conversion progress; metadata remains editable, and creation waits for validated PDFs.",
+    "common_locations": [
+      "WebUI message stream adapter"
+    ],
+    "translator_guidance": "Use singular wording. This summary is shown only when the new-message count is exactly one.",
+    "grammatical_role": "instruction",
+    "parameter_schema": {},
+    "rendered_example": "Preparing and validating message PDFs. You can edit the record details while you wait.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.previous",
+    "context_group": "messaging.capture",
+    "default_text": "Previous action state",
+    "semantic_meaning": "Previous action state",
+    "common_locations": [
+      "Captured message PDF"
+    ],
+    "translator_guidance": "Action state includes required flag and local due date, time zone, and instant. Preserve the chronology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Previous action state",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.priority",
+    "context_group": "messaging.capture",
+    "default_text": "Priority",
+    "semantic_meaning": "Message preservation and operations: Priority",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Priority",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.provenance",
+    "context_group": "messaging.capture",
+    "default_text": "Message capture provenance",
+    "semantic_meaning": "Message preservation and operations: Message capture provenance",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Message capture provenance",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.record_id",
+    "context_group": "messaging.capture",
+    "default_text": "Record identifier",
+    "semantic_meaning": "Message preservation and operations: Record identifier",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Record identifier",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.record_number",
+    "context_group": "messaging.capture",
+    "default_text": "Record number",
+    "semantic_meaning": "Message preservation and operations: Record number",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Record number",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.resources",
+    "context_group": "messaging.capture",
+    "default_text": "Resource references",
+    "semantic_meaning": "Message preservation and operations: Resource references",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Resource references",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.save",
+    "context_group": "messaging.capture",
+    "default_text": "Save as record",
+    "semantic_meaning": "Message preservation and operations: Save as record",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Save as record",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.security",
+    "context_group": "messaging.capture",
+    "default_text": "Security level",
+    "semantic_meaning": "Message preservation and operations: Security level",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Security level",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.selected",
+    "context_group": "messaging.capture",
+    "default_text": "Selected message",
+    "semantic_meaning": "Message preservation and operations: Selected message",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Selected message",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.sender",
+    "context_group": "messaging.capture",
+    "default_text": "Sender",
+    "semantic_meaning": "Message preservation and operations: Sender",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Sender",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.sent_at",
+    "context_group": "messaging.capture",
+    "default_text": "Sent at",
+    "semantic_meaning": "Message preservation and operations: Sent at",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Sent at",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.to",
+    "context_group": "messaging.capture",
+    "default_text": "To",
+    "semantic_meaning": "Message preservation and operations: To",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "To",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.capture.unavailable",
+    "context_group": "messaging.capture",
+    "default_text": "Current access unavailable",
+    "semantic_meaning": "Message preservation and operations: Current access unavailable",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Current access unavailable",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.error.conflict",
+    "context_group": "messaging.error",
+    "default_text": "This item changed. Reload it before trying again.",
+    "semantic_meaning": "Human messaging interface: This item changed. Reload it before trying again.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "This item changed. Reload it before trying again.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.error.denied",
+    "context_group": "messaging.error",
+    "default_text": "You are no longer authorized to access this item.",
+    "semantic_meaning": "Human messaging interface: You are no longer authorized to access this item.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "You are no longer authorized to access this item.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.error.failed",
+    "context_group": "messaging.error",
+    "default_text": "The operation could not be completed. Refresh and try again.",
+    "semantic_meaning": "Human messaging interface: The operation could not be completed. Refresh and try again.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The operation could not be completed. Refresh and try again.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.error.validation",
+    "context_group": "messaging.error",
+    "default_text": "Check the subject, message, recipients, security level, due date, and resource links.",
+    "semantic_meaning": "Validation failed for one or more human message fields.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Check the subject, message, recipients, security level, due date, and resource links.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.action_required",
+    "context_group": "messaging.field",
+    "default_text": "Action required",
+    "semantic_meaning": "Human messaging interface: Action required",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Action required",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.affected_recipients",
+    "context_group": "messaging.field",
+    "default_text": "Affected recipients",
+    "semantic_meaning": "Human messaging interface: Affected recipients",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Affected recipients",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.aggregation",
+    "context_group": "messaging.field",
+    "default_text": "Aggregation",
+    "semantic_meaning": "Human messaging interface: Aggregation",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Aggregation",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.all",
+    "context_group": "messaging.field",
+    "default_text": "All",
+    "semantic_meaning": "Human messaging interface: All",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "All",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.amendment_kind",
+    "context_group": "messaging.field",
+    "default_text": "Amendment",
+    "semantic_meaning": "Human messaging interface: Amendment",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Amendment",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.body",
+    "context_group": "messaging.field",
+    "default_text": "Message",
+    "semantic_meaning": "Human messaging interface: Message",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Message",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.cc",
+    "context_group": "messaging.field",
+    "default_text": "Cc",
+    "semantic_meaning": "Human messaging interface: Cc",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Cc",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.complete",
+    "context_group": "messaging.field",
+    "default_text": "Is the action done?",
+    "semantic_meaning": "Human messaging interface: Is the action done?",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Is the action done?",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.due_date",
+    "context_group": "messaging.field",
+    "default_text": "Action due date",
+    "semantic_meaning": "Human messaging interface: Action due date",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Action due date",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.everyone",
+    "context_group": "messaging.field",
+    "default_text": "Everyone",
+    "semantic_meaning": "Synthetic human-message audience: all currently eligible person accounts across the organization.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Use the established translation for Everyone; this is a recipient audience, not a real role.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Everyone",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.expanded_recipients",
+    "context_group": "messaging.field",
+    "default_text": "Current recipient count",
+    "semantic_meaning": "Human messaging interface: Current recipient count",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Current recipient count",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.expiry",
+    "context_group": "messaging.field",
+    "default_text": "Expires",
+    "semantic_meaning": "Human messaging interface: Expires",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Expires",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.information",
+    "context_group": "messaging.field",
+    "default_text": "Information only",
+    "semantic_meaning": "Human messaging interface: Information only",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Information only",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.kind",
+    "context_group": "messaging.field",
+    "default_text": "Recipient kind",
+    "semantic_meaning": "Human messaging interface: Recipient kind",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Recipient kind",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.org_unit",
+    "context_group": "messaging.field",
+    "default_text": "Organizational unit",
+    "semantic_meaning": "Human messaging interface: Organizational unit",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Organizational unit",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.priority",
+    "context_group": "messaging.field",
+    "default_text": "Priority",
+    "semantic_meaning": "Human messaging interface: Priority",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Priority",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.read",
+    "context_group": "messaging.field",
+    "default_text": "Read",
+    "semantic_meaning": "Human messaging interface: Read",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Read",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.reason",
+    "context_group": "messaging.field",
+    "default_text": "Reason",
+    "semantic_meaning": "Human messaging interface: Reason",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Reason",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.receipts",
+    "context_group": "messaging.field",
+    "default_text": "Request read receipts",
+    "semantic_meaning": "Human messaging interface: Request read receipts",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Request read receipts",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.recipient",
+    "context_group": "messaging.field",
+    "default_text": "Recipient",
+    "semantic_meaning": "Human messaging interface: Recipient",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Recipient",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.record",
+    "context_group": "messaging.field",
+    "default_text": "Record",
+    "semantic_meaning": "Human messaging interface: Record",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Record",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.resource",
+    "context_group": "messaging.field",
+    "default_text": "Resource",
+    "semantic_meaning": "Human messaging interface: Resource",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Resource",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.resource_kind",
+    "context_group": "messaging.field",
+    "default_text": "Resource kind",
+    "semantic_meaning": "Human messaging interface: Resource kind",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Resource kind",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.resources",
+    "context_group": "messaging",
+    "default_text": "Resources",
+    "semantic_meaning": "Heading for resources attached separately below a message body.",
+    "common_locations": [
+      "Compose attachment panel",
+      "Delivered and sent message resource panels"
+    ],
+    "translator_guidance": "Records and aggregations linked to the message, separate from authored body text.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Resources",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.role",
+    "context_group": "messaging.field",
+    "default_text": "Role",
+    "semantic_meaning": "Human messaging interface: Role",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Role",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.search",
+    "context_group": "messaging.field",
+    "default_text": "Search subject",
+    "semantic_meaning": "Human messaging interface: Search subject",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Search subject",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.security",
+    "context_group": "messaging.field",
+    "default_text": "Security level",
+    "semantic_meaning": "Human messaging interface: Security level",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Security level",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.sender",
+    "context_group": "messaging.field",
+    "default_text": "Sender",
+    "semantic_meaning": "Human messaging interface: Sender",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Sender",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.sent_at",
+    "context_group": "messaging.field",
+    "default_text": "Sent",
+    "semantic_meaning": "Human messaging interface: Sent",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Sent",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.sent_before",
+    "context_group": "messaging.field",
+    "default_text": "Sent before",
+    "semantic_meaning": "Human messaging interface: Sent before",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Sent before",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.sent_from",
+    "context_group": "messaging.field",
+    "default_text": "Sent on or after",
+    "semantic_meaning": "Human messaging interface: Sent on or after",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Sent on or after",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.subject",
+    "context_group": "messaging.field",
+    "default_text": "Subject",
+    "semantic_meaning": "Human messaging interface: Subject",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Subject",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.to",
+    "context_group": "messaging.field",
+    "default_text": "To",
+    "semantic_meaning": "Human messaging interface: To",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "To",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.unread",
+    "context_group": "messaging.field",
+    "default_text": "Unread",
+    "semantic_meaning": "Human messaging interface: Unread",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Unread",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.user",
+    "context_group": "messaging.field",
+    "default_text": "User",
+    "semantic_meaning": "Human messaging interface: User",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "User",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.help.amend",
+    "context_group": "messaging.help",
+    "default_text": "This sends a correction notice to every original recipient. Sent content remains immutable.",
+    "semantic_meaning": "Human messaging interface: This sends a correction notice to every original recipient. Sent content remains immutable.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "This sends a correction notice to every original recipient. Sent content remains immutable.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.help.completion",
+    "context_group": "messaging.help",
+    "default_text": "Check “Is the action done?” to tell the sender you have completed the requested action. Your reply will be sent to them.",
+    "semantic_meaning": "Explains that checking the action-completed control records completion and informs the original sender through this reply.",
+    "common_locations": [
+      "Reply composer for an incomplete action-required To delivery"
+    ],
+    "translator_guidance": "Use the same wording as messaging.field.complete for the checkbox. Explain that the reply informs the original sender; there is no separate notification or send.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Check “Is the action done?” to tell the sender you have completed the requested action. Your reply will be sent to them.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.help.due",
+    "context_group": "messaging.help",
+    "default_text": "The due date uses your working timezone and is informational.",
+    "semantic_meaning": "Human messaging interface: The due date uses your working timezone and is informational.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The due date uses your working timezone and is informational.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.help.limits",
+    "context_group": "messaging.help",
+    "default_text": "Limits: selectors / recipients / resource links",
+    "semantic_meaning": "Human messaging interface: Limits: selectors / recipients / resource links",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Limits: selectors / recipients / resource links",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.help.linked",
+    "context_group": "messaging.help",
+    "default_text": "The earlier message’s body is linked without being copied into this message.",
+    "semantic_meaning": "Explains that the previous message body remains accessible by its relationship link and is not quoted into the new body.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "This guidance refers to the body only. A new reply may prefill its subject separately.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The earlier message’s body is linked without being copied into this message.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.help.recipient_search",
+    "context_group": "messaging.help",
+    "default_text": "Type at least two characters to find users, roles or organization units by name, description, code, user external ID or email. Refine your search if needed.",
+    "semantic_meaning": "Search recipient names and descriptions across supported languages, role/unit codes, user external IDs and email, starting at two characters.",
+    "common_locations": [
+      "Message composer: To and Cc"
+    ],
+    "translator_guidance": "Preserve the distinction between users, roles and organization units.",
+    "grammatical_role": "help",
+    "parameter_schema": {},
+    "rendered_example": "Type at least two characters to find users, roles or organization units by name, description, code, user external ID or email. Refine your search if needed.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.linked.title",
+    "context_group": "messaging.linked",
+    "default_text": "Earlier linked message",
+    "semantic_meaning": "Dialog heading identifying a linked earlier message while the latest message stays in the mailbox reading pane.",
+    "common_locations": [
+      "Earlier message dialog"
+    ],
+    "translator_guidance": "Make clear this is an earlier linked message, not the currently selected latest message.",
+    "grammatical_role": "heading",
+    "parameter_schema": {},
+    "rendered_example": "Earlier linked message",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.live.close",
+    "context_group": "messaging.live",
+    "default_text": "Close",
+    "semantic_meaning": "Dismiss this live message notification.",
+    "common_locations": [
+      "WebUI message stream adapter"
+    ],
+    "translator_guidance": "Preserve the named count placeholder; never translate sender-authored content.",
+    "grammatical_role": "button label",
+    "parameter_schema": {},
+    "rendered_example": "Close",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.live.new_message",
+    "context_group": "messaging.live",
+    "default_text": "New message",
+    "semantic_meaning": "Durable mailbox reconciliation summary or live messaging indicator.",
+    "common_locations": [
+      "WebUI message stream adapter"
+    ],
+    "translator_guidance": "Preserve the named count placeholder; never translate sender-authored content.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "New message",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.live.summary",
+    "context_group": "messaging.live",
+    "default_text": "You have {count} new messages",
+    "semantic_meaning": "Durable mailbox reconciliation summary or live messaging indicator.",
+    "common_locations": [
+      "WebUI message stream adapter"
+    ],
+    "translator_guidance": "Preserve the named count placeholder; never translate sender-authored content.",
+    "grammatical_role": "label",
+    "parameter_schema": {
+      "count": "integer"
+    },
+    "rendered_example": "You have 3 new messages",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.live.summary_one",
+    "context_group": "messaging.live",
+    "default_text": "You have 1 new message",
+    "semantic_meaning": "Reconnect summary for exactly one newly discovered message.",
+    "common_locations": [
+      "WebUI message stream adapter"
+    ],
+    "translator_guidance": "Use singular wording. This summary is shown only when the new-message count is exactly one.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "You have 1 new message",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.live.test_summary",
+    "context_group": "messaging.live",
+    "default_text": "You have {count} new messages, including {test_count} TEST notifications.",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: test_summary.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {
+      "count": "integer",
+      "test_count": "integer"
+    },
+    "rendered_example": "You have 3 new messages, including 1 TEST notifications.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.live.unread",
+    "context_group": "messaging.live",
+    "default_text": "Unread: {count}",
+    "semantic_meaning": "Durable mailbox reconciliation summary or live messaging indicator.",
+    "common_locations": [
+      "WebUI message stream adapter"
+    ],
+    "translator_guidance": "Preserve the named count placeholder; never translate sender-authored content.",
+    "grammatical_role": "label",
+    "parameter_schema": {
+      "count": "integer"
+    },
+    "rendered_example": "Unread: 3",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.active_connections",
+    "context_group": "messaging.monitor",
+    "default_text": "Active client connections",
+    "semantic_meaning": "Message preservation and operations: Active client connections",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Active client connections",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.active_inbox",
+    "context_group": "messaging.monitor",
+    "default_text": "Active Inbox entries",
+    "semantic_meaning": "Message preservation and operations: Active Inbox entries",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Active Inbox entries",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.active_outbox",
+    "context_group": "messaging.monitor",
+    "default_text": "Active Outbox entries",
+    "semantic_meaning": "Active Outbox entries",
+    "common_locations": [
+      "Messaging Monitor"
+    ],
+    "translator_guidance": "Content-free operational measurements. Preserve mailbox and connection terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Active Outbox entries",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.alert",
+    "context_group": "messaging.monitor",
+    "default_text": "An operational issue requires attention. Review listener health and failure counters.",
+    "semantic_meaning": "Message preservation and operations: An operational issue requires attention. Review listener health and failure counters.",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "An operational issue requires attention. Review listener health and failure counters.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.approaching_expiry",
+    "context_group": "messaging.monitor",
+    "default_text": "Messages approaching expiry",
+    "semantic_meaning": "Message preservation and operations: Messages approaching expiry",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Messages approaching expiry",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.audit",
+    "context_group": "messaging.monitor",
+    "default_text": "Open authorized audit history",
+    "semantic_meaning": "Message preservation and operations: Open authorized audit history",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Open authorized audit history",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.capture_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Capture failures",
+    "semantic_meaning": "Message preservation and operations: Capture failures",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Capture failures",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.capture_seconds",
+    "context_group": "messaging.monitor",
+    "default_text": "Mean capture processing time (seconds)",
+    "semantic_meaning": "Mean capture processing time (seconds)",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Mean capture processing time (seconds)",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.catchup_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Catch-up failures",
+    "semantic_meaning": "Message preservation and operations: Catch-up failures",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Catch-up failures",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.cleanup_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Cleanup failures",
+    "semantic_meaning": "Message preservation and operations: Cleanup failures",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Cleanup failures",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.cleanup_seconds",
+    "context_group": "messaging.monitor",
+    "default_text": "Mean group cleanup time (seconds)",
+    "semantic_meaning": "Mean group cleanup time (seconds)",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Mean group cleanup time (seconds)",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.connected",
+    "context_group": "messaging.monitor",
+    "default_text": "Listener connected",
+    "semantic_meaning": "Message preservation and operations: Listener connected",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Listener connected",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.delayed_groups",
+    "context_group": "messaging.monitor",
+    "default_text": "Large retained group observations",
+    "semantic_meaning": "Message preservation and operations: Large retained group observations",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Large retained group observations",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.disconnected",
+    "context_group": "messaging.monitor",
+    "default_text": "Listener disconnected",
+    "semantic_meaning": "Message preservation and operations: Listener disconnected",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Listener disconnected",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.eligible_groups",
+    "context_group": "messaging.monitor",
+    "default_text": "Observed groups eligible for purge",
+    "semantic_meaning": "Last bounded cleanup observations: Observed groups eligible for purge",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Observed groups eligible for purge",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.expired_retained",
+    "context_group": "messaging.monitor",
+    "default_text": "Expired messages still retained",
+    "semantic_meaning": "Message preservation and operations: Expired messages still retained",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Expired messages still retained",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.expired_retained_by_group",
+    "context_group": "messaging.monitor",
+    "default_text": "Expired messages waiting for their group",
+    "semantic_meaning": "Last bounded cleanup observations: Expired messages waiting for their group",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Expired messages waiting for their group",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.fanout_count",
+    "context_group": "messaging.monitor",
+    "default_text": "Recipient deliveries created",
+    "semantic_meaning": "Message preservation and operations: Recipient deliveries created",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Recipient deliveries created",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.gateways",
+    "context_group": "messaging.monitor",
+    "default_text": "Real-time gateway instances",
+    "semantic_meaning": "Message preservation and operations: Real-time gateway instances",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Real-time gateway instances",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.group_failures",
+    "context_group": "messaging.monitor",
+    "default_text": "Group cleanup failures",
+    "semantic_meaning": "Last bounded cleanup observations: Group cleanup failures",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Group cleanup failures",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.group_members",
+    "context_group": "messaging.monitor",
+    "default_text": "Observed retention-group members",
+    "semantic_meaning": "Last bounded cleanup observations: Observed retention-group members",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Observed retention-group members",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.group_size",
+    "context_group": "messaging.monitor",
+    "default_text": "Group members examined (total)",
+    "semantic_meaning": "Message preservation and operations: Group members examined (total)",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Group members examined (total)",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.largest_group",
+    "context_group": "messaging.monitor",
+    "default_text": "Largest observed group",
+    "semantic_meaning": "Last bounded cleanup observations: Largest observed group",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Largest observed group",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.last_notification_at",
+    "context_group": "messaging.monitor",
+    "default_text": "Last received notification",
+    "semantic_meaning": "Last received notification",
+    "common_locations": [
+      "Messaging Monitor"
+    ],
+    "translator_guidance": "Content-free operational measurements. Preserve mailbox and connection terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Last received notification",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.listener_generation",
+    "context_group": "messaging.monitor",
+    "default_text": "Listener connections including reconnects",
+    "semantic_meaning": "Listener connections including reconnects",
+    "common_locations": [
+      "Messaging Monitor"
+    ],
+    "translator_guidance": "Content-free operational measurements. Preserve mailbox and connection terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Listener connections including reconnects",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.metrics",
+    "context_group": "messaging.monitor",
+    "default_text": "Operational measurements",
+    "semantic_meaning": "Message preservation and operations: Operational measurements",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Operational measurements",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.notifications_emitted",
+    "context_group": "messaging.monitor",
+    "default_text": "Committed delivery notifications",
+    "semantic_meaning": "Message preservation and operations: Committed delivery notifications",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Committed delivery notifications",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.notifications_received",
+    "context_group": "messaging.monitor",
+    "default_text": "Notifications received",
+    "semantic_meaning": "Message preservation and operations: Notifications received",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Notifications received",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.oldest_eligible_group",
+    "context_group": "messaging.monitor",
+    "default_text": "Oldest observed eligible group",
+    "semantic_meaning": "Last bounded cleanup observations: Oldest observed eligible group",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Oldest observed eligible group",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.oldest_expired_candidate",
+    "context_group": "messaging.monitor",
+    "default_text": "Oldest expired cleanup candidate",
+    "semantic_meaning": "Message preservation and operations: Oldest expired cleanup candidate",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Oldest expired cleanup candidate",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.privacy",
+    "context_group": "messaging.monitor",
+    "default_text": "Operational counts only. This page grants no access to message content or mailboxes.",
+    "semantic_meaning": "Message preservation and operations: Operational counts only. This page grants no access to message content or mailboxes.",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Operational counts only. This page grants no access to message content or mailboxes.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.producers",
+    "context_group": "messaging.monitor",
+    "default_text": "Measurements by notification producer",
+    "semantic_meaning": "Measurements by notification producer",
+    "common_locations": [
+      "Messaging Monitor"
+    ],
+    "translator_guidance": "Content-free operational measurements. Preserve mailbox and connection terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Measurements by notification producer",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.purged_drafts",
+    "context_group": "messaging.monitor",
+    "default_text": "Drafts permanently purged",
+    "semantic_meaning": "Message preservation and operations: Drafts permanently purged",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Drafts permanently purged",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.purged_groups",
+    "context_group": "messaging.monitor",
+    "default_text": "Groups permanently purged",
+    "semantic_meaning": "Message preservation and operations: Groups permanently purged",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Groups permanently purged",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.purged_messages",
+    "context_group": "messaging.monitor",
+    "default_text": "Messages permanently purged",
+    "semantic_meaning": "Message preservation and operations: Messages permanently purged",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Messages permanently purged",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.restorable_inbox",
+    "context_group": "messaging.monitor",
+    "default_text": "Restorable Inbox entries",
+    "semantic_meaning": "Message preservation and operations: Restorable Inbox entries",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Restorable Inbox entries",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.restorable_outbox",
+    "context_group": "messaging.monitor",
+    "default_text": "Restorable Outbox entries",
+    "semantic_meaning": "Restorable Outbox entries",
+    "common_locations": [
+      "Messaging Monitor"
+    ],
+    "translator_guidance": "Content-free operational measurements. Preserve mailbox and connection terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Restorable Outbox entries",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.restricted_count",
+    "context_group": "messaging.monitor",
+    "default_text": "Restricted message presentations",
+    "semantic_meaning": "Message preservation and operations: Restricted message presentations",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Restricted message presentations",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.retention",
+    "context_group": "messaging.monitor",
+    "default_text": "Retention and cleanup",
+    "semantic_meaning": "Message preservation and operations: Retention and cleanup",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Retention and cleanup",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.send_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Failed send requests",
+    "semantic_meaning": "Message preservation and operations: Failed send requests",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Failed send requests",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.send_success",
+    "context_group": "messaging.monitor",
+    "default_text": "Successful send requests",
+    "semantic_meaning": "Message preservation and operations: Successful send requests",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Successful send requests",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.slow_disconnects",
+    "context_group": "messaging.monitor",
+    "default_text": "Slow-client disconnections",
+    "semantic_meaning": "Slow-client disconnections",
+    "common_locations": [
+      "Messaging Monitor"
+    ],
+    "translator_guidance": "Content-free operational measurements. Preserve mailbox and connection terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Slow-client disconnections",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.system_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Atomic system notification failures",
+    "semantic_meaning": "Message preservation and operations: Atomic system notification failures",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Atomic system notification failures",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.system_seconds",
+    "context_group": "messaging.monitor",
+    "default_text": "Mean system notification time (seconds)",
+    "semantic_meaning": "Mean system notification time (seconds)",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Mean system notification time (seconds)",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.test_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Failed test sends",
+    "semantic_meaning": "Message preservation and operations: Failed test sends",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Failed test sends",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.test_rate_rejected",
+    "context_group": "messaging.monitor",
+    "default_text": "Test rate-limit rejections",
+    "semantic_meaning": "Message preservation and operations: Test rate-limit rejections",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Test rate-limit rejections",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.test_seconds",
+    "context_group": "messaging.monitor",
+    "default_text": "Mean test-send time (seconds)",
+    "semantic_meaning": "Mean test-send time (seconds)",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Mean test-send time (seconds)",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.test_success",
+    "context_group": "messaging.monitor",
+    "default_text": "Successful test sends",
+    "semantic_meaning": "Message preservation and operations: Successful test sends",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Successful test sends",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.title",
+    "context_group": "messaging.monitor",
+    "default_text": "Messages Monitor",
+    "semantic_meaning": "Message preservation and operations: Messages Monitor",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Messages Monitor",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.navigation.drafts",
+    "context_group": "messaging.navigation",
+    "default_text": "Drafts",
+    "semantic_meaning": "Human messaging interface: Drafts",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Drafts",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.navigation.inbox",
+    "context_group": "messaging.navigation",
+    "default_text": "Inbox",
+    "semantic_meaning": "Human messaging interface: Inbox",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Inbox",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.navigation.messages",
+    "context_group": "messaging.navigation",
+    "default_text": "Messages",
+    "semantic_meaning": "Human messaging interface: Messages",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Messages",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.navigation.outbox",
+    "context_group": "messaging.navigation",
+    "default_text": "Outbox",
+    "semantic_meaning": "Human messaging interface: Outbox",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Outbox",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.notice.action_amended",
+    "context_group": "messaging.notice",
+    "default_text": "Action amended",
+    "semantic_meaning": "Human messaging interface: Action amended",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Action amended",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.priority.high",
+    "context_group": "messaging.priority",
+    "default_text": "High",
+    "semantic_meaning": "Human messaging interface: High",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "High",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.priority.normal",
+    "context_group": "messaging.priority",
+    "default_text": "Normal",
+    "semantic_meaning": "Human messaging interface: Normal",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Normal",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.priority.very_high",
+    "context_group": "messaging.priority",
+    "default_text": "Very high",
+    "semantic_meaning": "Human messaging interface: Very high",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Very high",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.reason.message_recipient_clearance_required",
+    "context_group": "messaging.reason",
+    "default_text": "No eligible recipient has sufficient security clearance.",
+    "semantic_meaning": "Human messaging interface: No eligible recipient has sufficient security clearance.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "No eligible recipient has sufficient security clearance.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.reason.message_recipient_exchange_required",
+    "context_group": "messaging.reason",
+    "default_text": "No eligible recipient has permission to exchange messages.",
+    "semantic_meaning": "Human messaging interface: No eligible recipient has permission to exchange messages.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "No eligible recipient has permission to exchange messages.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.reason.message_resource_level_too_high",
+    "context_group": "messaging.reason",
+    "default_text": "Raise the message security level to include this resource.",
+    "semantic_meaning": "Human messaging interface: Raise the message security level to include this resource.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Raise the message security level to include this resource.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.reason.message_resource_unavailable",
+    "context_group": "messaging.reason",
+    "default_text": "This resource is no longer available to you.",
+    "semantic_meaning": "Human messaging interface: This resource is no longer available to you.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "This resource is no longer available to you.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.reply.subject_prefix",
+    "context_group": "messaging.reply",
+    "default_text": "Re:",
+    "semantic_meaning": "Conventional prefix for the editable subject of a new reply.",
+    "common_locations": [
+      "New reply composer"
+    ],
+    "translator_guidance": "Retain the conventional email-style Re: prefix in every language, as expressly approved. The original user-authored subject is appended separately and is not translated.",
+    "grammatical_role": "value",
+    "parameter_schema": {},
+    "rendered_example": "Re:",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.retention.deadline",
+    "context_group": "messaging.retention",
+    "default_text": "Restorable until {deadline}",
+    "semantic_meaning": "Message preservation and operations: Restorable until {deadline}",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {
+      "deadline": "text"
+    },
+    "rendered_example": "Restorable until 3 October 2026",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.retention.delete",
+    "context_group": "messaging.retention",
+    "default_text": "Delete my mailbox entry",
+    "semantic_meaning": "Message preservation and operations: Delete my mailbox entry",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Delete my mailbox entry",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.retention.recently_deleted",
+    "context_group": "messaging.retention",
+    "default_text": "Recently deleted",
+    "semantic_meaning": "Show restorable deleted messages in the current Inbox or Outbox.",
+    "common_locations": [
+      "Inbox",
+      "Outbox"
+    ],
+    "translator_guidance": "These are sent messages, not drafts. Deletion is personal to this mailbox.",
+    "grammatical_role": "switch label",
+    "parameter_schema": {},
+    "rendered_example": "Recently deleted",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.retention.restore",
+    "context_group": "messaging.retention",
+    "default_text": "Restore message",
+    "semantic_meaning": "Message preservation and operations: Restore message",
+    "common_locations": [
+      "Messaging record capture, mailbox retention, or operations monitor"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish message restoration from user-account recovery. Capture means saving as a governed record.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Restore message",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.section.amendments",
+    "context_group": "messaging.section",
+    "default_text": "Action amendments",
+    "semantic_meaning": "Human messaging interface: Action amendments",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Action amendments",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.section.effective",
+    "context_group": "messaging.section",
+    "default_text": "Current action",
+    "semantic_meaning": "Human messaging interface: Current action",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Current action",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.section.links",
+    "context_group": "messaging.section",
+    "default_text": "Resource links",
+    "semantic_meaning": "Human messaging interface: Resource links",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Resource links",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.section.original",
+    "context_group": "messaging.section",
+    "default_text": "Original action",
+    "semantic_meaning": "Human messaging interface: Original action",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Original action",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.section.recipients",
+    "context_group": "messaging.section",
+    "default_text": "Recipients and status",
+    "semantic_meaning": "Human messaging interface: Recipients and status",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Recipients and status",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.action_completed",
+    "context_group": "messaging.state",
+    "default_text": "Action completed",
+    "semantic_meaning": "Human messaging interface: Action completed",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Action completed",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.active",
+    "context_group": "messaging.state",
+    "default_text": "Active",
+    "semantic_meaning": "Current effective role or active organizational unit in messaging recipient search.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Active",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.completed",
+    "context_group": "messaging.state",
+    "default_text": "Completed",
+    "semantic_meaning": "Human messaging interface: Completed",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Completed",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.completed_late",
+    "context_group": "messaging.state",
+    "default_text": "Completed late",
+    "semantic_meaning": "Human messaging interface: Completed late",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Completed late",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.empty",
+    "context_group": "messaging.state",
+    "default_text": "No messages to show",
+    "semantic_meaning": "Human messaging interface: No messages to show",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "No messages to show",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.expiring",
+    "context_group": "messaging.state",
+    "default_text": "Approaching expiry",
+    "semantic_meaning": "Human messaging interface: Approaching expiry",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Approaching expiry",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.late",
+    "context_group": "messaging.state",
+    "default_text": "Late",
+    "semantic_meaning": "Human messaging interface: Late",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Late",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.loading",
+    "context_group": "messaging.state",
+    "default_text": "Loading messages…",
+    "semantic_meaning": "Human messaging interface: Loading messages…",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Loading messages…",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.needs_attention",
+    "context_group": "messaging.state",
+    "default_text": "Needs attention",
+    "semantic_meaning": "Human messaging interface: Needs attention",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Needs attention",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.outstanding",
+    "context_group": "messaging.state",
+    "default_text": "Outstanding",
+    "semantic_meaning": "Human messaging interface: Outstanding",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Outstanding",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.ready_validate",
+    "context_group": "messaging.state",
+    "default_text": "Ready to validate on send",
+    "semantic_meaning": "Human messaging interface: Ready to validate on send",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Ready to validate on send",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.restricted",
+    "context_group": "messaging.state",
+    "default_text": "Restricted message",
+    "semantic_meaning": "Human messaging interface: Restricted message",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Restricted message",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.saved",
+    "context_group": "messaging.state",
+    "default_text": "Draft saved",
+    "semantic_meaning": "Human messaging interface: Draft saved",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Draft saved",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.sent",
+    "context_group": "messaging.state",
+    "default_text": "Message sent",
+    "semantic_meaning": "Human messaging interface: Message sent",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Message sent",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.unavailable",
+    "context_group": "messaging.state",
+    "default_text": "Resource unavailable",
+    "semantic_meaning": "Human messaging interface: Resource unavailable",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Resource unavailable",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.state.withdrawn",
+    "context_group": "messaging.state",
+    "default_text": "Withdrawn",
+    "semantic_meaning": "Human messaging interface: Withdrawn",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Preserve the messaging meaning; a message is not a record or workflow.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Withdrawn",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.test.label",
+    "context_group": "messaging.test",
+    "default_text": "TEST — not a production notification",
+    "semantic_meaning": "Notification administration and immutable test-message presentation: label.",
+    "common_locations": [
+      "Notification Administration and messaging"
+    ],
+    "translator_guidance": "Use precise administrator-facing wording; preserve placeholders and permanent test distinction.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "TEST — not a production notification",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.value.false",
+    "context_group": "messaging.value",
+    "default_text": "No",
+    "semantic_meaning": "Notification administration: false.",
+    "common_locations": [
+      "Notification Administration"
+    ],
+    "translator_guidance": "Preserve placeholders and the stated limits.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "No",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.value.true",
+    "context_group": "messaging.value",
+    "default_text": "Yes",
+    "semantic_meaning": "Notification administration: true.",
+    "common_locations": [
+      "Notification Administration"
+    ],
+    "translator_guidance": "Preserve placeholders and the stated limits.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Yes",
+    "is_html": false
   },
   {
     "message_key": "navigation.item.advanced_search",
@@ -9266,6 +12968,90 @@
     "is_html": false
   },
   {
+    "message_key": "privilege.messaging.monitor.description",
+    "context_group": "privilege.messaging.monitor",
+    "default_text": "Read sanitized messaging operational health.",
+    "semantic_meaning": "Messaging privilege description",
+    "common_locations": [
+      "Authorization administration"
+    ],
+    "translator_guidance": "Use approved messaging and authorization terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Read sanitized messaging operational health.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.messaging.monitor.name",
+    "context_group": "privilege.messaging.monitor",
+    "default_text": "Monitor messaging",
+    "semantic_meaning": "Messaging privilege name",
+    "common_locations": [
+      "Authorization administration"
+    ],
+    "translator_guidance": "Use approved messaging and authorization terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Monitor messaging",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.messaging.notifications.administer.description",
+    "context_group": "privilege.messaging.notifications.administer",
+    "default_text": "Configure registered notification producers and controlled tests.",
+    "semantic_meaning": "Messaging privilege description",
+    "common_locations": [
+      "Authorization administration"
+    ],
+    "translator_guidance": "Use approved messaging and authorization terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Configure registered notification producers and controlled tests.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.messaging.notifications.administer.name",
+    "context_group": "privilege.messaging.notifications.administer",
+    "default_text": "Administer notifications",
+    "semantic_meaning": "Messaging privilege name",
+    "common_locations": [
+      "Authorization administration"
+    ],
+    "translator_guidance": "Use approved messaging and authorization terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Administer notifications",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.messaging.user_messages.exchange.description",
+    "context_group": "privilege.messaging.user_messages.exchange",
+    "default_text": "Send and receive human-authored messages.",
+    "semantic_meaning": "Messaging privilege description",
+    "common_locations": [
+      "Authorization administration"
+    ],
+    "translator_guidance": "Use approved messaging and authorization terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Send and receive human-authored messages.",
+    "is_html": false
+  },
+  {
+    "message_key": "privilege.messaging.user_messages.exchange.name",
+    "context_group": "privilege.messaging.user_messages.exchange",
+    "default_text": "Exchange messages",
+    "semantic_meaning": "Messaging privilege name",
+    "common_locations": [
+      "Authorization administration"
+    ],
+    "translator_guidance": "Use approved messaging and authorization terminology.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Exchange messages",
+    "is_html": false
+  },
+  {
     "message_key": "privilege.org_unit.modify_metadata.description",
     "context_group": "privilege.org_unit.modify_metadata",
     "default_text": "Modify multilingual names and descriptions for organization units.",
@@ -10408,11 +14194,132 @@
     "is_html": false
   },
   {
+    "message_key": "resource_picker.add_selected",
+    "context_group": "resource_picker",
+    "default_text": "Add selected",
+    "semantic_meaning": "Shared record and aggregation selection dialog: Add selected",
+    "common_locations": [
+      "Shared resource picker",
+      "Message compose"
+    ],
+    "translator_guidance": "Resources are existing Wathiq records (وثائق) and aggregations (ملفات); selecting creates references, not file uploads.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Add selected",
+    "is_html": false
+  },
+  {
+    "message_key": "resource_picker.empty",
+    "context_group": "resource_picker",
+    "default_text": "No resources match this search.",
+    "semantic_meaning": "Shared record and aggregation selection dialog: No resources match this search.",
+    "common_locations": [
+      "Shared resource picker",
+      "Message compose"
+    ],
+    "translator_guidance": "Resources are existing Wathiq records (وثائق) and aggregations (ملفات); selecting creates references, not file uploads.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "No resources match this search.",
+    "is_html": false
+  },
+  {
+    "message_key": "resource_picker.limit",
+    "context_group": "resource_picker",
+    "default_text": "The selected resources exceed the remaining message link limit. Remove some selections.",
+    "semantic_meaning": "Shared record and aggregation selection dialog: The selected resources exceed the remaining message link limit. Remove some selections.",
+    "common_locations": [
+      "Shared resource picker",
+      "Message compose"
+    ],
+    "translator_guidance": "Resources are existing Wathiq records (وثائق) and aggregations (ملفات); selecting creates references, not file uploads.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "The selected resources exceed the remaining message link limit. Remove some selections.",
+    "is_html": false
+  },
+  {
+    "message_key": "resource_picker.prompt",
+    "context_group": "resource_picker",
+    "default_text": "Enter a search term, then press Search or Enter.",
+    "semantic_meaning": "The resource picker starts empty and sends no request until the user submits a nonblank full-text query.",
+    "common_locations": [
+      "Shared resource picker"
+    ],
+    "translator_guidance": "Search covers indexed resource numbers, titles, descriptions and accessible component contents. Enter refers to the keyboard key.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Enter a search term, then press Search or Enter.",
+    "is_html": false
+  },
+  {
+    "message_key": "resource_picker.query",
+    "context_group": "resource_picker",
+    "default_text": "Search text",
+    "semantic_meaning": "Shared record and aggregation selection dialog: Search text",
+    "common_locations": [
+      "Shared resource picker",
+      "Message compose"
+    ],
+    "translator_guidance": "Resources are existing Wathiq records (وثائق) and aggregations (ملفات); selecting creates references, not file uploads.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Search text",
+    "is_html": false
+  },
+  {
+    "message_key": "resource_picker.search",
+    "context_group": "resource_picker",
+    "default_text": "Search",
+    "semantic_meaning": "Shared record and aggregation selection dialog: Search",
+    "common_locations": [
+      "Shared resource picker",
+      "Message compose"
+    ],
+    "translator_guidance": "Resources are existing Wathiq records (وثائق) and aggregations (ملفات); selecting creates references, not file uploads.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Search",
+    "is_html": false
+  },
+  {
+    "message_key": "resource_picker.selected",
+    "context_group": "resource_picker",
+    "default_text": "Selected resources",
+    "semantic_meaning": "Shared record and aggregation selection dialog: Selected resources",
+    "common_locations": [
+      "Shared resource picker",
+      "Message compose"
+    ],
+    "translator_guidance": "Resources are existing Wathiq records (وثائق) and aggregations (ملفات); selecting creates references, not file uploads.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Selected resources",
+    "is_html": false
+  },
+  {
+    "message_key": "resource_picker.title",
+    "context_group": "resource_picker",
+    "default_text": "Add resources",
+    "semantic_meaning": "Shared record and aggregation selection dialog: Add resources",
+    "common_locations": [
+      "Shared resource picker",
+      "Message compose"
+    ],
+    "translator_guidance": "Resources are existing Wathiq records (وثائق) and aggregations (ملفات); selecting creates references, not file uploads.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Add resources",
+    "is_html": false
+  },
+  {
     "message_key": "saved_search.administration.filter.created_before",
     "context_group": "saved_search.administration",
     "default_text": "Created before",
     "semantic_meaning": "Upper creation-date boundary for the saved-search administration inventory.",
-    "common_locations": ["Saved Search Administration"],
+    "common_locations": [
+      "Saved Search Administration"
+    ],
     "translator_guidance": "Translate as a concise date-filter label.",
     "grammatical_role": "field label",
     "parameter_schema": {},
@@ -10424,7 +14331,9 @@
     "context_group": "saved_search.administration",
     "default_text": "Created from",
     "semantic_meaning": "Lower creation-date boundary for the saved-search administration inventory.",
-    "common_locations": ["Saved Search Administration"],
+    "common_locations": [
+      "Saved Search Administration"
+    ],
     "translator_guidance": "Translate as a concise date-filter label.",
     "grammatical_role": "field label",
     "parameter_schema": {},
@@ -10436,7 +14345,9 @@
     "context_group": "saved_search.administration",
     "default_text": "Owner name or email",
     "semantic_meaning": "Owner filter for the saved-search administration inventory.",
-    "common_locations": ["Saved Search Administration"],
+    "common_locations": [
+      "Saved Search Administration"
+    ],
     "translator_guidance": "Translate as a concise search-field label.",
     "grammatical_role": "field label",
     "parameter_schema": {},
@@ -14198,6 +18109,22 @@
     "grammatical_role": "interface text",
     "parameter_schema": {},
     "rendered_example": "Assigned roles",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.index.label.database_display_name_31c6f7d2",
+    "context_group": "webui.index",
+    "default_text": "Database: {database_name}",
+    "semantic_meaning": "Identifies the configured database environment in the application footer.",
+    "common_locations": [
+      "WebUI: application footer"
+    ],
+    "translator_guidance": "Translate the Database label concisely and preserve the database_name placeholder exactly. The placeholder value is supplied separately for the active language.",
+    "grammatical_role": "label with value",
+    "parameter_schema": {
+      "database_name": "text"
+    },
+    "rendered_example": "Database: Production Database",
     "is_html": false
   },
   {

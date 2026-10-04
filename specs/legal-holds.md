@@ -4,7 +4,9 @@
 **Approved:** 22 September 2026  
 **Prepared:** 22 September 2026  
 **Project:** ERMS / Wathiq  
-**Revision:** 1.0
+**Revision:** 1.1
+
+**Notification extension approved:** 3 October 2026
 
 ## 1. Purpose
 
@@ -1008,3 +1010,87 @@ pass.
 6. **The first-release held-items table lists direct held items only.** Every row
    provides an authorized **Open** action to navigate to the aggregation or
    record. Effectively protected descendants are not expanded in this table.
+
+## Built-in system notifications (approved 3 October 2026)
+
+The legal-hold subsystem registers two optional producers under MSG-018 and
+MSG-019 of the notifications and messaging specification. These notifications
+are informational: they request neither read receipts nor action completion.
+They do not change the hold's protections or resource permissions.
+
+### Responsibility assignment — `holds.responsibility_assigned`
+
+After creating a hold, notify its owner and each initial contributor. After
+changing the owner, notify the newly assigned owner. After replacing
+contributors, notify only newly added contributors. Unchanged assignments,
+removals, rejected changes, and changes to unrelated fields create no assignment
+notification. Each newly assigned person receives a separate envelope so that
+one assignment does not disclose other responsible people.
+
+The audience is the newly assigned active person, resolved by backend code from
+the persisted hold responsibility. Clients cannot supply notification audiences
+or content. The event identifier combines the committed hold event-history ID
+and the assigned user ID. Typed context consists of integer `hold_id` and
+`user_id`; neither appears in the supplied template. Retries of the same event
+must not create a second delivery.
+
+### Approaching end — `holds.approaching_end`
+
+An active hold becomes eligible when its non-null end timestamp is no more than
+seven days away and remains strictly later than the current database time.
+Scheduled holds, expired holds, and holds without an end date are excluded.
+One reminder is sent to the current active owner and active contributors,
+deduplicated by person. If no eligible person exists, no reminder is recorded;
+the worker may try again while the hold remains eligible.
+
+The reminder is unique for the pair `(hold ID, end timestamp)`. Changing the end
+timestamp permits a reminder for the new timestamp once it becomes eligible.
+Returning to a timestamp already notified does not create another reminder.
+Changing responsibilities alone does not repeat an already-sent reminder.
+Worker retries, restarts, multiple API instances, and later message purge must
+not repeat a processed pair. Processing after downtime sends only still-eligible
+reminders; it never sends a reminder after expiry.
+
+The context contains integer `hold_id` and datetime `end_date`. The backend
+resolves the current audience; only the localized end timestamp appears in the
+supplied template. Delivery does not imply that resources become deletable at
+that time: other holds and controls may continue to apply.
+
+### Configuration, privacy, and transaction behavior
+
+Both producers are optional and use normal priority initially. The only allowed
+audience mode for each is its feature-owned resolver; neither supports static
+recipients or structured resource links. The initial templates contain no hold
+name, code, case description, resource title, or confidential content. Messages
+use the messaging subsystem's baseline security level.
+
+The producer catalogue is seeded separately from schema creation. A governed
+configuration installer provides English and Arabic templates, attributed to a
+named notification administrator, and activates them through the ordinary
+configuration service. Existing active configurations and pending administrator
+drafts are preserved. Unconfigured producers remain dormant; administrators may
+disable configured producers. No historical assignment notifications are sent
+on activation. Enabling the reminder producer permits still-eligible reminders.
+
+An enabled assignment notification and its responsibility change commit in one
+consistent-snapshot transaction. Failure rolls back both. An enabled reminder
+and its processed-pair checkpoint likewise commit together; failure leaves the
+pair retryable. Disabling the reminder producer does not mark pairs processed.
+Recipient and fan-out limits remain those of MSG-018; they are not bypassed.
+
+The API lifecycle worker checks for reminders approximately once per minute,
+using a bounded batch of at most 100 holds and a transaction-scoped leader lock.
+It uses the ordinary application connection pool. Durable checkpoints are
+independent of message retention and are removed when their hold is deleted.
+
+Notification templates are versioned notification configuration, not new UI
+catalogue keys. Arabic templates reuse the checked-in terminology
+«تعليق قنوني». Existing UI translations and their provenance remain unchanged.
+
+The two producers use these feature-seeded display names independently of their
+notification templates:
+
+| Producer | English | Arabic |
+| --- | --- | --- |
+| `holds.approaching_end` | Legal hold approaching expiry | اقتراب انتهاء تعليق قنوني |
+| `holds.responsibility_assigned` | Legal hold responsibility assigned | إسناد مسؤولية بشأن تعليق قنوني |

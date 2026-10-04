@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
-import secrets
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -49,9 +44,6 @@ router = APIRouter(
     prefix="/api/v1",
     tags=["security levels"],
 )
-_PREVIEW_SECRET = secrets.token_bytes(32)
-
-
 def _level(connection: Connection, level_id: int) -> dict[str, Any]:
     row = connection.execute("SELECT * FROM security_levels WHERE id=%s", (level_id,)).fetchone()
     if row is None:
@@ -116,27 +108,6 @@ def _subtree_above(connection: Connection, aggregation_id: int, target: int) -> 
     return aggregations, records
 
 
-def _unsigned_payload(data: dict[str, Any]) -> bytes:
-    return json.dumps(data, sort_keys=True, separators=(",", ":")).encode()
-
-
-def _sign(data: dict[str, Any]) -> str:
-    body = _unsigned_payload(data)
-    signature = hmac.new(_PREVIEW_SECRET, body, hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(body + signature).decode().rstrip("=")
-
-
-def _verify(token: str) -> dict[str, Any]:
-    try:
-        raw = base64.urlsafe_b64decode(token + "=" * (-len(token) % 4))
-        body, signature = raw[:-32], raw[-32:]
-        if not hmac.compare_digest(signature, hmac.new(_PREVIEW_SECRET, body, hashlib.sha256).digest()):
-            raise ValueError
-        return json.loads(body)
-    except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
-        raise HTTPException(status_code=409, detail="invalid or expired security-level preview") from error
-
-
 def _build_preview(connection: Connection, request: SecurityLevelChangePreviewRequest) -> dict[str, Any]:
     target = _level(connection, request.target_security_level_id)
     resource = _resource(connection, request.resource_type, request.resource_id)
@@ -165,16 +136,13 @@ def _build_preview(connection: Connection, request: SecurityLevelChangePreviewRe
         "aggregations": {str(row["id"]): row["version"] for row in affected_aggregations},
         "records": {str(row["id"]): row["version"] for row in affected_records},
     }
-    request_data = request.model_dump()
-    payload = {"request": request_data, "versions": versions}
     return {
-        "preview_token": _sign(payload),
         "conflict": conflict,
         "remedy": request.remedy,
         "target_level_number": target["level_number"],
         "affected_aggregations": affected_aggregations,
         "affected_records": affected_records,
-        "_payload": payload,
+        "reviewed_versions": versions,
     }
 
 
@@ -346,9 +314,7 @@ def preview_security_level_change(
             connection, "aggregation", payload.destination_aggregation_id,
             source_permission, receive_permission, lock=False,
         )
-    preview = _build_preview(connection, payload)
-    preview.pop("_payload", None)
-    return preview
+    return _build_preview(connection, payload)
 
 
 @router.post("/security-level-changes/apply")
@@ -360,12 +326,11 @@ def apply_security_level_change(
     reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
     if not reason:
         raise HTTPException(status_code=422, detail="X-Change-Reason is required")
-    original = _verify(payload.preview_token)
-    preview_request = SecurityLevelChangePreviewRequest(**payload.model_dump(exclude={"preview_token"}))
-    if original["request"] != preview_request.model_dump():
-        raise HTTPException(status_code=409, detail="security-level preview does not match request")
+    preview_request = SecurityLevelChangePreviewRequest(
+        **payload.model_dump(exclude={"reviewed_versions"})
+    )
     current = _build_preview(connection, preview_request)
-    if current["_payload"]["versions"] != original["versions"]:
+    if current["reviewed_versions"] != payload.reviewed_versions.model_dump():
         raise HTTPException(status_code=412, detail="security-level preview is stale")
     if current["conflict"] and payload.remedy == "none":
         raise HTTPException(status_code=409, detail="security_hierarchy_violation")
@@ -405,6 +370,9 @@ def apply_security_level_change(
     target_level = _level(connection, target_id)
     if target_level["level_number"] < old_level["level_number"]:
         require_global(connection, "security.resource.downgrade")
+    connection.execute(
+        "SELECT set_config('app.security_level_change_authorized','authorized',true)"
+    )
     for row in current["affected_records"]:
         connection.execute("UPDATE records SET security_level_id=%s WHERE id=%s", (target_id, row["id"]))
     for row in current["affected_aggregations"]:
@@ -418,8 +386,11 @@ def apply_security_level_change(
     if payload.destination_aggregation_id is not None:
         assignments.append(f"{parent_column}=%s")
         parameters.append(payload.destination_aggregation_id)
-    parameters.append(payload.resource_id)
-    connection.execute(f"UPDATE {table} SET {','.join(assignments)} WHERE id=%s", parameters)
+    if target_id != old_level["id"] or payload.destination_aggregation_id is not None:
+        parameters.append(payload.resource_id)
+        connection.execute(
+            f"UPDATE {table} SET {','.join(assignments)} WHERE id=%s", parameters
+        )
     append_security_level_event(
         connection,
         entity_type=payload.resource_type,

@@ -604,6 +604,7 @@ class ErmsApiClient:
     async def browse_page(
         self, path: str, *, cursor: str | None = None, query: str = "", limit: int = 50,
         owning_org_unit_id: int | None = None,
+        record_creation: bool = False, digital_only: bool = False,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {"limit": limit}
         if cursor:
@@ -612,6 +613,8 @@ class ErmsApiClient:
             params["query"] = query
         if owning_org_unit_id is not None:
             params["owning_org_unit_id"] = owning_org_unit_id
+        if record_creation:
+            params.update(record_creation=True, digital_only=digital_only)
         return await self.request("GET", f"/api/v1/browse/{path}", params=params)
 
     async def history(self, resource: str, entity_id: int, *, limit: int = 200) -> list[dict[str, Any]]:
@@ -1236,13 +1239,32 @@ class ErmsApiClient:
             files={"file": (name, content, mime_type or "application/octet-stream")},
         )
 
-    async def components(self, record_id: int) -> list[dict[str, Any]]:
-        return await self.request(
-            "GET", "/api/v1/digital-components", params={"record_id": record_id}
-        )
+    async def component_page(
+        self, record_id: int, *, limit: int = 25, offset: int = 0,
+    ) -> dict[str, Any]:
+        """Return one authorized, deterministically ordered component page."""
+        return await self.search_request("digital-components", {
+            "where": {"field": "record_id", "operator": "eq", "value": record_id},
+            "sort": [
+                {"field": "component_order", "direction": "asc"},
+                {"field": "id", "direction": "asc"},
+            ],
+            "limit": limit,
+            "offset": offset,
+        })
+
+    async def component_count(self, record_id: int) -> int:
+        return int((await self.component_page(record_id, limit=1))["total"])
 
     async def reorder_components(self, record_id: int, components: list[dict[str, int]]) -> None:
         await self.request("PUT", f"/api/v1/records/{record_id}/digital-components/order", json={"components": components})
+
+    async def move_component(self, record_id: int, component_id: int, direction: int) -> None:
+        await self.request(
+            "POST",
+            f"/api/v1/records/{record_id}/digital-components/{component_id}/move",
+            json={"direction": direction},
+        )
 
     async def delete_component(self, component_id: int, version: int) -> None:
         await self.request("DELETE", f"/api/v1/digital-components/{component_id}", headers={"If-Match": str(version)})
@@ -1291,14 +1313,14 @@ class ErmsApiClient:
         await self.request("DELETE", f"/api/v1/record-drafts/{draft_id}/components/{component_id}")
 
     async def commit_record_draft(
-        self, draft_id: int, creator_acl_role_id: int | None = None,
+        self, draft_id: int, creator_acl_role_id: int | None = None, *, capture: bool = False,
     ) -> dict[str, Any]:
         params = (
             {"creator_acl_role_id": creator_acl_role_id}
             if creator_acl_role_id is not None else None
         )
         return await self.request(
-            "POST", f"/api/v1/record-drafts/{draft_id}/commit", params=params,
+            "POST", f"/api/v1/record-drafts/{draft_id}/commit", params=params, timeout=660 if capture else 30,
         )
 
     async def discard_record_draft(self, draft_id: int) -> None:

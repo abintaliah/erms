@@ -41,6 +41,50 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
     """
     if path == "/health" or (method == "POST" and path == "/api/v1/auth/login"):
         return "public", None, None
+    if path == "/api/v1/messages/stream/sse":
+        return "relationship_scoped", None, None
+    if path.startswith("/api/v1/messages/monitor"):
+        return "globally_privileged", "messaging.monitor", None
+    if path in {"/api/v1/messages/{envelope_id}/capture", "/api/v1/messages/{envelope_id}/capture-preview"}:
+        return "relationship_scoped", "record.create", None
+    if path.startswith("/api/v1/messages/recently-deleted/") or path in {"/api/v1/messages/{mailbox}/{identity}", "/api/v1/messages/{mailbox}/{identity}/restore"}:
+        return "relationship_scoped", None, None
+    if path.startswith("/api/v1/notification-administration/"):
+        return "globally_privileged", "messaging.notifications.administer", None
+    if (method, path) in {
+        ("GET", "/api/v1/messages/linked/{root_id}/{target_id}"),
+        ("POST", "/api/v1/messages/outbox/{envelope_id}/amendments"),
+        ("GET", "/api/v1/messages/{envelope_id}/amendments"),
+        ("GET", "/api/v1/messages/drafts"), ("POST", "/api/v1/messages/drafts"),
+        ("GET", "/api/v1/messages/drafts/{draft_id}"), ("PUT", "/api/v1/messages/drafts/{draft_id}"),
+        ("DELETE", "/api/v1/messages/drafts/{draft_id}"),
+        ("POST", "/api/v1/messages/drafts/{draft_id}/restore"),
+        ("POST", "/api/v1/messages/drafts/{draft_id}/send"),
+    }:
+        return "relationship_scoped", "messaging.user_messages.exchange", None
+    messaging_global_operations = {
+        ("GET", "/api/v1/messages/capabilities"),
+        ("GET", "/api/v1/messages/recipients/{kind}"),
+        ("POST", "/api/v1/messages/recipients/validate"),
+        ("POST", "/api/v1/messages/send"),
+    }
+    if (method, path) in messaging_global_operations:
+        return "globally_privileged", "messaging.user_messages.exchange", None
+    if method == "GET" and path in {
+        "/api/v1/messages/resources/{kind}", "/api/v1/messages/outbox",
+        "/api/v1/messages/outbox/{envelope_id}",
+        "/api/v1/messages/outbox/{envelope_id}/recipients",
+    }:
+        return "relationship_scoped", "messaging.user_messages.exchange", None
+    if (method, path) in {
+        ("GET", "/api/v1/messages/inbox"),
+        ("GET", "/api/v1/messages/inbox/{delivery_id}"),
+        ("GET", "/api/v1/messages/catch-up"),
+        ("GET", "/api/v1/messages/unread-count"),
+        ("POST", "/api/v1/messages/inbox/{delivery_id}/read"),
+    }:
+        # Owner-scoped; exchange is conditional on human versus system content.
+        return "relationship_scoped", None, None
     if path.startswith("/api/v1/internal/text-indexing/"):
         return "service_lease_scoped", "content.index.execute", None
     if path == "/api/v1/full-text-search":
@@ -154,8 +198,10 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         return "globally_privileged", "authorization.administer", None
     if path.startswith(("/api/v1/profiles", "/api/v1/privileges")) or "/profile" in path:
         return "globally_privileged", "authorization.administer", None
-    if path == "/api/v1/permissions":
-        return "globally_privileged", "authorization.administer", None
+    if method == "GET" and path == "/api/v1/permissions":
+        # The resource_type query parameter selects an alternative global
+        # privilege; there is no resource-instance ACL gate for this catalogue.
+        return "relationship_scoped", None, None
     if path.startswith(("/api/v1/roles", "/api/v1/org-units", "/api/v1/user-role-assignments")):
         return "globally_privileged", "organization.administer", None
     if method == "GET" and path == "/api/v1/classifications/{classification_id}/path":
@@ -199,7 +245,7 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
             return "resource_scoped", "record.component.replace", "record.component.replace"
         if method == "DELETE" and path.endswith("/content"):
             return "resource_scoped", "record.component.remove", "record.component.remove"
-        if path.endswith("/order"):
+        if path.endswith("/order") or path.endswith("/move"):
             return "resource_scoped", "record.component.reorder", "record.component.reorder"
         if method == "POST" and (path.endswith("/upload") or path.endswith("/components")):
             return "resource_scoped", "record.component.add", "record.component.add"
@@ -306,6 +352,15 @@ def api_operations() -> list[dict[str, Any]]:
                     "target_policy_class": target_class,
                     "global_privilege": privilege,
                     "resource_permission": permission,
+                    **({"conditional_global_privileges": {
+                        "query_parameter": "resource_type",
+                        "match": "any",
+                        "when_omitted": ["authorization.administer"],
+                        "by_value": {
+                            "aggregation": ["authorization.administer", "aggregation.acl.manage"],
+                            "record": ["authorization.administer", "record.acl.manage"],
+                        },
+                    }} if (upper_method, path) == ("GET", "/api/v1/permissions") else {}),
                     "phase_0_enforced": False,
                     "phase_4_enforced": target_class == "globally_privileged",
                     "phase_5_enforced": (

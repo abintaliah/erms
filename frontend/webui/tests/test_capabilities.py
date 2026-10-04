@@ -79,3 +79,8 @@ def test_governed_capabilities_fail_closed_when_a_response_field_is_missing():
     assert capability_allowed({"remove_component": True}, "remove_component")
     assert not capability_allowed({}, "remove_component")
     assert not capability_allowed({"remove_component": False}, "remove_component")
+
+
+def test_notification_administration_is_independent_of_exchange_monitor_and_audit():
+    assert can_navigate('messages-notifications', {'messaging.notifications.administer'})
+    assert not can_navigate('messages-notifications', {'messaging.monitor','audit.view','messaging.user_messages.exchange'})

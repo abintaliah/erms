@@ -48,6 +48,15 @@ def storage_secret() -> str:
     return os.getenv("WEBUI_STORAGE_SECRET", "local-development-change-me")
 
 
+def database_display_name(language_tag: str) -> str:
+    default_name = os.getenv("DATABASE_DISPLAY_NAME", "").strip()
+    if not default_name:
+        raise RuntimeError("DATABASE_DISPLAY_NAME is required")
+    language = language_tag.strip().split("-", 1)[0].upper()
+    localized_name = os.getenv(f"DATABASE_DISPLAY_NAME_{language}", "").strip()
+    return localized_name or default_name
+
+
 def default_root_aggregation_medium() -> str:
     value = os.getenv("DEFAULT_ROOT_AGGREGATION_MEDIUM", "mixed").strip().lower()
     if value not in {"digital", "physical", "mixed"}:

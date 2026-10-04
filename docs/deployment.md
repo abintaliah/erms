@@ -37,10 +37,9 @@ neither the same physical application server nor sticky sessions.
 
 `API_WORKERS` can increase the number of API worker processes on one server.
 Each worker has its own database connection pool. Budget database connections
-across all instances: the application pool maximum is approximately
-`instance count × API_WORKERS × DB_POOL_MAX_SIZE`, plus connections for
-administration and other clients. Increasing API capacity does not increase
-database capacity automatically.
+across all instances, including one dedicated messaging listener per worker,
+as calculated in [PostgreSQL connection sizing](#postgresql-connection-sizing).
+Increasing API capacity does not increase database capacity automatically.
 
 ### NiceGUI instances
 
@@ -82,6 +81,130 @@ Redis is optional and does not preserve live pages. To enable shared storage:
 Redis is additional infrastructure for shared UI storage; PostgreSQL remains
 the authority for API authentication and records. See the
 [NiceGUI Redis deployment example](https://github.com/zauberzeug/nicegui/tree/main/examples/redis_storage).
+
+## PostgreSQL connection sizing
+
+Wathiq does not reserve a PostgreSQL connection for each signed-in user or
+browser tab. Each connected page has a long-lived messaging stream to the API
+(through NiceGUI in the current WebUI). Every API worker shares **one dedicated
+PostgreSQL `LISTEN` connection** across its connected messaging clients. This
+connection is outside the application's request pool, but still counts toward
+PostgreSQL's connection limit.
+
+| Connection | Allocation | Uses the application database pool? |
+| --- | --- | --- |
+| Messaging WebSocket or SSE stream to the API | One per connected page/tab | No; this is an HTTP/WebSocket connection, not a database connection |
+| PostgreSQL messaging listener | One per API worker process | No; dedicated, long-lived, autocommit connection |
+| Ordinary queries, including catch-up, unread counts and stream authentication checks | Borrowed briefly as needed | Yes |
+
+### Calculate the database connection budget
+
+For instances with the same pool configuration:
+
+```text
+W = peak total API worker processes across all instances
+P = DB_POOL_MAX_SIZE per worker
+O = peak database connections from other services, jobs and tools
+H = operational headroom for temporary or unexpected connections
+R = superuser_reserved_connections + reserved_connections
+
+API connection budget = W × (P + 1)
+Required max_connections ≥ W × (P + 1) + O + H + R
+```
+
+For identical instances, `W = instance count × API_WORKERS`. Include autoscaling
+peaks and old/new worker overlap during rolling restarts. If pool sizes differ,
+sum `(pool maximum + 1 listener)` for every worker instead of using `W × (P + 1)`.
+Count other database clients across the entire PostgreSQL server, including
+other databases, direct maintenance jobs, migration tools and monitoring.
+NiceGUI and REST-only text indexers do not add their own direct database pools;
+their API requests consume the API pools already counted above.
+
+The repository defaults are `DB_POOL_MIN_SIZE=1` and `DB_POOL_MAX_SIZE=10`.
+Budget against the maximum, even though pools can use fewer connections when
+idle. At these defaults, each API worker can use up to **11 database connections**.
+
+Worked example (illustrative allocation, not a measured user-capacity guarantee):
+
+| Allocation | Connections |
+| --- | ---: |
+| Two API instances, two workers each: `4 × (10 + 1)` | 44 |
+| Other services, jobs and administrative tools | 10 |
+| Operational headroom | 20 |
+| Superuser reserve of 3; other reserved connections of 0 | 3 |
+| **Required total** | **77** |
+
+`max_connections=100` accommodates this example. If a rolling deployment
+temporarily doubles those four API workers, the same calculation becomes
+`8 × 11 + 10 + 20 + 3 = 121`; a limit of 100 would no longer cover that peak.
+
+### PostgreSQL settings and inspection
+
+For the first example, the PostgreSQL configuration would be:
+
+```conf
+max_connections = 100
+superuser_reserved_connections = 3
+reserved_connections = 0
+```
+
+Use the values calculated for the actual deployment. Reserved slots are part
+of `max_connections`, not additional slots above it; exclude them from ordinary
+application capacity. These settings require a PostgreSQL restart. Increasing
+`max_connections` increases resource allocation, including shared memory, so
+raising it alone is not a performance improvement. See the official
+[PostgreSQL connection settings](https://www.postgresql.org/docs/18/runtime-config-connection.html).
+
+Read the active settings and current connection usage with:
+
+```sql
+SELECT name, setting, pending_restart
+FROM pg_settings
+WHERE name IN ('max_connections', 'superuser_reserved_connections',
+               'reserved_connections')
+ORDER BY name;
+
+SELECT datname, usename, application_name, state, count(*) AS connections
+FROM pg_stat_activity
+WHERE backend_type = 'client backend'
+GROUP BY datname, usename, application_name, state
+ORDER BY datname, usename, application_name, state;
+```
+
+Listener connections appear with `application_name='wathiq-message-listener'`.
+An idle listener is expected: it waits outside a transaction. Observe usage
+during peak traffic and deployment overlap, not only while the application is
+idle. Also check any connection limits imposed on the application database role,
+the database itself, or a database proxy; those limits can reject connections
+before the server-wide maximum is reached.
+
+If the request DSN uses a transaction-pooling proxy, set
+`MESSAGING_LISTENER_DATABASE_URL` to a direct or session-pooled connection to
+the **same database**. The listener must retain its PostgreSQL session. With
+a transaction pooler, budget its actual maximum PostgreSQL server connections
+instead of counting each application-to-pooler connection as a server connection;
+then add the dedicated listeners and other direct clients separately.
+
+### Relate the budget to concurrent users
+
+There is no fixed conversion from concurrent users to PostgreSQL connections.
+Users may have several tabs/devices, and active users generate different query
+loads. Estimate peak connected pages and peak activity, load-test representative
+workflows, and choose worker and pool counts from observed latency, pool waits,
+database CPU, memory and I/O. Then apply the connection-budget formula above.
+
+`MESSAGING_STREAM_MAX_CONNECTIONS=1000` is the default client-stream ceiling
+**per API worker**, and `MESSAGING_STREAM_MAX_USER_CONNECTIONS=20` is the default
+per-user ceiling per worker. Neither value allocates PostgreSQL connections or
+proves that the deployment can support that many active clients. Allow for
+uneven stream distribution and reconnection bursts. Stream heartbeats also make
+short authentication queries through the existing request pool.
+
+The API proxy must support WebSocket upgrades, disable SSE response buffering,
+and allow idle timeouts longer than `MESSAGING_STREAM_HEARTBEAT_SECONDS`
+(default 15 seconds). These transport settings are separate from PostgreSQL's
+connection budget. See the [Phase 3 implementation report](notifications-and-messaging-phase-3.md)
+for the event contract, queue limits, recovery behavior and verification evidence.
 
 ## Server preparation and configuration
 
@@ -226,6 +349,8 @@ the one-shot `cleanup` command hourly; do not use both scheduling models.
 Example `/etc/erms/webui.env`:
 
 ```ini
+DATABASE_DISPLAY_NAME="Production Database"
+DATABASE_DISPLAY_NAME_AR="قاعدة بيانات الإنتاج"
 WEBUI_API_URL=http://127.0.0.1:8000
 WEBUI_HOST=127.0.0.1
 WEBUI_PORT=8080
@@ -509,8 +634,228 @@ You can log out and later return with `tmux attach -t erms`. Reattach and press
 database volume and leaves services it reused running. See
 [tmux's documentation](https://github.com/tmux/tmux/wiki/Getting-Started).
 
-The local stack requires Docker, `curl`, and `psql`. Its automatic database
+The local stack permits only one launcher per checkout. A second invocation
+exits before starting services or rotating the local indexer's credentials.
+Stop the first launcher with Ctrl+C before restarting. The process lock lives
+in `.cache/local-stack.lock`; do not delete it while services are running.
+The operating system releases the lock when its holders exit, so the file
+remaining on disk does not indicate a running stack.
+
+During temporary API connection failures, timeouts, or HTTP 429/502/503/504
+responses, indexer job polling retries with exponential backoff capped at
+30 seconds. It logs the outage once and logs recovery when polling succeeds.
+Authentication failures still stop the pool; they require fixing the service
+credentials. One-shot execution still fails immediately on a failed claim.
+
+The local stack requires Python 3, Docker, `curl`, and `psql`. Its automatic database
 container uses development credentials and is intended for local testing.
 `tmux` provides neither automatic boot startup nor restart after a crash. For
 an ongoing deployment, use the separate systemd services and independently
 managed database described above.
+
+## System notification readiness and administration
+
+For upgrades through messaging Phase 4, apply migrations 033, 034, 035, and
+`036_notification_administration_guards.sql` in order. Initialize an empty
+database from `database/schema.sql` alone, then run the separate catalogue seeds
+as described in [the seed guide](../database/seeds/README.md).
+
+Each API process explicitly assembles its code-owned notification definitions.
+Startup compares these contracts with the database without repairing or seeding
+them. `/health` returns HTTP 503 with `notification_readiness_failed` and safe
+producer/error identifiers if a required contract or its active configuration
+is missing or incompatible. Do not route traffic to an instance failing this
+readiness check. Optional contract discrepancies are reported in the
+`notifications.issues` health field; attempting to emit through an invalid
+contract still fails closed.
+
+Notification Administration, under Messages, requires
+`messaging.notifications.administer`. This is independent of message exchange,
+Monitor, and audit privileges. Before enabling a feature that requires a
+notification, its owner must supply the approved Python definition and matching
+feature seed/upgrade contract, and an administrator must save and activate a
+valid configuration with published templates for every enabled language,
+including English. A new language can be registered while disabled; add and
+publish its templates in new active configuration versions before enabling it.
+Language enablement and configuration activation are guarded against concurrent
+changes in PostgreSQL.
+
+This subsystem revision does not invent any business notification triggers.
+The production definition list is initially empty. A separately approved
+feature explicitly adds its definition to `application_definitions()` in
+`backend/services/api/messaging/notification_registry.py`. The disposable
+browser preview producer in `tools/notification_preview.py` is test tooling and
+is never assembled by the production application.
+
+Feature code calls `emit_system_notification` in
+`backend/services/api/messaging/notifications.py` inside its already-open
+repeatable-read or serializable PostgreSQL transaction. Pass the producer code,
+a stable domain event ID, only declared typed context values, and optional
+triggering-user provenance. Commit the domain change and notification together;
+propagate errors so the complete transaction rolls back. Retry the complete
+transaction on serialization failure, preserving the same domain event ID.
+Never call the service after committing the domain change. There is no
+production REST send endpoint or background notification retry queue.
+
+Static audiences and registered dynamic resolvers are expanded under the same
+transaction. Resource builders receive validated feature-owned presentation
+configuration; every returned link is checked by ordinary resource policy at
+the baseline security level. With no triggering user, that check uses the
+backend principal already established by the caller's transaction. Registration
+as a producer grants no resource permissions.
+
+Controlled test sends use a separate endpoint and explicit individual
+recipients. The defaults are 10 recipients per test, 20 test sends per
+administrator per hour, and 30-day expiry; environment settings use the
+`MESSAGING_TEST_` names in `.env.example`. Test history records safe provenance
+and outcomes, without template context or message content. Test messages retain
+an immutable test flag and prominent labels throughout the mailbox and live
+notification paths. Retention execution and operational metrics are supplied by the Phase 5
+lifecycle worker described below.
+
+The connection-sizing calculation above is unchanged: producers reuse their
+caller's transaction; test sends use a normal pooled transaction; there remains
+one dedicated LISTEN connection per API process, not per recipient or browser.
+
+## Message capture, retention, and Monitor
+
+Upgrade an existing Phase 4 database with
+`database/migrations/037_messaging_retention.sql`. New databases continue to use
+`database/schema.sql` alone. Restart API and WebUI processes after upgrading and
+synchronize the new catalogue definitions and generated Arabic drafts through the
+normal seed/review workflow. No persistent database is upgraded by the test runner.
+
+For colleagues syncing existing forks, see the
+[message capture validator upgrade note](upgrades/message-capture-validator.md)
+and [local tooling guide](local-tooling.md). The local stack performs a
+non-blocking availability check; production capture still validates every PDF.
+
+Capture uses WeasyPrint 68.1 from the API requirements and the bundled Changa
+fonts in `backend/services/api/messaging/pdf_assets`. Install WeasyPrint's native
+Pango/font dependencies for the deployment platform. Install the independent
+veraPDF CLI and its supported Java runtime, then set `MESSAGING_PDF_VALIDATOR` to
+its executable path (the default is `verapdf` on PATH). Acceptance verification
+uses veraPDF 1.30.2. Both PDF/A-2u and PDF/UA-1 checks must pass for every generated
+message and provenance component. Missing tools, timeouts, and validation errors
+block capture; they never commit a partial record. The renderer cannot fetch
+network resources or local files other than its bundled fonts.
+
+Each rendering/validation subprocess is bounded to 60 seconds, within a total
+600-second capture-generation budget. The WebUI allows 660 seconds for the
+capture request. Configure the reverse proxy's request timeout to accommodate
+this operation. The normal application transaction pool supplies capture and
+cleanup connections. These operations do not create additional LISTEN connections;
+the PostgreSQL connection-sizing calculation above still applies. Long captures
+occupy a transaction while validating source permissions and preserving a
+consistent amendment history, so include expected simultaneous captures in pool
+load testing.
+
+The default capture limits are 100 earlier messages plus the selected message and
+provenance, and 50 MiB for all PDFs combined. The `MESSAGING_CAPTURE_` settings in
+`.env.example` change those limits after restart; raising them requires capacity
+and request-duration tests. A record capture requires the ordinary record-create
+and destination permissions. An ordinary message draft is never a record capture.
+
+Every API process runs a lifecycle worker. It snapshots gateway health every 15
+seconds and starts cleanup at `MESSAGING_CLEANUP_INTERVAL_SECONDS` (default 3600).
+`MESSAGING_CLEANUP_BATCH_SIZE` (default 500) bounds candidate pages, draft cleanup,
+and transfer of group identifiers. Each connected group is locked and purged in
+one transaction, even when larger than a page; a page boundary never splits a
+conversation. Lock waits are limited to 3 seconds and cleanup statements to 60
+seconds. A failed group is retained for a subsequent sweep. Large groups can
+therefore remain stored until a complete attempt succeeds. Inspect the Monitor's
+eligible-group age, group size, failures, and durations when tuning cleanup.
+
+Envelope expiry and its restoration-period length are stored at send time.
+Changing retention settings does not move existing expiry/restoration deadlines.
+A manual deletion establishes its own deadline at that deletion. Restoring before
+expiry returns the entry to normal expiry; restoring after expiry never extends
+the original deadline. Capture drafts, unsent message drafts, and records do not
+keep a messaging group alive. Captured records and immutable capture provenance
+survive source purge under ordinary records-management rules.
+
+Messages → Monitor requires `messaging.monitor`. It reports counters and mean
+processing durations, current mailbox/expiry totals, bounded gateway and producer
+pages, and cleanup-group observations from completed discovery attempts. Group
+observations are not an instantaneous census before the worker has scanned them.
+Gateway snapshots older than 45 seconds or a disconnected listener raise an
+alert. Operational failures remain flagged until a successful corresponding
+operation resolves the failure; counters remain cumulative. Metrics contain no
+message bodies, subjects, recipient labels, or protected resource metadata.
+Audit navigation additionally requires `audit.view`.
+
+For deployment verification, use `tools/verify_messaging_pdf.py` with veraPDF,
+Poppler (`pdffonts`, `pdftotext`, `pdftoppm`), and the API environment. It produces
+English/Arabic PDFs, renderings, font reports, and independent validation reports.
+Run database acceptance tests only through `tools/test_messaging.py`, which creates
+fresh disposable databases, verifies upgrade parity, and drops them afterwards.
+
+### Built-in legal-hold notifications
+
+For an existing deployment, apply
+`database/migrations/038_legal_hold_notifications.sql` after migration 037,
+followed by `database/migrations/039_localized_notification_producer_names.sql`.
+New databases use `database/schema.sql` alone. Then run the separate catalogue
+seed `database/seeds/hold-notification-producers.sql` against that deployment.
+The API explicitly registers the matching two Python contracts at startup.
+
+After reviewing the supplied English/Arabic templates in
+`database/seeds/hold-notification-templates.json`, install and activate their
+initial configuration with an existing active person account that has
+`messaging.notifications.administer`:
+
+```sh
+backend/services/api/.venv/bin/python -m tools.configure_hold_notifications \
+  --administrator-id ADMINISTRATOR_ID \
+  --operational-owner 'Legal governance'
+```
+
+The command records administrator-attributed configuration history with source
+`seeding`. It does not replace existing configurations or pending administrator
+drafts. It fails atomically if any enabled language lacks a valid template;
+additional languages require reviewed templates through Notification
+Administration. Subsequent changes, disabling, previews, and test sends use
+that existing administration screen. No production database was configured as
+part of development verification.
+
+Until configured, these optional producers are dormant. Once enabled,
+assignment-delivery failure rolls back the associated hold responsibility
+change. Reminder failures roll back the reminder checkpoint and are retried by
+the API lifecycle worker. The worker checks roughly once a minute, in bounded
+100-hold batches, using one ordinary pooled connection and a transaction-scoped
+leader lock across instances. There is no new dedicated PostgreSQL connection.
+Hold/end-date checkpoints prevent repeats even after the original notification
+has been purged. No reminders are sent after expiry.
+
+### Localized notification producer names
+
+Apply migration `039_localized_notification_producer_names.sql` after 038, then
+rerun `database/seeds/hold-notification-producers.sql`. The seed fills missing
+English and Arabic names without replacing existing names, localized wording,
+active configuration versions, or message templates. Fresh databases use the
+canonical schema and then the separate seed. No UI translation catalogue keys
+are added for these entity names. Restart the API and WebUI to load the updated
+name projection and rendering code if automatic reload is disabled.
+
+
+### Message resource picker (migration 040)
+
+After migrations through 039, apply
+`database/migrations/040_message_record_aggregation_links.sql` before deploying
+the record/aggregation-only message-link model. Fresh databases use the canonical
+schema alone. The migration removes direct digital-component message/draft link
+targets; message-to-record capture components remain unchanged. It fails safely
+if unexpected component message links exist rather than deleting them.
+
+Synchronize the nine new `resource_picker.*` catalogue definitions and Arabic
+drafts through the normal seed/review workflow, then restart API and WebUI.
+The Add resources dialog uses the existing record/aggregation search API and
+full-text index, including its rollout setting, authorization, and indexing
+freshness. No new search service or database connection pool is required.
+See [implementation and verification](messaging-resource-picker.md).
+
+For the local checkout on this machine, veraPDF 1.30.2 is installed in
+`.local-tools/verapdf` (ignored by Git). The root `.env` sets
+`MESSAGING_PDF_VALIDATOR` to its absolute executable path. Restart the API
+after changing this setting. A temporary test installation under `/tmp` does
+not configure the application, and should not be used as a permanent path.

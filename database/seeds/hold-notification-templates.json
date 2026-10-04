@@ -1,0 +1,22 @@
+{
+  "holds.responsibility_assigned": {
+    "en": [
+      "Legal hold responsibility assigned",
+      "<p>You have been assigned responsibility for a legal hold. Open Legal Holds to review your assignment.</p>"
+    ],
+    "ar": [
+      "إسناد مسؤولية بشأن تعليق قنوني",
+      "<p>أُسندت إليك مسؤولية بشأن تعليق قنوني. افتح صفحة حالات تعليق قنوني للاطلاع على تفاصيل الإسناد.</p>"
+    ]
+  },
+  "holds.approaching_end": {
+    "en": [
+      "Legal hold approaching its end date",
+      "<p>A legal hold for which you have responsibility is scheduled to end on {end_date}. Review it in Legal Holds. Other holds and controls may continue to protect its resources.</p>"
+    ],
+    "ar": [
+      "اقتراب موعد انتهاء تعليق قنوني",
+      "<p>من المقرر أن ينتهي تعليق قنوني تتولى مسؤولية بشأنه في {end_date}. راجعه في صفحة حالات تعليق قنوني. قد تستمر حالات تعليق وضوابط أخرى في حماية موارده.</p>"
+    ]
+  }
+}

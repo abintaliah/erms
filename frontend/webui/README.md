@@ -25,6 +25,11 @@ Open `http://localhost:8080`. The launcher creates a dedicated virtual
 environment under `frontend/webui/.venv` and installs only the frontend's
 dependencies.
 
+Message **Save record** capture also needs local veraPDF/Java tooling. Follow
+[the tooling guide](../../docs/local-tooling.md) and
+[the upgrade note](../../docs/upgrades/message-capture-validator.md).
+The stack launcher warns if this optional feature prerequisite is missing.
+
 To start the complete local stack instead, run:
 
 ```bash
@@ -40,6 +45,11 @@ processes and database container started by the script.
 Configuration is read from the process environment, with `.env` as local
 defaults:
 
+- `DATABASE_DISPLAY_NAME` is the required default-language database name shown
+  in the application footer
+- `DATABASE_DISPLAY_NAME_<LANGUAGE>` optionally supplies a localized name using
+  the uppercase base language tag, such as `DATABASE_DISPLAY_NAME_AR`; a blank
+  or absent language-specific value falls back to `DATABASE_DISPLAY_NAME`
 - `WEBUI_API_URL` defaults to `http://127.0.0.1:8000`
 - `WEBUI_HOST` defaults to `0.0.0.0`
 - `WEBUI_PORT` defaults to `8080`

@@ -4,6 +4,14 @@ set -Eeuo pipefail
 readonly PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ENV_FILE="${PROJECT_DIR}/.env"
 
+# Serialize launchers before provisioning rotates the shared indexer key.
+# The kernel releases this lock on exit, including an unexpected termination.
+if [[ "${ERMS_LOCAL_STACK_LOCK_PID:-}" != "$$" ]]; then
+    exec python3 "${PROJECT_DIR}/tools/local_stack_lock.py" \
+        "${PROJECT_DIR}/.cache/local-stack.lock" bash "${BASH_SOURCE[0]}" "$@"
+fi
+unset ERMS_LOCAL_STACK_LOCK_PID
+
 # Load project-local defaults before resolving the stack configuration. Keep
 # values explicitly exported by the invoking environment authoritative, which
 # matches the override=False behavior used by the API and web UI.
@@ -22,6 +30,10 @@ if [[ -f "${PROJECT_ENV_FILE}" ]]; then
     eval "${INHERITED_EXPORTED_ENVIRONMENT}"
     unset INHERITED_EXPORTED_ENVIRONMENT ALLEXPORT_WAS_ENABLED
 fi
+
+# Optional feature prerequisite, checked even when services are reused.
+# This reads the resolved environment and never blocks unrelated features.
+python3 "${PROJECT_DIR}/tools/check_local_pdf_validator.py"
 
 readonly STACK_DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:5433/erms}"
 readonly STACK_DB_CONTAINER="${ERMS_LOCAL_DB_CONTAINER:-erms-postgres-local}"
