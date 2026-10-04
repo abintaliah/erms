@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "300132914a73e8cfca6fbb3bf496e7d513f2e9c86af1e854cf6af36e36145680",
+  "catalogue_sha256": "6507bdca6d6be85d0858b7a9d1a78f7eceb864806d89a59f92bd37833bff2b5a",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260929040036",
   "generated_at": "2026-09-29T04:00:36.438919+04:00",
@@ -14744,6 +14744,26 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
         "date_published": "2026-09-26T13:44:17.672002+00:00"
+      }
+    },
+    {
+      "message_key": "webui.hold_reason_dialog.update_action",
+      "translated_text": "تعديل التعليق القانوني",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "source_origin": "generated",
+        "source_status": "draft"
+      }
+    },
+    {
+      "message_key": "webui.hold_reason_dialog.update_title",
+      "translated_text": "سبب تعديل هذا التعليق القانوني",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "source_origin": "generated",
+        "source_status": "draft"
       }
     },
     {

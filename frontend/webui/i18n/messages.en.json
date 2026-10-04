@@ -17846,6 +17846,34 @@
     "is_html": false
   },
   {
+    "message_key": "webui.hold_reason_dialog.update_action",
+    "context_group": "webui.hold_reason_dialog",
+    "default_text": "Update hold",
+    "semantic_meaning": "Action confirming an existing legal hold update with the entered audit reason.",
+    "common_locations": [
+      "WebUI: hold editor update reason dialog"
+    ],
+    "translator_guidance": "Hold means a legal hold. Use the approved Arabic legal-hold terminology.",
+    "grammatical_role": "button label",
+    "parameter_schema": {},
+    "rendered_example": "Update hold",
+    "is_html": false
+  },
+  {
+    "message_key": "webui.hold_reason_dialog.update_title",
+    "context_group": "webui.hold_reason_dialog",
+    "default_text": "Reason for updating this hold",
+    "semantic_meaning": "Title asking for the audit reason before updating an existing legal hold.",
+    "common_locations": [
+      "WebUI: hold editor update reason dialog"
+    ],
+    "translator_guidance": "Hold means a legal hold. Use the approved Arabic legal-hold terminology.",
+    "grammatical_role": "dialog title",
+    "parameter_schema": {},
+    "rendered_example": "Reason for updating this hold",
+    "is_html": false
+  },
+  {
     "message_key": "webui.index.accessible_name.collapse_navigation_b4de6b59",
     "context_group": "webui.index",
     "default_text": "Collapse navigation",

@@ -19205,7 +19205,11 @@ def index(q: str = "") -> None:
 
             async def save() -> None:
                 if editing:
-                    await hold_reason_dialog("Reason for updating this hold", "Update hold", persist)
+                    await hold_reason_dialog(
+                        render_message("webui.hold_reason_dialog.update_title"),
+                        render_message("webui.hold_reason_dialog.update_action"),
+                        persist,
+                    )
                 else:
                     await persist()
             with ui.row().classes("w-full justify-end gap-2"):
