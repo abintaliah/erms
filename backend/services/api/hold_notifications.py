@@ -11,11 +11,18 @@ ASSIGNED = "holds.responsibility_assigned"
 ENDING = "holds.approaching_end"
 
 
+GOVERNOR = """EXISTS(SELECT 1 FROM user_role_assignments ga
+    JOIN roles gr ON gr.id=ga.role_id WHERE ga.user_id=u.id
+    AND gr.is_information_governance AND role_effectively_active(gr.id)
+    AND ga.valid_from<=CURRENT_TIMESTAMP
+    AND (ga.valid_until IS NULL OR ga.valid_until>CURRENT_TIMESTAMP))"""
+
+
 def _people(c, hold_id):
     return c.execute(
-        """SELECT DISTINCT u.id FROM users u WHERE u.status='active'
+        f"""SELECT DISTINCT u.id FROM users u WHERE u.status='active'
         AND u.account_type='person' AND (u.id=(SELECT owner_user_id FROM holds WHERE id=%s)
-        OR EXISTS(SELECT 1 FROM hold_contributors hc WHERE hc.hold_id=%s AND hc.user_id=u.id))
+        OR EXISTS(SELECT 1 FROM hold_contributors hc WHERE hc.hold_id=%s AND hc.user_id=u.id) OR {GOVERNOR})
         ORDER BY u.id LIMIT %s""",
         (hold_id, hold_id, LIMITS["MAX_SELECTORS_PER_SEND"] + 1),
     ).fetchall()
@@ -44,7 +51,7 @@ def definitions():
             producer_code=ASSIGNED,
             feature_code="holds",
             event_type="responsibility_assigned",
-            contract_version=1,
+            contract_version=3,
             required_for_business_commit=False,
             allow_static_audience=False,
             placeholders={
@@ -58,7 +65,7 @@ def definitions():
             producer_code=ENDING,
             feature_code="holds",
             event_type="approaching_end",
-            contract_version=1,
+            contract_version=2,
             required_for_business_commit=False,
             allow_static_audience=False,
             placeholders={
@@ -112,12 +119,12 @@ def process_reminders(c, limit=100):
     if not enabled["enabled"]:
         return 0
     rows = c.execute(
-        """SELECT h.id,h.valid_to FROM holds h
+        f"""SELECT h.id,h.valid_to FROM holds h
         WHERE h.valid_from<=CURRENT_TIMESTAMP AND h.valid_to>CURRENT_TIMESTAMP
         AND h.valid_to<=CURRENT_TIMESTAMP+interval '7 days'
         AND EXISTS(SELECT 1 FROM users u WHERE u.status='active' AND u.account_type='person'
             AND (u.id=h.owner_user_id OR EXISTS(SELECT 1 FROM hold_contributors hc
-                WHERE hc.hold_id=h.id AND hc.user_id=u.id)))
+                WHERE hc.hold_id=h.id AND hc.user_id=u.id) OR {GOVERNOR}))
         AND NOT EXISTS(SELECT 1 FROM hold_notification_reminders n WHERE n.hold_id=h.id AND n.end_at=h.valid_to)
         ORDER BY h.valid_to,h.id LIMIT %s FOR UPDATE OF h SKIP LOCKED""",
         (limit,),

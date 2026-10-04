@@ -76,3 +76,16 @@ The Git ignore rules already cover:
 - `kile.jsonc`
 
 These settings are meant to remain local to each machine, not to be shared in the source repository.
+
+### macOS renderer library path
+
+If WeasyPrint reports that it cannot load GObject/Pango despite Homebrew
+libraries being installed, configure the installed library directory in `.env`:
+
+```dotenv
+DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib
+```
+
+Use the actual Homebrew library directory on your machine and restart the API.
+This follows the official WeasyPrint missing-library troubleshooting guidance:
+https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#missing-library

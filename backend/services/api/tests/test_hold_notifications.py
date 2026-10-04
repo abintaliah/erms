@@ -27,6 +27,8 @@ def enabled(client, monkeypatch):
     _, owner, _ = account(client, privileges=())
     _, contributor, _ = account(client, privileges=())
     with db() as c:
+        # Baseline cases isolate responsible people; governor coverage is explicit below.
+        c.execute("UPDATE roles SET is_information_governance=false WHERE is_information_governance")
         c.execute((ROOT / "database/seeds/hold-notification-producers.sql").read_text())
     assert len(run(admin, lambda c: configure(c, admin, "Legal governance"))) == 2
     return token, admin, owner, contributor
@@ -387,3 +389,39 @@ def test_localized_producer_names_search_fallback_and_seed_preservation(client, 
     with db() as c:
         c.execute("UPDATE system_notification_producers SET translations=NULL WHERE producer_code=%s", (hn.ASSIGNED,))
         c.execute((ROOT/'database/seeds/hold-notification-producers.sql').read_text())
+
+
+def test_information_governors_receive_expiry_only_and_effective_roles_only(client, enabled):
+    _, governor, role = account(client, privileges=())
+    _, expired, expired_role = account(client, privileges=())
+    with db() as c:
+        c.execute("UPDATE roles SET is_information_governance=true WHERE id IN (%s,%s)", (role, expired_role))
+        c.execute("UPDATE user_role_assignments SET valid_until=CURRENT_TIMESTAMP WHERE user_id=%s", (expired,))
+    hold = create(client, enabled)
+    with db() as c:
+        def recipients(code):
+            return c.execute("SELECT d.recipient_user_id FROM message_deliveries d JOIN message_envelopes e ON e.id=d.envelope_id WHERE e.system_producer_code=%s", (code,)).fetchall()
+        assigned = [r["recipient_user_id"] for r in recipients(hn.ASSIGNED)]
+        assert governor not in assigned
+        assert expired not in assigned
+        assert set(assigned) == set(enabled[2:])
+        # Governance alone never creates assignment eligibility.
+        assert hn.assigned_audience(c, {"hold_id": hold["id"], "user_id": governor}) == []
+        # A governor who is personally assigned still receives that assignment.
+        c.execute("UPDATE roles SET is_information_governance=true WHERE id IN (SELECT role_id FROM user_role_assignments WHERE user_id=%s)", (enabled[2],))
+        personal = hn.assigned_audience(c, {"hold_id": hold["id"], "user_id": enabled[2]})
+        assert len(personal) == 1 and personal[0].target_id == enabled[2]
+    assert run(enabled[1], hn.process_reminders) == 1
+    with db() as c:
+        ending = [r["recipient_user_id"] for r in recipients(hn.ENDING)]
+        assert set(ending) == {governor, *enabled[2:]}
+        assert len(ending) == len(set(ending))
+        c.execute("UPDATE users SET date_deactivated=CURRENT_TIMESTAMP WHERE id IN (%s,%s)", enabled[2:])
+    # Governors remain eligible even when there are no active responsible people.
+    other = create(client, enabled, valid_to=(datetime.now(timezone.utc)+timedelta(days=6)).isoformat(), owner_user_id=enabled[1], contributor_user_ids=[])
+    with db() as c:
+        c.execute("UPDATE users SET date_deactivated=CURRENT_TIMESTAMP WHERE id=%s", (enabled[1],))
+    assert run(governor, hn.process_reminders) == 1
+    with db() as c:
+        c.execute("UPDATE user_role_assignments SET valid_until=CURRENT_TIMESTAMP WHERE user_id=%s", (governor,))
+        assert hn.ending_audience(c, {"hold_id": other["id"]}) == []
