@@ -61,7 +61,7 @@ class Api:
         return dict(id=1, name='Root 1', code='R1', status='active')
 
 
-async def setup(user, *, direction='ltr', privileges=None, saved=None, selector=False):
+async def setup(user, *, direction='ltr', privileges=None, saved=None, selector=False, on_selection=None):
     api = Api()
     storage = {'organization_browser_state': saved or {}}
     state = {}
@@ -90,7 +90,7 @@ async def setup(user, *, direction='ltr', privileges=None, saved=None, selector=
             namespace[name] = ui.label('')
         namespace['table_container'] = ui.column()
         exec(compile(ast.Module(body=[BROWSER],type_ignores=[]),str(SOURCE),'exec'),namespace)
-        await namespace['show_organization_structure'](selection_mode='org_unit' if selector else None)
+        await namespace['show_organization_structure'](selection_mode=selector if isinstance(selector,str) else 'org_unit' if selector else None, on_selection=on_selection)
     await user.open('/organization-test')
     return api, storage, state, opened
 
@@ -210,3 +210,25 @@ async def test_roles_follow_last_unit_page(user: User, direction):
     assert labels.index('U28 · Unit 28') < labels.index('RM-MGR · Records Manager')
     calls = [call[2] for call in api.calls if call[0] == 'children']
     assert [(call['unit_offset'], call['role_offset']) for call in calls] == [(0, 0), (25, 0)]
+
+
+@pytest.mark.parametrize("target,kind", [("R1 · Root 1","org_unit"),("RM-MGR · Records Manager","role"),("أميرة المنصوري","user")])
+async def test_mixed_selector_accepts_all_entity_types(user: User, target, kind):
+    selected=[]
+    async def choose(node):
+        selected.append(node)
+        return True
+    await setup(user,selector="all",on_selection=choose)
+    if kind != "org_unit":
+        expander(user,"R1").click()
+        await asyncio.sleep(.08)
+        button(user,render_message('webui.render_collection.button.load_more_755f4879')).click()
+        await asyncio.sleep(.08)
+    if kind == "user":
+        expander(user,"RM-MGR").click()
+        await asyncio.sleep(.08)
+    button(user,target).click()
+    await asyncio.sleep(.08)
+    button(user,render_message('webui.show_organization_structure.button.select_replace_cf383c4d',replace=render_message('messaging.field.recipient'))).click()
+    await asyncio.sleep(.08)
+    assert selected[0]['type'] == kind

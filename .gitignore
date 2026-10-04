@@ -99,3 +99,7 @@ tmp/
 temp/
 *.tmp
 erms on localhost:5433.session.sql
+.kilo/kilo.jsonc
+
+# Machine-local validation tools
+.local-tools/

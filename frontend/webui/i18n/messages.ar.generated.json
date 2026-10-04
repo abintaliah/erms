@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "9d2988861e689634bf26f4e0bd6d864abe48a4485710f1809aa34df12487fa65",
+  "catalogue_sha256": "300132914a73e8cfca6fbb3bf496e7d513f2e9c86af1e854cf6af36e36145680",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260929040036",
   "generated_at": "2026-09-29T04:00:36.438919+04:00",
@@ -132,6 +132,18 @@
     ],
     "classification_transfer.working": [
       "جارٍ المعالجة…"
+    ],
+    "messaging.help.recipient_search": [
+      "اكتب حرفين على الأقل للبحث عن المستخدمين أو الأدوار أو الوحدات التنظيمية بالاسم أو الوصف أو البريد الإلكتروني للمستخدم. حدّد البحث أكثر عند الحاجة."
+    ],
+    "messaging.help.completion": [
+      "يتطلب إكمال الإجراء إدراج المرسل الأصلي في «إلى»."
+    ],
+    "messaging.help.linked": [
+      "يُربط المحتوى السابق بهذه الرسالة دون نسخه إليها."
+    ],
+    "messaging.capture.error.message_capture_medium_fixed_digital": [
+      "يجب أن يكون وسيط السجل المنشأ من الرسالة رقميًا. لا يمكن تغييره إلى مختلط أو مادي."
     ]
   },
   "items": [
@@ -1312,6 +1324,54 @@
       }
     },
     {
+      "message_key": "audit.event.notification_configuration_activated",
+      "translated_text": "فُعّلت إعدادات الإشعار",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "audit.event.notification_configuration_saved",
+      "translated_text": "حُفظت إعدادات الإشعار",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "audit.event.notification_test_failed",
+      "translated_text": "فشل إرسال الإشعار الاختباري",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "audit.event.notification_test_sent",
+      "translated_text": "أُرسل إشعار اختباري",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "audit.event.ownership_corrected",
       "translated_text": "تصحيح الملكية",
       "quality_flags": [],
@@ -1585,6 +1645,18 @@
         "source_status": "published",
         "date_reviewed": "2026-09-28T10:30:03.437443+00:00",
         "date_published": "2026-09-28T10:30:03.437443+00:00"
+      }
+    },
+    {
+      "message_key": "authentication.error.credentials_not_accepted",
+      "translated_text": "لم تُقبل بيانات تسجيل الدخول. تحقق من اسم الدخول وكلمة المرور ثم حاول مرة أخرى.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
       }
     },
     {
@@ -3579,6 +3651,25 @@
         "source_status": "published",
         "date_reviewed": "2026-09-27T05:36:02.357506+00:00",
         "date_published": "2026-09-27T05:36:02.357506+00:00"
+      }
+    },
+    {
+      "message_key": "components.field.storage_backend",
+      "translated_text": "محرك التخزين",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "capture-picker-layout-20261004",
+        "generated_at": "2026-10-03T22:21:23.839683+00:00",
+        "batch_id": "capture-picker-layout-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "275d877615dcd3e59f66c40d98d224afa0104288dfdc0ecb7ba95d002237e8b7",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
       }
     },
     {
@@ -6258,6 +6349,18 @@
       }
     },
     {
+      "message_key": "localization.validation.notification_coverage",
+      "translated_text": "انشر قالب إشعار باللغة {language} للجهة المُصدرة {producer} قبل تفعيل هذه اللغة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "localization.validation.origin.invalid",
       "translated_text": "اختر مصدر ترجمة صالحًا.",
       "quality_flags": [],
@@ -6351,6 +6454,3134 @@
         "source_status": "published",
         "date_reviewed": "2026-09-26T13:44:17.672002+00:00",
         "date_published": "2026-09-26T13:44:17.672002+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.action.add",
+      "translated_text": "إضافة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.amend",
+      "translated_text": "تعديل الإجراء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.browse_recipients",
+      "translated_text": "استعراض الهيكل التنظيمي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.cancel",
+      "translated_text": "إلغاء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.compose",
+      "translated_text": "إنشاء رسالة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.discard",
+      "translated_text": "حذف المسودة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.follow_up",
+      "translated_text": "إرسال متابعة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.forward",
+      "translated_text": "إعادة توجيه",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.next",
+      "translated_text": "التالي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.open",
+      "translated_text": "فتح",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.open_amended",
+      "translated_text": "فتح الرسالة المعدّل إجراؤها",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.open_original",
+      "translated_text": "فتح الرسالة السابقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.previous",
+      "translated_text": "السابق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.recently_deleted",
+      "translated_text": "المسودات المحذوفة مؤخرًا",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.refresh",
+      "translated_text": "تحديث",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.remove",
+      "translated_text": "إزالة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.reply",
+      "translated_text": "رد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.restore",
+      "translated_text": "استعادة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.save_draft",
+      "translated_text": "حفظ المسودة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.action.send",
+      "translated_text": "إرسال",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.activate",
+      "translated_text": "تفعيل هذا الإصدار المحفوظ",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.activated",
+      "translated_text": "تم تفعيل إصدار الإعدادات.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.active",
+      "translated_text": "الإصدار الفعّال",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.audience",
+      "translated_text": "قاعدة تحديد المستلمين",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.audience.current_responsible_people",
+      "translated_text": "المالك والمساهمون الحاليون",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.audience.newly_assigned_person",
+      "translated_text": "المالك أو المساهم المُعيَّن حديثًا",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.back",
+      "translated_text": "العودة إلى الجهات المُصدرة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.confirm_test",
+      "translated_text": "تأكيد وإرسال الاختبار",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.conflict",
+      "translated_text": "تغيرت الإعدادات أو أنها غير جاهزة للتفعيل. حدّث الصفحة وتحقق من نشر اللغات وأهلية المستلمين.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.draft",
+      "translated_text": "مسودة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.empty",
+      "translated_text": "لا توجد عناصر لعرضها.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.enabled",
+      "translated_text": "مفعّل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.failed",
+      "translated_text": "تعذرت العملية. حدّث الصفحة وحاول مرة أخرى.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.failure",
+      "translated_text": "فشل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.history",
+      "translated_text": "سجل إرسال الاختبارات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.initiator",
+      "translated_text": "بدأه",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.loading",
+      "translated_text": "جارٍ تحميل إعدادات الإشعارات…",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.locked",
+      "translated_text": "عقد تحدده الوظيفة — لا يمكن تغيير هذه الحقول هنا.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.new",
+      "translated_text": "إصدار إعدادات جديد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.none",
+      "translated_text": "غير مضبوط",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.optional",
+      "translated_text": "إشعار اختياري",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.owner",
+      "translated_text": "المسؤول التشغيلي أو الفريق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.placeholder",
+      "translated_text": "العنصر النائب: {name}؛ النوع: {type}.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.preview",
+      "translated_text": "معاينة دون إرسال",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.published",
+      "translated_text": "تمت المراجعة والنشر",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.recipient_count",
+      "translated_text": "عدد المستلمين",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.required",
+      "translated_text": "مطلوب لإتمام معاملة العمل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.resources",
+      "translated_text": "عرض روابط الموارد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.review",
+      "translated_text": "حالة مراجعة القالب",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.review_preview",
+      "translated_text": "راجع المعاينات أدناه، ثم احفظ مرة أخرى لتأكيد هذا الإصدار. يتطلب تعديل أي قيمة معاينة جديدة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.reviewed",
+      "translated_text": "تمت المراجعة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.save",
+      "translated_text": "حفظ كإصدار جديد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.saved",
+      "translated_text": "تم حفظ إصدار الإعدادات.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.search",
+      "translated_text": "البحث عن الجهات المُصدرة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.sent",
+      "translated_text": "تم إرسال الإشعار الاختباري.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.static",
+      "translated_text": "مستخدمون وأدوار ووحدات محددة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.success",
+      "translated_text": "نجح",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.templates_help",
+      "translated_text": "استخدم فقط العناصر النائبة المعلنة بأسمائها. ينشئ الحفظ إصداراً جديداً غير قابل للتعديل. راجع وانشر كل لغة مفعّلة قبل التفعيل.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.test",
+      "translated_text": "إرسال اختبار لهذا الإصدار المحفوظ",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.test_help",
+      "translated_text": "يرسل هذا الإجراء اختباراً للإصدار المحفوظ بعلامة دائمة إلى المستخدمين المحددين أدناه. لا يشمل التعديلات غير المحفوظة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.test_limits",
+      "translated_text": "الحد الأقصى {recipients} مستلمين لكل اختبار؛ و{rate} اختبار إرسال لكل مسؤول في الساعة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.title",
+      "translated_text": "إدارة الإشعارات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.validation",
+      "translated_text": "تحقق من القوالب والقيم المحددة والمستلمين والمسؤول والسبب. يجب الالتزام بالحدود المعروضة لإرسال الاختبارات.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.values",
+      "translated_text": "قيم الأمثلة المحددة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.version",
+      "translated_text": "الإصدار",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.admin.versions",
+      "translated_text": "إصدارات الإعدادات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.amendment.action_withdrawn",
+      "translated_text": "سحب الإجراء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.amendment.due_date_added",
+      "translated_text": "إضافة تاريخ الاستحقاق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.amendment.due_date_changed",
+      "translated_text": "تغيير تاريخ الاستحقاق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.amendment.due_date_removed",
+      "translated_text": "إزالة تاريخ الاستحقاق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.action",
+      "translated_text": "الإجراء المطلوب الأصلي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.amendments",
+      "translated_text": "تعديلات الإجراء وحالته الفعلية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.body",
+      "translated_text": "الرسالة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.capture_id",
+      "translated_text": "معرّف الحفظ",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.captured_at",
+      "translated_text": "وقت الحفظ مع المنطقة الزمنية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.captured_by",
+      "translated_text": "القائم بالحفظ",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.cc",
+      "translated_text": "نسخة إلى",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.components",
+      "translated_text": "مكوّنات الرسائل بالترتيب",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.creator_role_cleared",
+      "translated_text": "أُلغي اختيار «الإنشاء لصالح» السابق لأنه لا يتبع الوحدة التنظيمية للملف الحاوي.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.due",
+      "translated_text": "الموعد النهائي الأصلي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.effective",
+      "translated_text": "حالة الإجراء السارية عند الحفظ",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.envelope_id",
+      "translated_text": "معرّف الرسالة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_chain_limit",
+      "translated_text": "يتجاوز هذا الحفظ العدد المسموح للرسائل المرتبطة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_components_fixed",
+      "translated_text": "لمكوّنات الرسائل المنشأة ترتيب ثابت ولا يمكن استبدالها أو إزالتها.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_digital_required",
+      "translated_text": "يتطلب حفظ الرسالة وجهة تقبل المكوّنات الرقمية.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_integrity",
+      "translated_text": "تعذر الحفظ لأن مراجع الرسائل غير متسقة أو دائرية.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_kind_ineligible",
+      "translated_text": "يمكن حفظ الرسائل البشرية فقط. تتضمن السلسلة المرتبطة رسالة غير مؤهلة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_medium_fixed_digital",
+      "translated_text": "يجب استخدام الوسيط «رقمي» للسجل المنشأ من الرسالة. لا يمكن تغييره إلى «هجين» أو «مادي».",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "mailbox-checkpoint-20261004",
+        "generated_at": "2026-10-03T22:44:38.899788+00:00",
+        "batch_id": "mailbox-checkpoint-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "fbbbe8b5f1196fb9ba838aed74e1dff5ed4d3681fd415533ff134031d4acd8a7",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_pdf_limit",
+      "translated_text": "تتجاوز ملفات PDF المنشأة حد الحجم الإجمالي المسموح.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_pdf_nonconforming",
+      "translated_text": "لم يجتز ملف PDF التحقق الأرشيفي أو التحقق من إتاحة الوصول. لم تُنشأ وثيقة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_render_failed",
+      "translated_text": "تعذر إنشاء نسخة أمينة من الرسالة. لم تُنشأ وثيقة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_renderer_unavailable",
+      "translated_text": "عارض PDF غير متاح أو تجاوز المهلة. لم تُنشأ وثيقة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_required",
+      "translated_text": "احفظ هذه الرسالة كوثيقة قبل حذفها من صندوقك.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_security_floor",
+      "translated_text": "لا يجوز أن تقل درجة سرية الوثيقة عن أي رسالة مشمولة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.error.message_capture_validator_unavailable",
+      "translated_text": "أداة التحقق المستقلة من PDF غير متاحة. لا يمكن تثبيت الحفظ.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.filename",
+      "translated_text": "اسم الملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.linked",
+      "translated_text": "رسالة سابقة مرتبطة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.new",
+      "translated_text": "حالة الإجراء المعدلة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.none",
+      "translated_text": "لا يوجد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.order",
+      "translated_text": "ترتيب المكوّن",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.preparing",
+      "translated_text": "جارٍ إعداد ملفات PDF للرسائل والتحقق منها. يمكنك تعديل بيانات الوثيقة أثناء الانتظار.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "capture-preparation-20261004",
+        "generated_at": "2026-10-03T23:01:43.747375+00:00",
+        "batch_id": "capture-preparation-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "713f8a5cf37728a981ffe5ccc747ee0f31ed190f43431137a471d899f8e31f01",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
+      }
+    },
+    {
+      "message_key": "messaging.capture.previous",
+      "translated_text": "حالة الإجراء السابقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.priority",
+      "translated_text": "الأولوية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.provenance",
+      "translated_text": "بيانات إثبات حفظ الرسالة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.record_id",
+      "translated_text": "معرّف الوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.record_number",
+      "translated_text": "رقم الوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.resources",
+      "translated_text": "مراجع الموارد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.save",
+      "translated_text": "حفظ كوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.security",
+      "translated_text": "درجة السرية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.selected",
+      "translated_text": "الرسالة المحددة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.sender",
+      "translated_text": "المرسل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.sent_at",
+      "translated_text": "تاريخ الإرسال",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.to",
+      "translated_text": "إلى",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.capture.unavailable",
+      "translated_text": "الوصول الحالي غير متاح",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.error.conflict",
+      "translated_text": "تغيّر هذا العنصر. أعد تحميله قبل المحاولة مجددًا.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.error.denied",
+      "translated_text": "لم تعد مخوّلًا بالوصول إلى هذا العنصر.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.error.failed",
+      "translated_text": "تعذّر إكمال العملية. حدّث الصفحة وحاول مجددًا.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.error.validation",
+      "translated_text": "تحقق من الموضوع ونص الرسالة والمستلمين ودرجة السرية وتاريخ الاستحقاق وروابط الموارد.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.action_required",
+      "translated_text": "يتطلب إجراءً",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.affected_recipients",
+      "translated_text": "المستلمون المعنيون",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.aggregation",
+      "translated_text": "الملف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.all",
+      "translated_text": "الكل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.amendment_kind",
+      "translated_text": "التعديل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.body",
+      "translated_text": "نص الرسالة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.cc",
+      "translated_text": "نسخة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.complete",
+      "translated_text": "هل اكتمل الإجراء؟",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.due_date",
+      "translated_text": "تاريخ استحقاق الإجراء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.everyone",
+      "translated_text": "الجميع",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "messaging-everyone-20261004",
+        "generated_at": "2026-10-04T04:24:39.991112+00:00",
+        "batch_id": "messaging-everyone-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "ffb97eca36e5e465c9f2993f81828218ed0c1a1881c3cafafe540229219f4b83",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
+      }
+    },
+    {
+      "message_key": "messaging.field.expanded_recipients",
+      "translated_text": "عدد المستلمين الحالي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.expiry",
+      "translated_text": "تنتهي الصلاحية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.information",
+      "translated_text": "للعلم فقط",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.kind",
+      "translated_text": "نوع المستلم",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.org_unit",
+      "translated_text": "الوحدة التنظيمية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.priority",
+      "translated_text": "الأولوية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.read",
+      "translated_text": "مقروءة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.reason",
+      "translated_text": "السبب",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.receipts",
+      "translated_text": "طلب إشعارات القراءة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.recipient",
+      "translated_text": "المستلم",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.record",
+      "translated_text": "الوثيقة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.resource",
+      "translated_text": "المورد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.resource_kind",
+      "translated_text": "نوع المورد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.resources",
+      "translated_text": "الموارد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.role",
+      "translated_text": "الدور",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.search",
+      "translated_text": "البحث في الموضوع",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.security",
+      "translated_text": "درجة السرية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.sender",
+      "translated_text": "المرسل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.sent_at",
+      "translated_text": "وقت الإرسال",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.sent_before",
+      "translated_text": "أُرسلت قبل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.sent_from",
+      "translated_text": "أُرسلت في أو بعد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.subject",
+      "translated_text": "الموضوع",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.to",
+      "translated_text": "إلى",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.unread",
+      "translated_text": "غير مقروءة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.user",
+      "translated_text": "المستخدم",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.help.amend",
+      "translated_text": "يُرسل إشعار تصحيح إلى جميع المستلمين الأصليين. يظل محتوى الرسالة المرسلة ثابتًا.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.help.completion",
+      "translated_text": "حدّد «هل اكتمل الإجراء؟» لإبلاغ المرسل بأنك أكملت الإجراء المطلوب. سيُرسَل ردّك إليه.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "messaging-reply-guidance-2026-10-03",
+        "generated_at": "2026-10-03T20:16:46.970845+04:00",
+        "batch_id": "messaging-reply-20261003",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "ead24e2a7611f39662cabfdd8bd8ea808c4dfd4100ae741eb71e035f3726a7fc",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
+      }
+    },
+    {
+      "message_key": "messaging.help.due",
+      "translated_text": "يُستخدم نطاقك الزمني لتاريخ الاستحقاق، وهو تاريخ إرشادي.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.help.limits",
+      "translated_text": "الحدود: الاختيارات / المستلمون / روابط الموارد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.help.linked",
+      "translated_text": "يُربط نص الرسالة السابقة بهذه الرسالة دون نسخه إليها.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "messaging-reply-guidance-2026-10-03",
+        "generated_at": "2026-10-03T20:16:46.970845+04:00",
+        "batch_id": "messaging-reply-20261003",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "ead24e2a7611f39662cabfdd8bd8ea808c4dfd4100ae741eb71e035f3726a7fc",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
+      }
+    },
+    {
+      "message_key": "messaging.help.recipient_search",
+      "translated_text": "اكتب حرفين على الأقل للبحث عن المستخدمين أو الأدوار أو الوحدات التنظيمية بالاسم أو الوصف أو الرمز أو المعرّف الخارجي للمستخدم أو بريده الإلكتروني. حدّد البحث أكثر عند الحاجة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.linked.title",
+      "translated_text": "الرسالة السابقة المرتبطة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "linked-message-dialog-20261004",
+        "generated_at": "2026-10-03T21:58:09.818558+00:00",
+        "batch_id": "linked-message-dialog-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "5d3cd66cf122123bb4320c4cb9dbf15259623a06c06df11d6e96aea667e1c08f",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
+      }
+    },
+    {
+      "message_key": "messaging.live.close",
+      "translated_text": "إغلاق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.live.new_message",
+      "translated_text": "رسالة جديدة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.live.summary",
+      "translated_text": "لديك {count} رسائل جديدة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.live.summary_one",
+      "translated_text": "لديك رسالة جديدة واحدة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "mailbox-checkpoint-20261004",
+        "generated_at": "2026-10-03T22:41:38.025607+00:00",
+        "batch_id": "mailbox-checkpoint-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "f39e21d8207a384ecde17fea08bdfe5fbc30f449df4032c7aaad213233127608",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
+      }
+    },
+    {
+      "message_key": "messaging.live.test_summary",
+      "translated_text": "لديك {count} رسائل جديدة، منها {test_count} إشعارات اختبارية.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.live.unread",
+      "translated_text": "غير المقروءة: {count}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.active_connections",
+      "translated_text": "اتصالات العملاء النشطة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.active_inbox",
+      "translated_text": "إدخالات الوارد النشطة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.active_outbox",
+      "translated_text": "عناصر الصادر النشطة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.alert",
+      "translated_text": "توجد مشكلة تشغيلية تستدعي الانتباه. راجع حالة المستمع وعدادات الإخفاق.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.approaching_expiry",
+      "translated_text": "رسائل تقترب من انتهاء الاستبقاء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.audit",
+      "translated_text": "فتح سجل التدقيق المصرح به",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.capture_failure",
+      "translated_text": "إخفاقات الحفظ",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.capture_seconds",
+      "translated_text": "متوسط مدة معالجة الحفظ (ثوانٍ)",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.catchup_failure",
+      "translated_text": "إخفاقات استدراك الرسائل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.cleanup_failure",
+      "translated_text": "إخفاقات التنظيف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.cleanup_seconds",
+      "translated_text": "متوسط مدة تنظيف المجموعة (ثوانٍ)",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.connected",
+      "translated_text": "المستمع متصل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.delayed_groups",
+      "translated_text": "مرات رصد مجموعات كبيرة مستبقاة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.disconnected",
+      "translated_text": "المستمع غير متصل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.eligible_groups",
+      "translated_text": "مجموعات مرصودة مؤهلة للحذف النهائي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.expired_retained",
+      "translated_text": "رسائل منتهية ما زالت محفوظة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.expired_retained_by_group",
+      "translated_text": "رسائل منتهية تنتظر بقية مجموعتها",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.fanout_count",
+      "translated_text": "نسخ التسليم المنشأة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.gateways",
+      "translated_text": "نسخ بوابة الاتصال الفوري",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.group_failures",
+      "translated_text": "إخفاقات تنظيف المجموعات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.group_members",
+      "translated_text": "أعضاء مجموعات الاستبقاء المرصودون",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.group_size",
+      "translated_text": "أعضاء المجموعات المفحوصون إجمالاً",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.largest_group",
+      "translated_text": "أكبر مجموعة مرصودة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.last_notification_at",
+      "translated_text": "آخر إشعار مستلم",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.listener_generation",
+      "translated_text": "اتصالات المستمع بما فيها إعادة الاتصال",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.metrics",
+      "translated_text": "القياسات التشغيلية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.notifications_emitted",
+      "translated_text": "إشعارات التسليم المثبتة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.notifications_received",
+      "translated_text": "الإشعارات المستلمة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.oldest_eligible_group",
+      "translated_text": "أقدم مجموعة مرصودة مؤهلة للحذف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.oldest_expired_candidate",
+      "translated_text": "أقدم رسالة منتهية مرشحة للتنظيف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.privacy",
+      "translated_text": "أعداد تشغيلية فقط. لا تمنح هذه الصفحة صلاحية الاطلاع على محتوى الرسائل أو صناديقها.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.producers",
+      "translated_text": "القياسات حسب منتج الإشعار",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.purged_drafts",
+      "translated_text": "مسودات حُذفت نهائياً",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.purged_groups",
+      "translated_text": "مجموعات حُذفت نهائياً",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.purged_messages",
+      "translated_text": "رسائل حُذفت نهائياً",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.restorable_inbox",
+      "translated_text": "إدخالات الوارد القابلة للاستعادة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.restorable_outbox",
+      "translated_text": "عناصر الصادر القابلة للاستعادة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.restricted_count",
+      "translated_text": "مرات عرض الرسائل المحجوبة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.retention",
+      "translated_text": "الاستبقاء والتنظيف",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.send_failure",
+      "translated_text": "طلبات الإرسال الفاشلة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.send_success",
+      "translated_text": "طلبات الإرسال الناجحة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.slow_disconnects",
+      "translated_text": "حالات فصل العملاء البطيئين",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.system_failure",
+      "translated_text": "إخفاقات معاملات إشعارات النظام",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.system_seconds",
+      "translated_text": "متوسط مدة إشعار النظام (ثوانٍ)",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.test_failure",
+      "translated_text": "إرسالات الاختبار الفاشلة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.test_rate_rejected",
+      "translated_text": "اختبارات مرفوضة لتجاوز معدل الإرسال",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.test_seconds",
+      "translated_text": "متوسط مدة الإرسال التجريبي (ثوانٍ)",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.test_success",
+      "translated_text": "إرسالات الاختبار الناجحة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.title",
+      "translated_text": "مراقبة الرسائل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.navigation.drafts",
+      "translated_text": "المسودات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.navigation.inbox",
+      "translated_text": "الوارد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.navigation.messages",
+      "translated_text": "الرسائل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.navigation.outbox",
+      "translated_text": "الصادر",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.notice.action_amended",
+      "translated_text": "تعديل الإجراء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.priority.high",
+      "translated_text": "عالية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.priority.normal",
+      "translated_text": "عادية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.priority.very_high",
+      "translated_text": "عالية جدًا",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.reason.message_recipient_clearance_required",
+      "translated_text": "لا يوجد مستلم مؤهل لديه درجة سرية كافٍ.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.reason.message_recipient_exchange_required",
+      "translated_text": "لا يوجد مستلم مؤهل لديه إذن بتبادل الرسائل.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.reason.message_resource_level_too_high",
+      "translated_text": "ارفع درجة سرية الرسالة لتضمين هذا المورد.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.reason.message_resource_unavailable",
+      "translated_text": "لم يعد هذا المورد متاحًا لك.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.reply.subject_prefix",
+      "translated_text": "Re:",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "messaging-reply-guidance-2026-10-03",
+        "generated_at": "2026-10-03T20:16:46.970845+04:00",
+        "batch_id": "messaging-reply-20261003",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "ead24e2a7611f39662cabfdd8bd8ea808c4dfd4100ae741eb71e035f3726a7fc",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
+      }
+    },
+    {
+      "message_key": "messaging.retention.deadline",
+      "translated_text": "يمكن الاستعادة حتى {deadline}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.retention.delete",
+      "translated_text": "حذف الرسالة من صندوقي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.retention.recently_deleted",
+      "translated_text": "المحذوفة مؤخراً",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.retention.restore",
+      "translated_text": "استعادة الرسالة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.section.amendments",
+      "translated_text": "تعديلات الإجراء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.section.effective",
+      "translated_text": "الإجراء الحالي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.section.links",
+      "translated_text": "روابط الموارد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.section.original",
+      "translated_text": "الإجراء الأصلي",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.section.recipients",
+      "translated_text": "المستلمون والحالة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.action_completed",
+      "translated_text": "اكتمل الإجراء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.active",
+      "translated_text": "نشط",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.completed",
+      "translated_text": "مكتمل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.completed_late",
+      "translated_text": "مكتمل بعد الموعد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.empty",
+      "translated_text": "لا توجد رسائل لعرضها",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.expiring",
+      "translated_text": "يقترب انتهاء الصلاحية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.late",
+      "translated_text": "متأخر",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.loading",
+      "translated_text": "جارٍ تحميل الرسائل…",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.needs_attention",
+      "translated_text": "تحتاج إلى مراجعة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.outstanding",
+      "translated_text": "بانتظار الإجراء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.ready_validate",
+      "translated_text": "جاهزة للتحقق عند الإرسال",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.restricted",
+      "translated_text": "رسالة مقيّدة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.saved",
+      "translated_text": "حُفظت المسودة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.sent",
+      "translated_text": "أُرسلت الرسالة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.unavailable",
+      "translated_text": "المورد غير متاح",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.withdrawn",
+      "translated_text": "مسحوب",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.test.label",
+      "translated_text": "اختبار — ليس إشعاراً إنتاجياً",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.value.false",
+      "translated_text": "لا",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.value.true",
+      "translated_text": "نعم",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
       }
     },
     {
@@ -7482,6 +10713,78 @@
       }
     },
     {
+      "message_key": "privilege.messaging.monitor.description",
+      "translated_text": "عرض حالة تشغيل المراسلات دون الكشف عن محتوى الرسائل.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "privilege.messaging.monitor.name",
+      "translated_text": "مراقبة المراسلات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "privilege.messaging.notifications.administer.description",
+      "translated_text": "إعداد مصادر الإشعارات المسجّلة والاختبارات المضبوطة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "privilege.messaging.notifications.administer.name",
+      "translated_text": "إدارة الإشعارات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "privilege.messaging.user_messages.exchange.description",
+      "translated_text": "إرسال الرسائل التي يكتبها المستخدمون واستقبالها.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "privilege.messaging.user_messages.exchange.name",
+      "translated_text": "تبادل الرسائل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "privilege.org_unit.modify_metadata.description",
       "translated_text": "تتيح هذه الصلاحية للمستخدم تعديل البيانات الوصفية للوحدة التنظيمية وفق ضوابط التفويض والسياسات المعتمدة.",
       "quality_flags": [],
@@ -8406,22 +11709,130 @@
       }
     },
     {
+      "message_key": "resource_picker.add_selected",
+      "translated_text": "إضافة المحدد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "resource_picker.empty",
+      "translated_text": "لا توجد موارد تطابق هذا البحث.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "resource_picker.limit",
+      "translated_text": "تتجاوز الموارد المحددة الحد المتبقي لروابط الرسالة. أزل بعض التحديدات.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "resource_picker.prompt",
+      "translated_text": "أدخل عبارة بحث، ثم اضغط على «بحث» أو مفتاح الإدخال.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "resource_picker.query",
+      "translated_text": "نص البحث",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "resource_picker.search",
+      "translated_text": "بحث",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "resource_picker.selected",
+      "translated_text": "الموارد المحددة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "resource_picker.title",
+      "translated_text": "إضافة موارد",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "saved_search.administration.filter.created_before",
       "translated_text": "أُنشئ قبل",
       "quality_flags": [],
-      "provenance": {"kind": "generated", "generated_by": "OpenAI", "review_state": "unreviewed"}
+      "provenance": {
+        "kind": "generated",
+        "generated_by": "OpenAI",
+        "review_state": "unreviewed"
+      }
     },
     {
       "message_key": "saved_search.administration.filter.created_from",
       "translated_text": "أُنشئ بدءًا من",
       "quality_flags": [],
-      "provenance": {"kind": "generated", "generated_by": "OpenAI", "review_state": "unreviewed"}
+      "provenance": {
+        "kind": "generated",
+        "generated_by": "OpenAI",
+        "review_state": "unreviewed"
+      }
     },
     {
       "message_key": "saved_search.administration.filter.owner",
       "translated_text": "اسم المالك أو بريده الإلكتروني",
       "quality_flags": [],
-      "provenance": {"kind": "generated", "generated_by": "OpenAI", "review_state": "unreviewed"}
+      "provenance": {
+        "kind": "generated",
+        "generated_by": "OpenAI",
+        "review_state": "unreviewed"
+      }
     },
     {
       "message_key": "saved_search.error.name_exists",

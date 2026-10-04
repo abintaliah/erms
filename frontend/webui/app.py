@@ -16,7 +16,13 @@ from zoneinfo import available_timezones
 from nicegui import app, background_tasks, context, events, ui
 
 from .api_client import ApiError, ErmsApiClient
+from .remote_select import RemoteSelect
 from .classification_workspace import classification_workspace
+from .messaging_workspace import messaging_workspace
+from .resource_inspector import resource_inspector
+from .messaging_live import LiveMailbox, stream_events, mailbox_cursor_key
+from .notification_administration import notification_administration
+from .messaging_monitor import messaging_monitor
 from .audit_labels import audit_entity_type_label
 from .retention_timeline import render_disposition_date, render_retention_stages
 from .capabilities import (
@@ -901,7 +907,7 @@ def render_component_cards(
                 for label, value in (
                     (render_message("entity_metadata.field.date_originated"), format_timestamp(component.get("date_originated"))),
                     (render_message("advanced_search.field.date_created"), format_timestamp(component.get("date_created"))),
-                    (render_message("webui.load_dashboard.label.digital_storage_by_organizational_unit_e4533a05"), str(component.get("storage_backend") or "—")),
+                    (render_message("components.field.storage_backend"), str(component.get("storage_backend") or "—")),
                     (component.get("checksum_algo") or render_message("advanced_search.field.checksum_value"), checksum_short),
                 ):
                     with ui.column().classes("gap-0 min-w-0"):
@@ -974,6 +980,13 @@ def add_timestamp_slots(table: Any, column_names: list[str]) -> None:
               <span v-else class="text-grey-5">—</span>
             </q-td>
         """)
+
+
+def login_error_message(error: ApiError) -> str:
+    """Distinguish rejected credentials from an expired authenticated session."""
+    if error.status_code == 401:
+        return render_message_plain("authentication.error.credentials_not_accepted")
+    return error_message(error)
 
 
 def error_message(error: ApiError) -> str:
@@ -1176,6 +1189,8 @@ def relationship_select(
     *,
     value: Any = None,
     required: bool = False,
+    multiple: bool = False,
+    remote: bool = False,
 ):
     lowered_label = label.lower()
     icon = (
@@ -1185,15 +1200,18 @@ def relationship_select(
         else "person" if "user" in lowered_label
         else "link"
     )
-    control = ui.select(
+    control = (RemoteSelect if remote else ui.select)(
         options,
         label=label,
         value=value,
         with_input=True,
         clearable=not required,
+        multiple=multiple,
     ).props(
         "outlined use-input input-debounce=0 behavior=menu options-dense"
     ).classes("w-full relationship-select")
+    if remote:
+        control.classes("remote-relationship-select")
     control.add_slot("prepend", f'<q-avatar size="34px" color="blue-1" text-color="primary" icon="{icon}" />')
     option_template = """
         <q-item v-bind="props.itemProps" class="relationship-option q-py-sm">
@@ -1202,6 +1220,8 @@ def relationship_select(
           </q-item-section>
           <q-item-section>
             <q-item-label class="text-weight-medium">{{ props.opt.label.includes(' · ') ? props.opt.label.split(' · ').slice(1).join(' · ') : props.opt.label }}</q-item-label>
+            <q-item-label v-if="props.opt.email" caption dir="ltr">{{ props.opt.email }}</q-item-label>
+            <q-item-label v-if="props.opt.reason" caption>{{ props.opt.reason }}</q-item-label>
             <q-item-label caption class="row items-center q-gutter-xs">
               <q-badge v-if="props.opt.label.includes(' · ')" outline color="primary" :label="props.opt.label.split(' · ')[0]" />
             </q-item-label>
@@ -1210,6 +1230,13 @@ def relationship_select(
         </q-item>
     """.replace("__ICON__", icon)
     control.add_slot("option", option_template)
+    if multiple:
+        # NiceGUI has no input-buffer or popup setter. Use QSelect's public
+        # methods after selection so the old menu cannot intercept another field.
+        def settle_selection():
+            control.run_method("updateInputValue", "")
+            control.run_method("hidePopup")
+        control.on_value_change(settle_selection)
     return control
 
 
@@ -1411,6 +1438,7 @@ def index(q: str = "") -> None:
     page_client.on_disconnect(lambda: clear_active_messages(page_client.id))
     page_client.on_disconnect(lambda: clear_locale_context(page_client.id))
     auth_state: dict[str, Any] = {"principal": None}
+    message_live = {"adapter": None, "api": None, "token": None, "notifications": []}
     cached_localization = app.storage.user.get("localization_context") or {}
     cached_messages = app.storage.user.get("localization_messages") or {}
     cached_fallback_keys = app.storage.user.get("localization_fallback_keys") or []
@@ -1534,6 +1562,10 @@ def index(q: str = "") -> None:
         item_filter: Callable[[dict[str, Any]], bool] | None = None,
         on_options_resolved: Callable[[dict[int, str]], None] | None = None,
         eligible_classifications: bool = False,
+        page_loader: Callable | None = None,
+        selected_loader: Callable | None = None,
+        option_reason: Callable | None = None,
+        active: Callable = lambda: True,
     ) -> Callable[..., Any]:
         """Load a bounded relationship page as the user filters a selector."""
         request_state: dict[str, Any] = {"revision": 0, "task": None, "loaded": False}
@@ -1547,11 +1579,34 @@ def index(q: str = "") -> None:
         )
 
         def make_options(rows: list[dict[str, Any]]) -> dict[int, str]:
-            return relationship_options(
+            options = relationship_options(
                 rows, label_fields,
                 include_level_number=resource == "security-levels",
                 level_label=security_level_label,
             )
+            if option_reason is not None:
+                disabled = request_state.setdefault("disabled", {})
+                for row in rows:
+                    reason = option_reason(row)
+                    disabled[row["id"]] = bool(reason)
+                    if hasattr(control, "option_details"):
+                        control.option_details[row["id"]] = {
+                            "email": row.get("email") or "", "reason": reason or "",
+                        }
+                    elif reason:
+                        options[row["id"]] += " · " + reason
+            return options
+
+        def apply_disabled_options() -> None:
+            if option_reason is None:
+                return
+            disabled = request_state.setdefault("disabled", {})
+            # NiceGUI maps option IDs to ordinal values for Quasar. Using
+            # ordinals avoids disabling a different person with the same name.
+            indices = [index for index, key in enumerate(control.options) if disabled.get(key)]
+            request_state["disabled"] = {key: value for key, value in disabled.items() if key in control.options}
+            control._props[":option-disable"] = "opt => " + json.dumps(indices) + ".includes(opt.value)"
+            control.update()
 
         async def resolve_selected_options() -> None:
             """Replace restored foreign-key placeholders with localized labels."""
@@ -1563,11 +1618,13 @@ def index(q: str = "") -> None:
                 return
             try:
                 rows = await asyncio.gather(*(
-                    api.get(resource, int(value)) for value in selected_values
+                    (selected_loader(int(value)) if selected_loader else api.get(resource, int(value))) for value in selected_values
                 ))
             except (ApiError, TypeError, ValueError):
                 # A deleted or inaccessible reference remains visible as an unresolved
                 # value; server-side search validation will reject it when appropriate.
+                return
+            if not active() or getattr(control, "_deleted", False):
                 return
             resolved = make_options(list(rows))
             raw_current_values = (
@@ -1579,27 +1636,28 @@ def index(q: str = "") -> None:
                 for value in raw_current_values
             }
             control.options = {
-                **{
-                    key: value for key, value in dict(control.options or {}).items()
-                    if key in current_values
-                },
+                **dict(control.options or {}),
                 **{
                     key: value for key, value in resolved.items()
                     if key in current_values
                 },
             }
             control.update()
+            apply_disabled_options()
             if on_options_resolved is not None:
                 on_options_resolved(resolved)
 
         async def load_options(query: str = "") -> None:
+            if not active() or getattr(control, "_deleted", False):
+                return
             request_state["revision"] += 1
             revision = request_state["revision"]
             try:
-                result = (
+                result = await page_loader(query) if page_loader else (
                     await api.administration_reference_page(
                         resource, query=query, limit=25,
                         sort="level_number" if resource == "security-levels" else "name",
+                        filters=filters,
                     )
                     if resource in {"profiles", "security-levels"}
                     else await api.relationship_page(
@@ -1610,9 +1668,10 @@ def index(q: str = "") -> None:
             except asyncio.CancelledError:
                 return
             except ApiError as error:
-                ui.notify(error_message(error), color="negative", close_button=True)
+                if revision == request_state["revision"] and active() and not getattr(control, "_deleted", False):
+                    ui.notify(error_message(error), color="negative", close_button=True)
                 return
-            if revision != request_state["revision"]:
+            if revision != request_state["revision"] or not active() or getattr(control, "_deleted", False):
                 return
             selected_values = (
                 set(control.value or []) if control.multiple
@@ -1631,6 +1690,7 @@ def index(q: str = "") -> None:
             )
             control.options = {**selected_options, **page_options}
             control.update()
+            apply_disabled_options()
             if on_options_resolved is not None:
                 on_options_resolved(page_options)
             request_state["loaded"] = True
@@ -1973,6 +2033,38 @@ def index(q: str = "") -> None:
             direction: ltr; unicode-bidi: isolate; text-align: left;
         }
         html[dir="rtl"] .row { flex-direction: row-reverse; }
+        /* Remote selects already inherit RTL. Reversing their internal rows
+           again places the recipient chips on the left. */
+        html[dir="rtl"] .remote-relationship-select .row { flex-direction: row; }
+        /* These native components already inherit RTL. The legacy global row
+           reversal flips them twice; Quasar floating labels remain left-anchored.
+           Native direction/card/row props do not reset those internal styles. */
+        html[dir="rtl"] :is(.wathiq-login-card, .messaging-workspace) .row {
+            flex-direction: row;
+        }
+        html[dir="rtl"] :is(.wathiq-login-card, .messaging-workspace) .q-field__label {
+            left: auto; right: 0; transform-origin: right top; text-align: right;
+        }
+        html[dir="rtl"] :is(.wathiq-login-card, .messaging-workspace) .q-field__append {
+            padding-left: 0; padding-right: 12px;
+        }
+        html[dir="rtl"] :is(.wathiq-login-card, .messaging-workspace) .q-field__prepend {
+            padding-right: 0; padding-left: 12px;
+        }
+        /* The native login glyph has no directional variant. Keep the same
+           symbol and mirror only this button in RTL. */
+        html[dir="rtl"] .wathiq-login-submit .q-icon { transform: scaleX(-1); }
+        /* QSelect's default removable chips use physical negative margins.
+           Native Select props cannot set the internal remove-icon spacing;
+           inspection showed overlap in inherited RTL. Keep a logical gap. */
+        .remote-relationship-select .q-chip__icon--remove {
+            margin: 0;
+        }
+        .remote-relationship-select.q-select--multiple .q-chip__content {
+            margin-inline-end: 6px;
+        }
+
+
         /* Transfer dialogs inherit the supported document direction. NiceGUI's
            select/row APIs have no per-control RTL layout switch. Live inspection
            showed the legacy .row reversal reversing that RTL direction twice;
@@ -3571,6 +3663,8 @@ def index(q: str = "") -> None:
             ).tooltip(render_message("webui.index.tooltip.search_93d9b9f9"))
         global_search_wrap.set_visibility(full_text_search_enabled())
         ui.space()
+        message_unread_button = ui.button(icon="inbox", on_click=lambda: select_messages("inbox")).props("flat no-caps")
+        message_unread_button.set_visibility(False)
         user_menu_button = ui.button(icon="account_circle").props(
             "flat round color=blue-grey-9 data-inspector-ignore=true"
         )
@@ -3676,6 +3770,12 @@ def index(q: str = "") -> None:
         localized_navigation = {
             "records_heading": render_message("navigation.section.records"),
             "organization_heading": render_message("navigation.section.organization"),
+            "messages_heading": render_message("messaging.navigation.messages"),
+            "messages-inbox": render_message("messaging.navigation.inbox"),
+            "messages-outbox": render_message("messaging.navigation.outbox"),
+            "messages-drafts": render_message("messaging.navigation.drafts"),
+            "messages-notifications": render_message("messaging.admin.title"),
+            "messages-monitor": render_message("messaging.monitor.title"),
             "advanced-search": render_message("navigation.item.advanced_search"),
             "aggregations": render_message("navigation.item.aggregations"),
             "records": render_message("navigation.item.records"),
@@ -3691,6 +3791,7 @@ def index(q: str = "") -> None:
                 )
                 for heading_key, entries in (
                     ("records_heading", (("advanced-search", "manage_search"), ("aggregations", "folder"), ("records", "description"), ("classification-schemes", "account_tree"))),
+                    ("messages_heading", (("messages-inbox", "inbox"), ("messages-outbox", "outbox"), ("messages-drafts", "drafts"), ("messages-monitor", "monitor_heart"), ("messages-notifications", "notifications"))),
                     ("organization_heading", (("org-units", "corporate_fare"), ("roles", "badge"), ("users", "group"))),
                 ):
                     heading_control = ui.label(localized_navigation[heading_key]).classes(
@@ -4295,6 +4396,11 @@ def index(q: str = "") -> None:
             render_navigation_breadcrumbs()
 
     breadcrumb_message_keys = {
+        "messages-inbox": "messaging.navigation.inbox",
+        "messages-outbox": "messaging.navigation.outbox",
+        "messages-drafts": "messaging.navigation.drafts",
+        "messages-notifications": "messaging.admin.title",
+        "messages-monitor": "messaging.monitor.title",
         "dashboard": "navigation.item.dashboard",
         "advanced-search": "navigation.item.advanced_search",
         "full-text-search": "webui.run_global_search.text.search_results_ecc13a7a",
@@ -4444,6 +4550,8 @@ def index(q: str = "") -> None:
                     await run_global_search(query)
             else:
                 await select_dashboard()
+        elif page.startswith("messages-"):
+            await select_messages(page.removeprefix("messages-"))
         elif page == "advanced-search":
             await select_advanced_search()
         elif page in ENTITIES:
@@ -4548,6 +4656,8 @@ def index(q: str = "") -> None:
 
     def clear_signed_in_identity() -> None:
         """Remove account identity and overlays before presenting sign-in again."""
+        stop_message_stream()
+        message_unread_button.set_visibility(False)
         clear_global_search_session()
         state.pop("classification_browser_preferences", None)
         state.pop("classification_workspace_token", None)
@@ -7411,7 +7521,7 @@ def index(q: str = "") -> None:
         state["recent_created"] = await decorate_for_spec(spec, created)
         state["recent_updated"] = await decorate_for_spec(spec, updated)
 
-    async def browse_advanced_aggregation(target_control: Any) -> None:
+    async def browse_advanced_aggregation(target_control: Any, *, record_creation=False, digital_only=False) -> None:
         dialog = ui.dialog()
         content: Any = None
         scheme_control: Any = None
@@ -7421,6 +7531,7 @@ def index(q: str = "") -> None:
             current = browser["collections"].setdefault(path, {"items": [], "next_cursor": None})
             page = await api.browse_page(
                 path, cursor=current["next_cursor"] if append else None, limit=50,
+                **({"record_creation": True, "digital_only": digital_only} if record_creation and (path.endswith("/aggregations") or path.startswith("aggregations/")) else {}),
             )
             current["items"] = [*current["items"], *page["items"]] if append else list(page["items"])
             current["next_cursor"] = page.get("next_cursor")
@@ -7549,11 +7660,12 @@ def index(q: str = "") -> None:
         scheme_control.on_value_change(lambda event: select_scheme(event.value))
 
     async def open_record_draft_editor(
-        target_aggregation_id: int | None = None, on_committed=None,
+        target_aggregation_id: int | None = None, on_committed=None, existing_capture_draft=None, capture_active=None,
+        capture_loader=None, capture_dialog=None,
     ) -> None:
         spec = ENTITIES["records"]
         try:
-            draft = await api.create_record_draft()
+            draft = existing_capture_draft or await api.create_record_draft()
             security_levels, creation_roles = await asyncio.gather(
                 api.list("security-levels", limit=25),
                 api.creation_role_options(target_aggregation_id),
@@ -7567,10 +7679,18 @@ def index(q: str = "") -> None:
                 if target_aggregation is not None else {}
             )
         except ApiError as error:
+            if capture_dialog is not None:capture_dialog.close()
+            if capture_active is not None and not capture_active():return
             ui.notify(error_message(error), color="negative", close_button=True)
             return
 
-        dialog = ui.dialog().props("persistent")
+        if capture_active is not None and not capture_active():
+            if capture_dialog is not None:capture_dialog.close()
+            return
+
+        dialog = capture_dialog or ui.dialog().props("persistent")
+        dialog.clear()
+        capture_preparation = {"closed": False, "ready": capture_loader is None}
         controls: dict[str, Any] = {}
         current_rows: list[dict[str, Any]] = []
         component_area: Any = None
@@ -7579,19 +7699,23 @@ def index(q: str = "") -> None:
         action_controls: dict[str, Any] = {}
         uploader_control: dict[str, Any] = {}
 
-        async def refresh_draft_components() -> None:
+        async def refresh_draft_components() -> bool:
             try:
                 rows = await api.draft_components(draft["id"])
+                if capture_active is not None and not capture_active():return
                 current_rows.clear()
                 current_rows.extend(rows)
                 component_area.clear()
                 component_list.set_visibility(bool(rows))
                 with component_area:
                     if rows:
-                        render_component_cards(rows, move_draft_component, remove_draft_component)
+                        render_component_cards(rows, move_draft_component, remove_draft_component, readonly=existing_capture_draft is not None)
+                return True
             except ApiError as error:
+                if capture_active is not None and not capture_active():return
                 with component_area:
                     ui.notify(error_message(error), color="negative")
+                return False
 
         async def move_draft_component(component: dict[str, Any], direction: int) -> None:
             index = next((i for i, item in enumerate(current_rows) if item["id"] == component["id"]), -1)
@@ -7669,6 +7793,10 @@ def index(q: str = "") -> None:
             )
 
         async def discard() -> None:
+            capture_preparation["closed"] = True
+            if draft.get("id") is None:
+                dialog.close()
+                return
             try:
                 await api.discard_record_draft(draft["id"])
             except ApiError as error:
@@ -7678,6 +7806,11 @@ def index(q: str = "") -> None:
             dialog.close()
 
         async def commit() -> None:
+            if not capture_preparation["ready"] or capture_preparation["closed"]:
+                return
+            if existing_capture_draft is not None:
+                action_controls["commit"].disable()
+                action_controls["commit"].props("loading")
             try:
                 payload = form_payload(spec, controls, creating=True)
                 if target_aggregation_id is not None:
@@ -7690,11 +7823,14 @@ def index(q: str = "") -> None:
                     raise ValueError("Select who this record is being created for")
                 await api.update_record_draft(draft["id"], payload)
                 committed_record = await api.commit_record_draft(
-                    draft["id"], int(creator_role_id),
+                    draft["id"], int(creator_role_id), capture=existing_capture_draft is not None,
                 )
+                if capture_active is not None and not capture_active():return
                 dialog.close()
                 ui.notify(render_message("webui.commit.notify.record_and_digital_components_created_c1c2938b"), color="positive")
-                await load_recent(spec)
+                if existing_capture_draft is None:
+                    await load_recent(spec)
+                if capture_active is not None and not capture_active():return
                 if on_committed is not None:
                     await on_committed(committed_record)
                     return
@@ -7703,9 +7839,15 @@ def index(q: str = "") -> None:
             except ValueError as error:
                 ui.notify(validation_error_message(error), color="warning")
             except ApiError as error:
+                if capture_active is not None and not capture_active():return
                 if await show_number_conflict(error, "records", controls["record_number"]):
                     return
                 ui.notify(error_message(error), color="negative", close_button=True)
+
+            finally:
+                if existing_capture_draft is not None and (capture_active is None or capture_active()):
+                    action_controls["commit"].props(remove="loading")
+                    action_controls["commit"].enable()
 
         with dialog, ui.card().classes("max-h-[calc(100vh-32px)] p-0").style("width: 1050px; max-width: calc(100vw - 32px)"):
             with ui.row().classes("w-full items-center no-wrap px-6 pt-5"):
@@ -7729,20 +7871,30 @@ def index(q: str = "") -> None:
                             aggregation_field.lookup_label_fields,
                         ),
                     )
-                    controls["aggregation_id"].classes("col-span-2")
+                    controls["aggregation_id"].classes("col-span-2").props("clearable")
                     style_relationship_chip_select(
                         controls["aggregation_id"], "aggregation_id",
                     )
                     if target_aggregation_id is None:
+                        async def destinations(query):
+                            if len(query.strip()) < 2:
+                                return {"items": []}
+                            return await api.search_request("aggregations", {
+                                "where": {"or": [{"field": field, "operator": "contains_ci", "value": query.strip()}
+                                    for field in ("aggregation_number", "title", "description")]},
+                                "sort": [{"field": "aggregation_number", "direction": "asc"}], "limit": 25,
+                            }, record_creation=True, digital_only=existing_capture_draft is not None)
                         bind_remote_relationship_select(
                             controls["aggregation_id"], "aggregations",
                             ("aggregation_number", "title"),
                             aggregation_field.lookup_label_fields,
+                            page_loader=destinations,
+                            active=lambda: dialog.value and (capture_active is None or capture_active()),
                         )
                         ui.button(
                             render_message("webui.show_memberships.button.browse_aed12689"),
                             icon="account_tree",
-                            on_click=lambda: browse_advanced_aggregation(controls["aggregation_id"]),
+                            on_click=lambda: browse_advanced_aggregation(controls["aggregation_id"], record_creation=True, digital_only=existing_capture_draft is not None),
                         ).props("flat dense no-caps").classes("col-span-2 justify-self-start")
                     if target_aggregation_id is not None:
                         # Read-only keeps the selected parent visible in the
@@ -7807,6 +7959,8 @@ def index(q: str = "") -> None:
                         if field.name == "medium":
                             parent = aggregations_by_id.get(controls["aggregation_id"].value)
                             initial_value = parent.get("medium", "mixed") if parent else "mixed"
+                        if existing_capture_draft is not None and field.name in draft:
+                            initial_value = draft[field.name]
                         controls[field.name] = field_input(field, value=initial_value, options=options)
                         if field.name == "record_number":
                             add_number_suggestion(controls[field.name], "records", controls)
@@ -7819,8 +7973,13 @@ def index(q: str = "") -> None:
                     def constrain_record_medium() -> None:
                         parent = aggregations_by_id.get(controls["aggregation_id"].value)
                         medium_control = controls["medium"]
+                        if existing_capture_draft is not None:
+                            medium_control.set_options({"digital": medium_options()["digital"]}, value="digital")
+                            medium_control.disable()
+                            return
                         if not parent:
-                            medium_control.set_options({}, value=None)
+                            medium_control.set_options({"digital": medium_options()["digital"]} if existing_capture_draft is not None else {},
+                                                       value="digital" if existing_capture_draft is not None else None)
                             medium_control.disable()
                             return
                         parent_medium = parent.get("medium", "mixed")
@@ -7844,11 +8003,12 @@ def index(q: str = "") -> None:
                             role_control.set_options({}, value=None)
                             role_control.disable()
                             creation_role_status.set_text(
-                                "Select a parent aggregation before choosing Create for."
-                            )
+                                render_message('webui.open_record_draft_editor.label.select_a_parent_aggregation_before_choosin_e92b6402'))
                             return
                         try:
                             rows = await api.creation_role_options(int(aggregation_id))
+                            if controls["aggregation_id"].value != aggregation_id or (capture_active is not None and not capture_active()):
+                                return
                         except ApiError as error:
                             ui.notify(error_message(error), color="negative", close_button=True)
                             return
@@ -7876,22 +8036,18 @@ def index(q: str = "") -> None:
                             role_control.disable()
                         if not rows:
                             creation_role_status.set_text(
-                                "You do not have an effective role in the parent aggregation's "
-                                "organizational unit, so you cannot create a record there."
+                                render_message("webui.open_record_draft_editor.label.you_do_not_have_an_effective_role_in_the_p_124c1ce3")
                             )
                         elif previous_role_was_cleared:
                             creation_role_status.set_text(
-                                "Your previous Create for selection was cleared because it does not "
-                                "belong to the parent aggregation's organizational unit."
+                                render_message("messaging.capture.creator_role_cleared")
                             )
                         elif len(rows) == 1:
                             creation_role_status.set_text(
-                                "Create for was set automatically because you have one eligible role."
-                            )
+                                render_message('webui.open_record_draft_editor.label.create_for_was_set_automatically_because_y_974126aa'))
                         else:
                             creation_role_status.set_text(
-                                "Choose one of your roles in the parent aggregation's organizational unit."
-                            )
+                                render_message('webui.open_record_draft_editor.label.choose_one_of_your_roles_in_the_parent_agg_e5eca9a8'))
 
                     async def apply_selected_aggregation() -> None:
                         aggregation_id = controls["aggregation_id"].value
@@ -7906,8 +8062,11 @@ def index(q: str = "") -> None:
                             except ApiError as error:
                                 ui.notify(error_message(error), color="negative", close_button=True)
                                 return
-                        constrain_record_medium()
-                        await refresh_record_creation_roles()
+                        if controls["aggregation_id"].value != aggregation_id or (capture_active is not None and not capture_active()):
+                            return
+                        with dialog:
+                            constrain_record_medium()
+                            await refresh_record_creation_roles()
 
                     controls["aggregation_id"].on_value_change(
                         lambda: background_tasks.create(apply_selected_aggregation())
@@ -7928,7 +8087,7 @@ def index(q: str = "") -> None:
 
                 def update_draft_component_controls() -> None:
                     selected_medium = controls["medium"].value
-                    draft_upload_area.set_visibility(selected_medium in {"digital", "mixed"})
+                    draft_upload_area.set_visibility(existing_capture_draft is None and selected_medium in {"digital", "mixed"})
                     physical_draft_notice.set_visibility(selected_medium == "physical")
 
                 controls["medium"].on_value_change(
@@ -7940,7 +8099,16 @@ def index(q: str = "") -> None:
                 update_draft_component_controls()
                 with ui.element("div").classes("component-list w-full mt-3") as component_list:
                     component_area = ui.element("div").classes("component-grid w-full")
-                component_list.set_visibility(False)
+                component_list.set_visibility(capture_loader is not None)
+                if capture_loader is not None:
+                    with component_area:
+                        for component in draft.get("components", []):
+                            with ui.card().classes("w-full gap-1").props("flat bordered"):
+                                with ui.grid(columns="auto minmax(0, 1fr)").classes("w-full items-center gap-2"):
+                                    ui.spinner(size="sm")
+                                    ui.label(component["title"]).classes("font-semibold grow break-words")
+                                ui.label(component["file_name"]).classes("text-xs text-slate-500 break-all")
+                                ui.label(render_message("messaging.capture.preparing")).classes("text-sm text-slate-500")
             ui.separator()
             with ui.row().classes("w-full justify-end gap-2 px-6 py-4"):
                 with ui.row().classes(
@@ -7950,9 +8118,43 @@ def index(q: str = "") -> None:
                     ui.label(RECORD_UPLOAD_WAIT_MESSAGE)
                 upload_wait.set_visibility(False)
                 action_controls["upload_wait"] = upload_wait
-                ui.button(render_message("webui.open_record_draft_editor.button.cancel_draft_84ea17b5"), on_click=discard).props("flat color=grey-7")
+                ui.button(render_message("webui.open_record_draft_editor.button.cancel_draft_84ea17b5"), on_click=discard).props("flat color=grey-7").mark("capture-cancel" if capture_loader is not None else "record-draft-cancel")
                 action_controls["commit"] = ui.button(render_message("webui.open_record_draft_editor.button.create_record_dd0193d6"), icon="check", on_click=commit).props("unelevated")
+                if capture_loader is not None:
+                    action_controls["commit"].disable()
+                    action_controls["commit"].mark("capture-create")
         dialog.open()
+        if capture_loader is not None:
+            try:
+                prepared = await capture_loader()
+            except ApiError as error:
+                if not capture_preparation["closed"] and (capture_active is None or capture_active()):
+                    action_controls["upload_wait"].set_visibility(False)
+                    component_area.clear()
+                    with component_area:
+                        ui.label(error_message(error)).classes("text-negative").mark("capture-preparation-error")
+                else:
+                    dialog.close()
+                return
+            if capture_preparation["closed"] or (capture_active is not None and not capture_active()):
+                await api.discard_record_draft(prepared["id"])
+                dialog.close()
+                return
+            # Keep metadata the user has edited while conversion was running.
+            # The server rechecks the chain and its security floor at commit.
+            draft = prepared
+            components_loaded = await refresh_draft_components()
+            if capture_preparation["closed"] or (capture_active is not None and not capture_active()):
+                if not capture_preparation["closed"]:
+                    await api.discard_record_draft(prepared["id"])
+                dialog.close()
+                return
+            if not components_loaded:
+                return
+            capture_preparation["ready"] = True
+            action_controls["upload_wait"].set_visibility(False)
+            action_controls["commit"].enable()
+            return
         await refresh_draft_components()
 
     async def open_editor(
@@ -10750,13 +10952,16 @@ def index(q: str = "") -> None:
         render_results()
 
     def render_table(spec: EntitySpec) -> None:
-        if spec.key in {"aggregations", "records"}:
-            guidance.text = "" if state["searched"] else render_message(
-                "webui.select_entity.text.large_collections_are_search_first_to_avoi_717a0f77"
-            )
-            subtitle.text = "" if state["searched"] else render_message(
-                "webui.select_entity.text.search_required_before_loading_results_88549c49"
-            )
+        # Background personal-section refreshes do not inherit a NiceGUI slot.
+        # Resolve translations in the owning page before updating its labels.
+        with table_container:
+            if spec.key in {"aggregations", "records"}:
+                guidance.text = "" if state["searched"] else render_message(
+                    "webui.select_entity.text.large_collections_are_search_first_to_avoi_717a0f77"
+                )
+                subtitle.text = "" if state["searched"] else render_message(
+                    "webui.select_entity.text.search_required_before_loading_results_88549c49"
+                )
         table_container.clear()
         with table_container:
             if spec.key in {"aggregations", "records"} and spec.search_first and not state["searched"]:
@@ -11698,7 +11903,7 @@ def index(q: str = "") -> None:
                 render_message("webui.show_change_password.input.temporary_password_b83bc142") if forced_change else render_message("webui.show_change_password.input.current_password_00f4f73a"),
                 password=True,
                 password_toggle_button=True,
-            ).props("outlined autocomplete=current-password").classes("w-full")
+            ).props('outlined autocomplete=current-password input-style="direction: ltr; unicode-bidi: isolate;"').classes("w-full")
             new = ui.input(render_message("webui.show_change_password.input.new_password_28399c5b"), password=True, password_toggle_button=True).props("outlined").classes("w-full")
             confirm = ui.input(render_message("webui.show_change_password.input.confirm_new_password_abd1d774"), password=True).props("outlined").classes("w-full")
 
@@ -15716,6 +15921,7 @@ def index(q: str = "") -> None:
             "role": render_message("entity_metadata.field.role"),
             "org_unit": render_message("entity_metadata.field.organization_unit"),
             "user": render_message("entity_metadata.field.user"),
+            "all": render_message("messaging.field.recipient"),
         }.get(selection_mode, "")
         is_selector = selection_mode is not None
         if not is_selector:
@@ -15883,7 +16089,7 @@ def index(q: str = "") -> None:
                 persist(); render_tree()
 
         def node_selectable(node: dict[str, Any]) -> bool:
-            if not is_selector or node["type"] != selection_mode:
+            if not is_selector or (selection_mode != "all" and node["type"] != selection_mode):
                 return not is_selector
             status = node.get("effective_status", node.get("status"))
             return status == "active" and (saved_audience is None or node.get("audience_selectable") is True)
@@ -15969,7 +16175,7 @@ def index(q: str = "") -> None:
                     if is_selector and not node_selectable(node):
                         node_content.tooltip(
                             render_message("webui.render_nodes.tooltip.this_item_is_visible_for_context_but_canno_b093611d")
-                            if node["type"] == selection_mode else render_message("webui.render_nodes.tooltip.use_this_item_to_navigate_the_hierarchy_869873c9")
+                            if selection_mode == "all" or node["type"] == selection_mode else render_message("webui.render_nodes.tooltip.use_this_item_to_navigate_the_hierarchy_869873c9")
                         )
                 if key in expanded:
                     render_nodes(browser["children"].get(key, []), depth + 1)
@@ -16111,7 +16317,7 @@ def index(q: str = "") -> None:
             selected = browser.get("selected")
             if (
                 not selected
-                or selected.get("type") != selection_mode
+                or (selection_mode != "all" and selected.get("type") != selection_mode)
                 or not selected.get("selectable")
             ):
                 ui.notify(
@@ -16480,7 +16686,7 @@ def index(q: str = "") -> None:
                         "role": render_message("webui.show_organization_structure.text.select_a_role_to_view_its_summary_3925160a"),
                         "user": render_message("webui.show_organization_structure.text.select_a_user_to_view_their_summary_6593ceaf"),
                     }[selection_mode]
-                    if is_selector
+                    if is_selector and selection_mode != "all"
                     else render_message("webui.show_organization_structure.text.select_an_organization_unit_role_or_user_t_4b5308e8")
                 )
                 ui.label(summary_guidance).classes("p-8 text-slate-400")
@@ -18662,6 +18868,108 @@ def index(q: str = "") -> None:
             render_results(workspace["last_result"])
         persist_workspace()
 
+    async def select_messages(mailbox: str = "inbox") -> None:
+        principal = auth_state.get("principal")
+        if principal is None:
+            return
+        key = "messages-" + mailbox
+        if not can_navigate(key, principal.get("global_privileges", [])):
+            return
+        show_authenticated_view()
+        state.update(resource=key, rows=[], searched=True, aggregation_detail=None)
+        token = object()
+        state["messaging_workspace_token"] = token
+        register_navigation(key, localized_navigation[key])
+        title.text = localized_navigation[key]
+        subtitle.text = ""
+        search_bar.set_visibility(False)
+        aggregation_mode_bar.set_visibility(False)
+        add_button.set_visibility(False)
+        add_record_button.set_visibility(False)
+        guidance.text = ""
+        table_container.clear()
+
+        async def open_message_resource(kind, identity):
+            if kind == "aggregation":
+                await open_aggregation(await api.get("aggregations", identity))
+            elif kind == "record":
+                await show_record_details(await api.get("records", identity))
+            else:
+                component = await api.get("digital-components", identity)
+                await show_record_details(await api.get("records", component["record_id"]))
+
+        async def inspect_message_resource(kind, identity, picker_active):
+            await resource_inspector(api=api, kind=kind, identity=identity,
+                active=picker_active, preview=preview_record_components,
+                field_label=entity_metadata_label, format_timestamp=format_timestamp,
+                medium_label=medium_label, on_error=lambda error: ui.notify(
+                    error_message(error), color="negative", close_button=True))
+
+        async def capture_message(envelope_id, root_id):
+            capture_dialog = ui.dialog().props("persistent")
+            opening = {"closed": False}
+            def capture_active():
+                return (not opening["closed"] and auth_state.get("principal") is principal
+                        and state.get("messaging_workspace_token") is token)
+            def cancel_opening():
+                opening["closed"] = True
+                capture_dialog.close()
+            with capture_dialog, ui.card().classes("w-full gap-4").style("width: 1050px; max-width: calc(100vw - 32px)"):
+                ui.label(render_message("webui.open_record_draft_editor.label.create_record_080740e1")).classes("text-xl font-semibold")
+                with ui.row().classes("w-full items-center"):
+                    ui.spinner(size="sm")
+                    ui.label(render_message("messaging.capture.preparing")).classes("grow")
+                ui.skeleton().classes("w-full h-24")
+                with ui.row().classes("w-full justify-end"):
+                    ui.button(render_message("webui.open_record_draft_editor.button.cancel_draft_84ea17b5"), on_click=cancel_opening).props("flat")
+                    ui.button(render_message("webui.open_record_draft_editor.button.create_record_dd0193d6"), icon="check").disable()
+            capture_dialog.open()
+            params = {"root_id":root_id} if root_id else {}
+            try:
+                draft = await api.request("GET", f"/api/v1/messages/{envelope_id}/capture-preview", params=params)
+            except ApiError as error:
+                capture_dialog.close()
+                if capture_active():
+                    ui.notify(error_message(error),color="negative",close_button=True)
+                return
+            if not capture_active():
+                capture_dialog.close()
+                return
+            async def prepare_pdfs():
+                return await api.request("POST", f"/api/v1/messages/{envelope_id}/capture", params=params,timeout=660)
+            await open_record_draft_editor(existing_capture_draft=draft,
+                on_committed=lambda _:select_messages(mailbox),capture_active=capture_active,
+                capture_loader=prepare_pdfs,capture_dialog=capture_dialog)
+
+        if mailbox == "monitor":
+            await messaging_monitor(api=api,container=table_container,
+                active=lambda:auth_state.get("principal") is principal and state.get("messaging_workspace_token") is token and state.get("resource")==key,
+                format_timestamp=format_timestamp,open_audit=lambda:select_entity("audit-trail"))
+            return
+        if mailbox == "notifications":
+            await notification_administration(
+                api=api, container=table_container,
+                relationship_select=relationship_select,
+                bind_relationship=bind_remote_relationship_select,
+                format_timestamp=format_timestamp,
+                active=lambda: auth_state.get("principal") is principal
+                and state.get("messaging_workspace_token") is token and state.get("resource") == key,
+            )
+            return
+        state["messaging_workspace"] = await messaging_workspace(
+            api=api, container=table_container, mailbox=mailbox,
+            can_exchange="messaging.user_messages.exchange" in principal.get("global_privileges", []),
+            relationship_select=relationship_select,
+            bind_relationship=bind_remote_relationship_select,
+            open_resource=open_message_resource, format_timestamp=format_timestamp,
+            inspect_resource=inspect_message_resource,
+            on_read=refresh_message_unread,
+            browse_recipients=show_organization_structure if "organization.browse" in principal.get("global_privileges", []) else None,
+            capture_record=capture_message if "record.create" in principal.get("global_privileges",[]) else None,
+            active=lambda: auth_state.get("principal") is principal
+            and state.get("messaging_workspace_token") is token and state.get("resource") == key,
+        )
+
     async def select_entity(key: str) -> None:
         entity_navigation_keys = {
             "aggregations": "navigation.item.aggregations",
@@ -20178,7 +20486,9 @@ def index(q: str = "") -> None:
     inspector_bridge.on("click", open_inspected_translation)
 
     for key, button in navigation.items():
-        if key == "classification-schemes":
+        if key.startswith("messages-"):
+            button.on("click", lambda _, mailbox=key.removeprefix("messages-"): guarded_page_navigation(lambda: select_messages(mailbox)))
+        elif key == "classification-schemes":
             button.on("click", lambda: guarded_page_navigation(select_classification_workspace))
         elif key == "advanced-search":
             button.on("click", lambda: guarded_page_navigation(select_advanced_search))
@@ -20316,7 +20626,7 @@ def index(q: str = "") -> None:
         ).props(
             "aria-label='" + render_message("webui.index.accessible_name.slowly_moving_connected_node_background_acc8bb9e") + "'"
         )
-        with ui.card().classes("wathiq-login-card"):
+        with ui.card().classes("wathiq-login-card").props(f"dir={initial_direction} lang={initial_language}"):
             with ui.row().classes("w-full items-stretch no-wrap gap-0"):
                 with ui.column().classes(
                     "wathiq-login-brand-panel shrink-0 justify-between gap-0"
@@ -20343,17 +20653,22 @@ def index(q: str = "") -> None:
                         "text-sm text-slate-500 mb-2"
                     )
                     login_email = ui.input(render_message("webui.index.input.email_address_2569f0e9")).props(
-                        "outlined autocomplete=username"
+                        'outlined autocomplete=username input-style="direction: ltr; unicode-bidi: isolate;"'
                     ).classes("w-full")
                     login_password = ui.input(
                         render_message("webui.index.input.password_f76ddde6"), password=True, password_toggle_button=True
-                    ).props("outlined autocomplete=current-password").classes("w-full")
+                    ).props('outlined autocomplete=current-password input-style="direction: ltr; unicode-bidi: isolate;"').classes("w-full")
                     login_error = ui.label().classes(
                         "wathiq-login-error text-negative text-sm"
                     )
-                    login_submit = ui.button(render_message("webui.index.button.continue_to_wathiq_9cc920d0"), icon="login").props(
+                    login_submit = ui.button(
+                        render_message("webui.index.button.continue_to_wathiq_9cc920d0"),
+                        icon=None if initial_direction == "rtl" else "login",
+                    ).props(
                         "unelevated no-caps"
-                    ).classes("w-full")
+                    ).classes("w-full wathiq-login-submit")
+                    if initial_direction == "rtl":
+                        login_submit.props("icon-right=login")
                     ui.label(render_message("webui.index.label.need_help_contact_your_system_administrato_9f127b23")).classes(
                         "w-full text-center text-xs text-slate-400 mt-1"
                     )
@@ -20387,7 +20702,7 @@ def index(q: str = "") -> None:
                     return
                 await select_dashboard()
             except ApiError as error:
-                login_error.text = error_message(error)
+                login_error.text = login_error_message(error)
 
         login_submit.on("click", submit_login)
         login_password.on("keydown.enter", submit_login)
@@ -20416,12 +20731,124 @@ def index(q: str = "") -> None:
             # The PDF viewer reports its own load failure when invoked.
             pass
 
+    async def open_live_delivery(event):
+        if auth_state.get("principal") is None:
+            return
+        identity = event.args
+        if identity is not None:
+            try:
+                from uuid import UUID
+                identity = str(UUID(identity))
+            except (ValueError, TypeError):
+                return
+        await select_messages("inbox")
+        workspace = state.get("messaging_workspace")
+        if identity and workspace:
+            await workspace["open"](identity)
+
+    ui.on("messaging_open", open_live_delivery)
+
+    def show_message_notification(label, identity):
+        # ui.notify's raw transport cannot serialize Python action callbacks.
+        # The standard notification element supports dynamic Quasar actions;
+        # ui.on / emitEvent is NiceGUI's supported browser-event bridge.
+        notification = ui.notification(label, actions=[{
+            "label": render_message("messaging.action.open"),
+            ":handler": "() => emitEvent('messaging_open', " + json.dumps(identity) + ")",
+        }], timeout=8, close_button=render_message("messaging.live.close"), html=False)
+        notifications = message_live["notifications"]
+        notifications[:] = [item for item in notifications if not item._deleted]
+        notifications.append(notification)
+        if len(notifications) > 32:
+            notifications.pop(0).dismiss()
+
+    def stop_message_stream() -> None:
+        if message_live["adapter"]:
+            message_live["adapter"].stop()
+        if message_live["api"]:
+            message_live["api"].cancel_pending_reads()
+            background_tasks.create(message_live["api"].close())
+        message_live.update(adapter=None, api=None, token=None)
+        for notification in message_live["notifications"]:
+            if not notification._deleted:
+                notification.dismiss()
+        message_live["notifications"].clear()
+
+    async def refresh_message_unread() -> None:
+        principal = auth_state.get("principal")
+        if principal is None:
+            return
+        result = await api.request("GET", "/api/v1/messages/unread-count")
+        if auth_state.get("principal") is principal:
+            message_unread_button.text = render_message("messaging.live.unread", count=result["unread_count"])
+            message_unread_button.set_visibility(True)
+
+    async def start_message_stream() -> None:
+        principal = auth_state.get("principal")
+        token = app.storage.user.get("session_token")
+        if not principal or not token or principal.get("must_change_password"):
+            return
+        stop_message_stream()
+        import hashlib
+        cursor_key = mailbox_cursor_key(api_url(), principal["user"]["id"])
+        legacy_cursor_key = "wathiq-message-cursor:" + str(principal["user"]["id"]) + ":" + hashlib.sha256(token.encode()).hexdigest()[:24]
+        message_live["token"] = token
+        is_active = lambda: auth_state.get("principal") is principal and message_live["token"] == token and page_client.has_socket_connection
+
+        async def load_cursor():
+            return await page_client.run_javascript("localStorage.getItem(" + json.dumps(cursor_key) + ") ?? sessionStorage.getItem(" + json.dumps(legacy_cursor_key) + ")", timeout=5)
+
+        async def save_cursor(value):
+            if is_active():
+                # Browser execution is synchronous: another tab cannot regress
+                # this account's persisted checkpoint with an older page.
+                script = "(() => { const key = " + json.dumps(cursor_key) + "; const incoming = BigInt(" + json.dumps(str(value)) + "); const stored = localStorage.getItem(key); const previous = stored && /^[0-9]+$/.test(stored) ? BigInt(stored) : 0n; localStorage.setItem(key, String(incoming > previous ? incoming : previous)); return true; })()"
+                await page_client.run_javascript(script, timeout=5)
+
+        async def present_message(kind, value):
+            if not is_active():
+                return
+            with page_client:
+                if kind == "unread":
+                    message_unread_button.text = render_message("messaging.live.unread", count=value)
+                    message_unread_button.set_visibility(True)
+                elif kind == "summary":
+                    label = render_message("messaging.live.test_summary", **value) if isinstance(value, dict) else (render_message("messaging.live.summary_one") if value == 1 else render_message("messaging.live.summary", count=value))
+                    show_message_notification(label, None)
+                elif kind == "message":
+                    # Content was freshly authorized by catch-up. Restricted
+                    # deliveries receive only a generic non-disclosing toast.
+                    label = render_message("messaging.live.new_message")
+                    if value.get("is_test"):
+                        label = render_message("messaging.test.label") + " · " + label
+                    if value.get("availability") == "available":
+                        label += ": " + value.get("toast_subject", value["subject"])
+                    show_message_notification(label, value["id"])
+                elif kind == "refresh" and state.get("resource") == "messages-inbox":
+                    workspace = state.get("messaging_workspace")
+                    if workspace:
+                        await workspace["refresh"]()
+
+        # Navigation cancels ordinary page reads; the stream owns a separate
+        # identity-scoped client so those cancellations cannot kill reconciliation.
+        live_api = ErmsApiClient(api_url())
+        live_api.set_session_token(token)
+        live_api.set_unauthorized_handler(handle_unauthorized)
+        message_live["api"] = live_api
+        adapter = LiveMailbox(api=live_api, events=lambda transport: stream_events(api_url(), token, transport), load_cursor=load_cursor, save_cursor=save_cursor, present=present_message, active=is_active)
+        message_live["adapter"] = adapter
+        adapter.start()
+
+    page_client.on_disconnect(stop_message_stream)
+    page_client.on_connect(start_message_stream)
+
     async def prepare_authenticated_workspace(principal: dict[str, Any]) -> bool:
         """Load ordinary application state only after password restrictions end."""
         if await load_localization_context():
             return False
         populate_user_menu(principal)
         background_tasks.create(load_authenticated_client_assets())
+        background_tasks.create(start_message_stream())
         await refresh_hold_navigation()
         return True
 
@@ -20449,6 +20876,9 @@ def index(q: str = "") -> None:
             return
 
     async def initialize_authenticated_ui() -> None:
+        # Signed-out pages need the same root and portal direction as signed-in
+        # pages; localization bootstrap normally runs only after authentication.
+        await apply_document_direction(initial_language, initial_direction)
         # The same asset drives both the sign-in background and the authenticated
         # header. Load it for every session, including restored sessions which
         # never display the sign-in dialog.

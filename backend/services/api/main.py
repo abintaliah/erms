@@ -91,6 +91,8 @@ from .holds import router as holds_router
 from .text_indexing import router as text_indexing_router
 from .reindexing import router as reindexing_router
 from .saved_searches import router as saved_searches_router
+from .messaging.routes import router as messaging_router
+from .messaging import capture as messaging_capture
 from .localization import (
     localization_readiness, router as localization_router,
     synchronize_message_definitions,
@@ -150,14 +152,30 @@ def _require_draft_accepts_components(draft: dict) -> None:
         })
 
 
+from .messaging.realtime import Gateway, router as messaging_realtime_router
+from .messaging.notification_routes import router as notification_administration_router
+from .messaging.notification_registry import initialize_registry
+from .messaging.notification_configuration import readiness as notification_readiness
+
+
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(application: FastAPI):
     default_working_timezone()
     open_pool()
     synchronize_message_definitions()
+    initialize_registry()
+    with pool.connection() as connection:
+        notification_readiness(connection)
+    application.state.messaging_gateway = Gateway()
+    application.state.messaging_gateway.start()
+    from .messaging.operations import Worker
+    application.state.messaging_worker = Worker(application.state.messaging_gateway)
+    application.state.messaging_worker.start()
     try:
         yield
     finally:
+        await application.state.messaging_worker.stop()
+        await application.state.messaging_gateway.stop()
         close_pool()
 
 
@@ -167,6 +185,8 @@ app = FastAPI(
     description="REST API for the Electronic Records Management System.",
     lifespan=lifespan,
 )
+app.include_router(messaging_realtime_router)
+app.include_router(notification_administration_router)
 app.include_router(number_suggestions_router)
 app.include_router(user_management_router)
 app.include_router(authentication_router)
@@ -184,6 +204,9 @@ app.include_router(holds_router)
 app.include_router(text_indexing_router)
 app.include_router(reindexing_router)
 app.include_router(saved_searches_router)
+from .messaging.monitor import router as messaging_monitor_router
+app.include_router(messaging_monitor_router)
+app.include_router(messaging_router)
 app.include_router(localization_router)
 app.include_router(entity_translations_router)
 
@@ -209,6 +232,10 @@ def _request_uuid(value: str | None, header_name: str) -> str:
         return str(UUID(value))
     except ValueError as exception:
         raise ValueError(f"{header_name} must be a valid UUID") from exception
+
+
+from .messaging.operations import request_metrics
+app.middleware("http")(request_metrics)
 
 
 @app.middleware("http")
@@ -444,8 +471,13 @@ async def database_error_handler(_, exception: psycopg.Error):
 @app.get("/health", tags=["system"])
 def health(connection: Connection = Depends(get_connection, scope="function")) -> dict[str, Any]:
     connection.execute("SELECT 1")
+    notifications = notification_readiness(connection)
+    if not notifications["ready"]:
+        raise HTTPException(status_code=503, detail={"code": "notification_readiness_failed", "notifications": notifications})
     return {
         "status": "ok",
+        "notifications": notifications,
+        "messaging_realtime": app.state.messaging_gateway.health(),
         "full_text_search_enabled": boolean_environment("FULL_TEXT_SEARCH_ENABLED", True),
         "content_indexing_scheduling_enabled": boolean_environment(
             "CONTENT_INDEXING_SCHEDULING_ENABLED", True,
@@ -658,9 +690,11 @@ def list_aggregations(
 )
 def search_aggregations(
     payload: SearchRequest,
+    record_creation: bool = False,
+    digital_only: bool = False,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return search_rows(connection, "aggregations", payload, endpoint="/api/v1/aggregations/search")
+    return search_rows(connection, "aggregations", payload, endpoint="/api/v1/aggregations/search", record_creation=record_creation, digital_only=digital_only)
 
 
 @app.get("/api/v1/aggregations/{aggregation_id}", response_model=AggregationRead, tags=["aggregations"])
@@ -1342,6 +1376,7 @@ def get_record_draft(draft_id: int, connection: Connection = Depends(get_connect
 def update_record_draft(draft_id: int, payload: RecordDraftUpdate, connection: Connection = Depends(get_connection, scope="function")):
     draft = _open_draft(connection, draft_id)
     values = payload.model_dump(exclude_unset=True)
+    messaging_capture.validate_medium(connection, draft_id, values.get("medium", draft["medium"]))
     aggregation_id = values.get("aggregation_id", draft["aggregation_id"])
     if aggregation_id is not None:
         parent = connection.execute(
@@ -1397,6 +1432,7 @@ def upload_record_draft_component(
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     draft = _open_draft(connection, draft_id, lock=True)
+    messaging_capture.protect_components(connection, draft_id)
     _require_draft_accepts_components(draft)
     inspected = inspect_upload(file)
     component = connection.execute(
@@ -1443,6 +1479,7 @@ def _reorder_components(connection: Connection, table: str, parent_column: str, 
 @app.put("/api/v1/record-drafts/{draft_id}/components/order", status_code=204, tags=["record drafts"])
 def reorder_record_draft_components(draft_id: int, payload: ComponentReorderRequest, connection: Connection = Depends(get_connection, scope="function")):
     _open_draft(connection, draft_id, lock=True)
+    messaging_capture.protect_components(connection, draft_id)
     _reorder_components(connection, "record_draft_components", "draft_id", draft_id, payload)
     connection.execute("UPDATE record_drafts SET date_updated = CURRENT_TIMESTAMP WHERE id = %s", (draft_id,))
     return Response(status_code=204)
@@ -1451,6 +1488,7 @@ def reorder_record_draft_components(draft_id: int, payload: ComponentReorderRequ
 @app.delete("/api/v1/record-drafts/{draft_id}/components/{component_id}", status_code=204, tags=["record drafts"])
 def delete_record_draft_component(draft_id: int, component_id: int, connection: Connection = Depends(get_connection, scope="function")):
     _open_draft(connection, draft_id, lock=True)
+    messaging_capture.protect_components(connection, draft_id)
     deleted = connection.execute(
         "DELETE FROM record_draft_components WHERE id = %s AND draft_id = %s RETURNING id",
         (component_id, draft_id),
@@ -1469,10 +1507,12 @@ def delete_record_draft_component(draft_id: int, component_id: int, connection: 
 
 @app.post("/api/v1/record-drafts/{draft_id}/commit", response_model=RecordRead, status_code=201, tags=["record drafts"])
 def commit_record_draft(
-    draft_id: int, creator_acl_role_id: int | None = None,
+    draft_id: int, request: Request, creator_acl_role_id: int | None = None,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     draft = _open_draft(connection, draft_id, lock=True)
+    request.state.message_capture = messaging_capture.capture_draft(connection, draft_id) is not None
+    capture = messaging_capture.prepare(connection, draft)
     missing = [name for name in ("aggregation_id", "medium", "record_number", "title") if not draft.get(name)]
     if missing:
         raise HTTPException(status_code=422, detail=f"draft is missing required fields: {', '.join(missing)}")
@@ -1496,6 +1536,7 @@ def commit_record_draft(
     connection.execute(
         "SELECT set_config('app.creator_acl_role_id',%s,true),set_config('app.event_metadata',%s,true)",
         (str(selected_role["role_id"]), json.dumps({
+            "workflow": "message_capture" if capture else "record_creation",
             "creator_acl_role_id": selected_role["role_id"],
             "creator_acl_role_code": selected_role["role_code"],
             "creator_org_unit_id": selected_role["org_unit_id"],
@@ -1518,6 +1559,10 @@ def commit_record_draft(
         "is_vital": draft["is_vital"],
         "date_of_next_review": draft["date_of_next_review"],
     })
+    if capture:
+        messaging_capture.finalize_staging(connection, draft, record, capture)
+        components = connection.execute("SELECT * FROM record_draft_components WHERE draft_id=%s ORDER BY component_order FOR UPDATE", (draft_id,)).fetchall()
+    committed_components = []
     incomplete = [item["file_name"] for item in components if item["content_status"] != "available"]
     if incomplete:
         raise HTTPException(status_code=409, detail="all draft component uploads must be complete")
@@ -1529,12 +1574,16 @@ def commit_record_draft(
             "checksum_algo": staged["checksum_algo"], "checksum_value": staged["checksum_value"],
             "storage_backend": "postgresql", "content_status": "available",
         })
+        committed_components.append(component["id"])
         configured_storage().promote_draft(connection, staged["id"], component["id"])
         _append_content_event(connection, component["id"], "CONTENT_UPLOADED", {
             "file_name": component["file_name"], "mime_type": component["mime_type"],
             "size_in_bytes": component["size_in_bytes"], "checksum_algo": component["checksum_algo"],
             "checksum_value": component["checksum_value"], "record_creation": True,
+            "workflow": "message_capture" if capture else "record_creation",
         })
+    if capture:
+        messaging_capture.persist(connection, draft, record, capture, committed_components)
     connection.execute("DELETE FROM record_drafts WHERE id = %s", (draft_id,))
     return record
 
@@ -1547,6 +1596,7 @@ def commit_record_draft_placement_correction(
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     draft = _open_draft(connection, draft_id, lock=True)
+    messaging_capture.protect_components(connection, draft_id)
     if not draft.get("aggregation_id"):
         raise HTTPException(status_code=422, detail="draft destination is required")
     security_level_id = draft["security_level_id"]

@@ -15,7 +15,12 @@ from .audit_context import (
     event_source_context,
     request_id_context,
 )
-from .config import boolean_environment, float_environment, integer_environment, required_environment
+from .config import (
+    boolean_environment,
+    float_environment,
+    integer_environment,
+    required_environment,
+)
 
 
 def database_url() -> str:
@@ -43,8 +48,10 @@ def close_pool() -> None:
     pool.close()
 
 
-def get_connection() -> Generator[Connection, None, None]:
+def _get_connection(consistent=False) -> Generator[Connection, None, None]:
     with pool.connection() as connection:
+        if consistent:
+            connection.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
         connection.execute(
             """
             SELECT
@@ -69,7 +76,23 @@ def get_connection() -> Generator[Connection, None, None]:
                 correlation_id_context.get(),
                 change_reason_context.get(),
                 event_metadata_context.get(),
-                str(boolean_environment("CONTENT_INDEXING_SCHEDULING_ENABLED", True)).lower(),
+                str(
+                    boolean_environment("CONTENT_INDEXING_SCHEDULING_ENABLED", True)
+                ).lower(),
             ),
         )
         yield connection
+
+
+def get_connection() -> Generator[Connection, None, None]:
+    yield from _get_connection()
+
+
+def get_consistent_connection() -> Generator[Connection, None, None]:
+    from fastapi import HTTPException
+    from psycopg.errors import SerializationFailure, DeadlockDetected
+
+    try:
+        yield from _get_connection(consistent=True)
+    except (SerializationFailure, DeadlockDetected):
+        raise HTTPException(status_code=409, detail={"code": "stale_version"})

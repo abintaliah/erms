@@ -102,9 +102,17 @@ def test_checked_in_arabic_generation_artifact_seeds_only_untouched_source_copie
         "awaiting_generation": 0,
     }
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
-        assert connection.execute(
-            "SELECT count(*) FROM ui_message_translations WHERE language_tag='ar' AND origin='generated' AND status='draft' AND reviewed_by_user_id IS NULL"
-        ).fetchone()[0] == len(manifest) - 1
+        artifact = json.loads((Path(__file__).parents[4] / "frontend/webui/i18n/messages.ar.generated.json").read_text())
+        expected_origins = {item["message_key"]: "imported" if isinstance(item.get("provenance"), dict) else "generated" for item in artifact["items"]}
+        seeded_rows = connection.execute(
+            "SELECT message_key,origin,status,reviewed_by_user_id,generation_metadata FROM ui_message_translations WHERE language_tag='ar' AND message_key<>%s", (protected_key,),
+        ).fetchall()
+        assert len(seeded_rows) == len(manifest) - 1
+        provenance = {item["message_key"]: item.get("provenance") for item in artifact["items"]}
+        for key, origin, status, reviewer, metadata in seeded_rows:
+            assert origin == expected_origins[key] and status == "draft" and reviewer is None
+            if provenance[key]:
+                assert metadata["export_provenance"] == provenance[key]
         protected = connection.execute(
             "SELECT translated_text,origin,reviewed_by_user_id FROM ui_message_translations WHERE message_key=%s AND language_tag='ar'",
             (protected_key,),
@@ -118,7 +126,7 @@ def test_checked_in_arabic_generation_artifact_seeds_only_untouched_source_copie
     assert protected[0] == "هذه صياغة يدوية {language}."
     assert protected[1] == "manual"
     assert protected[2] is not None
-    assert corrected == ("الوثائق", "draft", "generated", None, None)
+    assert corrected == ("الوثائق", "draft", expected_origins[corrected_key], None, None)
 
 
 def _translation(client):
@@ -375,7 +383,7 @@ def test_bulk_generated_review_publication_is_atomic_audited_and_revision_bounde
     keys = [item["message_key"] for item in selection["items"]]
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
         rows = connection.execute(
-            """SELECT status,origin,reviewed_by_user_id,published_by_user_id
+            """SELECT status,origin,reviewed_by_user_id,published_by_user_id,message_key
                  FROM ui_message_translations WHERE language_tag='ar' AND message_key=ANY(%s)""",
             (keys,),
         ).fetchall()
@@ -385,7 +393,9 @@ def test_bulk_generated_review_publication_is_atomic_audited_and_revision_bounde
                    AND source='web_ui' AND reason=%s""",
             ("Approve generated preference validation translations",),
         ).fetchone()[0]
-    assert all(row[0] == "published" and row[1] == "generated" for row in rows)
+    artifact = json.loads((Path(__file__).parents[4] / "frontend/webui/i18n/messages.ar.generated.json").read_text())
+    expected_origins = {item["message_key"]: "imported" if isinstance(item.get("provenance"), dict) else "generated" for item in artifact["items"]}
+    assert all(row[0] == "published" and row[1] == expected_origins[row[4]] for row in rows)
     assert all(row[2] is not None and row[3] is not None for row in rows)
     assert events == selection["count"]
 

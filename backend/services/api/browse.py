@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from psycopg import Connection, sql
 
 from .saved_searches import audience_eligibility_sql
+from .search import record_destination_clause
 from .database import get_connection
 from .entity_localization import localized_projection, preferred_language
 from .authorization_policy import require_organization_browse
@@ -313,6 +314,8 @@ def browse_classification_aggregations(
     classification_id: int, limit: int = Query(50, ge=1, le=100), cursor: str | None = None,
     query: str = Query("", max_length=200),
     owning_org_unit_id: int | None = None,
+    record_creation: bool = False,
+    digital_only: bool = False,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     classification = connection.execute(
@@ -323,9 +326,10 @@ def browse_classification_aggregations(
     if not classification["is_terminal"]:
         raise HTTPException(status_code=409, detail="only terminal classifications govern aggregations")
     owner_sql = " AND a.owning_org_unit_id=%s" if owning_org_unit_id is not None else ""
+    destination_sql = " AND " + record_destination_clause("a", digital_only=digital_only) if record_creation else ""
     return _page(
-        connection, scope=f"classification:{classification_id}:aggregations:owner:{owning_org_unit_id}",
-        source_sql=AGGREGATION_SOURCE + " AND a.classification_id=%s AND a.parent_aggregation_id IS NULL" + owner_sql,
+        connection, scope=f"classification:{classification_id}:aggregations:owner:{owning_org_unit_id}:create:{record_creation}:digital:{digital_only}",
+        source_sql=AGGREGATION_SOURCE + " AND a.classification_id=%s AND a.parent_aggregation_id IS NULL" + owner_sql + destination_sql,
         parameters=[classification_id, *([owning_org_unit_id] if owning_org_unit_id is not None else [])], key_column="aggregation_number", query=query,
         query_columns=("aggregation_number", "title"), limit=limit, cursor=cursor,
     )
@@ -339,14 +343,17 @@ def browse_aggregation_children(
     aggregation_id: int, limit: int = Query(50, ge=1, le=100), cursor: str | None = None,
     query: str = Query("", max_length=200),
     owning_org_unit_id: int | None = None,
+    record_creation: bool = False,
+    digital_only: bool = False,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     if connection.execute("SELECT 1 FROM aggregations WHERE id=%s AND current_user_can_view_aggregation(id)", (aggregation_id,)).fetchone() is None:
         raise HTTPException(status_code=404, detail="aggregation not found")
     owner_sql = " AND a.owning_org_unit_id=%s" if owning_org_unit_id is not None else ""
+    destination_sql = " AND " + record_destination_clause("a", digital_only=digital_only) if record_creation else ""
     return _page(
-        connection, scope=f"aggregation:{aggregation_id}:children:owner:{owning_org_unit_id}",
-        source_sql=AGGREGATION_SOURCE + " AND a.parent_aggregation_id=%s" + owner_sql,
+        connection, scope=f"aggregation:{aggregation_id}:children:owner:{owning_org_unit_id}:create:{record_creation}:digital:{digital_only}",
+        source_sql=AGGREGATION_SOURCE + " AND a.parent_aggregation_id=%s" + owner_sql + destination_sql,
         parameters=[aggregation_id, *([owning_org_unit_id] if owning_org_unit_id is not None else [])], key_column="aggregation_number", query=query,
         query_columns=("aggregation_number", "title"), limit=limit, cursor=cursor,
     )
