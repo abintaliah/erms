@@ -79,3 +79,10 @@ All applicable Phase 0 exit gates in the mobile specification are supported by
 the evidence recorded above and in `docs/validation-matrix.md`. The deferred
 items are not Phase 0 blockers and remain explicit prerequisites for their
 respective later work.
+
+## MobileFlutterV0.1 authentication verification — 4 October 2026
+
+The user confirmed that mobile authentication was tested successfully. This
+records user-reported validation of MobileFlutterV0.1; no additional automated
+verification was performed for this note. Continued mobile application work
+starts from this version on the MobileFlutterV0.2 branch.
