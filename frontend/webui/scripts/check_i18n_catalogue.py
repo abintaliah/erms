@@ -48,7 +48,7 @@ def referenced_keys() -> set[str]:
                     )
                 if (
                     isinstance(node, ast.Assign)
-                    and any(isinstance(target, ast.Name) and target.id in {"messages", "status_messages"} for target in node.targets)
+                    and any(isinstance(target, ast.Name) and target.id in {"messages", "status_messages", "CAPTURE_ERROR_KEYS"} for target in node.targets)
                     and isinstance(node.value, ast.Dict)
                 ):
                     keys.update(

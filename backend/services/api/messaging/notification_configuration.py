@@ -34,11 +34,17 @@ class Expected(Input):
     expected_active_configuration_version_id: UUID | None = None
 
 
+class NotificationSelector(Selector):
+    """Producer audiences retain the ordinary-principal API contract."""
+    selector_kind: Literal["user", "role", "org_unit"]
+    target_id: int = Field(gt=0)
+
+
 class Configuration(Expected):
     enabled: bool = True
     priority: Literal["normal", "high", "very_high"] = "normal"
     audience_mode: str = Field(min_length=1, max_length=120)
-    selectors: list[Selector] = Field(
+    selectors: list[NotificationSelector] = Field(
         default_factory=list, max_length=LIMITS["MAX_SELECTORS_PER_SEND"]
     )
     resource_presentation: dict = Field(default_factory=dict)
@@ -153,6 +159,8 @@ def expand_system(c, selectors):
             invalid("message_selector_duplicate")
         seen.add(key)
         kind = selected.selector_kind
+        if kind == "everyone":
+            invalid("message_selector_ineligible")
         table = {"user": "users", "role": "roles", "org_unit": "org_units"}[kind]
         live = {
             "user": "status='active' AND account_type='person'",
@@ -205,6 +213,8 @@ def validate_configuration(c, definition, payload, *, resolve_audience=True):
         invalid("notification_owner_required")
     if payload.audience_mode not in definition.contract()["audience_modes"]:
         invalid("notification_audience_invalid")
+    if any(s.selector_kind == "everyone" for s in payload.selectors):
+        invalid("message_selector_ineligible")
     if payload.audience_mode == "static":
         if not payload.selectors:
             invalid("notification_audience_invalid")
@@ -346,7 +356,7 @@ def configuration_from_row(row):
             for r in row["templates"]
         ],
         selectors=[
-            Selector(**{k: r[k] for k in Selector.model_fields})
+            NotificationSelector(**{k: r[k] for k in NotificationSelector.model_fields})
             for r in row["selectors"]
         ],
     )

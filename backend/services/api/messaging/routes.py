@@ -205,6 +205,9 @@ def inbox(
     cursor: str | None = Query(None, max_length=200),
     is_read: bool | None = None,
     priority: Priority | None = None,
+    sent_from: datetime | None = None,
+    sent_before: datetime | None = None,
+    sender_user_id: int | None = Query(None, gt=0),
     recipient_kind: Literal["user", "role", "org_unit"] | None = None,
     recipient_id: int | None = Query(None, gt=0),
     principal: Principal = Depends(principal_from_request),
@@ -218,6 +221,9 @@ def inbox(
             cursor=cursor,
             is_read=is_read,
             priority=priority,
+            sent_from=sent_from,
+            sent_before=sent_before,
+            sender_user_id=sender_user_id,
             recipient_kind=recipient_kind,
             recipient_id=recipient_id,
         ),
@@ -371,11 +377,13 @@ def list_drafts(
     limit: int = PageSize,
     cursor: str | None = Query(None, max_length=200),
     deleted: bool = False,
+    recipient_kind: Literal["user", "role", "org_unit"] | None = None,
+    recipient_id: int | None = Query(None, gt=0),
     principal: Principal = Depends(principal_from_request),
 ):
     return run(
         principal.user_id,
-        lambda c: drafts.listing(c, principal.user_id, limit, cursor, deleted),
+        lambda c: drafts.listing(c, principal.user_id, limit, cursor, deleted, recipient_kind=recipient_kind, recipient_id=recipient_id),
     )
 
 

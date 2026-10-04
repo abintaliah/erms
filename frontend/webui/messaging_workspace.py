@@ -59,6 +59,7 @@ MESSAGING_MESSAGE_KEYS = {
     "field.role": "messaging.field.role",
     "field.org_unit": "messaging.field.org_unit",
     "field.recipient": "messaging.field.recipient",
+    "field.everyone": "messaging.field.everyone",
     "field.kind": "messaging.field.kind",
     "field.resource_kind": "messaging.field.resource_kind",
     "field.resource": "messaging.field.resource",
@@ -229,7 +230,7 @@ async def messaging_workspace(
                 ui.badge(text("state.expiring"), color="orange")
 
     with container:
-        with ui.column().classes("w-full gap-3 p-3"):
+        with ui.column().classes("messaging-workspace w-full gap-3 p-3"):
             with ui.row().classes("w-full items-center gap-2"):
                 if can_exchange:
                     ui.button(
@@ -254,9 +255,36 @@ async def messaging_workspace(
                         await load(reset=True)
 
                     deleted.on_value_change(deleted_changed)
-            filters_host = ui.row().classes("w-full items-center gap-2")
+            filters_host = ui.row().classes("w-full items-start gap-2")
             with filters_host:
                 filters = {}
+                if mailbox == "inbox" and can_exchange:
+                    with ui.column().classes("w-full max-w-xs gap-1"):
+                        sender = relationship_select(text("field.sender"), {}, remote=True)
+                        sender.classes("w-full").mark("mailbox-sender")
+                        async def sender_page(query):
+                            if len(query.strip()) < 2:
+                                return {"items": []}
+                            return await request("GET", "/recipients/user", params={"q": query.strip(), "limit": 25, "purpose": "filter"})
+                        async def selected_sender(identity):
+                            page = await request("GET", "/recipients/user", params={"target_id": identity, "limit": 1, "purpose": "filter"})
+                            return next(iter(page["items"]), {"id": identity, "name": plain_text("state.unavailable")})
+                        bind_relationship(sender, "users", ("name",), ("name",), page_loader=sender_page, selected_loader=selected_sender, active=active)
+                        filters["sender_user_id"] = sender
+                        if browse_recipients:
+                            async def browse_sender():
+                                async def choose(node):
+                                    if not active() or node["type"] != "user":
+                                        return False
+                                    row = await selected_sender(node["id"])
+                                    if not active():
+                                        return False
+                                    sender.options = {row["id"]: row["name"]}
+                                    sender.value = row["id"]
+                                    sender.update()
+                                    return True
+                                await browse_recipients(selection_mode="user", on_selection=choose)
+                            ui.button(text("action.browse_recipients"), icon="account_tree", on_click=browse_sender).props("flat no-caps").mark("mailbox-browse-sender")
                 if mailbox != "drafts":
                     priority = (
                         ui.select(
@@ -282,15 +310,16 @@ async def messaging_workspace(
                         label=text("field.read"),
                     ).props("outlined dense")
                     filters["is_read"] = read
-                if mailbox == "outbox":
-                    filters["q"] = ui.input(text("field.search")).props(
-                        "outlined dense"
-                    )
+                if mailbox in ("inbox", "outbox"):
                     filters["sent_from"] = ui.input(text("field.sent_from")).props(
                         "outlined dense type=date"
                     )
                     filters["sent_before"] = ui.input(text("field.sent_before")).props(
                         "outlined dense type=date"
+                    )
+                if mailbox == "outbox":
+                    filters["q"] = ui.input(text("field.search")).props(
+                        "outlined dense"
                     )
                     filters["action_required"] = ui.select(
                         {
@@ -315,11 +344,12 @@ async def messaging_workspace(
                         security, "security-levels", ("name",), ("name",), active=active
                     )
                     filters["security_level_id"] = security
-                if mailbox in ("inbox", "outbox") and can_exchange:
+                if mailbox in ("inbox", "outbox", "drafts") and can_exchange:
                     filter_kinds = ("user", "role", "org_unit")
                     filter_labels = [plain_text("field." + kind) for kind in filter_kinds]
-                    recipient = relationship_select(text("field.recipient"), {}, remote=True)
-                    recipient.classes("max-w-xs")
+                    with ui.column().classes("w-full max-w-xs gap-1") as recipient_group:
+                        recipient = relationship_select(text("field.recipient"), {}, remote=True)
+                        recipient.classes("w-full").mark("mailbox-recipient")
 
                     def filter_option(row, index):
                         return dict(row, id=row["id"] * 3 + index,
@@ -358,9 +388,10 @@ async def messaging_workspace(
                                 recipient.update()
                                 return True
                             await browse_recipients(selection_mode="all", on_selection=choose)
-                        ui.button(text("action.browse_recipients"), icon="account_tree",
-                                  on_click=browse_filter).props("flat no-caps")
-                if mailbox != "drafts":
+                        with recipient_group:
+                            ui.button(text("action.browse_recipients"), icon="account_tree",
+                                      on_click=browse_filter).props("flat no-caps").mark("mailbox-browse-recipient")
+                if mailbox != "drafts" or can_exchange:
                     ui.button(
                         text("field.search"),
                         icon="search",
@@ -393,7 +424,7 @@ async def messaging_workspace(
         if reset:
             view.update(cursor=None, previous=[])
         content.set_visibility(True)
-        filters_host.set_visibility(not view["deleted"])
+        filters_host.set_visibility(not view["deleted"] or mailbox == "drafts")
         pagination.set_visibility(True)
         progress.text = text("state.loading")
         params = {"limit": 25}
@@ -412,9 +443,9 @@ async def messaging_workspace(
             for key in ("sent_from", "sent_before"):
                 if key in params:
                     params[key] += "T00:00:00Z"
-            if mailbox in ("inbox", "outbox") and can_exchange and recipient.value:
-                target, index = divmod(int(recipient.value), 3)
-                params.update(recipient_kind=filter_kinds[index], recipient_id=target)
+        if (mailbox == "drafts" or not view["deleted"]) and can_exchange and recipient.value:
+            target, index = divmod(int(recipient.value), 3)
+            params.update(recipient_kind=filter_kinds[index], recipient_id=target)
         try:
             result = await request(
                 "GET",
@@ -1179,9 +1210,13 @@ async def messaging_workspace(
             syncing_recipients = False
 
             def recipient_key(row):
+                if row["selector_kind"] == "everyone":
+                    return -1
                 return int(row["target_id"]) * 3 + recipient_kinds.index(row["selector_kind"])
 
             async def recipient_row(identity):
+                if int(identity) == -1:
+                    return {"id": -1, "name": plain_text("field.everyone"), "eligible": True}
                 target, index = divmod(int(identity), 3)
                 page = await request("GET", "/recipients/" + recipient_kinds[index], params={
                     "target_id": target, "limit": 1, "security_level_id": security.value,
@@ -1191,7 +1226,12 @@ async def messaging_workspace(
                 return {**row, "id": identity,
                         "name": recipient_labels[index] + " · " + row["name"]}
 
-            async def recipient_page(query):
+            def recipient_locked(address_type):
+                return any(row["selector_kind"] == "everyone" and (row["recipient_type"] == "to" or address_type == "cc") for row in selectors)
+
+            async def recipient_page(query, address_type):
+                if recipient_locked(address_type):
+                    return {"items": []}
                 if len(query.strip()) < 2:
                     return {"items": []}
                 pages = await asyncio.gather(*(request("GET", "/recipients/" + kind, params={
@@ -1208,16 +1248,28 @@ async def messaging_workspace(
                     return
                 control = recipient_controls[recipient_type]
                 candidates = [{"recipient_type": recipient_type,
-                    "selector_kind": recipient_kinds[int(identity) % 3],
-                    "target_id": int(identity) // 3} for identity in control.value or []]
+                    "selector_kind": "everyone" if int(identity) == -1 else recipient_kinds[int(identity) % 3],
+                    "target_id": None if int(identity) == -1 else int(identity) // 3} for identity in control.value or []]
                 others = [row for row in selectors if row["recipient_type"] != recipient_type]
+                if any(row["selector_kind"] == "everyone" and row["recipient_type"] == "to" for row in others):
+                    await validate()
+                    return
+                if any(row["selector_kind"] == "everyone" for row in candidates):
+                    candidates = [row for row in candidates if row["selector_kind"] == "everyone"]
                 if len(others) + len(candidates) <= limits["MAX_SELECTORS_PER_SEND"]:
                     selectors[:] = others + candidates
                 await completion_changed()
 
+            async def choose_everyone(address_type):
+                if not form_active() or saved.get("is_deleted") or recipient_locked(address_type):
+                    return
+                selectors[:] = ([row for row in selectors if row["recipient_type"] == "to" and row["selector_kind"] != "everyone"] if address_type == "cc" else [])
+                selectors.append({"recipient_type": address_type, "selector_kind": "everyone", "target_id": None})
+                await validate()
+
             async def browse(recipient_type):
                 async def choose(node):
-                    if not form_active() or saved.get("is_deleted"):
+                    if not form_active() or saved.get("is_deleted") or any(row["selector_kind"] == "everyone" and (row["recipient_type"] == "to" or recipient_type == "cc") for row in selectors):
                         return False
                     candidate = {"recipient_type": recipient_type,
                         "selector_kind": node["type"], "target_id": node["id"]}
@@ -1240,13 +1292,16 @@ async def messaging_workspace(
                     multiple=True, value=[], remote=True).props(
                         "outlined use-chips input-debounce=0 behavior=menu options-dense"
                     ).classes("w-full")
+                control.mark("message-recipients-" + address_type)
                 recipient_controls[address_type] = control
                 recipient_loaders.append(bind_relationship(
                     control, "users", ("name",), ("name",),
-                    page_loader=recipient_page, selected_loader=recipient_row,
+                    page_loader=lambda query, address_type=address_type: recipient_page(query, address_type), selected_loader=recipient_row,
                     option_reason=ineligible, active=form_active,
                 ))
                 control.on_value_change(lambda _, address_type=address_type: None if syncing_recipients else recipients_changed(address_type))
+                browse_buttons.append(ui.button(plain_text("field.everyone"), icon="groups",
+                    on_click=lambda _, address_type=address_type: choose_everyone(address_type)).props("flat no-caps").mark("message-everyone-" + address_type))
                 if browse_recipients:
                     browse_buttons.append(ui.button(
                         text("action.browse_recipients"), icon="account_tree",
@@ -1390,14 +1445,19 @@ async def messaging_workspace(
                 check = form["revision"]
                 form["valid"] = False
                 send_button.disable()
-                for button in browse_buttons:
-                    button.set_enabled(not saved.get("is_deleted") and len(selectors) < limits["MAX_SELECTORS_PER_SEND"])
+                buttons_per_field = 2 if browse_recipients else 1
+                for index, button in enumerate(browse_buttons):
+                    address_type = "to" if index < buttons_per_field else "cc"
+                    locked = recipient_locked(address_type)
+                    button.set_enabled(not locked and not saved.get("is_deleted") and len(selectors) < limits["MAX_SELECTORS_PER_SEND"])
                 add_link_button.set_enabled(
                     not saved.get("is_deleted")
                     and len(resources) < limits["MAX_RESOURCE_LINKS"]
                 )
 
                 async def resolve(group, row):
+                    if group == "recipients" and row["selector_kind"] == "everyone":
+                        return {"name": plain_text("field.everyone"), "eligible": True}
                     key = (
                         row["selector_kind"]
                         if group == "recipients"
@@ -1465,9 +1525,10 @@ async def messaging_workspace(
                 try:
                     for address_type, control in recipient_controls.items():
                         options = {recipient_key(item):
-                            recipient_labels[recipient_kinds.index(item["selector_kind"])] + " · " + (row.get("name") or plain_text("state.unavailable"))
+                            (plain_text("field.everyone") if item["selector_kind"] == "everyone" else recipient_labels[recipient_kinds.index(item["selector_kind"])] + " · " + (row.get("name") or plain_text("state.unavailable")))
                             for item, row in zip(selectors, rows) if item["recipient_type"] == address_type}
-                        control.options = {**control.options, **options}
+                        control.options = options if recipient_locked(address_type) else {**control.options, **options}
+                        control._props["use-input"] = not recipient_locked(address_type)
                         control.value = list(options)
                         control.update()
                 finally:
@@ -1613,6 +1674,12 @@ async def messaging_workspace(
                     return
                 finally:
                     send_button.set_enabled(form["valid"])
+                if active() and mailbox == "drafts" and saved.get("id"):
+                    # Send has committed: this draft no longer exists. Remove its
+                    # row immediately, even if refreshing the mailbox is slow or fails.
+                    row = message_rows.pop(str(saved["id"]), None)
+                    if row is not None:
+                        row.delete()
                 close()
                 ui.notify(text("state.sent"), color="positive")
                 if active():
@@ -1636,7 +1703,7 @@ async def messaging_workspace(
             with ui.row().classes("w-full items-center gap-2"):
                 send_button = ui.button(
                     text("action.send"), icon="send", on_click=send_message
-                ).props("no-caps")
+                ).props("no-caps").mark("messaging-send")
                 send_button.disable()
                 save_button = ui.button(
                     text("action.save_draft"), icon="save", on_click=save
@@ -1673,7 +1740,7 @@ async def messaging_workspace(
                 await asyncio.gather(*(loader() for loader in recipient_loaders))
 
             async def completion_changed():
-                if completion.value and source:
+                if completion.value and source and not any(row["selector_kind"] == "everyone" and row["recipient_type"] == "to" for row in selectors):
                     entry = {
                         "recipient_type": "to",
                         "selector_kind": "user",

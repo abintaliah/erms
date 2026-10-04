@@ -10,6 +10,62 @@ from backend.services.api.messaging.transactions import run
 from backend.services.api.messaging.actions import amend
 
 
+def test_inbox_sent_date_range_boundaries(client):
+    from datetime import timedelta
+    sender, _, _ = account(client)
+    recipient, rid, _ = account(client)
+    result = post(client, sender, payload(rid)).json()
+    with db() as c:
+        sent_at = c.execute("SELECT sent_at FROM message_envelopes WHERE id=%s", (result['envelope_id'],)).fetchone()['sent_at']
+    for bounds, expected in [
+        ({'sent_from': sent_at.isoformat()}, True),
+        ({'sent_before': sent_at.isoformat()}, False),
+        ({'sent_from': (sent_at-timedelta(days=1)).isoformat(), 'sent_before': (sent_at+timedelta(days=1)).isoformat()}, True),
+        ({'sent_from': (sent_at+timedelta(days=1)).isoformat()}, False),
+    ]:
+        response = client.get(PREFIX + '/inbox', headers=_bearer(recipient), params=bounds)
+        assert response.status_code == 200
+        assert bool(response.json()['items']) == expected
+
+
+def test_inbox_sender_and_draft_recipient_filters(client):
+    sender, sid, _ = account(client)
+    other, oid, _ = account(client)
+    recipient, rid, _ = account(client)
+    first = post(client, sender, payload(rid)).json()
+    post(client, other, payload(rid))
+    response = client.get(PREFIX + '/inbox', headers=_bearer(recipient), params={'sender_user_id': sid})
+    assert response.status_code == 200
+    assert [item['envelope_id'] for item in response.json()['items']] == [first['envelope_id']]
+    data = {k: v for k, v in payload(rid).items() if k != 'request_id'}
+    created = client.post(PREFIX + '/drafts', headers=_bearer(sender), json=data)
+    assert created.status_code == 200
+    for target, expected in [(rid, True), (oid, False)]:
+        response = client.get(PREFIX + '/drafts', headers=_bearer(sender), params={'recipient_kind': 'user', 'recipient_id': target})
+        assert response.status_code == 200
+        assert bool(response.json()['items']) == expected
+    assert client.get(PREFIX + '/drafts', headers=_bearer(sender), params={'recipient_kind': 'user'}).status_code == 422
+
+
+@pytest.mark.parametrize('kind', ['role', 'org_unit'])
+def test_draft_filter_matches_selected_role_or_unit(client, kind):
+    sender, _, _ = account(client)
+    _, _, role_id = account(client)
+    with db() as c:
+        unit_id = c.execute('SELECT org_unit_id FROM roles WHERE id=%s', (role_id,)).fetchone()['org_unit_id']
+    target = role_id if kind == 'role' else unit_id
+    data = {k: v for k, v in payload().items() if k != 'request_id'}
+    data['selectors'] = [dict(selector_kind=kind, target_id=target, recipient_type='to')]
+    created = client.post(PREFIX + '/drafts', headers=_bearer(sender), json=data)
+    assert created.status_code == 200
+    response = client.get(PREFIX + '/drafts', headers=_bearer(sender), params={'recipient_kind': kind, 'recipient_id': target})
+    assert response.status_code == 200
+    assert [item['id'] for item in response.json()['items']] == [created.json()['id']]
+    other_kind = 'org_unit' if kind == 'role' else 'role'
+    response = client.get(PREFIX + '/drafts', headers=_bearer(sender), params={'recipient_kind': other_kind, 'recipient_id': unit_id if other_kind == 'org_unit' else role_id})
+    assert response.status_code == 200 and response.json()['items'] == []
+
+
 def test_relationship_access_completion_and_branches(client):
     sender, uid, _ = account(client)
     recipient, rid, _ = account(client)

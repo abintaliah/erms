@@ -216,3 +216,110 @@ a valid translation containing only a description to verify missing-name
 fallback. Both runs' fresh/upgrade disposable databases were dropped. No stack
 was launched, no migration or new translation key is required, and no capture
 localization issue remains from these checks.
+
+## Everyone audience — 4 October 2026
+
+MSG-005B now defines Everyone as a synthetic human-message audience. Everyone in
+To replaces all To/Cc selectors. Everyone in Cc replaces other Cc selectors and
+permits ordinary To selectors. Expansion retains send-time eligibility,
+clearance, immutable audience snapshots, configured recipient limits, one
+copy per person, and To precedence. Cc recipients have no action obligation.
+The security specification explicitly separates this messaging audience from
+Everyone's existing ACL behavior; no role, privilege or organizational-unit
+hierarchy entry is created.
+
+| Approved rule | Implementation | Verification |
+| --- | --- | --- |
+| To/Cc exclusivity and removable selection | Compose shared controls and `validate_everyone` on send/validation/draft write | English/Arabic NiceGUI exclusivity/removal tests; invalid-composition API tests |
+| Eligible organization-wide send-time audience | `selector_users`, existing `messaging_user_eligible`, bounded expansion | Exchange/clearance exclusions, sender exclusion, recipient-limit and post-send membership tests |
+| To wins overlap; single delivery; Cc informational | Existing deduplicated fan-out and action rules | Individual, role and unit overlap tests; To outstanding / Cc no action |
+| Synthetic selector survives draft save/send | Nullable selector model, draft reconstruction, explicit nullable reference inserts | Draft round-trip and atomic send test |
+| Localized name in reading and capture | Published catalogue label projected in mailbox and PDF renderer | English/Arabic mailbox and PDF renderer-input assertions |
+| Human-only extension | Separate ordinary producer-selector model | Producer-principal rejection and existing producer configuration/send regressions |
+| Existing database upgrade without a role seed | Migration 042; canonical schema includes matching constraints/indexes | Disposable populated-upgrade/fresh parity and preservation checks |
+
+English and canonical Arabic artifacts add only `messaging.field.everyone`
+(“Everyone” / “الجميع”), with generated draft provenance and review required.
+Existing artifact values and provenance are preserved; no administrator export
+was promoted. Catalogue ordering, active-key coverage, placeholder/blank and
+terminology checks passed through the localization catalogue regression suite.
+
+The UI uses a direct Everyone button beside each field. Locked fields retain a
+removable chip and stop ordinary remote searches; no complete entity collection
+is downloaded and no new cache is introduced. Live English/LTR and Arabic/RTL
+preview checks verified Cc selection, exclusive To selection and restoration
+of ordinary controls after removal. The isolated database-free preview was
+stopped and its browser tab closed.
+
+Migration `042_messaging_everyone.sql` was subsequently applied to `demo` on
+4 October 2026 after its old selector constraint rejected Everyone draft saves.
+Both sent/draft selector constraints and unique indexes were verified. Catalogue
+synchronization preserves protected translations; the Everyone Arabic draft
+requires administrator review/publication. No test was run against a persistent
+database. All test databases were dropped.
+
+Verification completed: the messaging kernel/workflow and localization catalogue
+regression run passed; the producer administration/send regression run passed;
+all 13 Everyone-specific checks and all 32 messaging UI checks passed. The
+additional capture fallback renderer test passed. Fresh/upgrade parity includes
+the new synthetic-selector constraints and unique indexes. Producer model
+reconstruction was corrected after its regression tests caught a model-type
+mismatch; the rerun passed. Reply completion with Everyone in To is verified
+without adding a conflicting ordinary selector. Syntax and diff checks passed.
+No implementation issue remains from these checks; only the deployment and
+translation-review steps listed above remain.
+
+Everyone resource attachment verification (4 October 2026): the user's open
+draft allowed Add resources and opened the picker with Everyone in To. No
+Everyone-specific attachment restriction was found in the implementation.
+MSG-005B now explicitly permits resource attachment for both To and Cc Everyone.
+Four database-free interaction regression cases passed, covering both fields
+with and without the shared recipient browser. They search, select, attach and
+submit a record link together with the Everyone selector. No runtime change,
+translation change or database migration was needed for this behavior.
+
+Draft-list freshness correction (4 October 2026): after a successful draft send,
+the WebUI now removes that draft's row before waiting for the mailbox refresh.
+The previous behavior kept the stale row visible until a fresh response arrived.
+This follows the specified successful-send draft removal and mutation freshness
+contract. English and Arabic regressions verify removal while the refresh is
+deliberately blocked, then verify the refreshed empty state. Five focused
+interaction checks passed, including draft save/cancel and abandoned navigation.
+Syntax and diff checks passed. No translation or database changes are required.
+
+Mailbox filters revision (4 October 2026): Browse organization structure now
+sits below Recipient inside a native NiceGUI column. Inbox gains the existing
+Outbox sent-date controls and paired API bounds (`sent_from >=`, `sent_before <`).
+The specification records the UTC date boundary semantics and retained filter
+selection. Recipient search continues to combine users, roles and units through
+three bounded concurrent searches. Two English/Arabic interaction checks and
+one API date-boundary test passed. Fresh/upgrade schema parity passed; every
+disposable test database was dropped. Live LTR/RTL measurements confirmed the
+Browse button begins 4px below the field; the owned preview and tabs were closed.
+No catalogue keys, wording, translations or database schema changed.
+
+Recipient-filter semantics and rationale: directory lookup matches localized
+names, descriptions and codes, plus user email. Once an entity is selected by
+search or browsing, mailbox filtering matches its original To/Cc selector type
+and ID, not current membership or all expanded deliveries. Audit Office matches
+messages addressed to that unit; Auditor matches messages addressed to that
+role; a user matches messages explicitly addressed to them. This preserves
+original addressing intent and stable historical results after membership
+changes. The specification's Addressing and mailbox filters revision now
+includes these examples and the rationale for the combined field, Browse
+placement and server-side date bounds. Section 6.7 explicitly documents immediate
+sent-draft removal, preservation on send failure and the reason for removing the
+row before refreshing. These clarifications introduce no new runtime behavior.
+
+
+Mailbox filter and RTL correction (4 October 2026): Inbox now offers a bounded,
+clearable Sender user selector and a user browser below it, matching the exact
+envelope sender. Recipient remains available in Inbox and Outbox and is now
+available for active and recently deleted Drafts. Draft role/unit filters match
+the saved selectors themselves, without expanding membership. Ownership and
+current clearance restrictions remain enforced. The mailbox root scopes the
+RTL row/field correction documented in design-language section 19.1.
+Verification: all 44 messaging workspace UI cases and three disposable-database
+API cases passed; fresh/upgrade schema parity passed and both databases were
+dropped. Existing Sender, Recipient and Browse catalogue keys are reused; no
+new translation keys, schema changes, migrations or caches are introduced.

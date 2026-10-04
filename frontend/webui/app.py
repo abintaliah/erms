@@ -982,6 +982,13 @@ def add_timestamp_slots(table: Any, column_names: list[str]) -> None:
         """)
 
 
+def login_error_message(error: ApiError) -> str:
+    """Distinguish rejected credentials from an expired authenticated session."""
+    if error.status_code == 401:
+        return render_message_plain("authentication.error.credentials_not_accepted")
+    return error_message(error)
+
+
 def error_message(error: ApiError) -> str:
     if error.status_code == 404 and error.message == "saved search not found":
         return render_message_plain("saved_search.error.unavailable")
@@ -2029,6 +2036,34 @@ def index(q: str = "") -> None:
         /* Remote selects already inherit RTL. Reversing their internal rows
            again places the recipient chips on the left. */
         html[dir="rtl"] .remote-relationship-select .row { flex-direction: row; }
+        /* These native components already inherit RTL. The legacy global row
+           reversal flips them twice; Quasar floating labels remain left-anchored.
+           Native direction/card/row props do not reset those internal styles. */
+        html[dir="rtl"] :is(.wathiq-login-card, .messaging-workspace) .row {
+            flex-direction: row;
+        }
+        html[dir="rtl"] :is(.wathiq-login-card, .messaging-workspace) .q-field__label {
+            left: auto; right: 0; transform-origin: right top; text-align: right;
+        }
+        html[dir="rtl"] :is(.wathiq-login-card, .messaging-workspace) .q-field__append {
+            padding-left: 0; padding-right: 12px;
+        }
+        html[dir="rtl"] :is(.wathiq-login-card, .messaging-workspace) .q-field__prepend {
+            padding-right: 0; padding-left: 12px;
+        }
+        /* The native login glyph has no directional variant. Keep the same
+           symbol and mirror only this button in RTL. */
+        html[dir="rtl"] .wathiq-login-submit .q-icon { transform: scaleX(-1); }
+        /* QSelect's default removable chips use physical negative margins.
+           Native Select props cannot set the internal remove-icon spacing;
+           inspection showed overlap in inherited RTL. Keep a logical gap. */
+        .remote-relationship-select .q-chip__icon--remove {
+            margin: 0;
+        }
+        .remote-relationship-select.q-select--multiple .q-chip__content {
+            margin-inline-end: 6px;
+        }
+
 
         /* Transfer dialogs inherit the supported document direction. NiceGUI's
            select/row APIs have no per-control RTL layout switch. Live inspection
@@ -11868,7 +11903,7 @@ def index(q: str = "") -> None:
                 render_message("webui.show_change_password.input.temporary_password_b83bc142") if forced_change else render_message("webui.show_change_password.input.current_password_00f4f73a"),
                 password=True,
                 password_toggle_button=True,
-            ).props("outlined autocomplete=current-password").classes("w-full")
+            ).props('outlined autocomplete=current-password input-style="direction: ltr; unicode-bidi: isolate;"').classes("w-full")
             new = ui.input(render_message("webui.show_change_password.input.new_password_28399c5b"), password=True, password_toggle_button=True).props("outlined").classes("w-full")
             confirm = ui.input(render_message("webui.show_change_password.input.confirm_new_password_abd1d774"), password=True).props("outlined").classes("w-full")
 
@@ -20591,7 +20626,7 @@ def index(q: str = "") -> None:
         ).props(
             "aria-label='" + render_message("webui.index.accessible_name.slowly_moving_connected_node_background_acc8bb9e") + "'"
         )
-        with ui.card().classes("wathiq-login-card"):
+        with ui.card().classes("wathiq-login-card").props(f"dir={initial_direction} lang={initial_language}"):
             with ui.row().classes("w-full items-stretch no-wrap gap-0"):
                 with ui.column().classes(
                     "wathiq-login-brand-panel shrink-0 justify-between gap-0"
@@ -20618,17 +20653,22 @@ def index(q: str = "") -> None:
                         "text-sm text-slate-500 mb-2"
                     )
                     login_email = ui.input(render_message("webui.index.input.email_address_2569f0e9")).props(
-                        "outlined autocomplete=username"
+                        'outlined autocomplete=username input-style="direction: ltr; unicode-bidi: isolate;"'
                     ).classes("w-full")
                     login_password = ui.input(
                         render_message("webui.index.input.password_f76ddde6"), password=True, password_toggle_button=True
-                    ).props("outlined autocomplete=current-password").classes("w-full")
+                    ).props('outlined autocomplete=current-password input-style="direction: ltr; unicode-bidi: isolate;"').classes("w-full")
                     login_error = ui.label().classes(
                         "wathiq-login-error text-negative text-sm"
                     )
-                    login_submit = ui.button(render_message("webui.index.button.continue_to_wathiq_9cc920d0"), icon="login").props(
+                    login_submit = ui.button(
+                        render_message("webui.index.button.continue_to_wathiq_9cc920d0"),
+                        icon=None if initial_direction == "rtl" else "login",
+                    ).props(
                         "unelevated no-caps"
-                    ).classes("w-full")
+                    ).classes("w-full wathiq-login-submit")
+                    if initial_direction == "rtl":
+                        login_submit.props("icon-right=login")
                     ui.label(render_message("webui.index.label.need_help_contact_your_system_administrato_9f127b23")).classes(
                         "w-full text-center text-xs text-slate-400 mt-1"
                     )
@@ -20662,7 +20702,7 @@ def index(q: str = "") -> None:
                     return
                 await select_dashboard()
             except ApiError as error:
-                login_error.text = error_message(error)
+                login_error.text = login_error_message(error)
 
         login_submit.on("click", submit_login)
         login_password.on("keydown.enter", submit_login)
@@ -20836,6 +20876,9 @@ def index(q: str = "") -> None:
             return
 
     async def initialize_authenticated_ui() -> None:
+        # Signed-out pages need the same root and portal direction as signed-in
+        # pages; localization bootstrap normally runs only after authentication.
+        await apply_document_direction(initial_language, initial_direction)
         # The same asset drives both the sign-in background and the authenticated
         # header. Load it for every session, including restored sessions which
         # never display the sign-in dialog.

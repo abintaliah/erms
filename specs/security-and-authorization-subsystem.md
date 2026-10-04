@@ -709,7 +709,7 @@ inert until both gates are satisfied.
 
 ### 7.2 Synthetic Everyone principal
 
-Everyone is an ACL-only synthetic principal representing every authenticated
+Within authorization, Everyone is an ACL-only synthetic principal representing every authenticated
 user account. It is not a row in `roles`, is not seeded, has no organizational
 unit, has no assignments, has no profile, has no security level, cannot be
 renamed or deleted, and never appears in the organization tree or role
@@ -2124,3 +2124,10 @@ Revision 0.6 resolves the remaining ACL and deployment-policy questions:
    effective custodian count from reaching zero.
 
 No authorization-policy decisions remain open from the revision 0.5 review.
+
+
+The messaging subsystem separately supports a synthetic Everyone audience for
+human messages, as specified in notifications-and-messaging.md. This does not
+create a role, grant privileges, change ACL matching, or bypass effective-role
+and security-clearance gates. Messaging expansion uses its own recipient
+eligibility rules; ACL matching still represents all authenticated accounts.

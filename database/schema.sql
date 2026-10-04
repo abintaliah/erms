@@ -6193,7 +6193,9 @@ ALTER TABLE message_recipient_selectors ADD CHECK(recipient_type IN ('to','cc'))
  ADD CHECK(btrim(display_name)<>''), ADD UNIQUE(envelope_id,recipient_type,ordinal),
  ADD CHECK((selector_kind='user' AND user_id IS NOT NULL AND role_id IS NULL AND org_unit_id IS NULL)
  OR (selector_kind='role' AND role_id IS NOT NULL AND user_id IS NULL AND org_unit_id IS NULL)
- OR (selector_kind='org_unit' AND org_unit_id IS NOT NULL AND user_id IS NULL AND role_id IS NULL));
+ OR (selector_kind='org_unit' AND org_unit_id IS NOT NULL AND user_id IS NULL AND role_id IS NULL)
+ OR (selector_kind='everyone' AND user_id IS NULL AND role_id IS NULL AND org_unit_id IS NULL));
+CREATE UNIQUE INDEX message_recipient_selectors_everyone_unique ON message_recipient_selectors(envelope_id,recipient_type) WHERE selector_kind='everyone';
 CREATE UNIQUE INDEX message_recipient_selectors_user_id_unique ON message_recipient_selectors(envelope_id,recipient_type,user_id) WHERE user_id IS NOT NULL;
 CREATE UNIQUE INDEX message_recipient_selectors_role_id_unique ON message_recipient_selectors(envelope_id,recipient_type,role_id) WHERE role_id IS NOT NULL;
 CREATE UNIQUE INDEX message_recipient_selectors_org_unit_id_unique ON message_recipient_selectors(envelope_id,recipient_type,org_unit_id) WHERE org_unit_id IS NOT NULL;
@@ -6202,7 +6204,9 @@ ALTER TABLE message_draft_recipient_selectors ADD CHECK(recipient_type IN ('to',
  ADD CHECK(btrim(display_name)<>''), ADD UNIQUE(draft_id,recipient_type,ordinal),
  ADD CHECK((selector_kind='user' AND user_id IS NOT NULL AND role_id IS NULL AND org_unit_id IS NULL)
  OR (selector_kind='role' AND role_id IS NOT NULL AND user_id IS NULL AND org_unit_id IS NULL)
- OR (selector_kind='org_unit' AND org_unit_id IS NOT NULL AND user_id IS NULL AND role_id IS NULL));
+ OR (selector_kind='org_unit' AND org_unit_id IS NOT NULL AND user_id IS NULL AND role_id IS NULL)
+ OR (selector_kind='everyone' AND user_id IS NULL AND role_id IS NULL AND org_unit_id IS NULL));
+CREATE UNIQUE INDEX message_draft_recipient_selectors_everyone_unique ON message_draft_recipient_selectors(draft_id,recipient_type) WHERE selector_kind='everyone';
 CREATE UNIQUE INDEX message_draft_recipient_selectors_user_id_unique ON message_draft_recipient_selectors(draft_id,recipient_type,user_id) WHERE user_id IS NOT NULL;
 CREATE UNIQUE INDEX message_draft_recipient_selectors_role_id_unique ON message_draft_recipient_selectors(draft_id,recipient_type,role_id) WHERE role_id IS NOT NULL;
 CREATE UNIQUE INDEX message_draft_recipient_selectors_org_unit_id_unique ON message_draft_recipient_selectors(draft_id,recipient_type,org_unit_id) WHERE org_unit_id IS NOT NULL;

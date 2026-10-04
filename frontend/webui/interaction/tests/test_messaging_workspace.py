@@ -154,7 +154,7 @@ async def test_compose_uses_shared_bounded_selector_and_sends_new_content(user: 
     subject = next(c for c in user.find(ui.input).elements if c.label == "Subject")
     subject.value = "A new subject"
     next(iter(user.find(ui.editor).elements)).value = "<p>New content only</p>"
-    user.find("Send", kind=ui.button).click()
+    user.find(marker="messaging-send", kind=ui.button).click()
     await user.should_see("Message sent")
     assert api.sent[0]["subject"] == "A new subject"
     assert all(call[2].get("params", {}).get("limit", 25) <= 25 for call in api.calls)
@@ -211,11 +211,43 @@ async def test_structured_resource_editor_roundtrip(user: User):
     assert next(iter(user.find(ui.editor).elements)).value == ""
     subject.value = "Linked resource"
     await asyncio.sleep(0.05)
-    user.find("Send", kind=ui.button).click()
+    user.find(marker="messaging-send", kind=ui.button).click()
     await user.should_see("Message sent")
     link = api.sent[0]["resource_links"][0]
     assert link["resource_kind"] == "record" and link["target_id"] == 5
     assert link["link_token"] in api.sent[0]["body_rich_text"]
+
+
+@pytest.mark.parametrize("recipient_type", ["to", "cc"])
+@pytest.mark.parametrize("with_browser", [False, True])
+async def test_everyone_allows_resource_attachment(user: User, recipient_type, with_browser):
+    api, _ = await setup(user, browse=AsyncMock() if with_browser else None)
+    user.find("Compose").click()
+    await user.should_see(marker="message-recipients-to")
+    if recipient_type == "cc":
+        to = next(iter(user.find(marker="message-recipients-to").elements))
+        to.options = {6: "User · Recipient"}
+        to.value = [6]
+        await user.should_see("Current recipient count: 1")
+    user.find(marker="message-everyone-" + recipient_type).click()
+    await asyncio.sleep(.1)
+    assert next(iter(user.find("Add resources", kind=ui.button).elements)).enabled
+    user.find("Add resources", kind=ui.button).click()
+    await user.should_see("Search text")
+    next(c for c in user.find(ui.input).elements if c.label == "Search text").value = "Visible"
+    await asyncio.sleep(.1)
+    next(c for c in user.find(ui.button).elements if c.text == "Search").mark("everyone-resource-search")
+    user.find(marker="everyone-resource-search").click()
+    await user.should_see("Visible record")
+    next(c for c in user.find(ui.checkbox).elements if c.props.get("aria-label") == "Visible record").value = True
+    user.find("Add selected", kind=ui.button).click()
+    await asyncio.sleep(.1)
+    next(c for c in user.find(ui.input).elements if c.label == "Subject").value = "Circular for everyone"
+    await asyncio.sleep(.05)
+    user.find(marker="messaging-send", kind=ui.button).click()
+    await user.should_see("Message sent")
+    assert {"selector_kind": "everyone", "target_id": None, "recipient_type": recipient_type} in api.sent[0]["selectors"]
+    assert api.sent[0]["resource_links"][0]["target_id"] == 5
 
 
 async def test_shared_remote_selector_retains_selection_and_disables_explained_results(
@@ -402,7 +434,7 @@ async def test_due_date_guidance_follows_action_field_visibility(user: User, lan
     await user.should_see('Subject' if language=='en' else 'الموضوع')
     await user.should_see('Action required' if language=='en' else 'يتطلب إجراءً')
     action = next(c for c in user.find(ui.checkbox).elements if c.text == ('Action required' if language=='en' else 'يتطلب إجراءً'))
-    due = next(c for c in action.client.elements.values() if isinstance(c,ui.input) and c.props.get('type')=='date')
+    due = next(c for c in action.client.elements.values() if isinstance(c,ui.input) and c.props.get('type')=='date' and c.label == ('Action due date' if language=='en' else 'تاريخ استحقاق الإجراء'))
     help_text = 'The due date uses your working timezone and is informational.' if language=='en' else 'يُستخدم نطاقك الزمني لتاريخ الاستحقاق، وهو تاريخ إرشادي.'
     guidance = next(c for c in action.client.elements.values() if isinstance(c,ui.label) and c.text == help_text)
     assert not due.visible and not guidance.visible
@@ -498,7 +530,7 @@ async def test_mailbox_recipient_filter_search_browse_and_clear(user: User, mail
     await asyncio.sleep(.1)
     params = [kwargs['params'] for method,path,kwargs in api.calls if path.endswith('/'+mailbox)][-1]
     assert params['recipient_kind'] == 'role' and params['recipient_id'] == 2
-    user.find('Browse organization structure',kind=ui.button).click()
+    user.find(marker='mailbox-browse-recipient',kind=ui.button).click()
     await asyncio.sleep(.1)
     assert recipient.value == 8
     recipient.value = None
@@ -552,6 +584,11 @@ async def test_reply_prefills_sender_and_cc_has_no_completion_prompt(user: User,
     else:
         assert len(prompts) == 1 and prompts[0].value is False
         await user.should_see(render_message_plain('messaging.help.completion'))
+        user.find(marker="message-everyone-to").click()
+        await asyncio.sleep(.1)
+        prompts[0].value = True
+        await asyncio.sleep(.1)
+        assert to.value == [-1]
     subject.value = 'Edited reply subject'
     user.find('Save draft' if language=='en' else 'حفظ المسودة',kind=ui.button).click()
     await asyncio.sleep(.1)
@@ -615,6 +652,85 @@ async def test_mailbox_row_keeps_page_and_discards_stale_detail(user: User, mail
     assert 'Stale response must never render' not in [getattr(c, 'text', '') for c in user.find(ui.label).elements]
     assert next(iter(user.find(marker='message-row-second').elements)).visible
     assert next(iter(user.find('Previous' if language == 'en' else 'السابق', kind=ui.button).elements)).enabled
+
+@pytest.mark.parametrize('language', ['en', 'ar'])
+async def test_inbox_date_filters_and_browse_below_recipient(user: User, language):
+    api, _ = await setup(user, language=language, browse=AsyncMock())
+    labels = {r['message_key']: r['translated_text'] for r in json.loads((ROOT / 'i18n/messages.ar.generated.json').read_text())['items']}
+    english_labels = {r['message_key']: r['default_text'] for r in json.loads((ROOT / 'i18n/messages.en.json').read_text())}
+    def label(key, english):
+        return (labels if language == 'ar' else english_labels)['messaging.' + key]
+    recipient = next(c for c in user.find(ui.select).elements if c.label == label('field.recipient', 'Recipient'))
+    browse = next(iter(user.find(marker='mailbox-browse-recipient').elements))
+    assert recipient.parent_slot.parent is browse.parent_slot.parent
+    assert isinstance(recipient.parent_slot.parent, ui.column)
+    for key, value in [('sent_from', '2026-10-01'), ('sent_before', '2026-10-05')]:
+        next(c for c in user.find(ui.input).elements if c.label == label('field.' + key, 'Sent from' if key == 'sent_from' else 'Sent before')).value = value
+    user.find(label('field.search', 'Search subject'), kind=ui.button).click()
+    await asyncio.sleep(.1)
+    params = next(kwargs['params'] for method, path, kwargs in reversed(api.calls) if path.endswith('/inbox'))
+    assert params['sent_from'] == '2026-10-01T00:00:00Z'
+    assert params['sent_before'] == '2026-10-05T00:00:00Z'
+
+
+@pytest.mark.parametrize('language', ['en', 'ar'])
+@pytest.mark.parametrize('mailbox', ['inbox', 'drafts'])
+async def test_mailbox_sender_and_draft_recipient_filters(user: User, language, mailbox):
+    api, _ = await setup(user, language=language, mailbox=mailbox, browse=AsyncMock())
+    marker = 'mailbox-sender' if mailbox == 'inbox' else 'mailbox-recipient'
+    control = next(iter(user.find(marker=marker).elements))
+    control.options = {2: 'Sender'} if mailbox == 'inbox' else {7: 'Role · Auditor'}
+    control.value = 2 if mailbox == 'inbox' else 7
+    await asyncio.sleep(.05)
+    user.find('Search subject' if language == 'en' else 'البحث في الموضوع', kind=ui.button).click()
+    await asyncio.sleep(.1)
+    params = next(kwargs['params'] for method, path, kwargs in reversed(api.calls) if path.endswith('/' + mailbox))
+    if mailbox == 'inbox':
+        assert params['sender_user_id'] == 2
+    else:
+        assert params['recipient_kind'] == 'role' and params['recipient_id'] == 2
+    control.value = None
+    user.find('Search subject' if language == 'en' else 'البحث في الموضوع', kind=ui.button).click()
+    await asyncio.sleep(.1)
+    params = next(kwargs['params'] for method, path, kwargs in reversed(api.calls) if path.endswith('/' + mailbox))
+    assert 'sender_user_id' not in params and 'recipient_id' not in params
+
+
+@pytest.mark.parametrize('language', ['en', 'ar'])
+async def test_sent_draft_disappears_before_mailbox_refresh_finishes(user: User, language):
+    api = Api()
+    original = api.request
+    sent, refreshing, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    draft = dict(id='draft', subject='Ready draft', body_rich_text='<p>Body</p>',
+                 security_level_id=1, priority='normal', version=1,
+                 selectors=[dict(selector_kind='everyone', target_id=None, recipient_type='to')],
+                 resource_links=[], relationship_kind=None, related_delivery_id=None, related_envelope_id=None)
+    async def request(method, path, **kwargs):
+        if path.endswith('/drafts'):
+            if sent.is_set():
+                refreshing.set()
+                await release.wait()
+                return dict(items=[], has_more=False)
+            return dict(items=[draft], has_more=False)
+        if path.endswith('/drafts/draft/send'):
+            sent.set()
+            return dict(envelope_id='sent')
+        if path.endswith('/drafts/draft'):
+            return {**draft, 'version': 2 if method == 'PUT' else 1}
+        return await original(method, path, **kwargs)
+    api.request = request
+    await setup(user, api=api, mailbox='drafts', language=language)
+    user.find(marker='message-row-draft').click()
+    await user.should_see(kind=ui.input, content='Subject' if language == 'en' else 'الموضوع')
+    await asyncio.sleep(.1)
+    user.find('Send' if language == 'en' else 'إرسال', kind=ui.button).click()
+    try:
+        await asyncio.wait_for(refreshing.wait(), 2)
+        await user.should_not_see(marker='message-row-draft')
+    finally:
+        release.set()
+    await user.should_see('No messages to show' if language == 'en' else 'لا توجد رسائل لعرضها')
+
 
 @pytest.mark.parametrize('language', ['en', 'ar'])
 async def test_draft_panel_switch_save_and_cancel_keep_listing(user: User, language):
@@ -696,3 +812,30 @@ async def test_earlier_dialog_preserves_latest_and_navigates_back(user: User, la
     user.find(marker='linked-message-close').click()
     await user.should_see('latest body')
     assert not any(c.value for c in next(iter(user.find(marker='message-row-latest').elements)).client.elements.values() if isinstance(c,ui.dialog))
+
+
+@pytest.mark.parametrize("language", ["en", "ar"])
+async def test_everyone_selection_exclusivity_and_removal(user: User, language):
+    api, _ = await setup(user, language=language)
+    user.find("Compose" if language == "en" else "إنشاء رسالة").click()
+    await user.should_see(marker="message-recipients-to")
+    to = next(iter(user.find(marker="message-recipients-to").elements))
+    cc = next(iter(user.find(marker="message-recipients-cc").elements))
+    label = "Everyone" if language == "en" else "الجميع"
+    buttons = [next(iter(user.find(marker="message-everyone-" + kind).elements)) for kind in ("to", "cc")]
+    to.options={6:"Recipient"}; to.value=[6]
+    await user.should_see("Current recipient count: 1" if language == "en" else "عدد المستلمين الحالي: 1")
+    user.find(marker="message-everyone-cc").click()
+    await asyncio.sleep(.1)
+    assert cc.value == [-1] and to.value == [6]
+    assert not cc.props["use-input"] and to.props["use-input"]
+    assert not buttons[1].enabled
+    user.find(marker="message-everyone-to").click()
+    await asyncio.sleep(.1)
+    assert to.value == [-1] and cc.value == []
+    assert not to.props["use-input"] and not cc.props["use-input"]
+    assert not buttons[0].enabled and not buttons[1].enabled
+    to.value=[]
+    await asyncio.sleep(.1)
+    assert buttons[0].enabled and buttons[1].enabled
+    assert not any('/recipients/everyone' in c[1] for c in api.calls if len(c)>1)

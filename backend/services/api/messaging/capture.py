@@ -184,7 +184,7 @@ def field(label, value):
 
 def message_pdf(c, row, tag, direction, text, deadline):
     headers = c.execute(
-        """SELECT s.recipient_type,s.display_name,
+        """SELECT s.recipient_type,s.selector_kind,s.display_name,
             COALESCE(u.translations,r.translations,o.translations,'{}'::jsonb) AS translations
             FROM message_recipient_selectors s
             LEFT JOIN users u ON u.id=s.user_id
@@ -193,8 +193,9 @@ def message_pdf(c, row, tag, direction, text, deadline):
             WHERE s.envelope_id=%s ORDER BY s.recipient_type DESC,s.ordinal""",
         (row["id"],),
     ).fetchall()
+    everyone_labels = localized_labels(c, "messaging.field.everyone") if any(h["selector_kind"] == "everyone" for h in headers) else {}
     for header in headers:
-        header["display_name"] = localized_projection(
+        header["display_name"] = everyone_labels.get(tag, everyone_labels.get(tag.split("-")[0], "Everyone")) if header["selector_kind"] == "everyone" else localized_projection(
             {"name": header["display_name"], "translations": header["translations"]}, tag, "name"
         )["name"]
     metadata = c.execute(

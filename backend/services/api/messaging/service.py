@@ -44,6 +44,14 @@ def level(c: Connection, user: int, requested: int | None):
 
 def selector_users(c: Connection, user: int, selected: Selector, required: int):
     kind = selected.selector_kind
+    if kind == "everyone":
+        rows = c.execute(
+            "SELECT u.id,u.name FROM users u WHERE u.id<>%s AND messaging_user_eligible(u.id,%s) ORDER BY u.id LIMIT %s",
+            (user, required, LIMITS["MAX_RECIPIENTS_PER_SEND"] + 1),
+        ).fetchall()
+        if not rows:
+            invalid("message_selector_ineligible")
+        return {"name": "Everyone"}, rows
     table = {"user": "users", "role": "roles", "org_unit": "org_units"}[kind]
     live = {
         "user": "status='active' AND account_type='person'",
@@ -81,7 +89,21 @@ def selector_users(c: Connection, user: int, selected: Selector, required: int):
     return item, rows
 
 
+def validate_everyone(selectors):
+    everyone = [s for s in selectors if s.selector_kind == "everyone"]
+    if not everyone:
+        return
+    if len(everyone) != 1:
+        invalid("message_selector_ineligible")
+    selected = everyone[0]
+    if selected.recipient_type == "to" and len(selectors) != 1:
+        invalid("message_selector_ineligible")
+    if selected.recipient_type == "cc" and any(s is not selected and s.recipient_type == "cc" for s in selectors):
+        invalid("message_selector_ineligible")
+
+
 def expand(c: Connection, user: int, selectors: list[Selector], required: int):
+    validate_everyone(selectors)
     if not any(x.recipient_type == "to" for x in selectors):
         invalid("message_to_required")
     snapshots = []
@@ -275,14 +297,14 @@ def send(c: Connection, user: int, payload: Send, *, request_fingerprint=None):
         selected = snapshot["selector"]
         c.execute(
             sql.SQL(
-                """INSERT INTO message_recipient_selectors(envelope_id,recipient_type,selector_kind,{},display_name,ordinal)
-          VALUES (%s,%s,%s,%s,%s,%s)"""
-            ).format(sql.Identifier(selected.selector_kind + "_id")),
+                """INSERT INTO message_recipient_selectors(envelope_id,recipient_type,selector_kind,user_id,role_id,org_unit_id,display_name,ordinal)
+          VALUES (%s,%s,%s,%s,%s,%s,%s,%s)"""
+            ),
             (
                 envelope,
                 selected.recipient_type,
                 selected.selector_kind,
-                selected.target_id,
+                *(selected.target_id if selected.selector_kind == kind else None for kind in ("user", "role", "org_unit")),
                 snapshot["display_name"],
                 snapshot["enumeration"],
             ),

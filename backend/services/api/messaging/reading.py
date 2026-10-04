@@ -124,10 +124,13 @@ def present(c, user, rows, *, detail=False):
     language = metadata[0]['language'] if metadata else 'en'
     levels = {r['level_id']: r for r in metadata}
     senders = {r['sender_user_id']: r['sender_translations'] for r in metadata}
+    from .notification_configuration import localized_labels
+    everyone_labels = localized_labels(c, "messaging.field.everyone") if any(h["selector_kind"] == "everyone" for r in metadata for h in r["selectors"]) else {}
     for row in metadata:
         for header in row['selectors']:
-            header['display_name'] = localized_projection(
-                {'name': header['display_name'], 'translations': header.pop('translations')},
+            translations = header.pop("translations")
+            header['display_name'] = everyone_labels.get(language, "Everyone") if header["selector_kind"] == "everyone" else localized_projection(
+                {'name': header['display_name'], 'translations': translations},
                 language, 'name')['name']
         headers[row['id']] = row['selectors']
     system_ids = [
@@ -252,10 +255,13 @@ def present(c, user, rows, *, detail=False):
     return output
 
 
-def inbox(c, user, limit, cursor=None, after=None, is_read=None, priority=None, recipient_kind=None, recipient_id=None):
+def inbox(c, user, limit, cursor=None, after=None, is_read=None, priority=None, recipient_kind=None, recipient_id=None, sent_from=None, sent_before=None, sender_user_id=None):
     person(c, user)
     clauses = ["d.recipient_user_id=%s", ACTIVE_INBOX, VISIBLE]
     args = [user, user]
+    if sender_user_id is not None:
+        clauses.append("(messaging_user_clearance(%s)>=l.level_number AND e.sender_user_id=%s)")
+        args.extend((user, sender_user_id))
     if after is not None:
         clauses.append("d.mailbox_sequence>%s")
         args.append(after)
@@ -265,6 +271,10 @@ def inbox(c, user, limit, cursor=None, after=None, is_read=None, priority=None, 
     if is_read is not None:
         clauses.append("(d.read_at IS NOT NULL)=%s")
         args.append(is_read)
+    for value, operator in ((sent_from, ">="), (sent_before, "<")):
+        if value is not None:
+            clauses.append(f"e.sent_at{operator}%s")
+            args.append(value)
     if priority:
         # Filtering on protected priority must not leak restricted content.
         clauses.append(

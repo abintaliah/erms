@@ -1858,6 +1858,20 @@
     "is_html": false
   },
   {
+    "message_key": "authentication.error.credentials_not_accepted",
+    "context_group": "authentication.error",
+    "default_text": "Your sign-in credentials weren’t accepted. Check your login name and password and try again.",
+    "semantic_meaning": "Login attempt rejected; deliberately does not identify whether the login name or password was incorrect.",
+    "common_locations": [
+      "Sign-in form"
+    ],
+    "translator_guidance": "Use the same neutral explanation for an unknown login name and an incorrect password; ask the user to check both.",
+    "grammatical_role": "complete sentence",
+    "parameter_schema": {},
+    "rendered_example": "Your sign-in credentials weren’t accepted. Check your login name and password and try again.",
+    "is_html": false
+  },
+  {
     "message_key": "authorization.acl.inherit_from_parent",
     "context_group": "authorization.acl",
     "default_text": "Inherit ACL from parent",
@@ -9726,6 +9740,20 @@
     "grammatical_role": "label",
     "parameter_schema": {},
     "rendered_example": "Action due date",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.field.everyone",
+    "context_group": "messaging.field",
+    "default_text": "Everyone",
+    "semantic_meaning": "Synthetic human-message audience: all currently eligible person accounts across the organization.",
+    "common_locations": [
+      "Messages workspace"
+    ],
+    "translator_guidance": "Use the established translation for Everyone; this is a recipient audience, not a real role.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Everyone",
     "is_html": false
   },
   {

@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Literal
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .config import LIMITS
 from .content import REQUEST_BODY_BYTES
 
@@ -12,8 +12,14 @@ class Input(BaseModel):
 
 class Selector(Input):
     recipient_type: Literal["to", "cc"] = "to"
-    selector_kind: Literal["user", "role", "org_unit"]
-    target_id: int = Field(gt=0)
+    selector_kind: Literal["user", "role", "org_unit", "everyone"]
+    target_id: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if (self.selector_kind == "everyone") != (self.target_id is None):
+            raise ValueError("Everyone has no target ID; ordinary selectors require one")
+        return self
 
 
 class ResourceLink(Input):

@@ -61,7 +61,7 @@ This subsystem includes:
 
 - system notifications addressed to users;
 - messages sent by one user to one or more users;
-- user, Wathiq-role, and organizational-unit recipient selectors;
+- user, Wathiq-role, organizational-unit, and synthetic Everyone recipient selectors;
 - `To` and `Cc` recipients;
 - one independently identifiable recipient copy per addressee;
 - inbox, unread state, message reading, and read receipts;
@@ -107,7 +107,7 @@ selectors, expanded addressee snapshots, and structured resource links. They do
 not include recipient-specific mailbox sequence, read time, action-completion
 state, or deletion state.
 
-**Recipient selector** means a user, role, or organizational unit chosen in
+**Recipient selector** means a user, role, organizational unit, or synthetic Everyone audience chosen in
 `To` or `Cc`. **Expansion** resolves those choices to eligible individual
 users. An **addressee** is one of those resolved users. Several selectors may
 resolve to the same user, who still receives only one copy.
@@ -332,6 +332,40 @@ lazily paged organizational browser. It navigates units, roles and users
 and can select any eligible entity into that field. Messaging eligibility is
 checked when selected and again at send time. Existing recipient limits, To
 precedence, expansion and draft behavior remain authoritative.
+
+### MSG-005B — Organization-wide Everyone recipient
+
+Human messages may select **Everyone** in To or Cc. This is a synthetic
+messaging audience, not a role row or an organizational-unit subtree. It uses
+the familiar Everyone name without changing Everyone's ACL semantics.
+
+- Everyone in To is the sole selector across both To and Cc. Selecting it
+  replaces existing selections; removing it restores ordinary selection.
+- Everyone in Cc is the sole Cc selector. Ordinary users, roles and organizational
+  units may still be selected in To. Selecting it replaces other Cc selections.
+- Everyone in Cc still requires at least one ordinary To selector before sending.
+- Selecting Everyone in either field does not disable resource search or
+  attachment. Users may link records and aggregations, including organization-wide
+  circulars, under the existing resource authorization and attachment-limit rules.
+- Resolve Everyone at send time to all eligible active person accounts across
+  the organization, excluding the sender. Apply the same effective-role,
+  exchange-privilege and message-security-clearance checks as ordinary recipients.
+  This means all eligible accounts, not a separate HR employee register.
+- Freeze the concrete audience at send time. Deliver once per person; To wins
+  when an ordinary To selection overlaps Everyone in Cc. Only concrete To
+  recipients have action responsibilities. Existing recipient limits apply.
+- Offer Everyone directly beside each recipient field, with localized English
+  and Arabic wording; do not create a role, enumerate units, or preload users.
+- API selector: `selector_kind: "everyone"`, `target_id: null`, and
+  `recipient_type: "to"` or `"cc"`. Reject mixed To-Everyone selections, multiple
+  Everyone selectors, or Everyone-Cc combined with other Cc selectors. Apply
+  these composition rules to draft writes, validation and send. Incomplete
+  drafts may omit To; sending may not.
+- Persist the synthetic selector with null user, role and organizational-unit
+  references. Localize its display in mailboxes and capture PDFs.
+
+This extension concerns human messages only; system-notification configuration
+audiences retain their existing user/role/organizational-unit contract.
 
 ### MSG-006 — Fan-out
 
@@ -1752,6 +1786,13 @@ sending, and explicitly discarding a draft. Each row shows last-updated time and
 a non-sensitive validation summary such as **Ready to validate on send** or
 **Needs attention**.
 
+After the API confirms a successful send, remove that draft from the visible
+listing immediately and close its compose panel, then refresh the remaining
+listing. Do not wait for the refresh response to remove the sent draft. A failed
+send must retain the draft and its editable contents. This keeps the listing
+consistent with the committed send even when the subsequent refresh is slow
+or fails, and prevents the user mistaking a sent message for an unsent draft.
+
 Drafts are not displayed in Inbox or Outbox and never contribute unread,
 receipt, action, or Monitor delivery counts. This revision defines explicit
 save and discard; it does not require automatic keystroke-by-keystroke saving.
@@ -1992,16 +2033,16 @@ there is no generic target ID whose meaning depends on another field.
 | `id` | `bigserial` | Primary key |
 | `envelope_id` | `uuid` | Required FK to `message_envelopes(id)` |
 | `recipient_type` | `text` | Required; `to` or `cc` |
-| `selector_kind` | `text` | Required; `user`, `role`, or `org_unit` |
+| `selector_kind` | `text` | Required; `user`, `role`, `org_unit`, or `everyone` |
 | `user_id` | `bigint` | Nullable FK to `users(id)` |
 | `role_id` | `bigint` | Nullable FK to `roles(id)` |
 | `org_unit_id` | `bigint` | Nullable FK to `org_units(id)` |
 | `display_name` | `text` | Required non-blank send-time snapshot |
 | `ordinal` | `integer` | Required non-negative display order within its recipient type |
 
-A check constraint shall require exactly one of `user_id`, `role_id`, or
-`org_unit_id` to be non-null and shall require it to agree with
-`selector_kind`. Uniqueness constraints shall prevent the same selector from
+For ordinary selectors, a check constraint shall require exactly one of
+`user_id`, `role_id`, or `org_unit_id` to be non-null and to agree with
+`selector_kind`. For `everyone`, all three references must be null. Uniqueness constraints shall prevent the same selector from
 appearing more than once in the same recipient type. Foreign-key deletion
 behavior must preserve sent-message history and the immutable selector display
 snapshot even if the referenced user, role, or organizational unit is later
@@ -3835,14 +3876,39 @@ their stored content and links; no data migration is required.
 
 ### Addressing and mailbox filters revision (approved 3 October 2026)
 
+The 4 October 2026 revision adds a primary Sender filter to Inbox and a
+Recipient filter to Drafts. Inbox Sender selects a user through bounded remote
+directory search or the shared browser in user-selection mode. It matches the
+envelope's actual `sender_user_id`, not the sender's current roles or unit.
+It does not match system producers, which are not human senders. Inbox retains
+its separate Recipient filter. Outbox and Drafts need no Sender filter because
+they contain only the authenticated person's sent envelopes or owned drafts.
+Their primary person-related filter is Recipient.
+
+Draft Recipient matches the current saved draft's To/Cc selector type and ID,
+without expanding current membership. Use `recipient_kind` and `recipient_id`
+as a required pair on the Drafts API too. All filters remain server-side,
+paginated, subject to ownership/visibility and current clearance, and clearable.
+Search and browsing preserve the selected entity. Browse appears below its
+corresponding field. Draft Recipient is available in active and recently deleted
+draft listings. Sender is available on the active Inbox listing.
+
 Inbox and Outbox provide a single Recipient filter that searches users, roles
 and organizational units together after two characters, using the same
 localized names, descriptions, codes and user email matching as Compose.
 There is no separate recipient-kind dropdown. Each result identifies its type.
 A Browse organization structure button opens the existing bounded shared
-browser, allowing selection of a unit, role or user. Selection remains visible
+browser, allowing selection of a unit, role or user. Place this button directly
+below the Recipient field in both reading directions. Selection remains visible
 until changed or cleared. Applying Search resets pagination and requests a
 fresh server-filtered page; browsing itself does not load a mailbox page.
+
+Inbox and Outbox also provide **Sent on or after** and **Sent before** date
+filters. Both filter the envelope's sent timestamp on the server: Sent on or
+after includes midnight
+UTC on the selected date; Sent before excludes midnight UTC on its selected
+date. Either bound may be omitted. Applying Search resets pagination while
+retaining the selected recipient and other filter values.
 
 The filter matches the original envelope's To/Cc selectors of the chosen type
 and ID. It does not expand a role or unit again using current membership. The
@@ -3851,6 +3917,21 @@ and Outbox and rejects an incomplete pair. Filtering protected selector
 headers requires current message clearance and retains normal mailbox
 ownership/visibility rules. The selector search/browser keeps the existing
 exchange-privilege gate.
+
+Searching the directory finds a selectable entity; applying the selected entity
+filters messages. Search and browsing have identical message-matching semantics.
+For example, selecting Audit Office finds messages explicitly addressed to that
+unit in To or Cc, not messages addressed individually to its current staff.
+Selecting Auditor finds messages addressed to that role, not all messages sent
+to its members. Selecting a user finds messages explicitly addressed to that
+user, not every message delivered to them through a role, unit or Everyone.
+
+This preserves the sender's original addressing intent and makes historical
+results independent of later membership changes. The combined Recipient field
+avoids requiring users to choose an entity type before finding a recipient.
+Keeping Browse below that field makes its relationship clear. Sent-date bounds
+let users narrow a mailbox on the server without downloading its full history;
+reusing the existing Outbox boundary convention keeps both mailboxes consistent.
 
 Verification covers automatic Reply addressing; informational Cc state in
 Inbox, Outbox receipts and completion enforcement; To-over-Cc precedence;

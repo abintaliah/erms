@@ -34,7 +34,7 @@ def get(c, user, identity, lock=False, deleted=False):
         {
             "selector_kind": r["selector_kind"],
             "recipient_type": r["recipient_type"],
-            "target_id": r[r["selector_kind"] + "_id"],
+            "target_id": None if r["selector_kind"] == "everyone" else r[r["selector_kind"] + "_id"],
         }
         for r in c.execute(
             "SELECT * FROM message_draft_recipient_selectors WHERE draft_id=%s ORDER BY recipient_type DESC,ordinal",
@@ -57,7 +57,7 @@ def get(c, user, identity, lock=False, deleted=False):
     return row
 
 
-def listing(c, user, limit, after=None, deleted=False):
+def listing(c, user, limit, after=None, deleted=False, recipient_kind=None, recipient_id=None):
     require_exchange(c, user)
     condition = (
         "(deleted_at IS NOT NULL OR expires_at<=CURRENT_TIMESTAMP) AND COALESCE(purge_after,expires_at+make_interval(days=>expiry_restoration_days))>CURRENT_TIMESTAMP"
@@ -65,6 +65,12 @@ def listing(c, user, limit, after=None, deleted=False):
         else "deleted_at IS NULL AND expires_at>CURRENT_TIMESTAMP"
     )
     args = [user]
+    if (recipient_kind is None) != (recipient_id is None):
+        invalid("message_recipient_filter_invalid")
+    if recipient_kind:
+        column = {"user": "user_id", "role": "role_id", "org_unit": "org_unit_id"}[recipient_kind]
+        condition += f" AND messaging_user_clearance(%s)>=(SELECT level_number FROM security_levels WHERE id=message_drafts.security_level_id) AND EXISTS(SELECT 1 FROM message_draft_recipient_selectors s WHERE s.draft_id=message_drafts.id AND s.{column}=%s)"
+        args.extend((user, recipient_id))
     if after:
         from .reading import cursor_decode
 
@@ -150,12 +156,12 @@ def save(c, user, payload, identity=None, version=None):
             ),
             (identity, user, *fields.values(), LIMITS["DRAFT_ACTIVE_DAYS"], LIMITS["DRAFT_RECOVERY_DAYS"]),
         )
+    from .service import validate_everyone
+    validate_everyone(payload.selectors)
     positions = {"to": 0, "cc": 0}
     for selected in payload.selectors:
-        table = {"user": "users", "role": "roles", "org_unit": "org_units"}[
-            selected.selector_kind
-        ]
-        row = c.execute(
+        table = {"user": "users", "role": "roles", "org_unit": "org_units"}.get(selected.selector_kind)
+        row = {"name": "Everyone"} if table is None else c.execute(
             sql.SQL("SELECT name FROM {} WHERE id=%s").format(sql.Identifier(table)),
             (selected.target_id,),
         ).fetchone()
@@ -163,13 +169,13 @@ def save(c, user, payload, identity=None, version=None):
             invalid("message_selector_ineligible")
         c.execute(
             sql.SQL(
-                "INSERT INTO message_draft_recipient_selectors(draft_id,recipient_type,selector_kind,{},display_name,ordinal) VALUES (%s,%s,%s,%s,%s,%s)"
-            ).format(sql.Identifier(selected.selector_kind + "_id")),
+                "INSERT INTO message_draft_recipient_selectors(draft_id,recipient_type,selector_kind,user_id,role_id,org_unit_id,display_name,ordinal) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)"
+            ),
             (
                 identity,
                 selected.recipient_type,
                 selected.selector_kind,
-                selected.target_id,
+                *(selected.target_id if selected.selector_kind == kind else None for kind in ("user", "role", "org_unit")),
                 row["name"],
                 positions[selected.recipient_type],
             ),

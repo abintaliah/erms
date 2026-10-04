@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "6abf27241a2eae9659e2e850e3ad5600fecce80637cdfcc935a2cf3a42db9db6",
-  "catalogue_sha256": "713f8a5cf37728a981ffe5ccc747ee0f31ed190f43431137a471d899f8e31f01",
+  "catalogue_sha256": "300132914a73e8cfca6fbb3bf496e7d513f2e9c86af1e854cf6af36e36145680",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20260929040036",
   "generated_at": "2026-09-29T04:00:36.438919+04:00",
@@ -1645,6 +1645,18 @@
         "source_status": "published",
         "date_reviewed": "2026-09-28T10:30:03.437443+00:00",
         "date_published": "2026-09-28T10:30:03.437443+00:00"
+      }
+    },
+    {
+      "message_key": "authentication.error.credentials_not_accepted",
+      "translated_text": "لم تُقبل بيانات تسجيل الدخول. تحقق من اسم الدخول وكلمة المرور ثم حاول مرة أخرى.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true
       }
     },
     {
@@ -7980,6 +7992,25 @@
         "source_origin": "generated",
         "source_status": "draft",
         "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.everyone",
+      "translated_text": "الجميع",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated",
+        "generator": "Codex",
+        "model": "GPT-6",
+        "prompt_version": "messaging-everyone-20261004",
+        "generated_at": "2026-10-04T04:24:39.991112+00:00",
+        "batch_id": "messaging-everyone-20261004",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "catalogue_sha256": "ffb97eca36e5e465c9f2993f81828218ed0c1a1881c3cafafe540229219f4b83",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c"
       }
     },
     {
