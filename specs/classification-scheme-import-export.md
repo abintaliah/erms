@@ -2,8 +2,8 @@
 
 **Status:** Implemented and verified — approved product decisions retained
 **Prepared:** 29 September 2026
-**Revision:** 0.16 — reader-oriented Word layout and native direction formatting
-**Implementation state:** API/codecs/Word/UI implemented; acceptance evidence recorded below; new Arabic draft wording awaits human review
+**Revision:** 0.17 — successful classification scheme export event history
+**Implementation state:** API/codecs/Word/UI implemented; prior acceptance evidence recorded below; IE-14 export auditing implemented and verified; Arabic draft wording awaits human review
 
 ## 1. Purpose and governing specifications
 
@@ -724,7 +724,8 @@ and `date_published: null`. Export is
 Word additionally requires `language=<enabled language tag>`. Both enforce
 `classifications.administer` and retain the existing authentication/CSRF flow.
 
-No new audit source/action, entity, privilege, or database migration is introduced.
+Import introduces no new audit source/action, entity, or privilege. Export
+auditing is specified separately in section 10.2; verification is recorded below.
 Each existing immutable CREATE history row records the source manifest and source
 entity snapshot in `metadata.classification_scheme_import`; the history entity ID
 and after-state ID supply the local side of the mapping. The original source
@@ -741,6 +742,31 @@ modified live schema has been audited for drift.
 The implementation rejects packages above 32 MiB or 10,000 classifications,
 without truncation. Traversal is iterative; there is no independent hierarchy
 depth limit. Deployment ingress must also bound multipart request bodies.
+
+### 10.2 Successful export event history
+
+**IE-14:** Every successful classification scheme export in JSON, CSV, or Word
+creates one immutable event-history entry in the source database, with operation
+`EXPORT` and entity type `classification_scheme`. Record the scheme ID and a
+human-readable scheme code/title snapshot, occurrence time, authenticated actor
+ID and name/email snapshots, the normal request source and request/correlation
+context, and export metadata containing `export_id` and `format`. For Word,
+also record the selected export `language`. JSON/CSV event `export_id` must
+match the package manifest's `export_id`.
+
+Success means that the server generated and validated the complete export and
+committed its history entry before returning the successful download response.
+It does not mean that the browser saved or opened the file. Authorization,
+validation, or generation failures must not create a successful `EXPORT` event;
+if history cannot be committed, do not return a successful export response.
+Export leaves scheme, classification, and retention-rule rows unchanged. The
+new history entry is not included in the exported package, and source history
+continues to be excluded from transfer.
+
+Recording the event does not add a privilege requirement: exporting still
+requires `classifications.administer`, without `audit.view`. Viewing the entry
+uses the existing authorized Audit Trail and its normal filters and redaction
+rules; no separate export-history page or privilege is introduced.
 
 ## 11. Acceptance conditions and verification traceability
 
@@ -762,6 +788,7 @@ evidence before the feature can be declared complete. References below identify 
 | IE-11 | Anonymous/unauthorized access denied; classifications.administer permits all export formats without metadata privileges or audit.view; the same privilege alone permits complete imports including translations without metadata privileges or audit.view; test scheme-only, classification-only, both, null, and empty translations in JSON and CSV; missing privilege rejects all writes without stripping data; UI base-permission gating and identity/provenance attribution verified | Route dependencies + UI gating; `test_only_administer_privilege`, `test_anonymous_transfer_denied`, `test_transfer_hidden_without_administer` |
 | IE-12 | Import draft, published, and future-publication source schemes; verify each destination scheme has NULL `date_published`, displays as unpublished/draft, is not eligible through published-scheme selectors, retains source publication provenance, and can subsequently use the existing authorized publication workflow subject to its normal eligibility rules | NULL publication override; `test_draft_import`, `test_first_use_and_publication_workflow`; live imported-draft display verified |
 | IE-13 | Complete CSV reconstructs the matching JSON package and digest; real CSV export/import round trip; shuffled rows, BOM, equivalent quoting and outer line endings; null/empty translations, bigint precision; reject missing/duplicate manifest fields, checksum tampering, wrong headers/row widths/types, conflicting owners, orphan translations/rules, malformed quoting and cycles; verify draft state and rollback | Shared typed package/checksum; JSON/CSV roundtrip, parsing, rollback tests; checked-in matching fixtures |
+| IE-14 | JSON, CSV, and Word successful exports each create one attributed EXPORT event with scheme snapshot, format, export ID and Word language; verify package/event ID agreement, unchanged source entities, authorized Audit Trail visibility, and no successful event/response after authorization, validation, generation, or history-commit failure | `routes.export_scheme`; `test_export_audit.py`; 2026-10-05 evidence in section 11.5 |
 
 Database-backed verification must create uniquely named disposable PostgreSQL
 databases per run, initialize empty databases from `database/schema.sql` alone,
@@ -834,6 +861,7 @@ corresponding IE requirements in the table above.
 | AT-12: provenance and history | Verify source-to-local mappings, source dates/versions/publication provenance, source exporter snapshot, and attribution of local import activity to the actual importing user. Source event history is not copied or attributed to coincidentally matching destination user IDs. | IE-02, IE-07, IE-11 |
 | AT-13: Word structure | Generate Word documents in every enabled supported language and the additional test language. Assert language settings, paragraph/table direction, landscape orientation, one classification table per root, all descendants, hierarchy indentation, row shading, repeated headers, labels, and complete content. Include empty, long-text, deep, broad, and mixed-script fixtures. | IE-09 |
 | AT-14: browser behavior | Verify Import beside Add Classification Scheme, including an empty list; no Import on details; JSON/CSV upload success/failure; Export formats on details; enabled-language choices independent of UI language. Success stays on the refreshed schemes list with filters, sorting, and pagination preserved. Verify duplicate-submit prevention, repeated navigation, pending-request abandonment, post-mutation freshness, user isolation, and both LTR and RTL layouts. | IE-10–11 |
+| AT-15: successful export auditing | Exercise all formats and enabled Word languages; verify IE-14 attribution, metadata, one event per successful request, authorized Audit Trail retrieval, package/event export-ID agreement, unchanged source entities, and failure behavior, including a forced history-commit failure. Existing transfer evidence does not satisfy this new case. | IE-14 |
 
 ### 11.3 Acceptance evidence and visual verification
 
@@ -998,6 +1026,20 @@ confirmed Changa Regular/Bold. Native Microsoft Word was not used for this
 rendering check. Automated DOCX assertions verify its native formatting markup.
 `git diff --check` and formatting checks passed.
 
+### 11.5 Export audit verification (2026-10-05)
+
+IE-14 / AT-15 is implemented in `routes.export_scheme`. The complete transfer
+suite passed 118 tests using two freshly created disposable databases; both were
+dropped. Nine strengthened new acceptance cases passed again in two further
+disposable databases, also dropped. Coverage includes JSON/CSV manifest-event
+ID agreement, English/Arabic/French Word languages, actor/request/source
+attribution, unchanged scheme/classification/retention-rule rows, authorized
+history retrieval, validation/generation failures, and deferred history-commit
+failure without a successful response or retained event. Existing privilege and
+anonymous-access regressions also passed. Detailed traceability, UI evidence,
+and deployment records are in
+[`docs/verification/classification-export-audit/verification.md`](../docs/verification/classification-export-audit/verification.md).
+
 ## 12. Decisions and remaining clarification
 
 | ID | Decision | Resolution/status |
@@ -1005,7 +1047,10 @@ rendering check. Automated DOCX assertions verify its native formatting markup.
 | D1 | Does complete transfer include immutable source event history? | Approved: transfer current entity state and provenance only; exclude source event history. |
 | D2 | How should source IDs, dates, first-use markers, and versions survive import? | Approved: preserve original dates, first-use markers, and versions, except the destination scheme has NULL date_published and retains the source publication date as provenance. Allocate local IDs and persist the source-to-local provenance mapping. Imported first-use markers retain their governance effect. Document storage and trigger interaction before coding. |
 | D3 | Successful-import navigation | Approved: stay on the schemes list after successful import and refresh its data. Import remains alongside Add Classification Scheme, never on an existing scheme's details page. |
-| D4 | Authorization, API routes, and import audit vocabulary | Authorization approved and revised: classifications.administer alone permits the entire import, including translations, and all export formats. No additional metadata privileges are required. Concrete route mapping is documented in section 10.1. Reuse existing CREATE/api/web_ui history with import provenance metadata; no new audit vocabulary is introduced. |
+| D4 | Authorization, API routes, and import audit vocabulary | Authorization approved and revised: classifications.administer alone permits the entire import, including translations, and all export formats. No additional metadata privileges are required. Concrete route mapping is documented in section 10.1. Reuse existing CREATE/api/web_ui history with import provenance metadata; no new import audit vocabulary is introduced. Export auditing is governed by IE-14. |
 
 D1, D2, D3, import placement, and the revised privilege mapping are approved.
+D5 approves successful export event history as specified by IE-14; implementation
+and acceptance evidence are recorded in section 11.5.
+
 D4 technical mapping is recorded in section 10.1. Full acceptance remains subject to every condition in section 11; implementation progress does not waive these conditions.

@@ -248,7 +248,7 @@ The complete macOS contributor procedure, including installation of Java,
 Tesseract with Arabic and English data, Poppler, LibreOffice and PostgreSQL 18,
 is in [Full-text search local setup](full-text-search-local-setup.md).
 
-Use `.env.example.api` as the API-host environment template and
+Use the generated `.env.example.api` as the API-host environment template and
 `.env.example.text_indexer` as the independently deployable indexer's template.
 `TEXT_INDEXER_PROCESS_COUNT` belongs in the full-stack `.env`/`.env.example`
 and the text-indexer templates because the supervisor consumes it. It is
@@ -281,6 +281,32 @@ files use literal `KEY=value` assignments, not shell commands or references
 to other variables. Process environment values override the repository's
 `.env` defaults.
 
+`backend/services/api/deploy/api.env.example` is the authoritative API-only
+example. `.env.example.api` is generated from it; do not edit the generated copy.
+After adding or changing an API environment setting, update the authoritative
+example and run `python3 tools/sync_api_env_template.py`. The API environment
+CI check runs `python3 tools/sync_api_env_template.py --check` and fails on drift.
+Also document the setting and update the full-stack `.env.example` when relevant;
+local binding, credentials and rollout values may intentionally differ.
+Templates are never loaded automatically. The supplied systemd services load
+`/etc/erms/api.env`; install the authoritative example there and configure it for
+the server. Process values take precedence over repository-root `.env` fallbacks.
+New template values do not update an existing server environment automatically.
+
+For local development, `run-local-stack.sh` now runs
+`tools/reconcile_local_env.py` under the launcher lock before loading `.env`.
+It appends missing active assignments and their associated comments from
+`.env.example`, reports added variable names, and preserves every existing
+assignment (including empty values), credential and file permission. Repeated
+runs add nothing once synchronized. Template values never replace explicitly
+exported process values. Example credentials and unresolved placeholders are
+reported rather than copied. A missing `WEBUI_STORAGE_SECRET` receives a new
+random secret; a newly created `.env` has mode 0600. Optional commented settings
+remain manual. You can run `python3 tools/reconcile_local_env.py` independently;
+it does not start services. This startup hook applies to the local stack, not
+the production systemd service.
+
+
 Example `/etc/erms/api.env`:
 
 ```ini
@@ -309,6 +335,8 @@ DEFAULT_ROOT_AGGREGATION_MEDIUM=mixed
 AUTH_COOKIE_SECURE=true
 CONTENT_INDEXING_SCHEDULING_ENABLED=false
 FULL_TEXT_SEARCH_ENABLED=false
+AUDIT_TRAIL_SEARCH_RESULT_LIMIT=1000
+TEXT_INDEXER_RATE_LIMIT_PER_MINUTE=600
 ```
 
 `DEFAULT_ROOT_AGGREGATION_MEDIUM` accepts `digital`, `physical`, or `mixed` and

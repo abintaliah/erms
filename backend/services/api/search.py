@@ -14,7 +14,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from .schemas import GlobalSearchRequest, SearchExpression, SearchRequest
 from .crud import redact_hidden_relationships
-from .config import boolean_environment
+from .config import boolean_environment, integer_environment
 
 
 MAX_SEARCH_DEPTH = 5
@@ -709,6 +709,34 @@ def record_destination_clause(alias: str, *, digital_only: bool = False) -> str:
               f" AND {alias}.medium IN ('digital','mixed')" if digital_only else "")
 
 
+def _audit_actor_candidates(expression: SearchExpression | None):
+    """Necessary raw predicates only; the authorized predicate still decides matches.
+
+    Unsupported branches mean TRUE, never FALSE. In particular, null/negated
+    actor tests must not exclude redacted envelopes whose projected actors are null.
+    """
+    if expression is None:
+        return None
+    if expression.field is not None:
+        if (expression.field in {"actor_user_id", "actor_name", "actor_email"}
+                and expression.operator in TEXT_OPERATORS | {"eq", "in", "gt", "gte", "lt", "lte"}):
+            return _compile_comparison(expression, SEARCH_FIELDS["event_history"],
+                                       table_alias="audit_candidate")
+        return None
+    children = expression.and_ or expression.or_
+    if children is None:
+        return None
+    compiled = [_audit_actor_candidates(child) for child in children]
+    if expression.or_ and any(child is None for child in compiled):
+        return None
+    compiled = [child for child in compiled if child is not None]
+    if not compiled:
+        return None
+    operator = sql.SQL(" OR " if expression.or_ else " AND ")
+    return (sql.SQL("({})").format(operator.join(child[0] for child in compiled)),
+            [value for child in compiled for value in child[1]])
+
+
 def search_rows(
     connection: Connection,
     table: str,
@@ -720,6 +748,12 @@ def search_rows(
     record_creation: bool = False,
     digital_only: bool = False,
 ) -> dict[str, Any]:
+    audit_cap = integer_environment("AUDIT_TRAIL_SEARCH_RESULT_LIMIT", 1000, minimum=1)
+    if table == "event_history" and request.offset >= audit_cap:
+        raise HTTPException(status_code=422, detail={
+            "code": "audit_result_cap", "message_key": "audit.filter.results_capped",
+            "params": {"limit": audit_cap},
+        })
     if _full_text_leaves(request.where) and not boolean_environment("FULL_TEXT_SEARCH_ENABLED", True):
         raise HTTPException(status_code=503, detail={
             "code": "full_text_search_disabled",
@@ -760,6 +794,13 @@ def search_rows(
             request.where, fields, resource=table, depth=1, condition_counter=[0]
         )
         clauses.append(expression)
+        if table == "event_history":
+            candidate = _audit_actor_candidates(request.where)
+            if candidate is not None:
+                clauses.append(sql.SQL(
+                    "resource.id IN (SELECT audit_candidate.id FROM event_history audit_candidate WHERE {})"
+                ).format(candidate[0]))
+                parameters.extend(candidate[1])
     if visibility is not None:
         clauses.append(visibility)
     where_clause = (
@@ -778,7 +819,8 @@ def search_rows(
             raise _invalid(f"sort field '{item.field}' is duplicated")
         sort_fields.append((item.field, item.direction))
     if not sort_fields:
-        sort_fields.extend([("_relevance", "desc"), ("id", "asc")] if positive_leaves else [("id", "asc")])
+        sort_fields.extend([("occurred_at", "desc"), ("id", "desc")] if table == "event_history"
+                           else [("_relevance", "desc"), ("id", "asc")] if positive_leaves else [("id", "asc")])
     elif "id" not in {field for field, _ in sort_fields}:
         sort_fields.append(("id", "asc"))
 
@@ -790,7 +832,15 @@ def search_rows(
     count_query = sql.SQL("SELECT count(*) AS total FROM {} resource{}").format(
         table_identifier, where_clause
     )
+    if table == "event_history":
+        count_query = sql.SQL(
+            "SELECT count(*) AS total FROM (SELECT 1 FROM {} resource{} LIMIT {}) audit_count"
+        ).format(table_identifier, where_clause, sql.Literal(audit_cap + 1))
     total = connection.execute(count_query, parameters).fetchone()["total"]
+    truncated = table == "event_history" and total > audit_cap
+    if table == "event_history":
+        total = min(total, audit_cap)
+    page_limit = min(request.limit, audit_cap-request.offset) if table == "event_history" else request.limit
 
     relevance,relevance_parameters=_relevance_expression(table,positive_leaves)
     language_candidates = []
@@ -833,7 +883,7 @@ def search_rows(
                 *relevance_parameters,
                 *parameters,
                 *(relevance_parameters if any(field == "_relevance" for field, _ in sort_fields) else []),
-                request.limit,
+                page_limit,
                 request.offset,
             ]
         ).fetchall()
@@ -853,6 +903,8 @@ def search_rows(
         "offset": request.offset,
         "returned": len(items),
     }
+    if table == "event_history":
+        result.update(result_cap=audit_cap, truncated=truncated)
     if all_leaves:
         if table == "records":
             pending = connection.execute(

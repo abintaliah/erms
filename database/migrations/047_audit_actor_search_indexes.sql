@@ -1,0 +1,11 @@
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX event_history_actor_name_trgm_idx ON event_history USING gin(actor_name gin_trgm_ops);
+CREATE INDEX event_history_actor_email_trgm_idx ON event_history USING gin(actor_email gin_trgm_ops);
+CREATE INDEX event_history_actor_identity_idx ON event_history(actor_user_id,md5(actor_name),md5(actor_email),actor_type);
+DROP INDEX event_history_actor_timeline_idx;
+CREATE INDEX event_history_actor_timeline_idx ON event_history(actor_user_id,occurred_at DESC,id DESC) WHERE actor_user_id IS NOT NULL;
+DROP INDEX event_history_occurred_at_idx;
+CREATE INDEX event_history_occurred_at_idx ON event_history(occurred_at DESC,id DESC);
+INSERT INTO schema_migrations(version) VALUES ('047_audit_actor_search_indexes');
+COMMIT;

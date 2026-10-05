@@ -1,9 +1,9 @@
 # Application Configuration — Draft Specification
 
-**Status:** Discussion draft — not approved; no implementation authorized  
-**Project:** ERMS  
-**Prepared:** 2 October 2026  
-**Revision:** 0.1
+**Status:** Discussion draft — general proposal not approved; the Audit Trail deployment result limit is separately approved for implementation
+**Project:** ERMS
+**Prepared:** 2 October 2026
+**Revision:** 0.2 — explicitly approved Audit Trail deployment result limit
 
 ## 1. Purpose
 
@@ -84,6 +84,7 @@ The following settings remain environment/`.env` settings.
 | `DB_POOL_MIN_SIZE` | `1` | Per-process database capacity |
 | `DB_POOL_MAX_SIZE` | `10` | Per-process database capacity |
 | `DB_POOL_TIMEOUT` | `10` seconds | Per-process connection-pool behavior |
+| `AUDIT_TRAIL_SEARCH_RESULT_LIMIT` | `1000`; integer at least `1` | Per-API deployment bound on Audit Trail matching results and count work; server returns the effective cap to the WebUI |
 | `WATHIQ_APPLICATION_REVISION` | Packaged Git revision when required | Build/deployment identity |
 
 ### 4.2 WebUI process and session infrastructure
@@ -596,3 +597,30 @@ removal after the run, whether the run passes or fails.
 4. Confirm the rollout treatment of existing non-default environment values.
 5. Confirm whether the administration UI saves one setting at a time or permits
    a validated atomic batch edit.
+
+`AUDIT_TRAIL_SEARCH_RESULT_LIMIT` is explicitly deployment-managed. It is read
+from the API process environment, defaults to 1000, and is validated at startup
+as a positive integer. It is not duplicated in database-managed configuration
+or a WebUI setting. Restart the API after changing `.env`. Counts detect at
+most limit + 1 matches, pagination cannot cross the limit, and the UI uses the
+API's `result_cap` rather than hard-coding 1000.
+
+
+## Approved local environment reconciliation
+
+Separately approved for implementation: `run-local-stack.sh` reconciles the root
+`.env` against `.env.example` before loading configuration and after acquiring
+its launcher lock. Append missing active settings with associated comments;
+never overwrite or remove an existing assignment, including empty values.
+Report added names without their values. Skip example credentials and unresolved
+placeholders and report them for manual configuration. Generate a random WebUI
+storage secret if absent. Preserve existing file permissions; create a new file
+with mode 0600. Repeated reconciliation must be idempotent. Explicit process
+environment values retain precedence. This behavior does not alter production
+service startup or automatically configure optional commented overrides.
+
+Traceability: `tools/reconcile_local_env.py`, the launcher startup hook, and
+`tools/tests/test_reconcile_local_env.py`. Three tests verify byte/value and
+permission preservation, idempotence, credential skipping, secret creation and
+startup ordering. Shell syntax validation passes. Direct reconciliation of the
+current local file reports no missing settings without starting services.

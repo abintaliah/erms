@@ -226,3 +226,20 @@ temporary PostgreSQL container. It tests the canonical schema and the lifecycle
 upgrade path separately, runs the API/database suite and backup/restore check,
 then explicitly drops auxiliary databases and removes the container on success,
 failure, or interruption. It never targets a persistent ERMS database.
+
+Migration 046 (`046_audit_actor_redaction.sql`) updates the authorized history
+view to mask actor ID, name and email when the resource event is redacted. This
+also prevents actor filters and result counts from matching hidden identities.
+Raw immutable history rows are retained. The same view definition is included
+directly in `schema.sql` for new installations.
+
+Migration 047 (`047_audit_actor_search_indexes.sql`) adds name/email trigram
+indexes and a fixed-size snapshot identity index, and adds deterministic ID
+ordering to actor/time indexes. The canonical schema contains the same DDL.
+Audit Trail searches are bounded by `AUDIT_TRAIL_SEARCH_RESULT_LIMIT` in `.env`
+(default 1000, positive integer). Counts inspect at most that limit plus one
+matching authorized event; a truncated search asks the user to refine filters.
+Actor suggestions query only current users and return at most 25 matches after
+two characters. Unselected text on Apply searches historical snapshots, including
+deleted accounts. Apply API configuration
+changes by restarting the API process.
