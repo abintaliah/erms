@@ -1,6 +1,7 @@
 """Click the Monitor button using the application's actual navigation wiring."""
 
 import ast
+import asyncio
 import inspect
 import json
 from pathlib import Path
@@ -14,6 +15,9 @@ from frontend.webui.i18n_catalogue import render_message, render_message_plain, 
 from frontend.webui.audit_labels import audit_entity_type_label
 from frontend.webui.api_client import ApiError
 from frontend.webui.messaging_monitor import messaging_monitor
+from frontend.webui.remote_select import RemoteSelect
+from frontend.webui.audit_actor_select import bind_audit_actor_select, actor_condition
+from nicegui import events as nicegui_events
 
 pytest_plugins = ["nicegui.testing.user_plugin"]
 pytestmark = pytest.mark.asyncio
@@ -39,6 +43,8 @@ async def test_monitor_audit_button_routes_to_dedicated_page_with_navigation_gua
 ):
     events = []
     searches = []
+    rendered = []
+    delayed = asyncio.Event()
     translations = {
         r["message_key"]: r["translated_text"]
         for r in json.loads((Path(__file__).parents[2] / "i18n/messages.ar.generated.json").read_text())["items"]
@@ -48,6 +54,9 @@ async def test_monitor_audit_button_routes_to_dedicated_page_with_navigation_gua
     title_text = translations.get(title_key) or render_message_plain(title_key)
 
     class Api:
+        async def audit_actors(self, query, **kwargs):
+            return {"items": [], "has_more": False}
+
         def cancel_pending_reads(self):
             events.append("cancel")
 
@@ -58,11 +67,14 @@ async def test_monitor_audit_button_routes_to_dedicated_page_with_navigation_gua
 
         async def event_history_filter_options(self):
             # No notification events yet: the shortcut must stay scoped anyway.
-            return {"entity_types": ["record"], "operations": [], "sources": [], "actor_types": []}
+            return {"entity_types": ["record"], "operations": ["EXPORT"], "sources": ["api"], "actor_types": ["user"]}
 
         async def search_request(self, resource, payload):
             assert resource == "event-history"
             searches.append(payload)
+            if "Delayed Actor" in str(payload):
+                await delayed.wait()
+                return {"items": [{"id": 999}], "total": 1}
             return {"items": [{"id": 1, "entity_type": "system_notification"}], "total": 75}
 
     @ui.page("/monitor-audit-navigation")
@@ -79,6 +91,8 @@ async def test_monitor_audit_button_routes_to_dedicated_page_with_navigation_gua
             "state": {"discard_navigation_guard": discard_guard}, "api": api,
             "inspect": inspect, "Callable": Callable, "Any": Any,
             "ui": ui, "render_message": render_message,
+            "RemoteSelect": RemoteSelect, "bind_audit_actor_select": bind_audit_actor_select,
+            "actor_condition": actor_condition, "error_message": str,
             "audit_entity_type_label": audit_entity_type_label,
             "register_navigation": lambda *args: events.append("audit"),
             "show_authenticated_view": lambda: None,
@@ -87,7 +101,7 @@ async def test_monitor_audit_button_routes_to_dedicated_page_with_navigation_gua
             "search_bar": ui.row(), "aggregation_mode_bar": ui.row(),
             "table_container": host, "ApiError": ApiError,
             "hydrate_historical_audit_identities": lambda rows: None,
-            "render_event_timeline": lambda rows, container: None,
+            "render_event_timeline": lambda rows, container: rendered.extend(r["id"] for r in rows),
             "set_connection_status": lambda connected: None,
             "event_label": str,
         }
@@ -118,10 +132,57 @@ async def test_monitor_audit_button_routes_to_dedicated_page_with_navigation_gua
         await user.should_see("51")
         assert searches[-1]["offset"] == 50
         assert searches[-1]["where"] == searches[0]["where"]
+        actor_label = translations.get("audit.filter.actor_identity") or render_message_plain("audit.filter.actor_identity")
+        apply_label = translations.get("webui.select_audit_trail.button.apply_filters_bf49489c") or render_message_plain("webui.select_audit_trail.button.apply_filters_bf49489c")
+        def label(key):
+            return translations.get(key) or render_message_plain(key)
+
+        for suffix, value in (("operation_c3539ad5", "EXPORT"), ("source_47e0b469", "api"), ("actor_type_1e26e211", "user")):
+            next(c for c in user.find(kind=ui.select).elements
+                 if c._props.get("label") == label("webui.select_audit_trail.select." + suffix)).value = value
+        for suffix, value in (("from_0cee5608", "2026-01-01T00:00"), ("until_dafbbcb5", "2026-12-31T23:59"), ("correlation_id_e6872415", "11111111-1111-4111-8111-111111111111")):
+            next(c for c in user.find(kind=ui.input).elements
+                 if c._props.get("label") == label("webui.select_audit_trail.input." + suffix)).value = value
+        next(c for c in user.find(kind=ui.number).elements
+             if c._props.get("label") == label("webui.select_audit_trail.number.entity_id_39367eca")).value = 123
+        actor_control = next(iter(user.find(actor_label).elements))
+        def type_actor(text):
+            with user.client:
+                event = nicegui_events.GenericEventArguments(sender=actor_control, client=user.client, args=text)
+                for listener in actor_control._event_listeners.values():
+                    if listener.type == 'inputValue':
+                        nicegui_events.handle_event(listener.handler,event)
+        type_actor("  Someone%@Example  ")
+        user.find(apply_label).click()
+        await user.should_not_see("51")
+        assert searches[-1]["offset"] == 0
+        assert searches[-1]["where"] == {"and": [searches[0]["where"],
+            {"field": "operation", "operator": "eq", "value": "EXPORT"},
+            {"field": "source", "operator": "eq", "value": "api"},
+            {"field": "actor_type", "operator": "eq", "value": "user"},
+            {"field": "entity_id", "operator": "eq", "value": 123},
+            {"field": "correlation_id", "operator": "eq", "value": "11111111-1111-4111-8111-111111111111"},
+            {"field": "occurred_at", "operator": "gte", "value": "2026-01-01T00:00"},
+            {"field": "occurred_at", "operator": "lte", "value": "2026-12-31T23:59"},
+            {"or": [
+            {"field": field, "operator": "contains_ci", "value": "Someone%@Example"}
+            for field in ("actor_name", "actor_email")
+        ]}]}
+        user.find(translations.get("audit.filter.clear") or render_message_plain("audit.filter.clear")).click()
+        await asyncio.sleep(0.1)
+        await user.should_see(title_text)
+        assert searches[-1]["where"] == searches[0]["where"]
+        type_actor("Delayed Actor")
+        user.find(apply_label).click()
+        await asyncio.sleep(0.1)
         user.find(marker="sidebar-audit").click()
+        await asyncio.sleep(0.1)
         await user.should_not_see("51")
         assert "where" not in searches[-1]
         assert searches[-1]["offset"] == 0
+        delayed.set()
+        await asyncio.sleep(0.1)
+        assert 999 not in rendered
     else:
         await user.should_see(button_text)
         assert events == []

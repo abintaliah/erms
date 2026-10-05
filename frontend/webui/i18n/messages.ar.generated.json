@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
-  "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+  "catalogue_sha256": "6813f4d2bfc23d9e7fd8daecf3eac584798a2b18a6bc4b5159f355f56d02ced9",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20261004202049",
   "generated_at": "2026-10-04T20:20:49.389628+04:00",
@@ -1216,6 +1216,23 @@
       }
     },
     {
+      "message_key": "audit.event.export",
+      "translated_text": "تصدير",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "audit-export-actor-filter-v1",
+        "generated_at": "2026-10-05T12:53:33.370463+00:00",
+        "batch_id": "audit-export-actor-filter-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "415bbd06b9e77a7c371e579dea0eebb083c9816619c3e59c4bfb33f05c72c6ca",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "audit.event.governance_role_changed",
       "translated_text": "تغيير دور الحوكمة",
       "quality_flags": [],
@@ -1645,6 +1662,159 @@
         "source_status": "published",
         "date_reviewed": "2026-09-28T10:30:03.437443+00:00",
         "date_published": "2026-09-28T10:30:03.437443+00:00"
+      }
+    },
+    {
+      "message_key": "audit.filter.actor_identity",
+      "translated_text": "اسم منفّذ الإجراء أو بريده الإلكتروني",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "audit-export-actor-filter-v1",
+        "generated_at": "2026-10-05T12:53:33.370463+00:00",
+        "batch_id": "audit-export-actor-filter-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "415bbd06b9e77a7c371e579dea0eebb083c9816619c3e59c4bfb33f05c72c6ca",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "audit.filter.actor_identity_hint",
+      "translated_text": "ابحث بجزء من الاسم أو البريد الإلكتروني",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "audit-export-actor-filter-v1",
+        "generated_at": "2026-10-05T12:53:33.370463+00:00",
+        "batch_id": "audit-export-actor-filter-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "415bbd06b9e77a7c371e579dea0eebb083c9816619c3e59c4bfb33f05c72c6ca",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "audit.filter.actor_suggestions_hint",
+      "translated_text": "اكتب حرفين على الأقل لعرض منفّذي الإجراءات المطابقين.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "audit-actor-autocomplete-v1",
+        "generated_at": "2026-10-05T13:29:25.055655+00:00",
+        "batch_id": "audit-actor-autocomplete-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6813f4d2bfc23d9e7fd8daecf3eac584798a2b18a6bc4b5159f355f56d02ced9",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "audit.filter.actors_failed",
+      "translated_text": "تعذّر تحميل منفّذي الإجراءات. اكتب مجدداً لإعادة المحاولة.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "audit-actor-autocomplete-v1",
+        "generated_at": "2026-10-05T13:29:25.055655+00:00",
+        "batch_id": "audit-actor-autocomplete-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6813f4d2bfc23d9e7fd8daecf3eac584798a2b18a6bc4b5159f355f56d02ced9",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "audit.filter.clear",
+      "translated_text": "مسح عوامل التصفية",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "audit-export-actor-filter-v1",
+        "generated_at": "2026-10-05T12:53:33.370463+00:00",
+        "batch_id": "audit-export-actor-filter-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "415bbd06b9e77a7c371e579dea0eebb083c9816619c3e59c4bfb33f05c72c6ca",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "audit.filter.no_actors",
+      "translated_text": "لا يوجد منفّذو إجراءات مطابقون في السجل المتاح لك.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "audit-actor-autocomplete-v1",
+        "generated_at": "2026-10-05T13:29:25.055655+00:00",
+        "batch_id": "audit-actor-autocomplete-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6813f4d2bfc23d9e7fd8daecf3eac584798a2b18a6bc4b5159f355f56d02ced9",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "audit.filter.refine_actors",
+      "translated_text": "يوجد المزيد من منفّذي الإجراءات المطابقين. حدّد الاسم أو البريد الإلكتروني بدقة أكبر.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "audit-actor-autocomplete-v1",
+        "generated_at": "2026-10-05T13:29:25.055655+00:00",
+        "batch_id": "audit-actor-autocomplete-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6813f4d2bfc23d9e7fd8daecf3eac584798a2b18a6bc4b5159f355f56d02ced9",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "audit.filter.results_capped",
+      "translated_text": "تُعرض أول {limit} أحداث مطابقة فقط. حدّد البحث بدقة أكبر باستخدام عوامل التصفية.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "audit-actor-autocomplete-v1",
+        "generated_at": "2026-10-05T13:29:25.055655+00:00",
+        "batch_id": "audit-actor-autocomplete-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6813f4d2bfc23d9e7fd8daecf3eac584798a2b18a6bc4b5159f355f56d02ced9",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "audit.filter.unnamed_actor",
+      "translated_text": "منفّذ إجراء بلا اسم",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "audit-actor-autocomplete-v1",
+        "generated_at": "2026-10-05T13:29:25.055655+00:00",
+        "batch_id": "audit-actor-autocomplete-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6813f4d2bfc23d9e7fd8daecf3eac584798a2b18a6bc4b5159f355f56d02ced9",
+        "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
+        "review_required": true
       }
     },
     {

@@ -17,6 +17,7 @@ from nicegui import app, background_tasks, context, events, ui
 
 from .api_client import ApiError, ErmsApiClient
 from .remote_select import RemoteSelect
+from .audit_actor_select import bind_audit_actor_select, actor_condition
 from .classification_workspace import classification_workspace
 from .messaging_workspace import messaging_workspace
 from .resource_inspector import resource_inspector
@@ -4952,6 +4953,8 @@ def index(q: str = "") -> None:
     def event_entity_identity(event: dict[str, Any]) -> tuple[str, str]:
         entity_type = event["entity_type"]
         snapshot = event.get("after_state") or event.get("before_state") or {}
+        if event.get("operation") == "EXPORT" and entity_type == "classification_scheme":
+            snapshot = (event.get("metadata") or {}).get("scheme") or snapshot
         current = event.get("_current_entity") or event.get("_historical_entity") or {}
 
         if entity_type == "user_role_assignment":
@@ -13186,6 +13189,13 @@ def index(q: str = "") -> None:
             await load_dashboard()
 
     async def select_audit_trail(*, initial_entity_type: str | None = None) -> None:
+        state["audit_page_revision"] = state.get("audit_page_revision", 0) + 1
+        audit_page_revision = state["audit_page_revision"]
+
+        def audit_page_is_current() -> bool:
+            return (state.get("resource") == "audit-trail"
+                    and state.get("audit_page_revision") == audit_page_revision)
+
         register_navigation("audit-trail", "Audit trail")
         show_authenticated_view()
         state.update(resource="audit-trail", rows=[], searched=True, aggregation_detail=None)
@@ -13201,7 +13211,7 @@ def index(q: str = "") -> None:
             with ui.column().classes("w-full p-5 gap-4"):
                 with ui.card().classes("w-full shadow-none border border-slate-200 p-4"):
                     ui.label(render_message("webui.select_audit_trail.label.filter_events_5327c240")).classes("font-semibold")
-                    with ui.grid(columns=4).classes("w-full gap-3"):
+                    with ui.grid().classes("w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"):
                         type_filter = ui.select(
                             {initial_entity_type: audit_entity_type_label(initial_entity_type)}
                             if initial_entity_type else {},
@@ -13218,11 +13228,21 @@ def index(q: str = "") -> None:
                         actor_filter = ui.select(
                             [], label=render_message("webui.select_audit_trail.select.actor_type_1e26e211"), clearable=True,
                         ).props("outlined dense use-input options-dense").classes("w-full")
+                        with ui.column().classes("w-full sm:col-span-2 gap-1"):
+                            actor_identity_filter = RemoteSelect(
+                                {}, label=render_message("audit.filter.actor_identity"),
+                                with_input=True, clearable=True,
+                            ).props("outlined dense options-dense input-debounce=0").classes("w-full remote-relationship-select")
+                            actor_identity_filter.props["placeholder"] = render_message("audit.filter.actor_identity_hint")
+                            actor_suggestion_status = ui.label(
+                                render_message("audit.filter.actor_suggestions_hint")
+                            ).classes("text-xs text-slate-500")
                         from_filter = ui.input(render_message("webui.select_audit_trail.input.from_0cee5608")).props("outlined dense type=datetime-local").classes("w-full")
                         until_filter = ui.input(render_message("webui.select_audit_trail.input.until_dafbbcb5")).props("outlined dense type=datetime-local").classes("w-full")
                         entity_id_filter = ui.number(render_message("webui.select_audit_trail.number.entity_id_39367eca"), min=1, format="%.0f").props("outlined dense clearable").classes("w-full")
                         correlation_filter = ui.input(render_message("webui.select_audit_trail.input.correlation_id_e6872415")).props("outlined dense clearable").classes("w-full")
                     with ui.row().classes("w-full justify-end"):
+                        reset_button = ui.button(render_message("audit.filter.clear"), icon="filter_alt_off").props("flat no-caps")
                         refresh_button = ui.button(render_message("webui.select_audit_trail.button.apply_filters_bf49489c"), icon="filter_alt").props("unelevated no-caps")
                 with ui.row().classes("w-full items-center gap-2"):
                     result_summary = ui.label().classes("text-sm text-slate-500 grow")
@@ -13230,12 +13250,23 @@ def index(q: str = "") -> None:
                     next_button = ui.button(render_message("webui.select_audit_trail.button.next_4982f418"), icon="chevron_right").props("flat dense no-caps")
                     previous_button.disable()
                     next_button.disable()
+                result_cap_notice = ui.label().classes("text-sm text-amber-700")
+                result_cap_notice.set_visibility(False)
                 results_container = ui.column().classes("w-full gap-2")
 
         page = {"offset": 0, "size": 50, "total": 0}
 
+        actor_search, selected_actor, reset_actor = bind_audit_actor_select(
+            actor_identity_filter, actor_suggestion_status, api=api,
+            active=audit_page_is_current,
+            scope=lambda: {"entity_type": type_filter.value, "actor_type": actor_filter.value},
+            on_error=lambda error: ui.notify(error_message(error), color="negative", close_button=True),
+        )
+
         try:
             filter_options = await api.event_history_filter_options()
+            if not audit_page_is_current():
+                return
             type_filter.options = {
                 value: audit_entity_type_label(value)
                 for value in filter_options["entity_types"]
@@ -13253,7 +13284,7 @@ def index(q: str = "") -> None:
             ):
                 control.update()
         except ApiError as error:
-            if error.status_code != 401:
+            if audit_page_is_current() and error.status_code != 401:
                 ui.notify(
                     render_message("webui.select_audit_trail.notify.could_not_load_audit_operation_filters_err_1e52391b", error_message=error_message(error)),
                     color="warning",
@@ -13261,6 +13292,10 @@ def index(q: str = "") -> None:
                 )
 
         async def load_audit_events() -> None:
+            if not audit_page_is_current():
+                return
+            page["revision"] = page.get("revision", 0) + 1
+            request_revision = page["revision"]
             refresh_button.props("loading disable")
             conditions: list[dict[str, Any]] = []
             for field, operator, value in (
@@ -13275,6 +13310,15 @@ def index(q: str = "") -> None:
             ):
                 if value not in (None, ""):
                     conditions.append({"field": field, "operator": operator, "value": value})
+            actor = selected_actor()
+            actor_identity = actor_search["query"]
+            if actor:
+                conditions.append(actor_condition(actor))
+            elif actor_identity:
+                conditions.append({"or": [
+                    {"field": field, "operator": "contains_ci", "value": actor_identity}
+                    for field in ("actor_name", "actor_email")
+                ]})
             payload: dict[str, Any] = {
                 "sort": [{"field": "occurred_at", "direction": "desc"}, {"field": "id", "direction": "desc"}],
                 "limit": page["size"], "offset": page["offset"],
@@ -13283,9 +13327,14 @@ def index(q: str = "") -> None:
                 payload["where"] = conditions[0] if len(conditions) == 1 else {"and": conditions}
             try:
                 response = await api.search_request("event-history", payload)
+                if not audit_page_is_current() or page["revision"] != request_revision:
+                    return
                 events_list = response["items"]
                 hydrate_historical_audit_identities(events_list)
                 page["total"] = response["total"]
+                result_cap_notice.set_visibility(bool(response.get("truncated")))
+                if response.get("truncated"):
+                    result_cap_notice.text = render_message("audit.filter.results_capped", limit=response["result_cap"])
                 first = page["offset"] + 1 if events_list else 0
                 last = page["offset"] + len(events_list)
                 result_summary.text = render_message("webui.load_audit_events.text.showing_first_last_of_total_matching_event_a86705af", first=first, last=last, total=page['total'])
@@ -13300,9 +13349,11 @@ def index(q: str = "") -> None:
                 render_event_timeline(events_list, results_container)
                 set_connection_status(True)
             except ApiError as error:
-                ui.notify(error_message(error), color="negative", close_button=True)
+                if audit_page_is_current() and page["revision"] == request_revision:
+                    ui.notify(error_message(error), color="negative", close_button=True)
             finally:
-                refresh_button.props(remove="loading disable")
+                if audit_page_is_current() and page["revision"] == request_revision:
+                    refresh_button.props(remove="loading disable")
 
         async def apply_filters() -> None:
             page["offset"] = 0
@@ -13317,6 +13368,16 @@ def index(q: str = "") -> None:
                 page["offset"] += page["size"]
                 await load_audit_events()
 
+        async def reset_filters() -> None:
+            for control in (operation_filter, source_filter, actor_filter,
+                            from_filter, until_filter,
+                            entity_id_filter, correlation_filter):
+                control.value = None
+            reset_actor()
+            type_filter.value = initial_entity_type
+            await apply_filters()
+
+        reset_button.on("click", reset_filters)
         refresh_button.on("click", apply_filters)
         previous_button.on("click", previous_page)
         next_button.on("click", next_page)

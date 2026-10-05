@@ -244,7 +244,7 @@ CREATE INDEX event_history_entity_timeline_idx
     ON event_history (entity_type, entity_id, occurred_at DESC, id DESC);
 
 CREATE INDEX event_history_actor_timeline_idx
-    ON event_history (actor_user_id, occurred_at DESC)
+    ON event_history (actor_user_id, occurred_at DESC, id DESC)
     WHERE actor_user_id IS NOT NULL;
 
 CREATE INDEX event_history_request_id_idx
@@ -256,7 +256,7 @@ CREATE INDEX event_history_correlation_id_idx
     WHERE correlation_id IS NOT NULL;
 
 CREATE INDEX event_history_occurred_at_idx
-    ON event_history (occurred_at DESC);
+    ON event_history (occurred_at DESC, id DESC);
 
 CREATE INDEX event_history_security_operation_timeline_idx
     ON event_history (operation, occurred_at DESC)
@@ -3118,7 +3118,11 @@ END $$;
 
 CREATE VIEW authorized_event_history AS
 SELECT event.id,event.occurred_at,event.transaction_id,event.entity_type,event.entity_id,
-       event.operation,event.actor_user_id,event.actor_name,event.actor_email,event.actor_type,
+       event.operation,
+       CASE WHEN visible.allowed THEN event.actor_user_id END AS actor_user_id,
+       CASE WHEN visible.allowed THEN event.actor_name END AS actor_name,
+       CASE WHEN visible.allowed THEN event.actor_email END AS actor_email,
+       event.actor_type,
        event.source,event.request_id,event.correlation_id,
        CASE WHEN visible.allowed THEN event.before_state ELSE NULL END AS before_state,
        CASE WHEN visible.allowed THEN event.after_state ELSE NULL END AS after_state,
@@ -5778,6 +5782,10 @@ CREATE INDEX profiles_translations_gin ON profiles USING gin(translations jsonb_
 
 -- Internationalization Phase 5 search and hardening begins.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX event_history_actor_name_trgm_idx ON event_history USING gin(actor_name gin_trgm_ops);
+CREATE INDEX event_history_actor_email_trgm_idx ON event_history USING gin(actor_email gin_trgm_ops);
+CREATE INDEX event_history_actor_identity_idx ON event_history(actor_user_id,md5(actor_name),md5(actor_email),actor_type);
+
 CREATE INDEX classification_schemes_translation_text_trgm_idx ON classification_schemes USING gin ((translations::text) gin_trgm_ops);
 CREATE INDEX classifications_translation_text_trgm_idx ON classifications USING gin ((translations::text) gin_trgm_ops);
 CREATE INDEX users_translation_text_trgm_idx ON users USING gin ((translations::text) gin_trgm_ops);

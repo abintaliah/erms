@@ -12,6 +12,10 @@ if [[ "${ERMS_LOCAL_STACK_LOCK_PID:-}" != "$$" ]]; then
 fi
 unset ERMS_LOCAL_STACK_LOCK_PID
 
+# Reconcile before loading defaults, under the launcher lock. Existing values
+# (including deliberately empty values) remain untouched.
+python3 "${PROJECT_DIR}/tools/reconcile_local_env.py"
+
 # Load project-local defaults before resolving the stack configuration. Keep
 # values explicitly exported by the invoking environment authoritative, which
 # matches the override=False behavior used by the API and web UI.

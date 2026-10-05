@@ -1,9 +1,11 @@
+from contextlib import contextmanager
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from psycopg import Connection, DataError, IntegrityError
 from psycopg.errors import RaiseException
+from psycopg.types.json import Jsonb
 
 from ..audit_context import actor_user_id_context
 from ..authorization_policy import require_classifications_admin
@@ -96,6 +98,31 @@ def export_scheme(
                     raise TransferError("file_too_large")
             else:
                 content = encode(package, format)
+        # Generation uses an unchanged repeatable-read snapshot. Audit in a
+        # separate context-configured transaction and commit before responding.
+        scheme = package["data"]["scheme"]
+        metadata = {
+            "export_id": package["manifest"]["export_id"],
+            "format": format,
+            "scheme": {"id": scheme_id, "code": scheme["code"], "title": scheme["title"]},
+        }
+        if format == "docx":
+            metadata["language"] = language
+        with contextmanager(get_connection)() as audit_connection:
+            audit_connection.execute(
+                """INSERT INTO event_history
+                (entity_type,entity_id,operation,actor_user_id,actor_name,actor_email,
+                 actor_type,source,request_id,correlation_id,metadata)
+                VALUES ('classification_scheme',%s,'EXPORT',
+                    NULLIF(current_setting('app.user_id',true),'')::bigint,
+                    NULLIF(current_setting('app.actor_name',true),''),
+                    NULLIF(current_setting('app.actor_email',true),''),
+                    current_setting('app.actor_type',true),
+                    current_setting('app.event_source',true),
+                    NULLIF(current_setting('app.request_id',true),'')::uuid,
+                    NULLIF(current_setting('app.correlation_id',true),'')::uuid,%s)""",
+                (scheme_id, Jsonb(metadata)),
+            )
         media = {
             "json": "application/json",
             "csv": "text/csv",

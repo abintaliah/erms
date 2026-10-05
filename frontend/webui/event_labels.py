@@ -6,6 +6,7 @@ Unknown historical/integration codes remain visible verbatim.
 from .i18n_catalogue import render_message
 
 EVENT_MESSAGE_KEYS = {
+    "EXPORT": "audit.event.export",
     "NOTIFICATION_CONFIGURATION_SAVED": "audit.event.notification_configuration_saved",
     "NOTIFICATION_CONFIGURATION_ACTIVATED": "audit.event.notification_configuration_activated",
     "NOTIFICATION_TEST_SENT": "audit.event.notification_test_sent",

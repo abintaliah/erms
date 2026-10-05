@@ -1290,6 +1290,20 @@
     "is_html": false
   },
   {
+    "message_key": "audit.event.export",
+    "context_group": "audit.event",
+    "default_text": "Export",
+    "semantic_meaning": "An export generated successfully on the server.",
+    "common_locations": [
+      "Audit Trail"
+    ],
+    "translator_guidance": "Use plain wording for the person or process taking the action. Preserve placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Export",
+    "is_html": false
+  },
+  {
     "message_key": "audit.event.governance_role_changed",
     "context_group": "audit.events",
     "default_text": "Governance Role Changed",
@@ -1855,6 +1869,134 @@
     "grammatical_role": "label",
     "parameter_schema": {},
     "rendered_example": "Vital Status Changed",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.filter.actor_identity",
+    "context_group": "audit.filter",
+    "default_text": "Actor name or email",
+    "semantic_meaning": "Filter audit events by their saved actor name or email.",
+    "common_locations": [
+      "Audit Trail"
+    ],
+    "translator_guidance": "Use plain wording for the person or process taking the action. Preserve placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Actor name or email",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.filter.actor_identity_hint",
+    "context_group": "audit.filter",
+    "default_text": "Search part of a name or email",
+    "semantic_meaning": "Case-insensitive literal partial match on event-time actor snapshots.",
+    "common_locations": [
+      "Audit Trail"
+    ],
+    "translator_guidance": "Use plain wording for the person or process taking the action. Preserve placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Search part of a name or email",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.filter.actor_suggestions_hint",
+    "context_group": "audit.filter",
+    "default_text": "Type at least 2 characters to see matching actors.",
+    "semantic_meaning": "Guidance for bounded authorized historical actor suggestions and audit results.",
+    "common_locations": [
+      "Audit Trail"
+    ],
+    "translator_guidance": "Use plain wording for the person or process taking an action. Preserve named placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Type at least 2 characters to see matching actors.",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.filter.actors_failed",
+    "context_group": "audit.filter",
+    "default_text": "Could not load actors. Type again to retry.",
+    "semantic_meaning": "Guidance for bounded authorized historical actor suggestions and audit results.",
+    "common_locations": [
+      "Audit Trail"
+    ],
+    "translator_guidance": "Use plain wording for the person or process taking an action. Preserve named placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Could not load actors. Type again to retry.",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.filter.clear",
+    "context_group": "audit.filter",
+    "default_text": "Clear filters",
+    "semantic_meaning": "Clear audit filters while retaining any navigation preset.",
+    "common_locations": [
+      "Audit Trail"
+    ],
+    "translator_guidance": "Use plain wording for the person or process taking the action. Preserve placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Clear filters",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.filter.no_actors",
+    "context_group": "audit.filter",
+    "default_text": "No matching actors in the accessible history.",
+    "semantic_meaning": "Guidance for bounded authorized historical actor suggestions and audit results.",
+    "common_locations": [
+      "Audit Trail"
+    ],
+    "translator_guidance": "Use plain wording for the person or process taking an action. Preserve named placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "No matching actors in the accessible history.",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.filter.refine_actors",
+    "context_group": "audit.filter",
+    "default_text": "More actors match. Refine the name or email.",
+    "semantic_meaning": "Guidance for bounded authorized historical actor suggestions and audit results.",
+    "common_locations": [
+      "Audit Trail"
+    ],
+    "translator_guidance": "Use plain wording for the person or process taking an action. Preserve named placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "More actors match. Refine the name or email.",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.filter.results_capped",
+    "context_group": "audit.filter",
+    "default_text": "Only the first {limit} matching events are available. Refine the search using the filters.",
+    "semantic_meaning": "Guidance for bounded authorized historical actor suggestions and audit results.",
+    "common_locations": [
+      "Audit Trail"
+    ],
+    "translator_guidance": "Use plain wording for the person or process taking an action. Preserve named placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {
+      "limit": "integer"
+    },
+    "rendered_example": "Only the first 1000 matching events are available. Refine the search using the filters.",
+    "is_html": false
+  },
+  {
+    "message_key": "audit.filter.unnamed_actor",
+    "context_group": "audit.filter",
+    "default_text": "Unnamed actor",
+    "semantic_meaning": "Guidance for bounded authorized historical actor suggestions and audit results.",
+    "common_locations": [
+      "Audit Trail"
+    ],
+    "translator_guidance": "Use plain wording for the person or process taking an action. Preserve named placeholders.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Unnamed actor",
     "is_html": false
   },
   {
