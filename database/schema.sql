@@ -6680,7 +6680,8 @@ CREATE TABLE messaging_gateway_health (
  instance_id uuid PRIMARY KEY, observed_at timestamptz NOT NULL,
  listener_connected boolean NOT NULL, listener_generation bigint NOT NULL,
  notifications_received bigint NOT NULL, last_notification_at timestamptz,
- active_connections integer NOT NULL, slow_disconnects bigint NOT NULL
+ active_connections integer NOT NULL, slow_disconnects bigint NOT NULL,
+ host_addresses inet[], api_port integer CHECK (api_port BETWEEN 1 AND 65535)
 );
 CREATE FUNCTION messaging_count_delivery() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN

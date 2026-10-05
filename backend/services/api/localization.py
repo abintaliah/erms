@@ -421,11 +421,21 @@ def synchronize_generated_arabic_drafts() -> dict[str, int]:
                 continue
             export_provenance = item.get("provenance") if isinstance(item.get("provenance"), dict) else None
             seed_origin = "imported" if export_provenance else "generated"
+            # A canonical admin export may later gain newly generated entries.
+            # Preserve imported provenance while recording the generating batch
+            # of each new entry, rather than attributing it to the old export.
+            item_metadata = dict(common_metadata)
+            generation_metadata = item.get("generation_metadata")
+            if not export_provenance and isinstance(generation_metadata, dict):
+                item_metadata.update({
+                    key: generation_metadata[key]
+                    for key in common_metadata if key in generation_metadata
+                })
             candidates.append((
                 item["message_key"], normalized,
                 seed_origin,
                 Jsonb({
-                    **common_metadata,
+                    **item_metadata,
                     "quality_flags": item.get("quality_flags", []),
                     **({"export_provenance": export_provenance} if export_provenance else {}),
                 }),

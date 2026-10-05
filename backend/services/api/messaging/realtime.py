@@ -121,6 +121,7 @@ class Gateway:
         self.connection = None
         self.task = None
         self.ready = False
+        self.health_changed = asyncio.Event()
         self.generation = 0
         self.stopping = False
         self.notifications_received = 0
@@ -219,6 +220,7 @@ class Gateway:
                     await connection.execute("LISTEN " + CHANNEL)
                     self.ready = True
                     self.generation += 1
+                    self.health_changed.set()
                     backoff = 1
                     for group in tuple(self.clients.values()):
                         for client in tuple(group):
@@ -233,8 +235,11 @@ class Gateway:
                         "Messaging listener disconnected; durable Inbox remains available"
                     )
             finally:
+                was_ready = self.ready
                 self.ready = False
                 self.connection = None
+                if was_ready:
+                    self.health_changed.set()
             if self.stopping:
                 return
             await asyncio.sleep(backoff)

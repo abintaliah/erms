@@ -2938,6 +2938,152 @@ Logs shall include request/correlation IDs, envelope ID, delivery ID, and safe
 status metadata. They shall not include rich-text bodies or protected linked
 resource data.
 
+**Monitor presentation — approved "At a glance" design**
+
+The Monitor shall lead with summary cards for indicators requiring attention,
+connected gateways versus all non-retired reports, and messages approaching
+expiry. Attention counts shall combine unhealthy gateway reports and existing
+operational alerts and explain that breakdown; they shall not imply a count of
+distinct incidents. Gateway summary counts and the connected/unhealthy health
+ring shall use complete overview totals rather than only the loaded gateway
+page. A zero-instance state shall show an empty state, not a healthy percentage.
+
+A responsive two-column layout shall place identified gateway reports and
+operational counters beside gateway health, retention breakdowns, and producer
+activity. Gateway rows shall emphasize endpoint, listener/report status, last
+report, active connections and notifications received. Overdue counters shall
+be explicitly identified as last-reported values. Instance IDs and secondary
+diagnostics shall remain available in expandable sections. Existing operational
+alerts and unresolved producer failures shall retain visible warning emphasis.
+
+Retention bars shall compare active and restorable mailbox entries. Producer
+bars shall compare cumulative notifications emitted among loaded producers,
+with that scope stated; no historical trend, new threshold, or new metric shall
+be inferred. All existing retention, operational, and producer diagnostics shall
+remain available through progressive disclosure.
+Each operational counter shall include a muted, plain-language explanatory
+subtitle below its label/value, including counters in expanded operational and
+producer diagnostics. Subtitles shall be localizable and explain the existing
+measurement, including averaging, units, repeat counting, and test-message
+inclusion or exclusion where relevant.
+
+Explicit bounded paging,
+Refresh, authorization, content privacy, and the messaging-filtered authorized
+audit shortcut shall be preserved. Refresh shall retain the prior usable
+snapshot during loading or a read failure. English/LTR and Arabic/RTL shall
+present the same information and interactions.
+
+#### 11.3.1 Gateway health lifecycle and identification
+
+Gateway health monitoring shall distinguish current gateway instances from
+records retained after an earlier process run. Historical records shall not
+cause an operational alert indefinitely.
+
+**Registration, shutdown, and retirement**
+
+Each gateway process shall register its own health record and refresh its
+heartbeat while running.
+
+On graceful shutdown, the process shall remove its own health record.
+
+The same lifecycle rules shall apply whether one or multiple gateways are
+deployed. No `MESSAGING_GATEWAY_MODE` environment variable or mode-dependent
+cleanup shall be introduced. Starting a gateway shall not by itself authorize
+deleting another gateway's health record.
+
+A gateway health record shall be retired when 24 hours or more have elapsed
+since its last recorded heartbeat. Retirement shall exclude the record from
+current health counts and alerts and remove the expired health record. This
+policy shall apply equally to records left by crashes, forced termination, or
+any other interruption of health reporting. No process-termination confirmation
+or integration with a process manager or orchestrator shall be required.
+
+Retirement shall preserve records whose latest heartbeat is less than 24 hours
+old, including heartbeats refreshed concurrently with cleanup. If a gateway
+resumes reporting after its record has been retired, its heartbeat shall
+automatically recreate its own health record. The 24-hour retirement threshold
+shall be fixed; no additional retirement configuration shall be introduced.
+
+**Gateway identification**
+
+Each gateway runs inside and is owned by an API worker process. It shares that
+process's network interfaces and API listening port. Each gateway shall report
+its `instance_id`, the owning API process's concrete IP address information, and
+API listening port alongside its health heartbeat. This information shall
+identify the owning API process, rather than the PostgreSQL endpoint or a
+connected client, and shall be available only through the privilege-gated
+Monitor.
+
+Gateway IP identification shall be obtained at runtime. A concrete IP bind
+address shall be used directly. For a wildcard bind such as `0.0.0.0` or `::`,
+the owning API process shall obtain its instance IP information from runtime
+deployment metadata or network-interface discovery. Wildcard bind addresses
+shall not be presented as gateway host identities. Where runtime discovery
+cannot establish one authoritative IP address, the Monitor shall expose the
+available concrete addresses and the ambiguity rather than select an arbitrary
+address. No `MESSAGING_GATEWAY_ADVERTISED_IP` environment variable or manually
+configured static advertised IP shall be required or introduced. The listening
+port shall come from the owning API process's `API_PORT` configuration; no
+separate gateway port configuration shall be introduced.
+
+Each gateway health alert and gateway-list entry shall display the host IP
+address information, API listening port, instance ID, and last health-report
+time. The instance ID shall distinguish API workers that share the same IP
+address and listening port, as well as processes that reuse the same address
+and port across restarts. No user-identifying information shall be included.
+
+**Health and alerts**
+
+A gateway health report shall be considered fresh for 45 seconds after its
+recorded observation time.
+
+The Monitor shall distinguish these conditions:
+
+- A fresh report with `listener_connected = false`: **Listener disconnected**.
+- A report older than 45 seconds but less than 24 hours old:
+  **Gateway health report overdue**.
+- A report 24 hours old or older: retired and excluded from current health
+  counts and alerts.
+
+A fresh report with `listener_connected = true` shall identify a healthy active
+listener.
+
+A healthy gateway shall not suppress an alert for another gateway that remains
+in service. Retired or removed gateway records shall not contribute to current
+health counts or alerts.
+
+**Acceptance criteria**
+
+- **AC-MSG-GH-001:** A graceful shutdown removes only the shutting-down gateway's
+  health record.
+- **AC-MSG-GH-002:** After a crash or forced termination, the prior gateway's
+  record produces an overdue-report alert while its heartbeat is older than
+  45 seconds but less than 24 hours old. At 24 hours it is retired and no longer
+  contributes to health counts or alerts, without termination confirmation.
+- **AC-MSG-GH-003:** A fresh disconnected report produces "Listener disconnected";
+  a report older than 45 seconds but less than 24 hours old produces "Gateway
+  health report overdue". A subsequent fresh connected report clears the
+  corresponding health alert.
+- **AC-MSG-GH-004:** Startup does not delete another instance's record merely
+  because a new gateway starts. One healthy instance does not conceal another
+  instance's disconnected or overdue status before its 24-hour retirement
+  threshold. These rules apply without a gateway-mode setting.
+- **AC-MSG-GH-005:** Retirement removes only records whose latest heartbeat is
+  at least 24 hours old, preserving fresher records and concurrent heartbeat
+  updates. A gateway resuming reporting after retirement automatically recreates
+  its own record. Verification covers the exact 45-second freshness and 24-hour
+  retirement boundaries.
+- **AC-MSG-GH-006:** Both alert texts follow the existing translation requirements
+  and render correctly in English and Arabic.
+- **AC-MSG-GH-007:** Each gateway alert identifies its runtime host IP address
+  information, API listening port, instance ID, and last report time, matching
+  the corresponding gateway-list entry. Concrete IP binds are reported directly; wildcard binds
+  use runtime deployment metadata or network-interface discovery, exposing
+  ambiguity when no single authoritative IP is available. Wildcard addresses
+  are not displayed as gateway host identities. No advertised-IP or separate
+  gateway-port environment variable is introduced. Workers sharing an endpoint
+  remain distinguishable by instance ID.
+
 ### 11.4 Retention and user deletion
 
 Sent-message expiry, per-user mailbox deletion, deleted-message restoration,

@@ -142,6 +142,64 @@ async def test_monitor_abandonment_and_bounded_requests(user: User):
     await user.should_not_see(render_message_plain("messaging.monitor.privacy"))
 
 
+@pytest.mark.parametrize("tag", ["en", "ar"])
+async def test_gateway_monitor_identity_warnings_and_refresh(user: User, tag):
+    calls = []
+    expected = (
+        {r["message_key"]: r["translated_text"] for r in json.loads(
+            (Path(__file__).parents[2] / "i18n/messages.ar.generated.json").read_text()
+        )["items"]}
+        if tag == "ar" else {}
+    )
+
+    def text(key):
+        return expected.get(key) or render_message_plain(key)
+    rows = [
+        dict(instance_id="gateway-a", host_addresses=["127.0.0.1"], api_port=8001,
+             observed_at="2026-10-05T11:00:00+04:00", listener_connected=True,
+             health_status="connected", active_connections=1, notifications_received=0,
+             listener_generation=1, slow_disconnects=0, last_notification_at=None),
+        dict(instance_id="gateway-b", host_addresses=["10.0.0.2", "::1"], api_port=8002,
+             observed_at="2026-10-05T10:00:00+04:00", listener_connected=True,
+             health_status="overdue", active_connections=0, notifications_received=0,
+             listener_generation=1, slow_disconnects=0, last_notification_at=None),
+        dict(instance_id="legacy", host_addresses=[], api_port=None,
+             observed_at="2026-10-05T10:00:00+04:00", listener_connected=False,
+             health_status="disconnected", active_connections=0, notifications_received=0,
+             listener_generation=1, slow_disconnects=0, last_notification_at=None),
+    ]
+
+    class Api:
+        async def request(self, method, path, **kwargs):
+            calls.append((path, kwargs))
+            if path.endswith("/gateways"):
+                return {"items": [dict(r) for r in rows], "next_cursor": None}
+            if path.endswith("/producers"):
+                return {"items": [], "next_cursor": None}
+            return {"alerts": [], "metrics": [], "retention": {}, "can_view_audit": False}
+
+    @ui.page("/gateway-health-test")
+    async def page():
+        language(tag)
+        await messaging_monitor(api=Api(), container=ui.column(), active=lambda: True, format_timestamp=str)
+
+    await user.open("/gateway-health-test")
+    await user.should_see("127.0.0.1:8001")
+    await user.should_see("[::1]:8002")
+    await user.should_see("gateway-b")
+    await user.should_see(text("messaging.monitor.overdue"))
+    await user.should_see(text("messaging.monitor.address_ambiguous"))
+    await user.should_see(text("messaging.monitor.endpoint_unavailable"))
+    assert len(calls) == 3 and calls[1][1]["params"] == {"limit": 25}
+    rows[1]["health_status"] = "connected"
+    user.find(text("messaging.action.refresh")).click()
+    await user.should_not_see(text("messaging.monitor.overdue"))
+    assert len(calls) == 6
+    await user.open("/gateway-health-test")
+    await user.should_see("127.0.0.1:8001")
+    assert len(calls) == 9
+
+
 async def test_capture_button_is_busy_until_staging_finishes(user: User):
     entered = asyncio.Event()
     release = asyncio.Event()

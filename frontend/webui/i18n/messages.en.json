@@ -10339,6 +10339,20 @@
     "is_html": false
   },
   {
+    "message_key": "messaging.monitor.address_ambiguous",
+    "context_group": "messaging.monitor",
+    "default_text": "Multiple interface addresses; no single gateway IP identified.",
+    "semantic_meaning": "Runtime discovery found several concrete addresses. None is arbitrarily selected as authoritative.",
+    "common_locations": [
+      "Message Monitor gateway health entries and warnings"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish an overdue heartbeat from a disconnected listener.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Multiple interface addresses; no single gateway IP identified.",
+    "is_html": false
+  },
+  {
     "message_key": "messaging.monitor.alert",
     "context_group": "messaging.monitor",
     "default_text": "An operational issue requires attention. Review listener health and failure counters.",
@@ -10353,6 +10367,20 @@
     "is_html": false
   },
   {
+    "message_key": "messaging.monitor.all_counters",
+    "context_group": "messaging.monitor",
+    "default_text": "All operational counters",
+    "semantic_meaning": "Expandable complete list of existing content-free operational metrics.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "All operational counters",
+    "is_html": false
+  },
+  {
     "message_key": "messaging.monitor.approaching_expiry",
     "context_group": "messaging.monitor",
     "default_text": "Messages approaching expiry",
@@ -10364,6 +10392,37 @@
     "grammatical_role": "label or message",
     "parameter_schema": {},
     "rendered_example": "Messages approaching expiry",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.attention_breakdown",
+    "context_group": "messaging.monitor",
+    "default_text": "{gateways} gateway indicators · {operations} operational alerts",
+    "semantic_meaning": "Breakdown of indicators requiring attention; counts are indicators rather than distinct incidents.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {
+      "gateways": "integer",
+      "operations": "integer"
+    },
+    "rendered_example": "1 gateway indicators · 1 operational alerts",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.attention_guidance",
+    "context_group": "messaging.monitor",
+    "default_text": "Review the highlighted gateway reports and operational alerts.",
+    "semantic_meaning": "Guidance shown when any existing gateway or operational indicator requires attention.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Review the highlighted gateway reports and operational alerts.",
     "is_html": false
   },
   {
@@ -10465,6 +10524,51 @@
     "is_html": false
   },
   {
+    "message_key": "messaging.monitor.connected_gateways",
+    "context_group": "messaging.monitor",
+    "default_text": "Connected gateways",
+    "semantic_meaning": "Count of gateways with fresh connected reports across all non-retired instances.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Connected gateways",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.connected_total",
+    "context_group": "messaging.monitor",
+    "default_text": "{connected} / {total}",
+    "semantic_meaning": "Connected gateway count divided by the total number of non-retired gateway reports; not a percentage.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {
+      "connected": "integer",
+      "total": "integer"
+    },
+    "rendered_example": "2 / 3",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.cumulative",
+    "context_group": "messaging.monitor",
+    "default_text": "Cumulative counters · durations are averages",
+    "semantic_meaning": "Counter values are cumulative; duration metrics are means across their observations, not trends.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Cumulative counters · durations are averages",
+    "is_html": false
+  },
+  {
     "message_key": "messaging.monitor.delayed_groups",
     "context_group": "messaging.monitor",
     "default_text": "Large retained group observations",
@@ -10476,6 +10580,342 @@
     "grammatical_role": "label or message",
     "parameter_schema": {},
     "rendered_example": "Large retained group observations",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.capture_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Failed attempts to save messages as records.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the capture_failure operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Failed attempts to save messages as records.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.capture_seconds",
+    "context_group": "messaging.monitor",
+    "default_text": "Average time taken to process a request to save a message as a record, in seconds.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the capture_seconds operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Average time taken to process a request to save a message as a record, in seconds.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.catchup_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Failed requests to catch up on messages after reconnecting.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the catchup_failure operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Failed requests to catch up on messages after reconnecting.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.cleanup_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Cleanup attempts that ended with an error.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the cleanup_failure operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Cleanup attempts that ended with an error.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.cleanup_seconds",
+    "context_group": "messaging.monitor",
+    "default_text": "Average time taken to clean up a message group, in seconds.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the cleanup_seconds operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Average time taken to clean up a message group, in seconds.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.delayed_groups",
+    "context_group": "messaging.monitor",
+    "default_text": "Cleanup attempts deferred because a message group exceeded the batch size.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the delayed_groups operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Cleanup attempts deferred because a message group exceeded the batch size.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.fanout_count",
+    "context_group": "messaging.monitor",
+    "default_text": "Recipient deliveries created, excluding test messages.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the fanout_count operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Recipient deliveries created, excluding test messages.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.group_size",
+    "context_group": "messaging.monitor",
+    "default_text": "Total group members examined across cleanup attempts; the same member may be counted again.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the group_size operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Total group members examined across cleanup attempts; the same member may be counted again.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.notifications_emitted",
+    "context_group": "messaging.monitor",
+    "default_text": "Recipient deliveries saved successfully, including test messages.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the notifications_emitted operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Recipient deliveries saved successfully, including test messages.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.purged_drafts",
+    "context_group": "messaging.monitor",
+    "default_text": "Expired message drafts permanently removed by cleanup.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the purged_drafts operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Expired message drafts permanently removed by cleanup.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.purged_groups",
+    "context_group": "messaging.monitor",
+    "default_text": "Message groups permanently removed by cleanup.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the purged_groups operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Message groups permanently removed by cleanup.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.purged_messages",
+    "context_group": "messaging.monitor",
+    "default_text": "Messages permanently removed by cleanup.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the purged_messages operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Messages permanently removed by cleanup.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.restricted_count",
+    "context_group": "messaging.monitor",
+    "default_text": "Times message content was hidden because the viewer lacked access.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the restricted_count operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Times message content was hidden because the viewer lacked access.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.send_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Send requests that returned an error.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the send_failure operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Send requests that returned an error.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.send_success",
+    "context_group": "messaging.monitor",
+    "default_text": "Send requests that completed without an error.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the send_success operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Send requests that completed without an error.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.system_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Failed attempts to produce a system notification.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the system_failure operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Failed attempts to produce a system notification.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.system_seconds",
+    "context_group": "messaging.monitor",
+    "default_text": "Average time taken to produce a system notification, in seconds.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the system_seconds operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Average time taken to produce a system notification, in seconds.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.test_failure",
+    "context_group": "messaging.monitor",
+    "default_text": "Notification test requests that returned an error, including rate-limit rejections.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the test_failure operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Notification test requests that returned an error, including rate-limit rejections.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.test_rate_rejected",
+    "context_group": "messaging.monitor",
+    "default_text": "Notification test requests rejected because too many were sent too quickly.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the test_rate_rejected operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Notification test requests rejected because too many were sent too quickly.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.test_seconds",
+    "context_group": "messaging.monitor",
+    "default_text": "Average time taken to process a notification test request, in seconds.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the test_seconds operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Average time taken to process a notification test request, in seconds.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.description.test_success",
+    "context_group": "messaging.monitor",
+    "default_text": "Notification test requests that completed without an error.",
+    "semantic_meaning": "Plain-language explanatory subtitle for the test_success operational metric; follows its existing instrumentation and units.",
+    "common_locations": [
+      "Messages Monitor operational summary",
+      "Expanded operational counters",
+      "Notification producer diagnostics"
+    ],
+    "translator_guidance": "Use everyday language. Preserve the distinction between attempts, recipient deliveries and unique messages; duration values are averages in seconds, and cumulative counts are not incident counts.",
+    "grammatical_role": "guidance",
+    "parameter_schema": {},
+    "rendered_example": "Notification test requests that completed without an error.",
     "is_html": false
   },
   {
@@ -10507,6 +10947,20 @@
     "is_html": false
   },
   {
+    "message_key": "messaging.monitor.endpoint_unavailable",
+    "context_group": "messaging.monitor",
+    "default_text": "Gateway endpoint unavailable",
+    "semantic_meaning": "Endpoint discovery failed or a pre-upgrade health record has no endpoint metadata.",
+    "common_locations": [
+      "Message Monitor gateway health entries and warnings"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish an overdue heartbeat from a disconnected listener.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Gateway endpoint unavailable",
+    "is_html": false
+  },
+  {
     "message_key": "messaging.monitor.expired_retained",
     "context_group": "messaging.monitor",
     "default_text": "Expired messages still retained",
@@ -10535,6 +10989,20 @@
     "is_html": false
   },
   {
+    "message_key": "messaging.monitor.expiry_window",
+    "context_group": "messaging.monitor",
+    "default_text": "Within the configured warning window",
+    "semantic_meaning": "Approaching-expiry count uses the configured retention warning window, not a new threshold.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Within the configured warning window",
+    "is_html": false
+  },
+  {
     "message_key": "messaging.monitor.fanout_count",
     "context_group": "messaging.monitor",
     "default_text": "Recipient deliveries created",
@@ -10546,6 +11014,50 @@
     "grammatical_role": "label or message",
     "parameter_schema": {},
     "rendered_example": "Recipient deliveries created",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.freshness",
+    "context_group": "messaging.monitor",
+    "default_text": "Fresh health report: within 45 seconds",
+    "semantic_meaning": "Existing threshold for freshness of a gateway health report.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Fresh health report: within 45 seconds",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.gateway_endpoint",
+    "context_group": "messaging.monitor",
+    "default_text": "Gateway: {endpoints}",
+    "semantic_meaning": "Gateway endpoint identity; preserve address and port placeholders.",
+    "common_locations": [
+      "Message Monitor gateway health entries and warnings"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish an overdue heartbeat from a disconnected listener.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {
+      "endpoints": "text"
+    },
+    "rendered_example": "Gateway: {endpoints}",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.gateway_health",
+    "context_group": "messaging.monitor",
+    "default_text": "Gateway health",
+    "semantic_meaning": "Visual connected versus unhealthy gateway report breakdown using complete overview totals.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Gateway health",
     "is_html": false
   },
   {
@@ -10605,6 +11117,50 @@
     "is_html": false
   },
   {
+    "message_key": "messaging.monitor.inbox_entries",
+    "context_group": "messaging.monitor",
+    "default_text": "Inbox entries",
+    "semantic_meaning": "Combined active and restorable inbox delivery entries, not unique messages.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Inbox entries",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.instance_diagnostics",
+    "context_group": "messaging.monitor",
+    "default_text": "Instance diagnostics",
+    "semantic_meaning": "Expandable gateway instance ID, listener generation, slow disconnects and last notification.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Instance diagnostics",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.instance_id",
+    "context_group": "messaging.monitor",
+    "default_text": "Instance: {instance_id}",
+    "semantic_meaning": "Process identity distinguishes workers sharing an endpoint and successive runs.",
+    "common_locations": [
+      "Message Monitor gateway health entries and warnings"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish an overdue heartbeat from a disconnected listener.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {
+      "instance_id": "text"
+    },
+    "rendered_example": "Instance: {instance_id}",
+    "is_html": false
+  },
+  {
     "message_key": "messaging.monitor.largest_group",
     "context_group": "messaging.monitor",
     "default_text": "Largest observed group",
@@ -10633,6 +11189,36 @@
     "is_html": false
   },
   {
+    "message_key": "messaging.monitor.last_report",
+    "context_group": "messaging.monitor",
+    "default_text": "Last health report: {timestamp}",
+    "semantic_meaning": "Last recorded health heartbeat, distinct from last notification time.",
+    "common_locations": [
+      "Message Monitor gateway health entries and warnings"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish an overdue heartbeat from a disconnected listener.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {
+      "timestamp": "text"
+    },
+    "rendered_example": "Last health report: {timestamp}",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.last_reported_values",
+    "context_group": "messaging.monitor",
+    "default_text": "Values below are from the last report; current activity is unknown.",
+    "semantic_meaning": "Stale gateway counters are historical observations, not assertions about current activity.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Values below are from the last report; current activity is unknown.",
+    "is_html": false
+  },
+  {
     "message_key": "messaging.monitor.listener_generation",
     "context_group": "messaging.monitor",
     "default_text": "Listener connections including reconnects",
@@ -10658,6 +11244,20 @@
     "grammatical_role": "label or message",
     "parameter_schema": {},
     "rendered_example": "Operational measurements",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.more_retention",
+    "context_group": "messaging.monitor",
+    "default_text": "All retention details",
+    "semantic_meaning": "Expandable complete existing retention and cleanup metrics.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "All retention details",
     "is_html": false
   },
   {
@@ -10717,6 +11317,34 @@
     "is_html": false
   },
   {
+    "message_key": "messaging.monitor.outbox_entries",
+    "context_group": "messaging.monitor",
+    "default_text": "Outbox entries",
+    "semantic_meaning": "Combined active and restorable sender outbox entries.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Outbox entries",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.overdue",
+    "context_group": "messaging.monitor",
+    "default_text": "Gateway health report overdue",
+    "semantic_meaning": "Warning: the heartbeat is older than 45 seconds but less than 24 hours; this does not prove listener disconnection.",
+    "common_locations": [
+      "Message Monitor gateway health entries and warnings"
+    ],
+    "translator_guidance": "Preserve identifiers and placeholders. Distinguish an overdue heartbeat from a disconnected listener.",
+    "grammatical_role": "label or message",
+    "parameter_schema": {},
+    "rendered_example": "Gateway health report overdue",
+    "is_html": false
+  },
+  {
     "message_key": "messaging.monitor.privacy",
     "context_group": "messaging.monitor",
     "default_text": "Operational counts only. This page grants no access to message content or mailboxes.",
@@ -10728,6 +11356,34 @@
     "grammatical_role": "label or message",
     "parameter_schema": {},
     "rendered_example": "Operational counts only. This page grants no access to message content or mailboxes.",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.producer_diagnostics",
+    "context_group": "messaging.monitor",
+    "default_text": "Producer diagnostics",
+    "semantic_meaning": "Expandable complete existing metrics for one notification producer.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Producer diagnostics",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.producer_scope",
+    "context_group": "messaging.monitor",
+    "default_text": "Cumulative notifications · bars compare loaded producers",
+    "semantic_meaning": "Bars show notifications emitted relative to the largest producer among loaded pages, not a rate or time trend.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Cumulative notifications · bars compare loaded producers",
     "is_html": false
   },
   {
@@ -10784,6 +11440,20 @@
     "grammatical_role": "label or message",
     "parameter_schema": {},
     "rendered_example": "Messages permanently purged",
+    "is_html": false
+  },
+  {
+    "message_key": "messaging.monitor.requires_attention",
+    "context_group": "messaging.monitor",
+    "default_text": "Requires attention",
+    "semantic_meaning": "Count of unhealthy gateway reports plus unresolved operational alerts.",
+    "common_locations": [
+      "Messages Monitor"
+    ],
+    "translator_guidance": "Translate this operational context; preserve named placeholders and distinguish report health from current process activity.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Requires attention",
     "is_html": false
   },
   {

@@ -81,6 +81,9 @@ def main():
                     connection.execute((ROOT / "database/migrations/042_messaging_everyone.sql").read_text())
                     connection.execute((ROOT / "database/migrations/043_legal_hold_notification_governors.sql").read_text())
                     connection.execute((ROOT / "database/migrations/044_hold_assignment_recipient_only.sql").read_text())
+                    connection.execute("INSERT INTO messaging_gateway_health VALUES ('00000000-0000-0000-0000-000000000045',CURRENT_TIMESTAMP,false,1,0,NULL,0,0)")
+                    connection.execute((ROOT / "database/migrations/045_messaging_gateway_health_lifecycle.sql").read_text())
+                    assert connection.execute("SELECT host_addresses IS NULL AND api_port IS NULL FROM messaging_gateway_health WHERE instance_id='00000000-0000-0000-0000-000000000045'").fetchone()[0]
                     assert (
                         connection.execute(
                             "SELECT count(*) FROM users WHERE name='Upgrade preservation fixture'"
@@ -143,6 +146,8 @@ def main():
                     api_port, ui_port = str(18001 + instance), str(18081 + instance)
                     preview_env = dict(
                         env,
+                        API_HOST="127.0.0.1",
+                        API_PORT=api_port,
                         WEBUI_API_URL="http://127.0.0.1:" + api_port,
                         WEBUI_PORT=ui_port,
                         WEBUI_HOST="127.0.0.1",
