@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
-  "catalogue_sha256": "6507bdca6d6be85d0858b7a9d1a78f7eceb864806d89a59f92bd37833bff2b5a",
+  "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
   "terminology_sha256": "a4413f17dd3c8d7fa10ceb8ee60ef225f0c3164a308a33bdca0b30e8fdbed51c",
   "batch_id": "admin-export-ar-20261004202049",
   "generated_at": "2026-10-04T20:20:49.389628+04:00",
@@ -8584,6 +8584,23 @@
       }
     },
     {
+      "message_key": "messaging.monitor.address_ambiguous",
+      "translated_text": "توجد عناوين متعددة لواجهات الشبكة؛ لم يُحدَّد عنوان واحد للبوابة.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "gateway-health-lifecycle-v1",
+        "generated_at": "2026-10-05T08:20:55.318527+00:00",
+        "batch_id": "gateway-health-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6531a4e0c3daab369869a06768485a4404c2974bc8bbcf1dbdf78123ce9c6e20",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.monitor.alert",
       "translated_text": "توجد مشكلة تشغيلية تستدعي الانتباه. راجع حالة المستمع وعدادات الإخفاق.",
       "quality_flags": [],
@@ -8596,6 +8613,23 @@
       }
     },
     {
+      "message_key": "messaging.monitor.all_counters",
+      "translated_text": "جميع العدادات التشغيلية",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.monitor.approaching_expiry",
       "translated_text": "رسائل تقترب من انتهاء الاستبقاء",
       "quality_flags": [],
@@ -8605,6 +8639,40 @@
         "source_status": "published",
         "date_reviewed": "2026-10-03T01:52:52.817964+00:00",
         "date_published": "2026-10-03T01:52:52.817964+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.monitor.attention_breakdown",
+      "translated_text": "{gateways} مؤشرات للبوابات · {operations} تنبيهات تشغيلية",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.attention_guidance",
+      "translated_text": "راجع تقارير البوابات والتنبيهات التشغيلية المميزة.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
       }
     },
     {
@@ -8692,6 +8760,57 @@
       }
     },
     {
+      "message_key": "messaging.monitor.connected_gateways",
+      "translated_text": "البوابات المتصلة",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.connected_total",
+      "translated_text": "{connected} / {total}",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.cumulative",
+      "translated_text": "عدادات تراكمية · المدد هي متوسطات",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.monitor.delayed_groups",
       "translated_text": "مرات رصد مجموعات كبيرة مستبقاة",
       "quality_flags": [],
@@ -8701,6 +8820,363 @@
         "source_status": "published",
         "date_reviewed": "2026-10-03T01:52:52.817964+00:00",
         "date_published": "2026-10-03T01:52:52.817964+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.capture_failure",
+      "translated_text": "محاولات أخفقت في حفظ الرسائل بوصفها وثائق.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.capture_seconds",
+      "translated_text": "متوسط وقت معالجة طلب حفظ رسالة بوصفها وثيقة، بالثواني.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.catchup_failure",
+      "translated_text": "طلبات أخفقت في استدراك الرسائل بعد إعادة الاتصال.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.cleanup_failure",
+      "translated_text": "محاولات تنظيف انتهت بخطأ.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.cleanup_seconds",
+      "translated_text": "متوسط وقت تنظيف مجموعة رسائل، بالثواني.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.delayed_groups",
+      "translated_text": "محاولات تنظيف أُجّلت لأن مجموعة رسائل تجاوزت حجم الدفعة.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.fanout_count",
+      "translated_text": "عمليات تسليم أُنشئت للمستلمين، باستثناء رسائل الاختبار.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.group_size",
+      "translated_text": "إجمالي أعضاء المجموعات المفحوصين خلال محاولات التنظيف؛ قد يُحتسب العضو نفسه مجدداً.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.notifications_emitted",
+      "translated_text": "عمليات تسليم حُفظت بنجاح للمستلمين، بما فيها رسائل الاختبار.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.purged_drafts",
+      "translated_text": "مسودات رسائل منتهية أُزيلت نهائياً أثناء التنظيف.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.purged_groups",
+      "translated_text": "مجموعات رسائل أُزيلت نهائياً أثناء التنظيف.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.purged_messages",
+      "translated_text": "رسائل أُزيلت نهائياً أثناء التنظيف.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.restricted_count",
+      "translated_text": "مرات إخفاء محتوى الرسائل لعدم امتلاك المستخدم صلاحية الاطلاع.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.send_failure",
+      "translated_text": "طلبات إرسال نتج عنها خطأ.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.send_success",
+      "translated_text": "طلبات إرسال اكتملت دون خطأ.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.system_failure",
+      "translated_text": "محاولات أخفقت في إنشاء إشعار نظام.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.system_seconds",
+      "translated_text": "متوسط وقت إنشاء إشعار نظام، بالثواني.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.test_failure",
+      "translated_text": "طلبات اختبار إشعارات نتج عنها خطأ، بما فيها الطلبات المرفوضة بسبب حد المعدل.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.test_rate_rejected",
+      "translated_text": "طلبات اختبار إشعارات رُفضت لإرسال عدد كبير منها خلال وقت قصير.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.test_seconds",
+      "translated_text": "متوسط وقت معالجة طلب اختبار إشعار، بالثواني.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.description.test_success",
+      "translated_text": "طلبات اختبار إشعارات اكتملت دون خطأ.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-counter-subtitles-v1",
+        "generated_at": "2026-10-05T10:25:16.287556+00:00",
+        "batch_id": "monitor-counter-subtitles-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
       }
     },
     {
@@ -8728,6 +9204,23 @@
       }
     },
     {
+      "message_key": "messaging.monitor.endpoint_unavailable",
+      "translated_text": "عنوان البوابة ومنفذها غير متاحين",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "gateway-health-lifecycle-v1",
+        "generated_at": "2026-10-05T08:20:55.318527+00:00",
+        "batch_id": "gateway-health-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6531a4e0c3daab369869a06768485a4404c2974bc8bbcf1dbdf78123ce9c6e20",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.monitor.expired_retained",
       "translated_text": "رسائل منتهية ما زالت محفوظة",
       "quality_flags": [],
@@ -8752,6 +9245,23 @@
       }
     },
     {
+      "message_key": "messaging.monitor.expiry_window",
+      "translated_text": "ضمن فترة التحذير المحددة",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.monitor.fanout_count",
       "translated_text": "نسخ التسليم المنشأة",
       "quality_flags": [],
@@ -8761,6 +9271,57 @@
         "source_status": "published",
         "date_reviewed": "2026-10-03T01:52:52.817964+00:00",
         "date_published": "2026-10-03T01:52:52.817964+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.monitor.freshness",
+      "translated_text": "تقرير حالة حديث: خلال 45 ثانية",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.gateway_endpoint",
+      "translated_text": "البوابة: {endpoints}",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "gateway-health-lifecycle-v1",
+        "generated_at": "2026-10-05T08:20:55.318527+00:00",
+        "batch_id": "gateway-health-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6531a4e0c3daab369869a06768485a4404c2974bc8bbcf1dbdf78123ce9c6e20",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.gateway_health",
+      "translated_text": "حالة البوابات",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
       }
     },
     {
@@ -8812,6 +9373,57 @@
       }
     },
     {
+      "message_key": "messaging.monitor.inbox_entries",
+      "translated_text": "عناصر الوارد",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.instance_diagnostics",
+      "translated_text": "تفاصيل تشخيص المثيل",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.instance_id",
+      "translated_text": "المثيل: {instance_id}",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "gateway-health-lifecycle-v1",
+        "generated_at": "2026-10-05T08:20:55.318527+00:00",
+        "batch_id": "gateway-health-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6531a4e0c3daab369869a06768485a4404c2974bc8bbcf1dbdf78123ce9c6e20",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.monitor.largest_group",
       "translated_text": "أكبر مجموعة مرصودة",
       "quality_flags": [],
@@ -8836,6 +9448,40 @@
       }
     },
     {
+      "message_key": "messaging.monitor.last_report",
+      "translated_text": "آخر تقرير للحالة: {timestamp}",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "gateway-health-lifecycle-v1",
+        "generated_at": "2026-10-05T08:20:55.318527+00:00",
+        "batch_id": "gateway-health-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6531a4e0c3daab369869a06768485a4404c2974bc8bbcf1dbdf78123ce9c6e20",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.last_reported_values",
+      "translated_text": "القيم أدناه من آخر تقرير؛ النشاط الحالي غير معروف.",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.monitor.listener_generation",
       "translated_text": "اتصالات المستمع بما فيها إعادة الاتصال",
       "quality_flags": [],
@@ -8857,6 +9503,23 @@
         "source_status": "published",
         "date_reviewed": "2026-10-03T01:52:52.817964+00:00",
         "date_published": "2026-10-03T01:52:52.817964+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.monitor.more_retention",
+      "translated_text": "جميع تفاصيل الاحتفاظ",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
       }
     },
     {
@@ -8908,6 +9571,40 @@
       }
     },
     {
+      "message_key": "messaging.monitor.outbox_entries",
+      "translated_text": "عناصر الصادر",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.overdue",
+      "translated_text": "تأخر تقرير حالة البوابة",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "gateway-health-lifecycle-v1",
+        "generated_at": "2026-10-05T08:20:55.318527+00:00",
+        "batch_id": "gateway-health-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "6531a4e0c3daab369869a06768485a4404c2974bc8bbcf1dbdf78123ce9c6e20",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.monitor.privacy",
       "translated_text": "أعداد تشغيلية فقط. لا تمنح هذه الصفحة صلاحية الاطلاع على محتوى الرسائل أو صناديقها.",
       "quality_flags": [],
@@ -8917,6 +9614,40 @@
         "source_status": "published",
         "date_reviewed": "2026-10-03T01:52:52.817964+00:00",
         "date_published": "2026-10-03T01:52:52.817964+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.monitor.producer_diagnostics",
+      "translated_text": "تفاصيل تشخيص الجهة المُصدِرة",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.monitor.producer_scope",
+      "translated_text": "إشعارات تراكمية · تقارن الأشرطة الجهات المُصدِرة المحمّلة",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
       }
     },
     {
@@ -8965,6 +9696,23 @@
         "source_status": "published",
         "date_reviewed": "2026-10-03T01:52:52.817964+00:00",
         "date_published": "2026-10-03T01:52:52.817964+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.monitor.requires_attention",
+      "translated_text": "يتطلب الانتباه",
+      "quality_flags": [],
+      "generation_metadata": {
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "6",
+        "prompt_version": "messages-monitor-at-a-glance-v1",
+        "generated_at": "2026-10-05T10:04:58.047342+00:00",
+        "batch_id": "monitor-overview-ar-20261005",
+        "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+        "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+        "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+        "review_required": true
       }
     },
     {
@@ -34886,6 +35634,100 @@
         "date_reviewed": "2026-09-26T16:20:14.562571+00:00",
         "date_published": "2026-09-26T16:20:14.562571+00:00"
       }
+    }
+  ],
+  "development_merge": {
+    "feature": "gateway-health-lifecycle",
+    "date": "2026-10-05",
+    "added_keys": [
+      "messaging.monitor.address_ambiguous",
+      "messaging.monitor.endpoint_unavailable",
+      "messaging.monitor.gateway_endpoint",
+      "messaging.monitor.instance_id",
+      "messaging.monitor.last_report",
+      "messaging.monitor.overdue"
+    ],
+    "administrator_export_promoted": false,
+    "generator": "OpenAI Codex",
+    "model": "GPT-6",
+    "model_version": "6",
+    "prompt_version": "gateway-health-lifecycle-v1",
+    "generated_at": "2026-10-05T08:20:55.318527+00:00",
+    "batch_id": "gateway-health-ar-20261005",
+    "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+    "catalogue_sha256": "6531a4e0c3daab369869a06768485a4404c2974bc8bbcf1dbdf78123ce9c6e20",
+    "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6"
+  },
+  "development_merges": [
+    {
+      "feature": "messages-monitor-at-a-glance",
+      "added_keys": [
+        "messaging.monitor.all_counters",
+        "messaging.monitor.attention_breakdown",
+        "messaging.monitor.attention_guidance",
+        "messaging.monitor.connected_gateways",
+        "messaging.monitor.connected_total",
+        "messaging.monitor.cumulative",
+        "messaging.monitor.expiry_window",
+        "messaging.monitor.freshness",
+        "messaging.monitor.gateway_health",
+        "messaging.monitor.inbox_entries",
+        "messaging.monitor.instance_diagnostics",
+        "messaging.monitor.last_reported_values",
+        "messaging.monitor.more_retention",
+        "messaging.monitor.outbox_entries",
+        "messaging.monitor.producer_diagnostics",
+        "messaging.monitor.producer_scope",
+        "messaging.monitor.requires_attention"
+      ],
+      "administrator_export_promoted": false,
+      "generator": "OpenAI Codex",
+      "model": "GPT-6",
+      "model_version": "6",
+      "prompt_version": "messages-monitor-at-a-glance-v1",
+      "generated_at": "2026-10-05T10:04:58.047342+00:00",
+      "batch_id": "monitor-overview-ar-20261005",
+      "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+      "catalogue_sha256": "fdc6106edd6f37059d2b3744060bc8181610c658b618f204ce3bced1e68e1ba8",
+      "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+      "review_required": true
+    },
+    {
+      "feature": "messages-monitor-counter-subtitles",
+      "added_keys": [
+        "messaging.monitor.description.capture_failure",
+        "messaging.monitor.description.capture_seconds",
+        "messaging.monitor.description.catchup_failure",
+        "messaging.monitor.description.cleanup_failure",
+        "messaging.monitor.description.cleanup_seconds",
+        "messaging.monitor.description.delayed_groups",
+        "messaging.monitor.description.fanout_count",
+        "messaging.monitor.description.group_size",
+        "messaging.monitor.description.notifications_emitted",
+        "messaging.monitor.description.purged_drafts",
+        "messaging.monitor.description.purged_groups",
+        "messaging.monitor.description.purged_messages",
+        "messaging.monitor.description.restricted_count",
+        "messaging.monitor.description.send_failure",
+        "messaging.monitor.description.send_success",
+        "messaging.monitor.description.system_failure",
+        "messaging.monitor.description.system_seconds",
+        "messaging.monitor.description.test_failure",
+        "messaging.monitor.description.test_rate_rejected",
+        "messaging.monitor.description.test_seconds",
+        "messaging.monitor.description.test_success"
+      ],
+      "administrator_export_promoted": false,
+      "generator": "OpenAI Codex",
+      "model": "GPT-6",
+      "model_version": "6",
+      "prompt_version": "messages-monitor-counter-subtitles-v1",
+      "generated_at": "2026-10-05T10:25:16.287556+00:00",
+      "batch_id": "monitor-counter-subtitles-ar-20261005",
+      "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
+      "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+      "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
+      "review_required": true
     }
   ]
 }

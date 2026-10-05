@@ -13185,7 +13185,7 @@ def index(q: str = "") -> None:
         else:
             await load_dashboard()
 
-    async def select_audit_trail() -> None:
+    async def select_audit_trail(*, initial_entity_type: str | None = None) -> None:
         register_navigation("audit-trail", "Audit trail")
         show_authenticated_view()
         state.update(resource="audit-trail", rows=[], searched=True, aggregation_detail=None)
@@ -13203,7 +13203,10 @@ def index(q: str = "") -> None:
                     ui.label(render_message("webui.select_audit_trail.label.filter_events_5327c240")).classes("font-semibold")
                     with ui.grid(columns=4).classes("w-full gap-3"):
                         type_filter = ui.select(
-                            {}, label=render_message("webui.select_audit_trail.select.entity_type_3b68096e"), clearable=True,
+                            {initial_entity_type: audit_entity_type_label(initial_entity_type)}
+                            if initial_entity_type else {},
+                            value=initial_entity_type,
+                            label=render_message("webui.select_audit_trail.select.entity_type_3b68096e"), clearable=True,
                         ).props("outlined dense use-input options-dense").classes("w-full")
                         operation_filter = ui.select(
                             [],
@@ -13237,6 +13240,11 @@ def index(q: str = "") -> None:
                 value: audit_entity_type_label(value)
                 for value in filter_options["entity_types"]
             }
+            # Keep the shortcut's scope even before any matching event exists.
+            if initial_entity_type:
+                type_filter.options.setdefault(
+                    initial_entity_type, audit_entity_type_label(initial_entity_type)
+                )
             operation_filter.options = {code: event_label(code) for code in filter_options["operations"]}
             source_filter.options = filter_options["sources"]
             actor_filter.options = filter_options["actor_types"]
@@ -18944,7 +18952,9 @@ def index(q: str = "") -> None:
         if mailbox == "monitor":
             await messaging_monitor(api=api,container=table_container,
                 active=lambda:auth_state.get("principal") is principal and state.get("messaging_workspace_token") is token and state.get("resource")==key,
-                format_timestamp=format_timestamp,open_audit=lambda:select_entity("audit-trail"))
+                format_timestamp=format_timestamp,
+                open_audit=lambda:guarded_page_navigation(
+                    lambda:select_audit_trail(initial_entity_type="system_notification")))
             return
         if mailbox == "notifications":
             await notification_administration(

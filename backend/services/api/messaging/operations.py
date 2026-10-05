@@ -15,6 +15,7 @@ from psycopg.errors import (
 from ..database import pool
 from .config import LIMITS
 from .retention import purge_group, cleanup_drafts
+from .gateway_health import endpoint_identity, retire_expired
 
 logger = logging.getLogger(__name__)
 METRICS = frozenset(
@@ -176,19 +177,24 @@ class Worker:
         self.instance_id = uuid4()
         self.task = None
         self.stopping = threading.Event()
-        self.wake = asyncio.Event()
+        self.wake = gateway.health_changed
 
     def start(self):
         self.task = asyncio.create_task(self.loop(), name="messaging-lifecycle")
 
     def snapshot(self):
         data = self.gateway.operational_health()
+        addresses, port = endpoint_identity()
         with pool.connection() as c:
             c.execute(
-                """INSERT INTO messaging_gateway_health VALUES(%s,CURRENT_TIMESTAMP,%s,%s,%s,%s,%s,%s)
+                """INSERT INTO messaging_gateway_health
+ (instance_id,observed_at,listener_connected,listener_generation,notifications_received,
+ last_notification_at,active_connections,slow_disconnects,host_addresses,api_port)
+ VALUES(%s,CURRENT_TIMESTAMP,%s,%s,%s,%s,%s,%s,%s::inet[],%s)
  ON CONFLICT(instance_id) DO UPDATE SET observed_at=EXCLUDED.observed_at,listener_connected=EXCLUDED.listener_connected,
  listener_generation=EXCLUDED.listener_generation,notifications_received=EXCLUDED.notifications_received,last_notification_at=EXCLUDED.last_notification_at,
- active_connections=EXCLUDED.active_connections,slow_disconnects=EXCLUDED.slow_disconnects""",
+ active_connections=EXCLUDED.active_connections,slow_disconnects=EXCLUDED.slow_disconnects,
+ host_addresses=EXCLUDED.host_addresses,api_port=EXCLUDED.api_port""",
                 (
                     self.instance_id,
                     data["listener_connected"],
@@ -197,14 +203,20 @@ class Worker:
                     data["last_notification_at"],
                     data["active_connections"],
                     data["slow_disconnects"],
+                    addresses,
+                    port,
                 ),
             )
+            retire_expired(c)
 
     async def loop(self):
         next_cleanup = monotonic() + LIMITS["CLEANUP_INTERVAL_SECONDS"]
         after = None
         next_hold_reminder = monotonic()
         while not self.stopping.is_set():
+            # Consume the notification before reading health: a transition
+            # during the snapshot remains pending and triggers another report.
+            self.wake.clear()
             try:
                 await asyncio.to_thread(self.snapshot)
                 if monotonic() >= next_hold_reminder:
