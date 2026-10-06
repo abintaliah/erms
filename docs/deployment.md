@@ -281,6 +281,27 @@ files use literal `KEY=value` assignments, not shell commands or references
 to other variables. Process environment values override the repository's
 `.env` defaults.
 
+### Maintaining environment templates
+
+Every new environment variable must be added to `.env.example` and every
+applicable service template in the same change, even when the code has a default.
+Renamed or removed variables and changed defaults require the same review.
+Use the consuming service to select templates:
+
+| Consumer | Relevant templates |
+| --- | --- |
+| API | `backend/services/api/deploy/api.env.example` and generated `.env.example.api` |
+| WebUI | `frontend/webui/deploy/webui.env.example` |
+| Text indexer | `.env.example.text_indexer` and `backend/services/text_indexer/deploy/text-indexer.env.example` |
+
+Document purpose, default or required value, service ownership and restart
+requirements. Preserve intentional deployment differences such as bindings and
+secure cookies; use safe placeholders instead of private credentials or local
+machine paths. Do not put unrelated service settings into service-only files.
+Describe template changes and manual configuration or restart requirements in
+the change handoff and deployment upgrade instructions. The agent-facing version
+of this requirement is in `AGENTS.md` under Environment variable templates.
+
 `backend/services/api/deploy/api.env.example` is the authoritative API-only
 example. `.env.example.api` is generated from it; do not edit the generated copy.
 After adding or changing an API environment setting, update the authoritative
