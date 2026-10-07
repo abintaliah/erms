@@ -70,6 +70,7 @@ class ErmsApiClient:
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
         with_metadata = bool(kwargs.pop("_with_metadata", False))
+        cancellable_read = bool(kwargs.pop("_cancellable_read", False))
         headers = dict(kwargs.pop("headers", {}))
         # httpx defaults string header values to ASCII. Reasons are human text;
         # send their UTF-8 bytes while leaving ordinary ASCII headers unchanged.
@@ -108,7 +109,7 @@ class ErmsApiClient:
                         key, completed,
                     )
                 )
-            return copy.deepcopy(await asyncio.shield(task))
+            return copy.deepcopy(await task if cancellable_read else await asyncio.shield(task))
         return await self._perform_request(
             normalized_method, path, kwargs, with_metadata=with_metadata,
         )
@@ -820,6 +821,14 @@ class ErmsApiClient:
 
     async def event_history_operations(self) -> list[str]:
         return await self.request("GET", "/api/v1/event-history/operations")
+
+    async def audit_actors(self, query: str, *, entity_type=None, actor_type=None):
+        params = {"q": query, "limit": 25}
+        if entity_type:
+            params["entity_type"] = entity_type
+        if actor_type:
+            params["actor_type"] = actor_type
+        return await self.request("GET", "/api/v1/event-history/actors", params=params, _cancellable_read=True)
 
     async def event_history_filter_options(self) -> dict[str, list[str]]:
         return await self.request("GET", "/api/v1/event-history/filter-options")

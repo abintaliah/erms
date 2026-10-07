@@ -137,3 +137,22 @@ Destination selection now closes the phone drawer before pushing its route, so
 Back returns to the unobscured Dashboard. The retained-Back widget checks now
 verify drawer closure before rotation in English/LTR and Arabic/RTL on phone
 and tablet. All 57 Flutter tests pass and static analysis is clean.
+
+## Latest-main integration — 7 October 2026
+
+Integrated `origin/main` at `a93c57a`. Catalogue conflicts were resolved by
+message key, preserving all incoming Arabic translation items and provenance
+exactly and retaining the mobile-only definitions and drafts. The newer
+administrator export already promoted on main is retained as the merge base;
+no new administrator export was produced. Mobile assets now contain 2,959
+keys per language, with exact canonical coverage and an updated catalogue hash.
+The four new navigation drafts and five earlier Phase 1 drafts still require
+review. The incoming messaging migration verification is retained.
+
+All 57 mobile tests pass after integration. Catalogue coverage, ordering,
+stale-key checks and API environment-template consistency pass. The Arabic
+draft validator reports eight inherited terminology failures, identical on
+`origin/main`: seven Vital record labels and
+`webui.hold_reason_dialog.remove_all_confirmation`. These require terminology
+review; curated translations were not overwritten to suppress the failures.
+No database-backed tests were run for this merge.

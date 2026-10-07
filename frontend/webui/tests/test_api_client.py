@@ -1176,3 +1176,31 @@ def test_json_attachment_remains_download_bytes():
         finally:
             await client.close()
     assert asyncio.run(exercise()) == payload
+
+
+def test_audit_actor_read_can_cancel_transport_and_retains_normal_auth_headers():
+    started = asyncio.Event()
+    cancelled = []
+    observed = []
+    async def handler(request):
+        observed.append((request.url.path, request.url.params['q'], request.headers['authorization']))
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.append(True)
+            raise
+    async def exercise():
+        client = ErmsApiClient('http://api.test', transport=httpx.MockTransport(handler))
+        client.set_session_token('fixture-token')
+        try:
+            task = asyncio.create_task(client.audit_actors('Ab', entity_type='record'))
+            await started.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert cancelled == [True]
+        finally:
+            await client.close()
+    asyncio.run(exercise())
+    assert observed == [('/api/v1/event-history/actors', 'Ab', 'Bearer fixture-token')]

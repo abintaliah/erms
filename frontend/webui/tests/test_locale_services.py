@@ -213,7 +213,7 @@ def test_dashboard_navigation_renders_cached_data_then_refreshes_in_background()
     source = inspect.getsource(index)
     dashboard = source[
         source.index("async def select_dashboard()"):
-        source.index("async def select_audit_trail()")
+        source.index("async def select_audit_trail(")
     ]
     assert 'state["dashboard_summary_cache"] = summary' in dashboard
     assert "await load_dashboard(summary_override=cached_summary)" in dashboard

@@ -7,6 +7,7 @@ from ..authorization_policy import require_global_privilege
 from ..resource_authorization import require_global
 from .transactions import run
 from .config import LIMITS
+from .gateway_health import CURRENT_REPORT_SQL, HEALTH_STATUS_SQL
 
 router = APIRouter(
     prefix="/api/v1/messages/monitor",
@@ -42,18 +43,15 @@ def overview(principal: Principal = Depends(principal_from_request)):
  count(*) FILTER(WHERE (sender_deleted_at IS NOT NULL OR (expires_at<=CURRENT_TIMESTAMP AND sender_purge_after IS NULL)) AND COALESCE(sender_purge_after,expires_at+make_interval(days=>expiry_restoration_days))>CURRENT_TIMESTAMP) AS restorable_outbox FROM message_envelopes WHERE sender_user_id IS NOT NULL"""
         ).fetchone()
         gateways = c.execute(
-            "SELECT count(*) AS instances,count(*) FILTER(WHERE NOT listener_connected OR observed_at<CURRENT_TIMESTAMP-interval '45 seconds') AS unhealthy FROM messaging_gateway_health"
+            f"SELECT count(*) AS instances,count(*) FILTER(WHERE NOT listener_connected OR observed_at<CURRENT_TIMESTAMP-interval '45 seconds') AS unhealthy FROM messaging_gateway_health WHERE {CURRENT_REPORT_SQL}"
         ).fetchone()
         return {
             "metrics": metrics,
             "retention": {**retention, **entries, **outbox, **groups},
             "gateways": gateways,
+            # Gateway alerts travel with their bounded gateway page, including
+            # endpoint identity, rather than an unbounded overview collection.
             "alerts": (
-                [{"code": "messaging_listener_unhealthy"}]
-                if gateways["unhealthy"]
-                else []
-            )
-            + (
                 [
                     {
                         "code": "messaging_operation_failure",
@@ -92,9 +90,11 @@ def gateways(
     def query(c):
         require_global(c, "messaging.monitor")
         rows = c.execute(
-            "SELECT * FROM messaging_gateway_health WHERE instance_id::text>%s ORDER BY instance_id::text LIMIT %s",
+            f"SELECT *, {HEALTH_STATUS_SQL} AS health_status FROM messaging_gateway_health WHERE {CURRENT_REPORT_SQL} AND instance_id::text>%s ORDER BY instance_id::text LIMIT %s",
             (after, limit + 1),
         ).fetchall()
+        for row in rows:
+            row["host_addresses"] = [str(a) for a in (row["host_addresses"] or [])]
         return {
             "items": rows[:limit],
             "next_cursor": (

@@ -4,7 +4,7 @@
 **Approved:** 19 September 2026
 **Project:** ERMS / wathiq  
 **Prepared:** 19 September 2026  
-**Revision:** 0.7 — reserved defunct-organization holdings-transfer privilege
+**Revision:** 0.9 — bounded historical actor autocomplete and capped Audit Trail search
 
 ## 1. Purpose
 
@@ -1671,6 +1671,104 @@ Denial events must not store secrets, component content, session tokens, or
 protected metadata the actor was not allowed to see. Rate limiting or
 aggregation may be used for repeated identical denials without losing incident
 visibility.
+
+### 18.1 Audit Trail actor name/email filter
+
+The system-wide Audit Trail must provide a localizable **Actor name or email**
+searchable selector alongside **Actor type**. Actor type continues to distinguish users
+from automated processes; the new filter identifies activity using the actor's
+name or email. A nonblank search matches a case-insensitive literal substring
+of either persisted `actor_name` or `actor_email`. Trim surrounding search
+whitespace; a blank value imposes no actor-name/email restriction. Characters
+used as SQL wildcard syntax must be treated literally.
+
+After at least two non-whitespace characters, show debounced server suggestions
+from the current users table by literal case-insensitive name/email substring.
+Return at most 25 users per request, with an indication to refine the text when
+more matches exist. The lookup must not query event history or perform event
+visibility checks. Suggestions show current user names/emails and are independent
+of the event-type and actor-type filters. Existing audit.view authorizes this
+bounded lookup; no additional directory privilege is required.
+
+If no user matches, retain the typed characters without any historical lookup.
+Apply uses that unselected text to search immutable audit snapshots, including
+renamed/deleted users and automated processes, under existing event authorization.
+
+Selecting a user filters by persisted `actor_user_id`, including that user's
+history across renames and account deletion. If text is
+entered without selecting a suggestion, retain the literal substring behavior
+below. Clearing selection/text removes the actor restriction. Suggestions are
+independent of the current event scope; all active filters continue to apply
+to the final event search. Selected labels remain available
+while more suggestions are loaded. Debounce for 200 ms, cancel superseded reads,
+and ignore responses after newer input or page navigation. Show localizable
+short-input, empty, refinement and failure guidance without a suggestion cache.
+
+`GET /api/v1/event-history/actors?q=<text>&limit=25` requires `audit.view`, accepts
+legacy optional `entity_type` and `actor_type` parameters without using them to
+constrain directory suggestions, and returns `items` containing
+`actor_user_id`, `actor_name`, `actor_email`, `actor_type`, plus `has_more`.
+Query length is bounded to 128 characters and the server limits suggestions to
+25. No user-directory privilege is added.
+
+Audit Trail searches return only the newest matching events up to deployment
+setting `AUDIT_TRAIL_SEARCH_RESULT_LIMIT` (positive integer, default 1,000), with
+50 per UI page. The server enforces this cap: counts stop after detecting limit
++ 1 matches, `total` is capped at the configured limit, and search responses
+include the effective `result_cap` and `truncated`. Offsets at or beyond the
+limit are rejected; a page crossing the cap is shortened. When truncated, show a localizable notice that users must refine the
+search with text or other filters to find more specific events. Do not download
+1,000 rows to paginate in the browser. Default event-history search ordering is
+newest occurrence first, with descending ID as the deterministic tie-breaker.
+
+Use actor-ID/time/ID and time/ID indexes for identity and chronological search,
+trigram indexes for actor-name/email substrings. Indexed raw candidate predicates may narrow
+the work, but the existing authorized projection still decides matches/counts.
+Never use a raw candidate match as permission to disclose an actor. Unsupported
+or negated/null branches must not change authorization or filter semantics.
+
+For unselected text on Apply, match event-time actor snapshots rather than the current
+user directory, so historical activity remains searchable after a user is
+renamed or deleted. A partial name or shared name can match multiple actors;
+the field does not imply that a name is a unique user identifier. Events without
+either snapshot do not match a nonblank search.
+
+Combine this condition with all other active Audit Trail filters using AND;
+name/email alternatives within this condition use OR. Apply the filter on the
+server before pagination and counting, reset to the first page when filters
+are applied, and clear it through the existing filter-reset action. Retain the
+existing entity-type presets, including the Messages Monitor audit shortcut.
+Do not download the user directory or event collection to filter in the browser.
+
+Existing `audit.view`, event authorization, and redaction rules remain in force.
+The filter must not disclose protected actor details through matches, result
+counts or redacted envelopes: historical actor fields hidden from the viewer
+must not be usable as matches. No additional user-directory privilege is
+required. English and maintained-language labels and hints follow the normal
+translation review/publication workflow.
+
+**Verification gate:** Verify current-user name/email suggestions without event-history access, no-match text
+retention, case-insensitive partial matching, literal wildcard characters,
+two-character suggestions, the 25-suggestion cap,
+selection and clearing, retained selections, stale/abandoned requests, the
+1,000-event result cap and refinement notice, realistic-volume query plans, surrounding
+whitespace and blank reset, null snapshots, renamed/deleted accounts, multiple
+actors sharing a name, AND composition with every existing filter, first-page
+reset and server pagination/count consistency. Verify authorization and
+redaction prevent hidden actor fields from influencing matches or counts, and
+verify the Messages Monitor preset, repeated navigation, and English/LTR and
+Arabic/RTL rendering. Record implementation paths and passing evidence before
+declaring this addition complete. Database-backed tests use newly created,
+uniquely named disposable databases and clean them up after success or failure.
+
+Implementation and verification (2026-10-05): `select_audit_trail` builds the
+actor OR condition inside the existing AND filter expression and bounded search
+request. The authorized history view masks protected actor fields in the
+canonical schema and migration 046. Actor-search and migration tests in
+`scheme_transfer/tests/test_export_audit.py`, English/Arabic navigation tests in
+`test_messaging_monitor_navigation.py`, and live responsive browser checks are
+recorded in
+[`docs/verification/classification-export-audit/verification.md`](../docs/verification/classification-export-audit/verification.md).
 
 ## 19. Caching and performance
 

@@ -17,8 +17,11 @@ Acceptance is tracked there; passing a subset does not establish completion.
   sequences; dependency-order insertion restores relationships. Unique indexes
   arbitrate concurrent imports. Deferred constraints run before returning.
   Failures roll back the entire request, including transactional history.
-- Exports run in a read-only REPEATABLE READ transaction. Word dependencies are
-  imported only for Word requests. No export is built on the browser.
+- Export generation runs in a read-only REPEATABLE READ transaction. After
+  successful generation/validation, a separate request-context transaction commits
+  one EXPORT event before the download response. A failed history commit prevents
+  success. Word dependencies are imported only for Word requests; no export is
+  built on the browser.
 
 ## Provenance storage and triggers
 
@@ -29,7 +32,12 @@ kind, source entity fields, and source scheme identity. Each CREATE record's
 independently to explicit rules. Source publication remains in the source
 scheme snapshot, while the inserted scheme has NULL `date_published`.
 
-There is no new event action, source enum, table, privilege, or migration.
+Import adds no event action, source enum, table, or privilege. Export uses the
+EXPORT domain action, with scheme snapshot, export ID, format and Word language
+in metadata. Existing audit context captures actor and request/correlation
+identity. This records server generation, not browser saving. Migration 046
+masks protected actor snapshots in authorized history so actor searches cannot
+match redacted identities.
 Existing `api`/`web_ui` sources and the actual authenticated importing actor
 remain in force. Source actor IDs remain provenance only. INSERT retains the
 explicit source timestamps and versions; the existing timestamp/version

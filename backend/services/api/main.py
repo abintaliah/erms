@@ -161,6 +161,7 @@ from .messaging.notification_configuration import readiness as notification_read
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     default_working_timezone()
+    integer_environment("AUDIT_TRAIL_SEARCH_RESULT_LIMIT", 1000, minimum=1)
     open_pool()
     synchronize_message_definitions()
     initialize_registry()
@@ -2213,6 +2214,25 @@ def list_event_history_filter_options(
         "sources": _distinct_event_history_values(connection, "source"),
         "actor_types": _distinct_event_history_values(connection, "actor_type"),
     }
+
+
+@app.get(
+    "/api/v1/event-history/actors",
+    response_model=None,
+    tags=["event history"],
+    dependencies=[Depends(require_audit_view)],
+)
+def list_event_history_actors(
+    q: str = Query(..., min_length=2, max_length=128),
+    limit: int = Query(25, ge=1, le=25),
+    entity_type: str | None = Query(None, max_length=100),
+    actor_type: str | None = Query(None, max_length=40),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    from .audit_search import actor_suggestions
+
+    return actor_suggestions(connection, q, limit=limit,
+                             entity_type=entity_type, actor_type=actor_type)
 
 
 @app.get(

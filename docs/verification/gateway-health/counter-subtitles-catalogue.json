@@ -1,0 +1,42 @@
+{
+  "added_keys": [
+    "messaging.monitor.description.capture_failure",
+    "messaging.monitor.description.capture_seconds",
+    "messaging.monitor.description.catchup_failure",
+    "messaging.monitor.description.cleanup_failure",
+    "messaging.monitor.description.cleanup_seconds",
+    "messaging.monitor.description.delayed_groups",
+    "messaging.monitor.description.fanout_count",
+    "messaging.monitor.description.group_size",
+    "messaging.monitor.description.notifications_emitted",
+    "messaging.monitor.description.purged_drafts",
+    "messaging.monitor.description.purged_groups",
+    "messaging.monitor.description.purged_messages",
+    "messaging.monitor.description.restricted_count",
+    "messaging.monitor.description.send_failure",
+    "messaging.monitor.description.send_success",
+    "messaging.monitor.description.system_failure",
+    "messaging.monitor.description.system_seconds",
+    "messaging.monitor.description.test_failure",
+    "messaging.monitor.description.test_rate_rejected",
+    "messaging.monitor.description.test_seconds",
+    "messaging.monitor.description.test_success"
+  ],
+  "preserved_existing_items": 2918,
+  "catalogue_sha256": "7cf20dd5bdc2e8701d26e1ff8c63842b31d84d07efa8dae616c324dc8522a99a",
+  "new_key_validation": "pass",
+  "coverage_order_provenance": "pass",
+  "unchanged_legacy_strict_findings": [
+    "advanced_search.field.vital_record: violates approved Vital record → الوثائق الهيوية terminology",
+    "dashboard.metric.vital_records: violates approved Vital record → الوثائق الهيوية terminology",
+    "entity_metadata.field.vital_record: violates approved Vital record → الوثائق الهيوية terminology",
+    "messaging.reply.subject_prefix: unchanged English source copy",
+    "messaging.reply.subject_prefix: unexplained Latin text Re:",
+    "webui.change_vital.checkbox.vital_record_1d96a258: violates approved Vital record → الوثائق الهيوية terminology",
+    "webui.hold_reason_dialog.remove_all_confirmation: violates approved Aggregation → ملف/ملفات terminology",
+    "webui.render_compact_resource_result.tooltip.vital_record_9db00737: violates approved Vital record → الوثائق الهيوية terminology",
+    "webui.select_organization_unit_details.label.vital_record_count_vital_records_a2c63104: violates approved Vital record → الوثائق الهيوية terminology",
+    "webui.select_record_details.label.vital_record_26408a5c: violates approved Vital record → الوثائق الهيوية terminology"
+  ],
+  "administrator_export_promoted": false
+}

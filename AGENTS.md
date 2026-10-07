@@ -15,6 +15,32 @@
   features. Do not declare a phase or feature complete while an approved
   requirement lacks implementation or verification evidence.
 
+## Environment variable templates
+
+- Every newly added environment variable must be documented in `.env.example`
+  and every relevant service template in the same change. A code default does
+  not replace template documentation. Apply the same reconciliation when
+  renaming, changing the default of, or removing a setting.
+- Check the API, WebUI and text-indexer templates according to the actual
+  consumer: `.env.example.api`, `.env.example.text_indexer`,
+  `backend/services/api/deploy/api.env.example`,
+  `frontend/webui/deploy/webui.env.example`, and
+  `backend/services/text_indexer/deploy/text-indexer.env.example`. Do not add
+  another service's settings to a service-only template.
+- `backend/services/api/deploy/api.env.example` is the authoritative API
+  template. Edit it, then run `python3 tools/sync_api_env_template.py` to
+  regenerate `.env.example.api`; never edit the generated copy directly.
+  Run `python3 tools/sync_api_env_template.py --check` before handoff.
+- Document each setting's purpose, default or required value, service ownership,
+  and restart requirements. Keep intentional local/server default differences
+  explicit. Use safe placeholders for credentials and machine-specific paths;
+  never copy private `.env` values into tracked templates.
+- Existing private environment values must be preserved. Local stack startup
+  appends missing safe defaults through `tools/reconcile_local_env.py`; it does
+  not update production environment files. Include deployment upgrade guidance
+  when a new setting requires manual configuration, and report template changes
+  and any operator action in the implementation handoff.
+
 ## Database-backed tests
 
 - Never run a test suite against the development, staging, production, or any
