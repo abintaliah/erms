@@ -27,12 +27,59 @@ class AuthenticatedShell extends StatelessWidget {
     final signOut = text('webui.index.button.sign_out_a4610dd4');
     final preferences = text('preferences.action.open');
     final profile = text('mobile.navigation.user_profile');
+    final entries = <_ShellDestination>[
+      _ShellDestination(
+        'global-search',
+        text('mobile.navigation.global_search'),
+        Icons.search,
+      ),
+      _ShellDestination(
+        'classification-browser',
+        text('mobile.navigation.classification_browser'),
+        Icons.account_tree_outlined,
+      ),
+      _ShellDestination(
+        'favourites',
+        text('mobile.navigation.favourites'),
+        Icons.star_outline,
+      ),
+      _ShellDestination(
+        'recent-activity',
+        text('mobile.navigation.recent_activity'),
+        Icons.history,
+      ),
+    ].where((entry) => controller.destinations.contains(entry.id)).toList();
+    void openDestination(_ShellDestination entry) {
+      // Phase 1 owns navigation; resource workflows are delivered in phases 3, 5 and 6.
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            key: ValueKey('destination-${entry.id}'),
+            appBar: AppBar(title: Text(entry.label)),
+            body: SafeArea(
+              child: Align(
+                alignment: AlignmentDirectional.topStart,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    entry.label,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final tablet = constraints.maxWidth >= tabletBreakpoint;
         final navigation = _ShellNavigation(
           appName: appName,
+          entries: entries,
+          onDestination: openDestination,
           dashboardLabel: dashboard,
           preferencesLabel: preferences,
           profileLabel: profile,
@@ -61,6 +108,17 @@ class AuthenticatedShell extends StatelessWidget {
           appBar: AppBar(
             leading: tablet ? const SizedBox.shrink() : null,
             automaticallyImplyLeading: !tablet,
+            actions: [
+              for (final entry in entries.where(
+                (entry) => entry.id == 'global-search',
+              ))
+                IconButton(
+                  key: const ValueKey('shell-search-action'),
+                  tooltip: entry.label,
+                  icon: const Icon(Icons.search),
+                  onPressed: () => openDestination(entry),
+                ),
+            ],
             title: Row(
               children: [
                 const WathiqBrand(showName: false, markSize: 30),
@@ -105,6 +163,8 @@ class AuthenticatedShell extends StatelessWidget {
 class _ShellNavigation extends StatelessWidget {
   const _ShellNavigation({
     required this.appName,
+    required this.entries,
+    required this.onDestination,
     required this.profileLabel,
     required this.showDashboard,
     required this.showProfile,
@@ -120,6 +180,8 @@ class _ShellNavigation extends StatelessWidget {
   });
 
   final String appName;
+  final List<_ShellDestination> entries;
+  final ValueChanged<_ShellDestination> onDestination;
   final String profileLabel;
   final bool showDashboard;
   final bool showProfile;
@@ -135,91 +197,116 @@ class _ShellNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SafeArea(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-          child: WathiqBrand(name: appName, markSize: 38),
-        ),
-        const Divider(height: 1),
-        if (showDashboard)
+    child: SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           Padding(
-            padding: const EdgeInsets.all(12),
-            child: ListTile(
-              key: const ValueKey('shell-dashboard'),
-              selected: true,
-              selectedColor: const Color(0xFF087AC1),
-              selectedTileColor: const Color(0xFFE0F2FE),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              leading: const Icon(Icons.home_outlined),
-              title: Text(dashboardLabel),
-              onTap: onDashboard,
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+            child: WathiqBrand(name: appName, markSize: 38),
           ),
-        const Spacer(),
-        const Divider(height: 1),
-        if (showProfile)
-          ListTile(
-            key: const ValueKey('shell-profile'),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => Scaffold(
-                  appBar: AppBar(title: Text(profileLabel)),
-                  body: SafeArea(
-                    child: ListView(
-                      padding: const EdgeInsets.all(24),
-                      children: [
-                        Text(
-                          userName,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(userEmail),
-                        const SizedBox(height: 24),
-                        ListTile(
-                          title: Text(preferencesLabel),
-                          leading: const Icon(Icons.language),
-                          onTap: onPreferences,
-                        ),
-                      ],
+          const Divider(height: 1),
+          for (final entry in entries.where(
+            (entry) => entry.id == 'global-search',
+          ))
+            _destinationTile(context, entry),
+          if (showDashboard)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: ListTile(
+                key: const ValueKey('shell-dashboard'),
+                selected: true,
+                selectedColor: const Color(0xFF087AC1),
+                selectedTileColor: const Color(0xFFE0F2FE),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                leading: const Icon(Icons.home_outlined),
+                title: Text(dashboardLabel),
+                onTap: onDashboard,
+              ),
+            ),
+          for (final entry in entries.where(
+            (entry) => entry.id != 'global-search',
+          ))
+            _destinationTile(context, entry),
+          const SizedBox(height: 24),
+          const Divider(height: 1),
+          if (showProfile)
+            ListTile(
+              key: const ValueKey('shell-profile'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: Text(profileLabel)),
+                    body: SafeArea(
+                      child: ListView(
+                        padding: const EdgeInsets.all(24),
+                        children: [
+                          Text(
+                            userName,
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(userEmail),
+                          const SizedBox(height: 24),
+                          ListTile(
+                            title: Text(preferencesLabel),
+                            leading: const Icon(Icons.language),
+                            onTap: onPreferences,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
+              leading: CircleAvatar(
+                backgroundColor: const Color(0xFFE0F2FE),
+                foregroundColor: const Color(0xFF087AC1),
+                child: Text(_initials(userName)),
+              ),
+              title: Text(
+                userName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                userEmail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            leading: CircleAvatar(
-              backgroundColor: const Color(0xFFE0F2FE),
-              foregroundColor: const Color(0xFF087AC1),
-              child: Text(_initials(userName)),
+          if (showProfile)
+            ListTile(
+              key: const ValueKey('shell-preferences'),
+              leading: const Icon(Icons.language),
+              title: Text(preferencesLabel),
+              onTap: onPreferences,
             ),
-            title: Text(userName, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text(
-              userEmail,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          if (showSignOut)
+            ListTile(
+              key: const ValueKey('shell-sign-out'),
+              leading: const Icon(Icons.logout),
+              title: Text(signOutLabel),
+              onTap: onSignOut,
             ),
-          ),
-        if (showProfile)
-          ListTile(
-            key: const ValueKey('shell-preferences'),
-            leading: const Icon(Icons.language),
-            title: Text(preferencesLabel),
-            onTap: onPreferences,
-          ),
-        if (showSignOut)
-          ListTile(
-            key: const ValueKey('shell-sign-out'),
-            leading: const Icon(Icons.logout),
-            title: Text(signOutLabel),
-            onTap: onSignOut,
-          ),
-        const SizedBox(height: 8),
-      ],
+          const SizedBox(height: 8),
+        ],
+      ),
     ),
   );
+
+  Widget _destinationTile(BuildContext context, _ShellDestination entry) =>
+      ListTile(
+        key: ValueKey('shell-${entry.id}'),
+        leading: Icon(entry.icon),
+        title: Text(entry.label),
+        onTap: () {
+          Scaffold.of(context).closeDrawer();
+          onDestination(entry);
+        },
+      );
 
   static String _initials(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
@@ -279,4 +366,11 @@ class _DashboardFoundation extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _ShellDestination {
+  const _ShellDestination(this.id, this.label, this.icon);
+  final String id;
+  final String label;
+  final IconData icon;
 }

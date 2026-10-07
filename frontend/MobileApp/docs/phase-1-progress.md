@@ -86,10 +86,54 @@ Started: 30 September 2026
 
 ## Pending
 
-- Global Search entry and the remaining approved drawer destinations need
-  their shell integration; downstream content workflows remain assigned to
-  their specified phases.
 - Complete English, Arabic, LTR, RTL, iOS, Android, phone, and tablet runtime
   verification, including actual OS warning permission/delivery and cancellation.
   Compiled native adapters and mocked channel checks do not establish OS delivery.
 - Phase 1 remains in progress; its complete exit gate is not yet claimed.
+
+## Phase 1 shell completion work — 4 October 2026
+
+- Added capability-controlled Global Search, Classification Browser, Favourites,
+  and Recent Activity entries in the approved drawer order. Global Search also
+  has a prominent top-bar action; it disappears when the server omits it.
+- Destination routes retain their place through orientation changes and Back;
+  they are navigation foundations only. Search execution, classification trees,
+  favourites and activity content remain in phases 5, 6 and 3 respectively.
+- Navigation scrolls on compact displays. English/LTR and Arabic/RTL widget
+  checks cover phone/tablet navigation, ordering, orientation, Back and disabled
+  search. Full Flutter verification: 57 tests pass; static analysis is clean.
+- Added four contextual `mobile.navigation.*` keys (global_search,
+  classification_browser, favourites, recent_activity), merged only missing
+  Arabic drafts, and synchronized 2,903 keys in each mobile asset. Existing
+  Arabic wording and per-item provenance are unchanged. Coverage, ordering,
+  stale-key, placeholder, terminology and catalogue-hash checks pass. No
+  administrator export was promoted; the four new drafts require review in
+  addition to the five earlier Phase 1 drafts.
+- Xcode 27 provides simulator interaction through Device Hub, already installed
+  on this workstation; the old standalone Simulator.app path does not apply.
+- Interactive iOS checks were requested from the user. OS warning delivery,
+  cancellation, timeout and cross-platform runtime evidence remain pending;
+  Phase 1 is not declared complete until its exit gate is verified.
+
+## User-reported iOS acceptance — 4 October 2026
+
+The user reports completing all requested interactive checks except the
+fifteen-minute tests. The requested matrix covered sign-in, drawer navigation,
+Arabic/RTL, sign-out, process-restart sign-in, return before fifteen minutes,
+and warning appearance/cancellation. This is user-reported evidence, not an
+independently observed device run. Native acceptance of the at-or-after-fifteen-
+minute boundary is still pending; automated 14:59/15:00 checks pass. Android
+Phase 1 runtime acceptance is also pending until the user finishes iOS testing.
+
+Updated native packaging verification: iOS simulator build and Android debug APK
+both pass with the explicit local API address supplied at build time. The iOS
+build was installed and launched through Flutter's debug runner; the initial
+English sign-in screen was visually inspected without clipping. Android was
+built only; its emulator has not been started for this acceptance run.
+
+## Pre-commit drawer correction — 7 October 2026
+
+Destination selection now closes the phone drawer before pushing its route, so
+Back returns to the unobscured Dashboard. The retained-Back widget checks now
+verify drawer closure before rotation in English/LTR and Arabic/RTL on phone
+and tablet. All 57 Flutter tests pass and static analysis is clean.

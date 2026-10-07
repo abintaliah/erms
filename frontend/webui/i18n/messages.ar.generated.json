@@ -4,7 +4,7 @@
   "model_version": "2026-10-04",
   "prompt_version": "mobile-phase1-contextual-ar-v1",
   "specification_sha256": "bccca5609cd31aacc6fb878e6459e27903a0cab4e35914e5df22c1678d856bee",
-  "catalogue_sha256": "0597c6263c2013574b1a59c6da6e99605f731da0572555a2f653c7b8199cd5a5",
+  "catalogue_sha256": "d63bb34b3a7d39423e53fcb883dbe6ae94fb5568367b2a0be01092d186c66a3d",
   "terminology_sha256": "1b1ce8068c6f156ba36bc6ad9a104b22b6262a4a8dea3c7842681df045897cd6",
   "batch_id": "codex-mobile-phase1-key-merge-20261004",
   "generated_at": "2026-10-04T10:36:09.246749+00:00",
@@ -9592,6 +9592,62 @@
         "source_origin": "generated",
         "source_status": "draft",
         "review_required": true
+      }
+    },
+    {
+      "message_key": "mobile.navigation.classification_browser",
+      "translated_text": "متصفح التصنيفات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "generator": "OpenAI Codex",
+        "model_version": "2026-10-04",
+        "batch_id": "mobile-phase1-navigation-20261004"
+      }
+    },
+    {
+      "message_key": "mobile.navigation.favourites",
+      "translated_text": "المفضلة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "generator": "OpenAI Codex",
+        "model_version": "2026-10-04",
+        "batch_id": "mobile-phase1-navigation-20261004"
+      }
+    },
+    {
+      "message_key": "mobile.navigation.global_search",
+      "translated_text": "البحث الشامل",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "generator": "OpenAI Codex",
+        "model_version": "2026-10-04",
+        "batch_id": "mobile-phase1-navigation-20261004"
+      }
+    },
+    {
+      "message_key": "mobile.navigation.recent_activity",
+      "translated_text": "النشاط الأخير",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "machine_generated",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "review_required": true,
+        "generator": "OpenAI Codex",
+        "model_version": "2026-10-04",
+        "batch_id": "mobile-phase1-navigation-20261004"
       }
     },
     {

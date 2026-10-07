@@ -50,3 +50,20 @@ substitute for automated unit evidence.
 | Best-effort ten-minute device warning (§8.3) | Native iOS UserNotifications / Android AlarmManager adapters; localized method-channel scheduler | Android/iOS debug builds and channel payload/cancellation test | Device permission/delivery matrix pending |
 | Central loading, error, offline and explicit retry (§§16–17) | Nondismissible overlay retaining current Navigator; safe principal retry; preference read retry | Session offline/retry tests and shell widget checks | Explicit Retry and bounded foreground monitoring implemented |
 | Contextual localization (§6) | Five new mobile keys; preserved canonical Arabic merge; synchronized mobile assets | 2,899-key coverage; full catalogue and Arabic/hash checks; three invariant-prefix tests | Automated verified; new Arabic drafts await administrator review |
+
+### Phase 1 shell integration — 4 October 2026
+
+| Requirement | Implementation | Evidence | Status |
+| --- | --- | --- | --- |
+| Ordered server-authoritative drawer and prominent search (§7.1–7.2) | `AuthenticatedShell`, capability-filtered destination entries and search action | `test/app_test.dart`: ordered drawer in both languages on phone/tablet; search omission | Automated verified |
+| Retained Back and responsive destination (§4, §7.3) | Navigator-owned destination foundations and scrollable drawer | `test/app_test.dart`: open Favourites, rotate, Back to shell; no framework errors in LTR/RTL phone/tablet | Automated verified; interactive checks pending |
+| Contextual destination labels (§6) | Four canonical `mobile.navigation.*` definitions and merged Arabic drafts | Catalogue validator, Arabic validation, preserved-item equality, hash check; 2,903 synchronized keys | Automated verified; Arabic drafts await review |
+
+The destination foundations provide Phase 1 navigation only; resource content
+and executable search remain governed by phases 3, 5 and 6. Full Phase 1 OS
+runtime acceptance remains pending, as recorded in `phase-1-progress.md`.
+
+User-reported iOS runtime evidence (4 October 2026): all requested interactive
+checks were reported tested except the fifteen-minute tests. Retain the native
+fifteen-minute boundary and Android runtime checks as pending; automated timeout
+checks do not replace this evidence.

@@ -7,6 +7,118 @@ import 'package:wathiq_mobile/features/auth/data/auth_api.dart';
 import 'package:wathiq_mobile/features/auth/domain/auth_principal.dart';
 
 void main() {
+  for (final language in ['en', 'ar']) {
+    for (final size in [const Size(390, 844), const Size(1024, 768)]) {
+      testWidgets(
+        'ordered capability drawer and retained Back $language $size',
+        (tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final controller = SessionController(
+            _FakeAuthApi(languageTag: language),
+          );
+          addTearDown(controller.dispose);
+          await controller.signIn(
+            email: 'user@example.test',
+            password: 'secret',
+          );
+          await tester.pumpWidget(
+            WathiqApp(catalogue: _catalogue, sessionController: controller),
+          );
+          await tester.pumpAndSettle();
+          if (size.width < 700) {
+            await tester.tap(
+              find.byTooltip(
+                language == 'ar' ? 'فتح قائمة التنقل' : 'Open navigation menu',
+              ),
+            );
+            await tester.pumpAndSettle();
+          }
+          final ids = [
+            'global-search',
+            'dashboard',
+            'classification-browser',
+            'favourites',
+            'recent-activity',
+            'profile',
+            'sign-out',
+          ];
+          double previous = -1;
+          for (final id in ids) {
+            final tile = find.byKey(ValueKey('shell-$id'));
+            await tester.ensureVisible(tile);
+            final y = tester.getTopLeft(tile).dy;
+            expect(tile, findsOneWidget);
+            expect(y, greaterThan(previous));
+            previous = y;
+          }
+          expect(previous, greaterThanOrEqualTo(0));
+          final tile = find.byKey(const ValueKey('shell-favourites'));
+          await tester.ensureVisible(tile);
+          await tester.tap(tile);
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('destination-favourites')),
+            findsOneWidget,
+          );
+          await tester.tap(find.byType(BackButton));
+          await tester.pumpAndSettle();
+          final shell = tester.state<ScaffoldState>(
+            find.byKey(const ValueKey('authenticated-shell')),
+          );
+          expect(shell.isDrawerOpen, isFalse);
+          if (size.width < 700) {
+            await tester.tap(
+              find.byTooltip(
+                language == 'ar' ? 'فتح قائمة التنقل' : 'Open navigation menu',
+              ),
+            );
+            await tester.pumpAndSettle();
+          }
+          await tester.ensureVisible(tile);
+          await tester.tap(tile);
+          await tester.pumpAndSettle();
+          tester.view.physicalSize = Size(size.height, size.width);
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('destination-favourites')),
+            findsOneWidget,
+          );
+          await tester.tap(find.byType(BackButton));
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('authenticated-shell')),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+  testWidgets('disabled server search hides drawer and top-bar entry', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = SessionController(_FakeAuthApi(searchEnabled: false));
+    addTearDown(controller.dispose);
+    await controller.signIn(email: 'user@example.test', password: 'secret');
+    await tester.pumpWidget(
+      WathiqApp(catalogue: _catalogue, sessionController: controller),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('shell-global-search')), findsNothing);
+    expect(find.byKey(const ValueKey('shell-search-action')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('shell-classification-browser')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('sign-in defaults to English independently of device locale', (
     tester,
   ) async {
@@ -222,6 +334,11 @@ void main() {
 
 const _catalogue = MessageCatalogue(
   english: {
+    'mobile.navigation.global_search': 'Global Search',
+    'mobile.navigation.classification_browser': 'Classification Browser',
+    'mobile.navigation.favourites': 'Favourites',
+    'mobile.navigation.recent_activity': 'Recent Activity',
+
     'common.error.bad_request': 'Request failed',
     'common.error.forbidden': 'Forbidden',
     'common.error.service_unavailable': 'Service unavailable',
@@ -258,6 +375,11 @@ const _catalogue = MessageCatalogue(
         'Replace your temporary password.',
   },
   arabic: {
+    'mobile.navigation.global_search': 'البحث الشامل',
+    'mobile.navigation.classification_browser': 'متصفح التصنيفات',
+    'mobile.navigation.favourites': 'المفضلة',
+    'mobile.navigation.recent_activity': 'النشاط الأخير',
+
     'common.error.bad_request': 'تعذر إكمال الطلب',
     'common.error.forbidden': 'غير مسموح',
     'common.error.service_unavailable': 'الخدمة غير متاحة',
@@ -296,11 +418,15 @@ const _catalogue = MessageCatalogue(
 );
 
 class _FakeAuthApi implements AuthApi {
-  _FakeAuthApi({AuthPrincipal? principal, this.languageTag = 'en'})
-    : principal = principal ?? _principal();
+  _FakeAuthApi({
+    AuthPrincipal? principal,
+    this.languageTag = 'en',
+    this.searchEnabled = true,
+  }) : principal = principal ?? _principal();
 
   final AuthPrincipal principal;
   final String languageTag;
+  final bool searchEnabled;
   String? lastEmail;
 
   @override
@@ -313,8 +439,8 @@ class _FakeAuthApi implements AuthApi {
   }
 
   @override
-  Future<List<String>> mobileCapabilities(String token) async => const [
-    'global-search',
+  Future<List<String>> mobileCapabilities(String token) async => [
+    if (searchEnabled) 'global-search',
     'dashboard',
     'classification-browser',
     'favourites',

@@ -11574,6 +11574,62 @@
     "is_html": false
   },
   {
+    "message_key": "mobile.navigation.classification_browser",
+    "context_group": "mobile.navigation",
+    "default_text": "Classification Browser",
+    "semantic_meaning": "Approved mobile drawer destination: Classification Browser.",
+    "common_locations": [
+      "Wathiq mobile Phase 1"
+    ],
+    "translator_guidance": "Navigation label; preserve the approved destination meaning.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Classification Browser",
+    "is_html": false
+  },
+  {
+    "message_key": "mobile.navigation.favourites",
+    "context_group": "mobile.navigation",
+    "default_text": "Favourites",
+    "semantic_meaning": "Approved mobile drawer destination: Favourites.",
+    "common_locations": [
+      "Wathiq mobile Phase 1"
+    ],
+    "translator_guidance": "Navigation label; preserve the approved destination meaning.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Favourites",
+    "is_html": false
+  },
+  {
+    "message_key": "mobile.navigation.global_search",
+    "context_group": "mobile.navigation",
+    "default_text": "Global Search",
+    "semantic_meaning": "Approved mobile drawer destination: Global Search.",
+    "common_locations": [
+      "Wathiq mobile Phase 1"
+    ],
+    "translator_guidance": "Navigation label; preserve the approved destination meaning.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Global Search",
+    "is_html": false
+  },
+  {
+    "message_key": "mobile.navigation.recent_activity",
+    "context_group": "mobile.navigation",
+    "default_text": "Recent Activity",
+    "semantic_meaning": "Approved mobile drawer destination: Recent Activity.",
+    "common_locations": [
+      "Wathiq mobile Phase 1"
+    ],
+    "translator_guidance": "Navigation label; preserve the approved destination meaning.",
+    "grammatical_role": "label",
+    "parameter_schema": {},
+    "rendered_example": "Recent Activity",
+    "is_html": false
+  },
+  {
     "message_key": "mobile.navigation.user_profile",
     "context_group": "mobile.navigation",
     "default_text": "User/Profile",
