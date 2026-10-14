@@ -156,3 +156,17 @@ draft validator reports eight inherited terminology failures, identical on
 `webui.hold_reason_dialog.remove_all_confirmation`. These require terminology
 review; curated translations were not overwritten to suppress the failures.
 No database-backed tests were run for this merge.
+
+## User-reported accelerated iOS acceptance — 7 October 2026
+
+On the iPhone simulator, the user reports that warning delivery and expiry on
+resume worked with a temporary three-minute background timeout and a warning
+after one minute (two minutes remaining). Early-return warning cancellation
+also passed. Arabic notification text was delivered; the user accepts the
+observed left-aligned notification presentation. Its cause was not independently
+verified. These are user-reported results, not independently observed runs.
+
+The temporary timing and warning text were restored to the approved fifteen-
+minute timeout and ten-minute warning. Accelerated checks validate the device
+lifecycle path but do not establish a real fifteen-minute device boundary run.
+That full-duration check and Android runtime acceptance remain pending.

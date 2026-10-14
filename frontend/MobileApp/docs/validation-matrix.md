@@ -67,3 +67,10 @@ User-reported iOS runtime evidence (4 October 2026): all requested interactive
 checks were reported tested except the fifteen-minute tests. Retain the native
 fifteen-minute boundary and Android runtime checks as pending; automated timeout
 checks do not replace this evidence.
+
+User-reported accelerated iOS acceptance (7 October 2026): warning delivery,
+expiry on resume, and early-return warning cancellation passed with a temporary
+three-minute timeout and a one-minute warning. Approved 15/10-minute timing and
+canonical warning text were restored afterward. Full-duration iOS boundary and
+Android runtime acceptance remain pending; accelerated evidence does not close
+the complete Phase 1 exit gate.
