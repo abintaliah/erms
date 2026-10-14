@@ -107,7 +107,7 @@ class PermissionRead(ApiModel):
 
 
 class AclPrincipalGrant(ApiModel):
-    principal_type: Literal["role", "everyone", "org_unit_members"]
+    principal_type: Literal["role", "everyone", "org_unit_members", "owning_and_higher_level_unit_managers", "effective_file_administrator"]
     role_id: int | None = None
     permission_codes: list[str]
 
@@ -141,7 +141,7 @@ class ChildRecordAclReplace(ApiModel):
 
 
 class AclPrincipalRead(ApiModel):
-    principal_type: Literal["role", "everyone", "org_unit_members"]
+    principal_type: Literal["role", "everyone", "org_unit_members", "owning_and_higher_level_unit_managers", "effective_file_administrator"]
     role_id: int | None
     display_name: str
     role_code: str | None
@@ -233,7 +233,7 @@ class AuthorizationSubjectRead(ApiModel):
 
 class EffectiveAclGrantRowRead(ApiModel):
     id: int
-    principal_type: Literal["role", "everyone", "org_unit_members"]
+    principal_type: Literal["role", "everyone", "org_unit_members", "owning_and_higher_level_unit_managers", "effective_file_administrator"]
     role_id: int | None
     role_code: str | None
     role_name: str | None
@@ -242,6 +242,7 @@ class EffectiveAclGrantRowRead(ApiModel):
 
 
 class AccessExplanationAclRead(ApiModel):
+    contextual_matches: list[dict[str, Any]] = Field(default_factory=list)
     resource_type: Literal["aggregation", "record"]
     source: str
     source_resource_id: int
@@ -346,6 +347,11 @@ class GovernanceWarningRead(ApiModel):
     severity: Literal["critical", "advisory"]
 
 
+class DispositionConfigurationWarningRead(ApiModel):
+    setting_key: Literal["DISPOSITION_CLASSIFICATION_SCHEME_ID", "DISPOSITION_UPLOADED_EVIDENCE_CLASSIFICATION_ID", "DISPOSITION_GENERATED_REPORTS_CLASSIFICATION_ID"]
+    code: Literal["destination_unset", "destination_open_root_missing"]
+
+
 class GovernanceCustodyRead(ApiModel):
     security_levels: list[CustodySecurityLevelRead]
     highest_security_level: CustodySecurityLevelRead | None
@@ -354,6 +360,7 @@ class GovernanceCustodyRead(ApiModel):
     assignments: list[GovernanceAssignmentRead]
     highest_clearance_custodian_count: int
     warnings: list[GovernanceWarningRead]
+    disposition_configuration_warnings: list[DispositionConfigurationWarningRead] = Field(default_factory=list)
 
 
 class SecurityEventCountRead(ApiModel):
@@ -720,6 +727,10 @@ class FavouriteRecordRead(ApiModel):
 class FavouritesRead(ApiModel):
     aggregations: list[FavouriteAggregationRead]
     records: list[FavouriteRecordRead]
+
+
+class FavouritesPageRead(FavouritesRead):
+    application_configuration: dict[str, Any]
 
 
 BrowseNode = TypeVar("BrowseNode")
@@ -1136,6 +1147,7 @@ class DashboardReviewItem(ApiModel):
 
 
 class DashboardSummaryRead(ApiModel):
+    application_configuration: dict[str, Any]
     overview_counts: dict[str, int]
     overview_medium_counts: dict[str, dict[Literal["physical", "digital", "mixed"], int]]
     overview_resource_attention_counts: dict[str, dict[Literal["vital", "held"], int]]
@@ -1179,6 +1191,8 @@ class OrgUnitCreate(ApiModel):
 
 
 class OrgUnitUpdate(ApiModel):
+    managing_role_id: int | None = None
+    file_administrator_role_id: int | None = None
     parent_org_unit_id: int | None = None
     code: NonBlankString | None = None
     name: NonBlankString | None = None
@@ -1186,6 +1200,8 @@ class OrgUnitUpdate(ApiModel):
 
 
 class OrgUnitRead(ApiModel):
+    managing_role_id: int | None = None
+    file_administrator_role_id: int | None = None
     id: int
     parent_org_unit_id: int | None
     code: str

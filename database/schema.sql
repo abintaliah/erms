@@ -4153,7 +4153,8 @@ BEGIN
         extraction_config_version=EXCLUDED.extraction_config_version,
         index_config_version=EXCLUDED.index_config_version,indexed_at=NULL,
         last_error_code=NULL,last_error_summary=NULL,date_updated=CURRENT_TIMESTAMP;
-    IF coalesce(nullif(current_setting('app.content_indexing_scheduling_enabled',true),''),'true')<>'true' THEN
+    IF coalesce(nullif(current_setting('app.content_indexing_scheduling_enabled',true),''),
+        (SELECT value#>>'{}' FROM application_settings WHERE key='CONTENT_INDEXING_SCHEDULING_ENABLED'))::boolean IS DISTINCT FROM true THEN
         RETURN NEW;
     END IF;
     INSERT INTO content_indexing_jobs(
@@ -6729,3 +6730,863 @@ CREATE INDEX holds_notification_due_idx ON holds(valid_to,id) WHERE valid_to IS 
 ALTER TABLE system_notification_producers ADD COLUMN name text CHECK(name IS NULL OR btrim(name)<>'');
 ALTER TABLE system_notification_producers ADD COLUMN translations jsonb CHECK(translations IS NULL OR jsonb_typeof(translations)='object');
 CREATE TRIGGER system_notification_producers_validate_translations BEFORE INSERT OR UPDATE OF translations ON system_notification_producers FOR EACH ROW EXECUTE FUNCTION validate_multilingual_entity_translations();
+
+-- Hierarchical oversight authorization
+CREATE OR REPLACE FUNCTION event_reference_identity(reference_field text, reference_id bigint)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE snapshot jsonb;
+DECLARE existing_snapshots jsonb;
+BEGIN
+    CASE reference_field
+        WHEN 'profile_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM profiles WHERE id=reference_id;
+        WHEN 'old_profile_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM profiles WHERE id=reference_id;
+        WHEN 'new_profile_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM profiles WHERE id=reference_id;
+        WHEN 'security_level_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name,'level_number',level_number) INTO snapshot FROM security_levels WHERE id=reference_id;
+        WHEN 'classification_id' THEN SELECT jsonb_build_object('id',id,'code',code,'title',title) INTO snapshot FROM classifications WHERE id=reference_id;
+        WHEN 'parent_classification_id' THEN SELECT jsonb_build_object('id',id,'code',code,'title',title) INTO snapshot FROM classifications WHERE id=reference_id;
+        WHEN 'classification_scheme_id' THEN SELECT jsonb_build_object('id',id,'code',code,'title',title) INTO snapshot FROM classification_schemes WHERE id=reference_id;
+        WHEN 'aggregation_id' THEN SELECT jsonb_build_object('id',id,'code',aggregation_number,'title',title) INTO snapshot FROM aggregations WHERE id=reference_id;
+        WHEN 'parent_aggregation_id' THEN SELECT jsonb_build_object('id',id,'code',aggregation_number,'title',title) INTO snapshot FROM aggregations WHERE id=reference_id;
+        WHEN 'destination_aggregation_id' THEN SELECT jsonb_build_object('id',id,'code',aggregation_number,'title',title) INTO snapshot FROM aggregations WHERE id=reference_id;
+        WHEN 'record_id' THEN SELECT jsonb_build_object('id',id,'code',record_number,'title',title) INTO snapshot FROM records WHERE id=reference_id;
+        WHEN 'role_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM roles WHERE id=reference_id;
+        WHEN 'managing_role_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM roles WHERE id=reference_id;
+        WHEN 'file_administrator_role_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM roles WHERE id=reference_id;
+        WHEN 'supervisor_role_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM roles WHERE id=reference_id;
+        WHEN 'user_id' THEN SELECT jsonb_build_object('id',id,'name',name,'email',email) INTO snapshot FROM users WHERE id=reference_id;
+        WHEN 'owner_user_id' THEN SELECT jsonb_build_object('id',id,'name',name,'email',email) INTO snapshot FROM users WHERE id=reference_id;
+        WHEN 'org_unit_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM org_units WHERE id=reference_id;
+        WHEN 'parent_org_unit_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM org_units WHERE id=reference_id;
+        WHEN 'owning_org_unit_id' THEN SELECT jsonb_build_object('id',id,'code',code,'name',name) INTO snapshot FROM org_units WHERE id=reference_id;
+        ELSE snapshot := NULL;
+    END CASE;
+    RETURN snapshot;
+END;
+$$;
+
+-- Prospective defaults only: this upgrade never changes existing ACL grants.
+ALTER TABLE org_units
+ ADD COLUMN managing_role_id bigint REFERENCES roles(id) ON DELETE RESTRICT,
+ ADD COLUMN file_administrator_role_id bigint REFERENCES roles(id) ON DELETE RESTRICT;
+CREATE INDEX org_units_managing_role_idx ON org_units(managing_role_id);
+CREATE INDEX org_units_file_administrator_role_idx ON org_units(file_administrator_role_id);
+
+CREATE FUNCTION validate_org_unit_designated_roles() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE designated bigint;
+BEGIN
+ FOREACH designated IN ARRAY ARRAY[NEW.managing_role_id,NEW.file_administrator_role_id] LOOP
+  IF designated IS NOT NULL AND NOT EXISTS (
+   SELECT 1 FROM roles WHERE id=designated AND org_unit_id=NEW.id AND NOT is_system
+    AND account_type_restriction IS DISTINCT FROM 'service'
+  ) THEN RAISE EXCEPTION 'designated role must belong to the same unit and be a non-system person role' USING ERRCODE='23514'; END IF;
+ END LOOP;
+ IF NEW.file_administrator_role_id IS DISTINCT FROM OLD.file_administrator_role_id
+   AND NEW.file_administrator_role_id IS NOT NULL
+   AND NOT role_effectively_active(NEW.file_administrator_role_id) THEN
+  RAISE EXCEPTION 'File Administrator role must be active' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER org_units_validate_designated_roles BEFORE INSERT OR UPDATE ON org_units
+ FOR EACH ROW EXECUTE FUNCTION validate_org_unit_designated_roles();
+
+CREATE FUNCTION protect_designated_role_unit() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM org_units WHERE
+  (managing_role_id=NEW.id OR file_administrator_role_id=NEW.id)
+  AND (id IS DISTINCT FROM NEW.org_unit_id OR NEW.is_system
+    OR NEW.account_type_restriction='service')) THEN
+  RAISE EXCEPTION 'role is designated by an organizational unit; clear or replace its designation first' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER roles_protect_designation BEFORE UPDATE ON roles
+ FOR EACH ROW EXECUTE FUNCTION protect_designated_role_unit();
+
+DO $$
+DECLARE acl_table text; constraint_row record;
+BEGIN
+ FOREACH acl_table IN ARRAY ARRAY['aggregation_acl_grants','aggregation_child_aggregation_acl_defaults','aggregation_child_record_acl_defaults','record_acl_grants'] LOOP
+  FOR constraint_row IN SELECT conname FROM pg_constraint WHERE conrelid=acl_table::regclass
+    AND contype='c' AND pg_get_constraintdef(oid) LIKE '%principal_type%' LOOP
+   EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I',acl_table,constraint_row.conname);
+  END LOOP;
+  EXECUTE format('ALTER TABLE %I ADD CONSTRAINT %I CHECK (
+    (principal_type=''role'' AND role_id IS NOT NULL) OR
+    (principal_type IN (''everyone'',''org_unit_members'',''owning_and_higher_level_unit_managers'',''effective_file_administrator'') AND role_id IS NULL))',acl_table,acl_table||'_principal_valid');
+  EXECUTE format('CREATE UNIQUE INDEX %I ON %I(%I,principal_type,permission_id)
+   WHERE principal_type IN (''owning_and_higher_level_unit_managers'',''effective_file_administrator'')',
+   acl_table||'_oversight_unique',acl_table,CASE WHEN acl_table='record_acl_grants' THEN 'record_id' ELSE 'aggregation_id' END);
+ END LOOP;
+END $$;
+
+-- Resolves roles from current data, with no authorization cache.
+CREATE FUNCTION contextual_acl_roles(p_owner bigint,p_principal text)
+ RETURNS TABLE(role_id bigint,org_unit_id bigint) LANGUAGE sql STABLE AS $$
+ WITH RECURSIVE chain AS (
+  SELECT id,parent_org_unit_id,managing_role_id,file_administrator_role_id,0 AS depth
+   FROM org_units WHERE id=p_owner
+  UNION ALL
+  SELECT parent.id,parent.parent_org_unit_id,parent.managing_role_id,parent.file_administrator_role_id,child.depth+1
+   FROM org_units parent JOIN chain child ON parent.id=child.parent_org_unit_id
+ ), selected AS (
+  SELECT managing_role_id AS role_id,id AS org_unit_id FROM chain
+   WHERE p_principal='owning_and_higher_level_unit_managers'
+  UNION ALL
+  SELECT file_administrator_role_id,id FROM
+   (SELECT * FROM chain WHERE file_administrator_role_id IS NOT NULL ORDER BY depth LIMIT 1) nearest
+   WHERE p_principal='effective_file_administrator'
+ )
+ SELECT selected.role_id,selected.org_unit_id FROM selected JOIN roles role ON role.id=selected.role_id
+ WHERE role.org_unit_id=selected.org_unit_id AND NOT role.is_system
+   AND role.account_type_restriction IS DISTINCT FROM 'service' AND role_effectively_active(role.id)
+$$;
+CREATE FUNCTION user_matches_contextual_acl(p_user bigint,p_owner bigint,p_principal text)
+ RETURNS boolean LANGUAGE sql STABLE AS $$
+ SELECT EXISTS(SELECT 1 FROM contextual_acl_roles(p_owner,p_principal) match
+  JOIN user_role_assignments assignment ON assignment.role_id=match.role_id
+  WHERE assignment.user_id=p_user AND assignment.valid_from<=CURRENT_TIMESTAMP
+   AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP))
+$$;
+
+CREATE OR REPLACE FUNCTION user_has_aggregation_permission(
+  p_user_id bigint, p_aggregation_id bigint, p_permission text
+) RETURNS boolean LANGUAGE plpgsql STABLE AS $$
+DECLARE
+  cursor_row aggregations%ROWTYPE;
+  parent_row aggregations%ROWTYPE;
+  source_id bigint;
+  source_kind text;
+  target_owner_id bigint;
+BEGIN
+  SELECT * INTO cursor_row FROM aggregations WHERE id=p_aggregation_id;
+  IF NOT FOUND THEN RETURN false; END IF;
+  target_owner_id := cursor_row.owning_org_unit_id;
+  IF NOT cursor_row.inherit_acl_from_parent OR cursor_row.parent_aggregation_id IS NULL THEN
+    source_id := cursor_row.id; source_kind := 'resource';
+  ELSE
+    LOOP
+      SELECT * INTO parent_row FROM aggregations WHERE id=cursor_row.parent_aggregation_id;
+      IF NOT FOUND THEN RETURN false; END IF;
+      IF parent_row.default_child_aggregation_acl_mode='custom' THEN
+        source_id := parent_row.id; source_kind := 'child_default'; EXIT;
+      ELSIF NOT parent_row.inherit_acl_from_parent OR parent_row.parent_aggregation_id IS NULL THEN
+        source_id := parent_row.id; source_kind := 'resource'; EXIT;
+      END IF;
+      cursor_row := parent_row;
+    END LOOP;
+  END IF;
+
+  IF source_kind='resource' THEN
+    RETURN EXISTS (
+      SELECT 1 FROM aggregation_acl_grants grant_row
+      JOIN permissions permission ON permission.id=grant_row.permission_id
+      WHERE grant_row.aggregation_id=source_id AND permission.code=p_permission
+        AND (grant_row.principal_type='everyone'
+          OR (grant_row.principal_type='role' AND EXISTS (
+            SELECT 1 FROM user_role_assignments assignment
+            WHERE assignment.user_id=p_user_id AND assignment.role_id=grant_row.role_id
+              AND assignment.valid_from<=CURRENT_TIMESTAMP
+              AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+              AND role_effectively_active(assignment.role_id)))
+          OR user_matches_contextual_acl(p_user_id,target_owner_id,grant_row.principal_type)
+          OR (grant_row.principal_type='org_unit_members' AND EXISTS (
+            SELECT 1 FROM user_role_assignments assignment
+            JOIN roles role ON role.id=assignment.role_id
+            WHERE assignment.user_id=p_user_id AND role.org_unit_id=target_owner_id
+              AND assignment.valid_from<=CURRENT_TIMESTAMP
+              AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+              AND role_effectively_active(role.id))))
+    );
+  END IF;
+  RETURN EXISTS (
+    SELECT 1 FROM aggregation_child_aggregation_acl_defaults grant_row
+    JOIN permissions permission ON permission.id=grant_row.permission_id
+    WHERE grant_row.aggregation_id=source_id AND permission.code=p_permission
+      AND (grant_row.principal_type='everyone'
+        OR (grant_row.principal_type='role' AND EXISTS (
+          SELECT 1 FROM user_role_assignments assignment
+          WHERE assignment.user_id=p_user_id AND assignment.role_id=grant_row.role_id
+            AND assignment.valid_from<=CURRENT_TIMESTAMP
+            AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+            AND role_effectively_active(assignment.role_id)))
+        OR user_matches_contextual_acl(p_user_id,target_owner_id,grant_row.principal_type)
+          OR (grant_row.principal_type='org_unit_members' AND EXISTS (
+          SELECT 1 FROM user_role_assignments assignment
+          JOIN roles role ON role.id=assignment.role_id
+          WHERE assignment.user_id=p_user_id AND role.org_unit_id=target_owner_id
+            AND assignment.valid_from<=CURRENT_TIMESTAMP
+            AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+            AND role_effectively_active(role.id))))
+  );
+END $$;
+
+CREATE OR REPLACE FUNCTION user_has_record_permission(
+  p_user_id bigint, p_record_id bigint, p_permission text
+) RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM records resource
+    JOIN permissions permission ON permission.code=p_permission
+    JOIN record_acl_grants grant_row ON NOT resource.inherit_acl_from_parent
+      AND grant_row.record_id=resource.id AND grant_row.permission_id=permission.id
+    WHERE resource.id=p_record_id AND
+      (grant_row.principal_type='everyone'
+       OR (grant_row.principal_type='role' AND EXISTS (
+         SELECT 1 FROM user_role_assignments assignment
+         WHERE assignment.user_id=p_user_id AND assignment.role_id=grant_row.role_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(assignment.role_id)))
+       OR user_matches_contextual_acl(p_user_id,resource.owning_org_unit_id,grant_row.principal_type)
+          OR (grant_row.principal_type='org_unit_members' AND EXISTS (
+         SELECT 1 FROM user_role_assignments assignment
+         JOIN roles role ON role.id=assignment.role_id
+         WHERE assignment.user_id=p_user_id AND role.org_unit_id=resource.owning_org_unit_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(role.id))))
+  ) OR EXISTS (
+    SELECT 1 FROM records resource
+    JOIN permissions permission ON permission.code=p_permission
+    JOIN aggregation_child_record_acl_defaults grant_row
+      ON resource.inherit_acl_from_parent AND grant_row.aggregation_id=resource.aggregation_id
+      AND grant_row.permission_id=permission.id
+    WHERE resource.id=p_record_id AND
+      (grant_row.principal_type='everyone'
+       OR (grant_row.principal_type='role' AND EXISTS (
+         SELECT 1 FROM user_role_assignments assignment
+         WHERE assignment.user_id=p_user_id AND assignment.role_id=grant_row.role_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(assignment.role_id)))
+       OR user_matches_contextual_acl(p_user_id,resource.owning_org_unit_id,grant_row.principal_type)
+          OR (grant_row.principal_type='org_unit_members' AND EXISTS (
+         SELECT 1 FROM user_role_assignments assignment
+         JOIN roles role ON role.id=assignment.role_id
+         WHERE assignment.user_id=p_user_id AND role.org_unit_id=resource.owning_org_unit_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(role.id))))
+  )
+$$;
+
+CREATE OR REPLACE FUNCTION user_has_destination_record_permission(
+  p_user_id bigint,p_aggregation_id bigint,p_permission text
+) RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT EXISTS(
+    SELECT 1 FROM aggregations resource
+    JOIN aggregation_child_record_acl_defaults grant_row
+      ON grant_row.aggregation_id=resource.id
+    JOIN permissions permission ON permission.id=grant_row.permission_id
+    WHERE resource.id=p_aggregation_id AND permission.code=p_permission
+      AND (grant_row.principal_type='everyone'
+       OR (grant_row.principal_type='role' AND EXISTS(
+         SELECT 1 FROM user_role_assignments assignment
+         WHERE assignment.user_id=p_user_id AND assignment.role_id=grant_row.role_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(assignment.role_id)))
+       OR user_matches_contextual_acl(p_user_id,resource.owning_org_unit_id,grant_row.principal_type)
+          OR (grant_row.principal_type='org_unit_members' AND EXISTS(
+         SELECT 1 FROM user_role_assignments assignment
+         JOIN roles role ON role.id=assignment.role_id
+         WHERE assignment.user_id=p_user_id AND role.org_unit_id=resource.owning_org_unit_id
+           AND assignment.valid_from<=CURRENT_TIMESTAMP
+           AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+           AND role_effectively_active(role.id))))
+  )
+$$;
+
+
+
+
+CREATE OR REPLACE FUNCTION initialize_resource_acls() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE creator_role_id bigint := NULLIF(current_setting('app.creator_acl_role_id',true),'')::bigint;
+  acl_scope record;
+BEGIN
+  IF creator_role_id IS NULL THEN RETURN NEW; END IF;
+  IF TG_TABLE_NAME='aggregations' THEN
+    INSERT INTO aggregation_acl_grants(aggregation_id,principal_type,role_id,permission_id)
+      SELECT NEW.id,'role',creator_role_id,id FROM permissions WHERE code=ANY(ARRAY['aggregation.view','aggregation.modify_metadata','aggregation.add_child','aggregation.add_record','aggregation.close','aggregation.history.view']);
+    INSERT INTO aggregation_acl_grants(aggregation_id,principal_type,permission_id)
+      SELECT NEW.id,'org_unit_members',id FROM permissions WHERE code=ANY(ARRAY['aggregation.view','aggregation.history.view']);
+    INSERT INTO aggregation_child_aggregation_acl_defaults(aggregation_id,principal_type,role_id,permission_id)
+      SELECT NEW.id,'role',creator_role_id,id FROM permissions WHERE code=ANY(ARRAY['aggregation.view','aggregation.modify_metadata','aggregation.add_child','aggregation.add_record','aggregation.close','aggregation.history.view']);
+    INSERT INTO aggregation_child_aggregation_acl_defaults(aggregation_id,principal_type,permission_id)
+      SELECT NEW.id,'org_unit_members',id FROM permissions WHERE code=ANY(ARRAY['aggregation.view','aggregation.history.view']);
+    INSERT INTO aggregation_child_record_acl_defaults(aggregation_id,principal_type,role_id,permission_id)
+      SELECT NEW.id,'role',creator_role_id,id FROM permissions WHERE code=ANY(ARRAY['record.view','record.history.view','record.component.list','record.component.view','record.component.download','record.component.share','record.component.print']);
+    INSERT INTO aggregation_child_record_acl_defaults(aggregation_id,principal_type,permission_id)
+      SELECT NEW.id,'org_unit_members',id FROM permissions WHERE code=ANY(ARRAY['record.view','record.component.list','record.component.view','record.component.download']);
+  ELSE
+    INSERT INTO record_acl_grants(record_id,principal_type,role_id,permission_id)
+      SELECT NEW.id,'role',creator_role_id,id FROM permissions WHERE code=ANY(ARRAY['record.view','record.history.view','record.component.list','record.component.view','record.component.download','record.component.share','record.component.print']);
+    INSERT INTO record_acl_grants(record_id,principal_type,permission_id)
+      SELECT NEW.id,'org_unit_members',id FROM permissions WHERE code=ANY(ARRAY['record.view','record.component.list','record.component.view','record.component.download']);
+  END IF;
+  FOR acl_scope IN SELECT * FROM (VALUES
+    ('aggregation_acl_grants','aggregation_id','aggregation'),
+    ('aggregation_child_aggregation_acl_defaults','aggregation_id','aggregation'),
+    ('aggregation_child_record_acl_defaults','aggregation_id','record'),
+    ('record_acl_grants','record_id','record')) AS scopes(table_name,owner_column,resource_type)
+  LOOP
+    IF (TG_TABLE_NAME='aggregations' AND acl_scope.table_name<>'record_acl_grants')
+      OR (TG_TABLE_NAME='records' AND acl_scope.table_name='record_acl_grants') THEN
+      EXECUTE format('INSERT INTO %I(%I,principal_type,permission_id)
+        SELECT $1,principal,id FROM permissions CROSS JOIN
+        (VALUES (''owning_and_higher_level_unit_managers''),(''effective_file_administrator'')) AS principals(principal)
+        WHERE code=ANY(CASE WHEN principal=''owning_and_higher_level_unit_managers'' THEN $2 ELSE $3 END)',acl_scope.table_name,acl_scope.owner_column)
+      USING NEW.id,
+        CASE WHEN acl_scope.resource_type='aggregation' THEN ARRAY['aggregation.view','aggregation.history.view']
+          ELSE ARRAY['record.view','record.component.list','record.component.view','record.component.download'] END,
+        CASE WHEN acl_scope.resource_type='aggregation' THEN ARRAY['aggregation.view','aggregation.modify_metadata','aggregation.add_child','aggregation.add_record','aggregation.close','aggregation.acl.manage','aggregation.history.view']
+          ELSE ARRAY['record.view','record.acl.manage','record.history.view','record.component.list','record.component.view','record.component.download','record.component.share','record.component.print'] END;
+    END IF;
+  END LOOP;
+  RETURN NEW;
+END $$;
+
+BEGIN;
+SELECT set_config('app.actor_type','automated_process',true), set_config('app.actor_name','Resource relationship installation',true), set_config('app.event_source','seeding',true);
+-- Phase 1: named resource relationships; disposition enforcement is deferred.
+CREATE TABLE relationship_types (
+ id bigserial PRIMARY KEY,
+ resource_kind text NOT NULL CHECK(resource_kind IN ('aggregation','record')),
+ code text NOT NULL CHECK(code ~ '^[a-z][a-z0-9_]*$'),
+ forward_name text NOT NULL CHECK(btrim(forward_name)<>''),
+ reverse_name text NOT NULL CHECK(btrim(reverse_name)<>''),
+ is_symmetric boolean NOT NULL DEFAULT false,
+ is_active boolean NOT NULL DEFAULT true,
+ translations jsonb NOT NULL DEFAULT '{}'::jsonb CHECK(jsonb_typeof(translations)='object'),
+ version integer NOT NULL DEFAULT 1,
+ date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ date_updated timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE(resource_kind,code),
+ CHECK(NOT is_symmetric OR forward_name=reverse_name)
+);
+CREATE TABLE aggregation_relationships (
+ id bigserial PRIMARY KEY,
+ relationship_type_id bigint NOT NULL REFERENCES relationship_types(id) ON DELETE RESTRICT,
+ source_id bigint NOT NULL REFERENCES aggregations(id) ON DELETE CASCADE,
+ target_id bigint NOT NULL REFERENCES aggregations(id) ON DELETE CASCADE,
+ date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ CHECK(source_id<>target_id),
+ UNIQUE(relationship_type_id,source_id,target_id)
+);
+CREATE INDEX aggregation_relationships_target_idx ON aggregation_relationships(target_id,id);
+CREATE INDEX aggregation_relationships_source_idx ON aggregation_relationships(source_id,id);
+CREATE TABLE record_relationships (
+ id bigserial PRIMARY KEY,
+ relationship_type_id bigint NOT NULL REFERENCES relationship_types(id) ON DELETE RESTRICT,
+ source_id bigint NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+ target_id bigint NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+ date_created timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ CHECK(source_id<>target_id),
+ UNIQUE(relationship_type_id,source_id,target_id)
+);
+CREATE INDEX record_relationships_target_idx ON record_relationships(target_id,id);
+CREATE INDEX record_relationships_source_idx ON record_relationships(source_id,id);
+CREATE FUNCTION guard_relationship_type() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NOT user_has_global_privilege(current_user_id(),'relationships.administer')
+    AND COALESCE(current_setting('app.event_source',true),'') NOT IN ('seeding','migration') THEN
+  RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='relationships_administer_required';
+ END IF;
+ IF TG_OP='UPDATE' AND (NEW.resource_kind,NEW.code,NEW.is_symmetric)
+     IS DISTINCT FROM (OLD.resource_kind,OLD.code,OLD.is_symmetric) THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='relationship_type_identity_immutable';
+ END IF;
+ IF TG_OP<>'DELETE' THEN
+  IF NOT COALESCE(jsonb_typeof(NEW.translations->'ar')='object',false)
+     OR NOT COALESCE(jsonb_typeof(NEW.translations->'ar'->'forward_name')='string',false)
+     OR NOT COALESCE(jsonb_typeof(NEW.translations->'ar'->'reverse_name')='string',false)
+     OR btrim(NEW.translations->'ar'->>'forward_name')=''
+     OR btrim(NEW.translations->'ar'->>'reverse_name')=''
+     OR (NEW.is_symmetric AND NEW.translations->'ar'->>'forward_name'
+                             IS DISTINCT FROM NEW.translations->'ar'->>'reverse_name') THEN
+   RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='relationship_arabic_labels_required';
+  END IF;
+ END IF;
+ RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
+END $$;
+CREATE TRIGGER relationship_types_guard BEFORE INSERT OR UPDATE OR DELETE ON relationship_types
+FOR EACH ROW EXECUTE FUNCTION guard_relationship_type();
+CREATE TRIGGER relationship_types_version BEFORE UPDATE ON relationship_types
+FOR EACH ROW EXECUTE FUNCTION bump_entity_version();
+CREATE TRIGGER relationship_types_history AFTER INSERT OR UPDATE OR DELETE ON relationship_types
+FOR EACH ROW EXECUTE FUNCTION record_entity_history('relationship_type');
+
+CREATE FUNCTION guard_resource_relationship() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE item record; definition relationship_types; kind text;
+BEGIN
+ kind:=TG_ARGV[0];
+ -- A parent resource deletion is authorized by its own existing deletion path.
+ -- Permit only genuine FK cascades; explicit unlinking still requires both endpoints.
+ IF TG_OP='DELETE' AND pg_trigger_depth()>1 THEN
+  IF (kind='aggregation' AND (NOT EXISTS(SELECT 1 FROM aggregations WHERE id=OLD.source_id)
+                             OR NOT EXISTS(SELECT 1 FROM aggregations WHERE id=OLD.target_id)))
+     OR (kind='record' AND (NOT EXISTS(SELECT 1 FROM records WHERE id=OLD.source_id)
+                           OR NOT EXISTS(SELECT 1 FROM records WHERE id=OLD.target_id))) THEN
+   RETURN OLD;
+  END IF;
+ END IF;
+ IF TG_OP='UPDATE' THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='relationship_immutable_remove_and_recreate';
+ END IF;
+ IF NOT user_has_global_privilege(current_user_id(),'relationships.link') THEN
+  RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='relationships_link_required';
+ END IF;
+ item:=CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
+ SELECT * INTO definition FROM relationship_types WHERE id=item.relationship_type_id FOR SHARE;
+ IF definition.resource_kind IS DISTINCT FROM kind THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='relationship_type_scope_mismatch';
+ END IF;
+ IF TG_OP='INSERT' AND NOT definition.is_active THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='relationship_type_inactive';
+ END IF;
+ IF kind='aggregation' THEN
+  PERFORM id FROM aggregations WHERE id IN (item.source_id,item.target_id) ORDER BY id FOR SHARE;
+  IF NOT current_user_can_view_aggregation(item.source_id) OR NOT current_user_can_view_aggregation(item.target_id) THEN
+   RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='relationship_endpoint_access_required';
+  END IF;
+ ELSE
+  PERFORM id FROM records WHERE id IN (item.source_id,item.target_id) ORDER BY id FOR SHARE;
+  IF NOT current_user_can_view_record(item.source_id) OR NOT current_user_can_view_record(item.target_id) THEN
+   RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='relationship_endpoint_access_required';
+  END IF;
+ END IF;
+ IF TG_OP='INSERT' AND definition.is_symmetric AND NEW.source_id>NEW.target_id THEN
+  NEW.source_id:=item.target_id; NEW.target_id:=item.source_id;
+ END IF;
+ RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
+END $$;
+CREATE TRIGGER aggregation_relationships_guard BEFORE INSERT OR UPDATE OR DELETE ON aggregation_relationships
+FOR EACH ROW EXECUTE FUNCTION guard_resource_relationship('aggregation');
+CREATE TRIGGER aggregation_relationships_history AFTER INSERT OR DELETE ON aggregation_relationships
+FOR EACH ROW EXECUTE FUNCTION record_entity_history('aggregation_relationship');
+CREATE TRIGGER record_relationships_guard BEFORE INSERT OR UPDATE OR DELETE ON record_relationships
+FOR EACH ROW EXECUTE FUNCTION guard_resource_relationship('record');
+CREATE TRIGGER record_relationships_history AFTER INSERT OR DELETE ON record_relationships
+FOR EACH ROW EXECUTE FUNCTION record_entity_history('record_relationship');
+CREATE OR REPLACE FUNCTION current_user_can_view_event_resource(
+  p_entity_type text, p_entity_id bigint, p_before jsonb, p_after jsonb
+) RETURNS boolean LANGUAGE plpgsql STABLE AS $$
+DECLARE record_id bigint;
+DECLARE historical_level_id bigint;
+BEGIN
+  IF p_entity_type IN ('aggregation_relationship','record_relationship') THEN
+    IF p_entity_type='aggregation_relationship' THEN
+      RETURN current_user_can_view_aggregation((COALESCE(p_after,p_before)->>'source_id')::bigint)
+         AND current_user_can_view_aggregation((COALESCE(p_after,p_before)->>'target_id')::bigint);
+    END IF;
+    RETURN current_user_can_view_record((COALESCE(p_after,p_before)->>'source_id')::bigint)
+       AND current_user_can_view_record((COALESCE(p_after,p_before)->>'target_id')::bigint);
+  END IF;
+  IF p_entity_type='aggregation' THEN
+    IF EXISTS (SELECT 1 FROM aggregations WHERE id=p_entity_id) THEN
+      RETURN current_user_can_view_aggregation(p_entity_id);
+    END IF;
+    historical_level_id := COALESCE(
+      CASE WHEN (p_before->>'security_level_id') ~ '^[0-9]+$' THEN (p_before->>'security_level_id')::bigint END,
+      CASE WHEN (p_after->>'security_level_id') ~ '^[0-9]+$' THEN (p_after->>'security_level_id')::bigint END
+    );
+  ELSIF p_entity_type='record' THEN
+    IF EXISTS (SELECT 1 FROM records WHERE id=p_entity_id) THEN
+      RETURN current_user_can_view_record(p_entity_id);
+    END IF;
+    historical_level_id := COALESCE(
+      CASE WHEN (p_before->>'security_level_id') ~ '^[0-9]+$' THEN (p_before->>'security_level_id')::bigint END,
+      CASE WHEN (p_after->>'security_level_id') ~ '^[0-9]+$' THEN (p_after->>'security_level_id')::bigint END
+    );
+  ELSIF p_entity_type IN ('digital_component','record_component') THEN
+    SELECT component.record_id INTO record_id FROM digital_components component WHERE component.id=p_entity_id;
+    IF record_id IS NULL THEN
+      record_id := COALESCE(
+        CASE WHEN (p_after->>'record_id') ~ '^[0-9]+$' THEN (p_after->>'record_id')::bigint END,
+        CASE WHEN (p_before->>'record_id') ~ '^[0-9]+$' THEN (p_before->>'record_id')::bigint END
+      );
+    END IF;
+    RETURN record_id IS NOT NULL AND current_user_can_view_record(record_id);
+  ELSE
+    RETURN true;
+  END IF;
+  IF historical_level_id IS NOT NULL THEN
+    RETURN user_has_global_privilege(current_user_id(),'audit.view') AND EXISTS (
+      SELECT 1 FROM user_role_assignments assignment
+      JOIN roles role ON role.id=assignment.role_id
+      JOIN security_levels role_level ON role_level.id=role.security_level_id
+      JOIN security_levels required ON required.id=historical_level_id
+      WHERE assignment.user_id=current_user_id()
+        AND assignment.valid_from<=CURRENT_TIMESTAMP
+        AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+        AND role_effectively_active(role.id)
+        AND role_level.level_number>=required.level_number
+    );
+  END IF;
+  RETURN false;
+END $$;
+INSERT INTO privileges(code,name,description,category) VALUES
+ ('relationships.link','Link Records and Aggregations','Create and remove named links between resources you can view.','record'),
+ ('relationships.administer','Administer Relationship Types','Maintain aggregation and record relationship catalogues.','administration');
+INSERT INTO profile_privileges(profile_id,privilege_id)
+SELECT p.id,v.id FROM profiles p CROSS JOIN privileges v
+WHERE p.code IN ('ALL_PRIVS','INFO_GOV_OFFICER','INFO_GOV_MGR')
+AND v.code IN ('relationships.link','relationships.administer') ON CONFLICT DO NOTHING;
+INSERT INTO schema_migrations(version) VALUES ('049_resource_relationships') ON CONFLICT DO NOTHING;
+COMMIT;
+
+
+-- Shared configuration foundation. Categories belong only to the Python registry.
+CREATE TABLE IF NOT EXISTS application_settings_state (
+ singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton),
+ database_id uuid NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+ installation_kind text NOT NULL CHECK(installation_kind IN ('fresh','upgrade'))
+);
+INSERT INTO application_settings_state(singleton,installation_kind)
+ VALUES(true,'fresh') ON CONFLICT(singleton) DO NOTHING;
+CREATE TABLE IF NOT EXISTS application_settings (
+ id bigserial UNIQUE NOT NULL,
+ key text PRIMARY KEY,
+ value jsonb NOT NULL,
+ protected_secret bytea,
+ provenance text NOT NULL DEFAULT 'default' CHECK(provenance IN ('default','configured','migrated')),
+ version bigint NOT NULL DEFAULT 1 CHECK(version>0),
+ date_updated timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_by_user_id bigint,
+ scheme_reference_id bigint GENERATED ALWAYS AS
+  (CASE WHEN key='DISPOSITION_CLASSIFICATION_SCHEME_ID' AND jsonb_typeof(value)='number'
+    THEN (value#>>'{}')::bigint END) STORED REFERENCES classification_schemes(id) ON DELETE RESTRICT,
+ classification_reference_id bigint GENERATED ALWAYS AS
+  (CASE WHEN key IN ('DISPOSITION_UPLOADED_EVIDENCE_CLASSIFICATION_ID','DISPOSITION_GENERATED_REPORTS_CLASSIFICATION_ID')
+    AND jsonb_typeof(value)='number' THEN (value#>>'{}')::bigint END)
+  STORED REFERENCES classifications(id) ON DELETE RESTRICT
+);
+CREATE TABLE IF NOT EXISTS application_settings_migration_keys (
+ migration_id text NOT NULL CHECK(btrim(migration_id)<>''),
+ key text NOT NULL REFERENCES application_settings(key) ON DELETE RESTRICT,
+ completed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ completed_by_user_id bigint NOT NULL,
+ resulting_version bigint NOT NULL CHECK(resulting_version>0),
+ PRIMARY KEY(migration_id,key)
+);
+CREATE OR REPLACE FUNCTION application_setting_value_valid(p_key text,p_value jsonb,p_secret bytea)
+ RETURNS boolean LANGUAGE sql STABLE AS $$
+ SELECT COALESCE(CASE p_key
+ WHEN 'DEFAULT_WORKING_TIMEZONE' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='string' AND btrim(p_value#>>'{}')<>'' AND (p_value#>>'{}') !~ E'[\r\n]' AND EXISTS(SELECT 1 FROM pg_timezone_names WHERE name=p_value#>>'{}'))
+ WHEN 'DEFAULT_ROOT_AGGREGATION_MEDIUM' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='string' AND btrim(p_value#>>'{}')<>'' AND (p_value#>>'{}') !~ E'[\r\n]' AND (p_value#>>'{}') IN ('digital','physical','mixed'))
+ WHEN 'REVIEW_WARNING_WINDOW_DAYS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 0 AND 9223372036854775807)
+ WHEN 'MAX_UPLOAD_SIZE_BYTES' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'CONTENT_SEGMENT_SIZE_BYTES' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 67108864)
+ WHEN 'CONTENT_SEGMENT_CHECKSUMS_ENABLED' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='boolean')
+ WHEN 'CONTENT_UPLOAD_SESSION_TTL_SECONDS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'CONTENT_CLEANUP_INTERVAL_SECONDS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'DOCUMENT_CONVERSION_TIMEOUT_SECONDS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'MAX_RENDITION_SIZE_BYTES' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'AUTH_SESSION_IDLE_MINUTES' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'AUTH_SESSION_ABSOLUTE_HOURS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'AUTH_LOCKOUT_ATTEMPTS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'AUTH_LOCKOUT_MINUTES' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'AUTH_PASSWORD_MIN_LENGTH' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 8 AND 9223372036854775807)
+ WHEN 'AUTH_SESSION_RETENTION_DAYS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 0 AND 9223372036854775807)
+ WHEN 'AUTH_SESSION_CLEANUP_INTERVAL_SECONDS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'AUTH_SESSION_CLEANUP_BATCH_SIZE' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'DASHBOARD_FAVOURITE_ITEM_LIMIT' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'DASHBOARD_RECENT_ITEM_LIMIT' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'DASHBOARD_RECENT_DAYS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'DASHBOARD_REVIEW_PREVIEW_LIMIT' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'CLASSIFICATION_RECENT_SELECTION_LIMIT' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'USER_DETAILS_SESSION_LIMIT' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'FULL_TEXT_SEARCH_ENABLED' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='boolean')
+ WHEN 'CONTENT_INDEXING_SCHEDULING_ENABLED' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='boolean')
+ WHEN 'CONTENT_INDEXING_HISTORY_RETENTION_DAYS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 0 AND 9223372036854775807)
+ WHEN 'CONTENT_INDEXING_CLEANUP_INTERVAL_SECONDS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'CONTENT_INDEXING_CLEANUP_BATCH_SIZE' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'TEXT_INDEXER_CREDENTIAL_HISTORY_RETENTION_DAYS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 0 AND 9223372036854775807)
+ WHEN 'TEXT_INDEXER_RATE_LIMIT_PER_MINUTE' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'SEARCH_RATE_LIMIT_PER_MINUTE' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'MANUAL_REINDEX_RATE_LIMIT_PER_MINUTE' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'AUDIT_TRAIL_SEARCH_RESULT_LIMIT' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'DISPOSITION_DESTRUCTION_REVIEW_ROUTE' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='string' AND btrim(p_value#>>'{}')<>'' AND (p_value#>>'{}') !~ E'[\r\n]' AND (p_value#>>'{}') IN ('standard','simplified','records_manager_only'))
+ WHEN 'DISPOSITION_CLASSIFICATION_SCHEME_ID' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)))
+ WHEN 'DISPOSITION_UPLOADED_EVIDENCE_CLASSIFICATION_ID' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)))
+ WHEN 'DISPOSITION_GENERATED_REPORTS_CLASSIFICATION_ID' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)))
+ WHEN 'DISPOSITION_EXTERNAL_AUTHORITY_NAME' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='string' AND btrim(p_value#>>'{}')<>'' AND (p_value#>>'{}') !~ E'[\r\n]')
+ WHEN 'DISPOSITION_EXTERNAL_AUTHORITY_EMAIL' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='string' AND btrim(p_value#>>'{}')<>'' AND (p_value#>>'{}') !~ E'[\r\n]' AND (p_value#>>'{}') ~ '^[^[:space:]@]+@[^[:space:]@]+$')))
+ WHEN 'DISPOSITION_DESTRUCTION_REMINDER_MONTHS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ WHEN 'SMTP_HOST' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='string' AND btrim(p_value#>>'{}')<>'' AND (p_value#>>'{}') !~ E'[\r\n]')))
+ WHEN 'SMTP_PORT' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 65535)))
+ WHEN 'SMTP_SECURITY' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='string' AND btrim(p_value#>>'{}')<>'' AND (p_value#>>'{}') !~ E'[\r\n]' AND (p_value#>>'{}') IN ('starttls','implicit_tls'))))
+ WHEN 'SMTP_AUTH_ENABLED' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='boolean')))
+ WHEN 'SMTP_USERNAME' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='string' AND btrim(p_value#>>'{}')<>'' AND (p_value#>>'{}') !~ E'[\r\n]')))
+ WHEN 'SMTP_PASSWORD' THEN p_value='null'::jsonb AND (p_secret IS NULL OR convert_from(p_secret,'UTF8') ~ '^fernet:v1:[A-Za-z0-9_=-]+$')
+ WHEN 'SMTP_SENDER_EMAIL' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='string' AND btrim(p_value#>>'{}')<>'' AND (p_value#>>'{}') !~ E'[\r\n]' AND (p_value#>>'{}') ~ '^[^[:space:]@]+@[^[:space:]@]+$')))
+ WHEN 'SMTP_SENDER_NAME' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='string' AND btrim(p_value#>>'{}')<>'' AND (p_value#>>'{}') !~ E'[\r\n]')))
+ WHEN 'SMTP_REPLY_TO_EMAIL' THEN p_secret IS NULL AND ((p_value='null'::jsonb OR (jsonb_typeof(p_value)='string' AND btrim(p_value#>>'{}')<>'' AND (p_value#>>'{}') !~ E'[\r\n]' AND (p_value#>>'{}') ~ '^[^[:space:]@]+@[^[:space:]@]+$')))
+ WHEN 'SMTP_TIMEOUT_SECONDS' THEN p_secret IS NULL AND (jsonb_typeof(p_value)='number' AND p_value::text ~ '^[0-9]+$' AND (p_value#>>'{}')::numeric BETWEEN 1 AND 9223372036854775807)
+ ELSE false END,false)
+$$;
+CREATE OR REPLACE FUNCTION guard_application_setting() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE installer boolean;
+BEGIN
+ installer := current_user_id() IS NULL AND
+  COALESCE(current_setting('app.event_source',true),'') IN ('seeding','migration');
+ IF TG_OP='DELETE' THEN
+  RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='application_settings_protected';
+ END IF;
+ IF TG_OP='INSERT' AND NOT installer THEN
+  RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='application_settings_protected';
+ END IF;
+ IF TG_OP='UPDATE' THEN
+  IF NOT user_has_global_privilege(current_user_id(),'app.settings.manage') OR
+     NOT EXISTS(SELECT 1 FROM users WHERE id=current_user_id() AND account_type='person' AND status='active') THEN
+   RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='application_settings_access_denied';
+  END IF;
+  IF btrim(COALESCE(current_setting('app.change_reason',true),''))='' THEN
+   RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_settings_reason_required';
+  END IF;
+  IF (NEW.id,NEW.key) IS DISTINCT FROM (OLD.id,OLD.key) THEN
+   RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_settings_identity_immutable';
+  END IF;
+  NEW.version:=OLD.version+1;
+  NEW.date_updated:=CURRENT_TIMESTAMP;
+  NEW.updated_by_user_id:=current_user_id();
+  IF NEW.provenance='default' THEN
+   RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_settings_provenance_invalid';
+  END IF;
+ END IF;
+ IF NOT application_setting_value_valid(NEW.key,NEW.value,NEW.protected_secret) THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_setting_value_invalid';
+ END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS application_settings_guard ON application_settings;
+CREATE TRIGGER application_settings_guard BEFORE INSERT OR UPDATE OR DELETE ON application_settings
+ FOR EACH ROW EXECUTE FUNCTION guard_application_setting();
+CREATE OR REPLACE FUNCTION audit_application_setting() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE safe jsonb; reference_field text;
+BEGIN
+ safe:=jsonb_build_object('setting_key',NEW.key,'version',NEW.version,'provenance',NEW.provenance);
+ IF NEW.key='SMTP_PASSWORD' THEN
+  safe:=safe||jsonb_build_object('credential_changed',TG_OP='UPDATE','is_set',NEW.protected_secret IS NOT NULL);
+ ELSE
+  safe:=safe||jsonb_build_object('new_value',NEW.value,
+   'old_value',CASE WHEN TG_OP='UPDATE' THEN OLD.value END);
+  reference_field:=CASE
+   WHEN NEW.key='DISPOSITION_CLASSIFICATION_SCHEME_ID' THEN 'classification_scheme_id'
+   WHEN NEW.key IN ('DISPOSITION_UPLOADED_EVIDENCE_CLASSIFICATION_ID',
+                   'DISPOSITION_GENERATED_REPORTS_CLASSIFICATION_ID') THEN 'classification_id'
+  END;
+  IF reference_field IS NOT NULL THEN
+   -- Persist identities at the change, rather than resolving mutable names
+   -- when an administrator later opens the historical event.
+   safe:=safe||jsonb_build_object(
+    'new_reference',event_reference_identity(reference_field,(NEW.value#>>'{}')::bigint),
+    'old_reference',CASE WHEN TG_OP='UPDATE' THEN
+     event_reference_identity(reference_field,(OLD.value#>>'{}')::bigint) END);
+  END IF;
+ END IF;
+ PERFORM append_domain_event('application_setting',NEW.id,
+  CASE WHEN TG_OP='INSERT' THEN 'APPLICATION_SETTING_SEEDED' ELSE 'APPLICATION_SETTING_CHANGED' END,safe);
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS application_settings_audit ON application_settings;
+CREATE TRIGGER application_settings_audit AFTER INSERT OR UPDATE ON application_settings
+ FOR EACH ROW EXECUTE FUNCTION audit_application_setting();
+CREATE OR REPLACE FUNCTION application_settings_set_valid() RETURNS boolean LANGUAGE sql STABLE AS $$
+ WITH dest AS (
+  SELECT (SELECT value FROM application_settings WHERE key='DISPOSITION_CLASSIFICATION_SCHEME_ID') AS scheme
+ ), auth AS (
+  SELECT (SELECT value FROM application_settings WHERE key='SMTP_AUTH_ENABLED') AS enabled,
+   (SELECT value FROM application_settings WHERE key='SMTP_USERNAME') AS username,
+   (SELECT protected_secret IS NOT NULL FROM application_settings WHERE key='SMTP_PASSWORD') AS password_set
+ )
+ SELECT NOT EXISTS(
+  SELECT 1 FROM application_settings s LEFT JOIN classifications c ON c.id=s.classification_reference_id
+  CROSS JOIN dest WHERE s.classification_reference_id IS NOT NULL AND
+   (dest.scheme='null'::jsonb OR NOT c.is_terminal OR c.classification_scheme_id<>(dest.scheme#>>'{}')::bigint)
+ ) AND NOT EXISTS(SELECT 1 FROM auth WHERE enabled='true'::jsonb
+  AND (username='null'::jsonb OR NOT password_set))
+
+$$;
+CREATE OR REPLACE FUNCTION check_application_settings_set() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NOT application_settings_set_valid() THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_settings_group_inconsistent';
+ END IF;
+ RETURN NULL;
+END $$;
+DROP TRIGGER IF EXISTS application_settings_set_constraint ON application_settings;
+CREATE CONSTRAINT TRIGGER application_settings_set_constraint AFTER INSERT OR UPDATE ON application_settings
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION check_application_settings_set();
+DROP TRIGGER IF EXISTS classifications_settings_destination_constraint ON classifications;
+CREATE CONSTRAINT TRIGGER classifications_settings_destination_constraint AFTER UPDATE ON classifications
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION check_application_settings_set();
+CREATE OR REPLACE FUNCTION guard_settings_migration_completion() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP<>'INSERT' OR NOT user_has_global_privilege(current_user_id(),'app.settings.manage') OR
+    btrim(COALESCE(current_setting('app.change_reason',true),''))='' OR
+    NEW.completed_by_user_id<>current_user_id() OR
+    NEW.resulting_version<>(SELECT version FROM application_settings WHERE key=NEW.key) THEN
+  RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='application_settings_completion_protected';
+ END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS application_settings_migration_guard ON application_settings_migration_keys;
+CREATE TRIGGER application_settings_migration_guard BEFORE INSERT OR UPDATE OR DELETE ON application_settings_migration_keys
+ FOR EACH ROW EXECUTE FUNCTION guard_settings_migration_completion();
+CREATE OR REPLACE FUNCTION apply_application_settings(p_changes jsonb,p_reason text,p_migration_id text DEFAULT NULL)
+ RETURNS void LANGUAGE plpgsql AS $$
+DECLARE item jsonb; old_row application_settings%ROWTYPE; submitted text[]; related text[];
+ previous_reason text; previous_source text; new_value jsonb; new_secret bytea; group_name text;
+BEGIN
+ IF NOT user_has_global_privilege(current_user_id(),'app.settings.manage') OR
+    NOT EXISTS(SELECT 1 FROM users WHERE id=current_user_id() AND account_type='person' AND status='active') THEN
+  RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='application_settings_access_denied';
+ END IF;
+ IF btrim(COALESCE(p_reason,''))='' THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_settings_reason_required';
+ END IF;
+ IF jsonb_typeof(p_changes)<>'array' OR jsonb_array_length(p_changes) NOT BETWEEN 1 AND 51 THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_settings_invalid_update';
+ END IF;
+ SELECT array_agg(value->>'key' ORDER BY value->>'key') INTO submitted FROM jsonb_array_elements(p_changes);
+ IF cardinality(submitted)<>(SELECT count(DISTINCT k) FROM unnest(submitted) k) OR
+    EXISTS(SELECT 1 FROM unnest(submitted) k WHERE k IS NULL OR NOT EXISTS(SELECT 1 FROM application_settings WHERE key=k)) THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_settings_invalid_update';
+ END IF;
+ FOREACH group_name IN ARRAY ARRAY['destinations','smtp'] LOOP
+  related:=CASE group_name WHEN 'destinations' THEN ARRAY['DISPOSITION_CLASSIFICATION_SCHEME_ID','DISPOSITION_GENERATED_REPORTS_CLASSIFICATION_ID','DISPOSITION_UPLOADED_EVIDENCE_CLASSIFICATION_ID']::text[] ELSE ARRAY['SMTP_AUTH_ENABLED','SMTP_HOST','SMTP_PASSWORD','SMTP_PORT','SMTP_REPLY_TO_EMAIL','SMTP_SECURITY','SMTP_SENDER_EMAIL','SMTP_SENDER_NAME','SMTP_TIMEOUT_SECONDS','SMTP_USERNAME']::text[] END;
+  IF submitted&&related AND NOT submitted@>related THEN
+   RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_settings_group_required';
+  END IF;
+ END LOOP;
+ IF p_migration_id IS NOT NULL AND btrim(p_migration_id)='' THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_settings_invalid_update';
+ END IF;
+ -- Stable row lock order shared with concurrent grouped administration/migration.
+ PERFORM 1 FROM application_settings WHERE key=ANY(submitted) ORDER BY key FOR UPDATE;
+ previous_reason:=current_setting('app.change_reason',true);
+ previous_source:=current_setting('app.event_source',true);
+ PERFORM set_config('app.change_reason',p_reason,true);
+ IF p_migration_id IS NOT NULL THEN PERFORM set_config('app.event_source','migration',true); END IF;
+ FOR item IN SELECT value FROM jsonb_array_elements(p_changes) ORDER BY value->>'key' LOOP
+  SELECT * INTO old_row FROM application_settings WHERE key=item->>'key';
+  IF p_migration_id IS NOT NULL AND EXISTS(SELECT 1 FROM application_settings_migration_keys
+    WHERE migration_id=p_migration_id AND key=old_row.key) THEN CONTINUE; END IF;
+  IF NOT COALESCE(jsonb_typeof(item->'expected_version')='number' AND item->>'expected_version' ~ '^[1-9][0-9]*$' AND
+     (item->>'expected_version')::numeric=old_row.version,false) THEN
+   RAISE EXCEPTION USING ERRCODE='40001',MESSAGE='application_settings_stale_version';
+  END IF;
+  new_value:=COALESCE(item->'value',old_row.value);
+  new_secret:=CASE WHEN item ? 'encrypted_secret' THEN
+   CASE WHEN item->>'encrypted_secret' IS NULL THEN NULL ELSE convert_to(item->>'encrypted_secret','UTF8') END
+   ELSE old_row.protected_secret END;
+  IF old_row.key='SMTP_PASSWORD' AND new_value<>'null'::jsonb THEN
+   RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_setting_value_invalid';
+  END IF;
+  IF p_migration_id IS NOT NULL AND old_row.provenance<>'default' AND
+     (new_value,new_secret) IS DISTINCT FROM (old_row.value,old_row.protected_secret) THEN
+   RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_settings_migration_conflict';
+  END IF;
+  IF (p_migration_id IS NULL AND (item ? 'value' OR item ? 'encrypted_secret')) OR
+     (p_migration_id IS NOT NULL AND old_row.provenance='default' AND (item ? 'value' OR item ? 'encrypted_secret')) THEN
+   UPDATE application_settings SET value=new_value,protected_secret=new_secret,
+    provenance=CASE WHEN p_migration_id IS NULL THEN 'configured' ELSE 'migrated' END WHERE key=old_row.key;
+  END IF;
+  IF p_migration_id IS NOT NULL THEN
+   INSERT INTO application_settings_migration_keys(migration_id,key,completed_by_user_id,resulting_version)
+    SELECT p_migration_id,key,current_user_id(),version FROM application_settings WHERE key=old_row.key;
+   PERFORM append_domain_event('application_setting',old_row.id,'APPLICATION_SETTINGS_MIGRATION_COMPLETED',
+    jsonb_build_object('setting_key',old_row.key,'migration_id',p_migration_id));
+  END IF;
+ END LOOP;
+ IF NOT application_settings_set_valid() THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='application_settings_group_inconsistent';
+ END IF;
+ PERFORM set_config('app.change_reason',COALESCE(previous_reason,''),true);
+ PERFORM set_config('app.event_source',COALESCE(previous_source,''),true);
+END $$;
+
+CREATE OR REPLACE FUNCTION reject_application_settings_removal() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='application_settings_protected'; END $$;
+DROP TRIGGER IF EXISTS application_settings_reject_truncate ON application_settings;
+CREATE TRIGGER application_settings_reject_truncate BEFORE TRUNCATE ON application_settings
+ FOR EACH STATEMENT EXECUTE FUNCTION reject_application_settings_removal();
+DROP TRIGGER IF EXISTS application_settings_state_immutable ON application_settings_state;
+CREATE TRIGGER application_settings_state_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON application_settings_state
+ FOR EACH STATEMENT EXECUTE FUNCTION reject_application_settings_removal();
+DROP TRIGGER IF EXISTS application_settings_migration_reject_truncate ON application_settings_migration_keys;
+CREATE TRIGGER application_settings_migration_reject_truncate BEFORE TRUNCATE ON application_settings_migration_keys
+ FOR EACH STATEMENT EXECUTE FUNCTION reject_application_settings_removal();
+
+-- Defaults are installation data, not configuration imported from an environment.
+DO $$
+DECLARE previous_source text:=current_setting('app.event_source',true);
+BEGIN
+ PERFORM set_config('app.event_source','seeding',true);
+ INSERT INTO application_settings(key,value) VALUES
+  ('DEFAULT_WORKING_TIMEZONE','"Asia/Dubai"'::jsonb),
+  ('DEFAULT_ROOT_AGGREGATION_MEDIUM','"mixed"'::jsonb),
+  ('REVIEW_WARNING_WINDOW_DAYS','30'::jsonb),
+  ('MAX_UPLOAD_SIZE_BYTES','52428800'::jsonb),
+  ('CONTENT_SEGMENT_SIZE_BYTES','16777216'::jsonb),
+  ('CONTENT_SEGMENT_CHECKSUMS_ENABLED','true'::jsonb),
+  ('CONTENT_UPLOAD_SESSION_TTL_SECONDS','86400'::jsonb),
+  ('CONTENT_CLEANUP_INTERVAL_SECONDS','3600'::jsonb),
+  ('DOCUMENT_CONVERSION_TIMEOUT_SECONDS','60'::jsonb),
+  ('MAX_RENDITION_SIZE_BYTES','104857600'::jsonb),
+  ('AUTH_SESSION_IDLE_MINUTES','30'::jsonb),
+  ('AUTH_SESSION_ABSOLUTE_HOURS','12'::jsonb),
+  ('AUTH_LOCKOUT_ATTEMPTS','5'::jsonb),
+  ('AUTH_LOCKOUT_MINUTES','15'::jsonb),
+  ('AUTH_PASSWORD_MIN_LENGTH','12'::jsonb),
+  ('AUTH_SESSION_RETENTION_DAYS','90'::jsonb),
+  ('AUTH_SESSION_CLEANUP_INTERVAL_SECONDS','3600'::jsonb),
+  ('AUTH_SESSION_CLEANUP_BATCH_SIZE','500'::jsonb),
+  ('DASHBOARD_FAVOURITE_ITEM_LIMIT','5'::jsonb),
+  ('DASHBOARD_RECENT_ITEM_LIMIT','4'::jsonb),
+  ('DASHBOARD_RECENT_DAYS','30'::jsonb),
+  ('DASHBOARD_REVIEW_PREVIEW_LIMIT','5'::jsonb),
+  ('CLASSIFICATION_RECENT_SELECTION_LIMIT','4'::jsonb),
+  ('USER_DETAILS_SESSION_LIMIT','5'::jsonb),
+  ('FULL_TEXT_SEARCH_ENABLED','false'::jsonb),
+  ('CONTENT_INDEXING_SCHEDULING_ENABLED','false'::jsonb),
+  ('CONTENT_INDEXING_HISTORY_RETENTION_DAYS','365'::jsonb),
+  ('CONTENT_INDEXING_CLEANUP_INTERVAL_SECONDS','3600'::jsonb),
+  ('CONTENT_INDEXING_CLEANUP_BATCH_SIZE','500'::jsonb),
+  ('TEXT_INDEXER_CREDENTIAL_HISTORY_RETENTION_DAYS','365'::jsonb),
+  ('TEXT_INDEXER_RATE_LIMIT_PER_MINUTE','600'::jsonb),
+  ('SEARCH_RATE_LIMIT_PER_MINUTE','600'::jsonb),
+  ('MANUAL_REINDEX_RATE_LIMIT_PER_MINUTE','60'::jsonb),
+  ('AUDIT_TRAIL_SEARCH_RESULT_LIMIT','1000'::jsonb),
+  ('DISPOSITION_DESTRUCTION_REVIEW_ROUTE','"standard"'::jsonb),
+  ('DISPOSITION_CLASSIFICATION_SCHEME_ID','null'::jsonb),
+  ('DISPOSITION_UPLOADED_EVIDENCE_CLASSIFICATION_ID','null'::jsonb),
+  ('DISPOSITION_GENERATED_REPORTS_CLASSIFICATION_ID','null'::jsonb),
+  ('DISPOSITION_EXTERNAL_AUTHORITY_NAME','"Sharjah Archives"'::jsonb),
+  ('DISPOSITION_EXTERNAL_AUTHORITY_EMAIL','null'::jsonb),
+  ('DISPOSITION_DESTRUCTION_REMINDER_MONTHS','6'::jsonb),
+  ('SMTP_HOST','null'::jsonb),
+  ('SMTP_PORT','null'::jsonb),
+  ('SMTP_SECURITY','null'::jsonb),
+  ('SMTP_AUTH_ENABLED','null'::jsonb),
+  ('SMTP_USERNAME','null'::jsonb),
+  ('SMTP_PASSWORD','null'::jsonb),
+  ('SMTP_SENDER_EMAIL','null'::jsonb),
+  ('SMTP_SENDER_NAME','null'::jsonb),
+  ('SMTP_REPLY_TO_EMAIL','null'::jsonb),
+  ('SMTP_TIMEOUT_SECONDS','30'::jsonb)
+ ON CONFLICT(key) DO NOTHING;
+ PERFORM set_config('app.event_source',COALESCE(previous_source,''),true);
+END $$;
+INSERT INTO privileges(code,name,description,category)
+ VALUES('app.settings.manage','Manage Application Settings','Manage validated application configuration and protected SMTP credentials.','administration')
+ ON CONFLICT DO NOTHING;
+INSERT INTO profile_privileges(profile_id,privilege_id)
+ SELECT p.id,v.id FROM profiles p CROSS JOIN privileges v WHERE p.code IN ('SYS_ADMIN','ALL_PRIVS') AND v.code='app.settings.manage'
+ ON CONFLICT DO NOTHING;
+INSERT INTO schema_migrations(version) VALUES('050_application_settings') ON CONFLICT DO NOTHING;
+INSERT INTO schema_migrations(version) VALUES('051_database_indexing_policy') ON CONFLICT DO NOTHING;
+INSERT INTO schema_migrations(version) VALUES('052_application_settings_reference_audit') ON CONFLICT DO NOTHING;

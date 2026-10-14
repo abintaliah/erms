@@ -14,6 +14,16 @@ client meta-commands such as `\\i`, `\\ir`, `\\set`, and `\\copy` are prohibited
 
 ## Existing database
 
+Migration `050_application_settings.sql` installs the typed application-settings
+foundation and protected administration privilege without importing environment
+values or overwriting configured settings. Apply it after migration 049 and
+follow [the API/key upgrade guidance](../docs/application-settings-upgrade.md).
+
+Migration `048_hierarchical_oversight_acls.sql` adds the approved organizational
+role designations and contextual ACL principals. It changes defaults only for
+future resource creation; it preserves every existing ACL grant. See
+[implementation and verification](../docs/hierarchical-oversight-acls-implementation.md).
+
 Migrations upgrade an existing database containing data. Inspect
 `schema_migrations` and apply only missing files from `database/migrations/` in
 filename order:

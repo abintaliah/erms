@@ -1,5 +1,7 @@
 import json
+import re
 from pathlib import Path
+import subprocess
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +15,12 @@ SEED_PATH = PROJECT_ROOT / "security" / "catalogue-seed.json"
 
 def test_database_sql_contains_no_psql_meta_commands():
     offenders = []
-    for path in sorted(PROJECT_ROOT.rglob("*.sql")):
+    # Check project SQL, including new untracked files, but not ignored
+    # pg_dump backups, virtual environments, or other local artifacts.
+    project_sql = subprocess.check_output([
+        "git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.sql",
+    ], cwd=PROJECT_ROOT, text=True).splitlines()
+    for path in (PROJECT_ROOT / name for name in sorted(set(project_sql))):
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if line.lstrip().startswith("\\"):
                 offenders.append(f"{path.relative_to(PROJECT_ROOT)}:{line_number}: {line}")
@@ -30,7 +37,9 @@ def test_canonical_schema_is_self_contained_and_current():
     assert "\\i " not in schema
     assert "\\ir " not in schema
     assert "CREATE TABLE schema_migrations" in schema
-    assert "INSERT INTO schema_migrations" not in schema
+    executable = "\n".join(line for line in schema.splitlines() if not line.lstrip().startswith("--"))
+    assert "database/migrations/" not in executable
+    assert "050_application_settings" in schema
     assert "aggregation.location.change" in schema
     assert "aggregations_protect_vital_deletion" in schema
     assert "aggregations_owner_review_due_idx" in schema
@@ -40,7 +49,7 @@ def test_seed_utilities_are_distinct_from_migrations():
     seeds = PROJECT_ROOT / "database" / "seeds"
     for path in sorted(seeds.glob("*.sql")):
         sql = path.read_text(encoding="utf-8")
-        assert "app.event_source', 'seeding'" in sql, path
+        assert re.search(r"set_config\('app\.event_source',\s*'seeding'", sql), path
         assert "INSERT INTO schema_migrations" not in sql, path
 
     importer = (seeds / "import_mutamathilah.py").read_text(encoding="utf-8")

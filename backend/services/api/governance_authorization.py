@@ -13,6 +13,8 @@ from .authorization_policy import (
     policy_context_from_request, require_authorization_admin,
 )
 from .authorization_admin import CUSTODY_PRIVILEGE_CODES
+from .application_settings import destination_warnings as _destination_warnings
+from .application_settings_registry import SettingsInvalid
 from .database import get_connection
 from .entity_localization import localized_projection, preferred_language
 from .resource_acls import _effective_aggregation, _effective_record, _grant_rows
@@ -85,19 +87,19 @@ def _resource_for_examiner(
     return row
 
 
-def _acl(connection: Connection, resource_type: str, resource_id: int) -> tuple[ResourceAcl, dict]:
+def _acl(connection: Connection, resource_type: str, resource_id: int, subject_role_ids: list[int]) -> tuple[ResourceAcl, dict]:
     if resource_type == "aggregation":
         source, owner_id, rows = _effective_aggregation(connection, resource_id)
         resource_type_for_permission = "aggregation"
         resource = connection.execute(
-            "SELECT inherit_acl_from_parent FROM aggregations WHERE id=%s", (resource_id,),
+            "SELECT inherit_acl_from_parent,owning_org_unit_id FROM aggregations WHERE id=%s", (resource_id,),
         ).fetchone()
         dormant = _grant_rows(connection, "aggregation", resource_id) if resource["inherit_acl_from_parent"] else []
     else:
         source, owner_id, rows = _effective_record(connection, resource_id)
         resource_type_for_permission = "record"
         resource = connection.execute(
-            "SELECT inherit_acl_from_parent FROM records WHERE id=%s", (resource_id,),
+            "SELECT inherit_acl_from_parent,owning_org_unit_id FROM records WHERE id=%s", (resource_id,),
         ).fetchone()
         dormant = _grant_rows(connection, "record", resource_id) if resource["inherit_acl_from_parent"] else []
     everyone = frozenset(
@@ -108,9 +110,20 @@ def _acl(connection: Connection, resource_type: str, resource_id: int) -> tuple[
         for row in rows if row["principal_type"] == "org_unit_members"
     )
     by_role: dict[int, set[str]] = {}
+    contextual_matches = []
+    resolved = {}
     for row in rows:
         if row["principal_type"] == "role":
             by_role.setdefault(row["role_id"], set()).add(row["permission_code"])
+        elif row["principal_type"] in {"owning_and_higher_level_unit_managers", "effective_file_administrator"}:
+            if row["principal_type"] not in resolved:
+                resolved[row["principal_type"]] = connection.execute(
+                    "SELECT * FROM contextual_acl_roles(%s,%s) WHERE role_id=ANY(%s::bigint[])",
+                    (resource["owning_org_unit_id"], row["principal_type"], subject_role_ids),
+                ).fetchall()
+            for match in resolved[row["principal_type"]]:
+                by_role.setdefault(match["role_id"], set()).add(row["permission_code"])
+                contextual_matches.append({**match, "principal_type": row["principal_type"], "permission_code": row["permission_code"]})
     acl = ResourceAcl(
         everyone_permissions=everyone,
         org_unit_member_permissions=org_unit_members,
@@ -121,6 +134,7 @@ def _acl(connection: Connection, resource_type: str, resource_id: int) -> tuple[
         "resource_type": resource_type_for_permission, "source": source,
         "source_resource_id": owner_id, "inherit_acl_from_parent": resource["inherit_acl_from_parent"],
         "effective_grants": rows, "dormant_override_grants": dormant,
+        "contextual_matches": contextual_matches,
     }
     return acl, detail
 
@@ -245,7 +259,7 @@ def explain_access(
     ):
         raise HTTPException(status_code=403, detail={"code": "insufficient_privilege"})
     subject = examiner if not other_user else load_user_policy_context(connection, selected_user_id)
-    acl, acl_detail = _acl(connection, payload.resource_type, payload.resource_id)
+    acl, acl_detail = _acl(connection, payload.resource_type, payload.resource_id, [role.role_id for role in subject.effective_roles])
     privilege, permission = policy
     integrity_allowed, integrity_reason, resource_state_constraints = _integrity_gate(
         connection, payload.resource_type, resource, payload.operation,
@@ -479,8 +493,13 @@ def governance_custody(
         warnings.append({"code": "zero_universal_governance_custodians", "severity": "critical"})
     elif highest_people == 1:
         warnings.append({"code": "single_universal_governance_custodian", "severity": "advisory"})
+    try:
+        configuration_warnings = _destination_warnings(connection)
+    except SettingsInvalid:
+        raise HTTPException(503, detail={"code": "application_settings_unavailable", "message_key": "settings.error.unavailable", "parameters": {}}) from None
     return {"security_levels": levels, "highest_security_level": highest_level,
             "required_custody_privilege_codes": sorted(required_privileges),
             "governance_roles": roles,
             "assignments": assignments, "highest_clearance_custodian_count": highest_people,
-            "warnings": warnings}
+            "warnings": warnings,
+            "disposition_configuration_warnings": configuration_warnings}

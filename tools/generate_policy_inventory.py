@@ -41,6 +41,17 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
     """
     if path == "/health" or (method == "POST" and path == "/api/v1/auth/login"):
         return "public", None, None
+    if path == "/api/v1/application-settings":
+        return "globally_privileged", "app.settings.manage", None
+    # Reconcile the generator with the already committed relationship policies.
+    if path.startswith("/api/v1/relationships/types/"):
+        if method == "GET":
+            return "authenticated_only", None, None
+        return "globally_privileged", "relationships.administer", None
+    if path.startswith("/api/v1/relationships/"):
+        if path.endswith("/targets"):
+            return "resource_scoped", None, None
+        return "relationship_scoped", "relationships.link" if method in {"POST", "DELETE"} else None, None
     if path == "/api/v1/messages/stream/sse":
         return "relationship_scoped", None, None
     if path.startswith("/api/v1/messages/monitor"):
@@ -89,7 +100,7 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         return "service_lease_scoped", "content.index.execute", None
     if path == "/api/v1/full-text-search":
         return "resource_scoped", "record.view", "record.view"
-    if path in {"/api/v1/preferences", "/api/v1/i18n/bootstrap"}:
+    if path in {"/api/v1/preferences", "/api/v1/i18n/bootstrap", "/api/v1/application-configuration"}:
         return "authenticated_only", None, None
     if path.startswith("/api/v1/i18n/catalogues/"):
         return "authenticated_only", None, None
@@ -190,6 +201,9 @@ def _target_policy(method: str, path: str) -> tuple[str, str | None, str | None]
         return "globally_privileged", "identity.users.administer", None
     if path == "/api/v1/authorization/explain":
         return "resource_scoped", "authorization.explain", None
+    if path == "/api/v1/{resource}/{resource_id}/acl-contextual-principals":
+        # Organization disclosure plus resource-type-specific ACL management.
+        return "resource_scoped", "organization.browse", None
     if path == "/api/v1/authorization/governance-custody":
         return "globally_privileged", "authorization.administer", None
     if path == "/api/v1/security-operations/summary":
@@ -361,6 +375,13 @@ def api_operations() -> list[dict[str, Any]]:
                             "record": ["authorization.administer", "record.acl.manage"],
                         },
                     }} if (upper_method, path) == ("GET", "/api/v1/permissions") else {}),
+                    **({"conditional_resource_authorization": {
+                        "path_parameter": "resource",
+                        "by_value": {
+                            "aggregations": {"global_privilege": "aggregation.acl.manage", "resource_permission": "aggregation.acl.manage"},
+                            "records": {"global_privilege": "record.acl.manage", "resource_permission": "record.acl.manage"},
+                        },
+                    }} if path == "/api/v1/{resource}/{resource_id}/acl-contextual-principals" else {}),
                     "phase_0_enforced": False,
                     "phase_4_enforced": target_class == "globally_privileged",
                     "phase_5_enforced": (
