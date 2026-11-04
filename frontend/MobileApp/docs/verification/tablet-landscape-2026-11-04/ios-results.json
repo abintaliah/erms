@@ -1,0 +1,46 @@
+{
+  "fixture": "production widgets and canonical catalogues with injected test-only API",
+  "viewport_checks": [
+    {
+      "name": "en-landscape-preferences",
+      "width": 1210.0,
+      "height": 834.0
+    },
+    {
+      "name": "en-landscape-shell",
+      "width": 1210.0,
+      "height": 834.0
+    },
+    {
+      "name": "en-landscape-retained-favourites",
+      "width": 1210.0,
+      "height": 834.0
+    },
+    {
+      "name": "ar-landscape-preferences",
+      "width": 1210.0,
+      "height": 834.0
+    },
+    {
+      "name": "ar-landscape-shell",
+      "width": 1210.0,
+      "height": 834.0
+    },
+    {
+      "name": "ar-landscape-retained-favourites",
+      "width": 1210.0,
+      "height": 834.0
+    }
+  ],
+  "screenshot_files": [
+    "ios-en-landscape-preferences.png",
+    "ios-en-landscape-shell.png",
+    "ios-en-landscape-retained-favourites.png",
+    "ios-ar-landscape-preferences.png",
+    "ios-ar-landscape-shell.png",
+    "ios-ar-landscape-retained-favourites.png"
+  ],
+  "result": "passed",
+  "device": "iPad Pro 11-inch (M5), iOS 27",
+  "acceptance_scope": "landscape only; production widgets and canonical catalogues with injected test-only API; no live account or database"
+}

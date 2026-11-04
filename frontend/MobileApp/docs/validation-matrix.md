@@ -7,6 +7,19 @@ row.
 
 ## Current session-policy amendment — 4 November 2026
 
+Latest bilingual layout acceptance (4 November 2026): user-reported iOS/Android
+phone language switching, Arabic mirroring, every destination/Back, and absence
+of clipped text, overflow or inaccessible buttons passed. Automated landscape
+tablet integration also passed on Pixel Tablet API 36 (1280×800 logical) and
+iPad Pro 11-inch M5/iOS 27 (1210×834), using production widgets/canonical assets
+with a test-only injected API. Twelve retained native screenshots and two result
+manifests are in `docs/verification/tablet-landscape-2026-11-04/`.
+
+The user explicitly approved landscape-only native tablet acceptance while
+keeping both tablet orientations supported. Native portrait/rotation acceptance
+is omitted at that request; existing widget rotation coverage is retained.
+Do not infer real-server tablet authentication from the injected API fixture.
+
 Latest acceptance (4 November 2026): the user confirmed the requested
 Android/iOS process-restart and account-switch sequence worked, with no previous
 user data retained after signing in with another account. Process-restart
@@ -59,6 +72,7 @@ Phase 1 remains open.
 
 | Requirement | Implementation | Verification | Current status |
 | --- | --- | --- | --- |
+| Bilingual phone/tablet shell, reachable navigation and Back (§§4, 6, 7) | Existing production widgets, Preferences and canonical catalogues; new test-only native harness and iPad orientation setup helper | User reported phone checks on both platforms; `integration_test/tablet_shell_test.dart` passed on both landscape tablets; reviewed native screenshots/manifests; `test/app_test.dart` retains orientation-transition checks; all 75 unit/widget tests and analysis pass | Phone checks passed on user evidence; landscape tablet UI passed on native automation; native portrait/rotation omitted by user approval; live-server tablet authentication unclaimed |
 | Offline gate and valid-session recovery (§16, §8.3) | Foreground passive check failure gates protected interaction; safe revalidation resumes the retained Navigator | Automated Flutter offline/stale-state regressions; controlled 55-second API-response outage with automatic restoration; user confirmed gating and retained-screen recovery on Android and iOS | Passed on both platforms with user-reported UI evidence; explicit Retry-specific coverage pending |
 | Revocation during outage and protected Back-state clearing (§8.3, §17.4) | Existing server revocation and revalidation clear the session generation and protected Navigator | Controlled API outage, audited revocation of only the two mobile sessions before restoration, verified server/audit state; user confirmed sign-in and Back protection on Android and iOS | Passed on both platforms with user-reported UI evidence |
 | Foreground expiry/revocation without renewing idle activity (§8.3; approved status endpoint) | Passive `/auth/me/session-status`; one nonoverlapping 15-second foreground monitor; guarded protected navigation; generation-owned state clearing | `test_mobile_session_status.py` plus existing policy/capability tests: 17 passed in disposable DB, dropped; `test/app_test.dart`: foreground route/Back and navigation rejection in English/Arabic phone/tablet, background/disposal pause; `test/session_controller_test.dart`: passive overlap/stale/offline; `test/auth_api_test.dart`: bearer endpoint; full Flutter suite 75 passed | Automated verified; foreground revocation passed on iOS/Android (user-reported); exact latency/language/Back coverage unclaimed |

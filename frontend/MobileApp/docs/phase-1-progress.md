@@ -1,5 +1,47 @@
 # Phase 1 progress record
 
+## Phone bilingual review and native tablet acceptance — 4 November 2026
+
+The user reports that language switching on both iOS and Android phones renders
+correctly, Arabic mirrors correctly, every destination opens and Back works,
+and no clipped text, overflow or inaccessible buttons were observed. Record
+these phone checks as passed on user-reported evidence. The user explicitly did
+not perform tablet review and requested automation.
+
+The user subsequently approved native tablet testing in landscape only while
+retaining support for both tablet orientations. Native portrait/rotation checks
+are omitted for this acceptance run at that explicit request; existing widget
+orientation-transition tests remain and product orientation settings are unchanged.
+
+Added a repeatable Flutter SDK integration-test harness using production widgets,
+canonical English/Arabic assets and a test-only injected API. The landscape run
+passed on Pixel Tablet API 36 (1280×800 logical viewport) and iPad Pro 11-inch
+(M5), iOS 27 (1210×834). It exercised language switching in both directions,
+RTL navigation placement, reachable controls, all shell destinations/profile/
+Preferences and Back, and checked framework errors/text line overflow. The agent
+reviewed native English/Arabic shell and Preferences screenshots on both tablets
+without observing clipping, overflow or inaccessible controls in those fixtures.
+Twelve screenshots and two result manifests are retained in
+`docs/verification/tablet-landscape-2026-11-04/`.
+
+Initial app-driven orientation setup was rejected by Android 16's large-screen
+policy and the iPad windowing mode. Landscape-only testing uses actual native
+viewports; a standalone, test-only XCTest helper successfully placed the iPad in
+landscape. No orientation-lock, compatibility override or multitasking change
+was introduced. Reproduction is documented in `docs/tablet-acceptance.md`.
+
+Flutter analysis and all 75 unit/widget regressions pass. The two native tablet
+integration runs pass. No live account, service settings, database or translation
+artifacts were changed. Native tablet results establish layout/navigation with
+an injected API, not real-server authentication on tablets. Remaining Phase 1
+session-card/translation and other unresolved evidence is not closed by this run.
+
+Afterward, both normal production-entrypoint debug builds were rebuilt,
+installed and launched on the tablets, replacing the test-only composition.
+The phone installations, real sessions and running local services were left
+unchanged. No application orientation configuration or user-visible wording
+changed.
+
 ## Latest acceptance and waiver — 4 November 2026
 
 The user explicitly requested skipping the manual absolute-session-lifetime

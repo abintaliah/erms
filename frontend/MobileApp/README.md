@@ -91,6 +91,12 @@ emulator, reverse the selected local port through ADB before launch so that the
 emulator's loopback address reaches the host. Do not commit environment URLs or
 credentials.
 
+## Native tablet acceptance
+
+Native tablet layout acceptance is documented in
+[`docs/tablet-acceptance.md`](docs/tablet-acceptance.md), including its test-only
+API boundary, landscape setup, screenshot artifacts and normal-build restoration.
+
 ## Session expiry
 
 The API enforces the application settings `AUTH_SESSION_IDLE_MINUTES` and

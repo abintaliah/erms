@@ -1,0 +1,46 @@
+{
+  "fixture": "production widgets and canonical catalogues with injected test-only API",
+  "viewport_checks": [
+    {
+      "name": "en-landscape-preferences",
+      "width": 1280.0,
+      "height": 800.0
+    },
+    {
+      "name": "en-landscape-shell",
+      "width": 1280.0,
+      "height": 800.0
+    },
+    {
+      "name": "en-landscape-retained-favourites",
+      "width": 1280.0,
+      "height": 800.0
+    },
+    {
+      "name": "ar-landscape-preferences",
+      "width": 1280.0,
+      "height": 800.0
+    },
+    {
+      "name": "ar-landscape-shell",
+      "width": 1280.0,
+      "height": 800.0
+    },
+    {
+      "name": "ar-landscape-retained-favourites",
+      "width": 1280.0,
+      "height": 800.0
+    }
+  ],
+  "screenshot_files": [
+    "android-en-landscape-preferences.png",
+    "android-en-landscape-shell.png",
+    "android-en-landscape-retained-favourites.png",
+    "android-ar-landscape-preferences.png",
+    "android-ar-landscape-shell.png",
+    "android-ar-landscape-retained-favourites.png"
+  ],
+  "result": "passed",
+  "device": "Pixel Tablet API 36",
+  "acceptance_scope": "landscape only; production widgets and canonical catalogues with injected test-only API; no live account or database"
+}
