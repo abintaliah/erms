@@ -44,7 +44,7 @@ content must never be committed to the repository or compiled as constants.
 Preferences, capabilities, principal and locale are process-memory state owned
 by the current session generation. Freshness comes from sign-in, explicit
 Preferences reads/mutations, and foreground session validation. Logout,
-revocation and background expiry clear that state; obsolete requests cannot
+revocation and server-owned expiry clear that state; obsolete requests cannot
 write into a later generation. Errors retain existing in-memory data behind a
 noninteractive gate and never populate persistent caches. English is restored
 when identity clears; saved language remains server-authoritative.
@@ -56,3 +56,13 @@ no elapsed-time cutoff, local expiry clock or reminder scheduler. Server-valid
 sessions resume, unauthenticated responses clear protected state, and network
 failures retain the noninteractive validation gate. Native startup cancels only
 legacy reminders from older builds without requesting notification permission.
+
+While foregrounded, one app-root timer checks the approved passive session-status
+endpoint every 15 seconds. There is no result cache or local expiry decision.
+Checks are scoped to the current session generation; overlapping probes, probes
+during full validation and background/signed-out probes are suppressed. The
+timer is disposed with the app root. Successful probes never renew server
+activity; failures gate protected interaction and 401 clears identity/routes.
+User-initiated destination/profile/preferences navigation performs ordinary
+principal/capability validation before pushing a route, with mounted/generation
+checks so late responses cannot reopen a stale screen.

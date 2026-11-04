@@ -99,3 +99,7 @@ session-return reminder. Returning from the background validates the session
 with the server; an unavailable server keeps protected interaction gated with
 Retry and Sign out. Process restart still requires sign-in. Native startup
 cancels reminders left by older builds without requesting notification permission.
+
+While the app stays open, a passive status check runs every 15 seconds without
+refreshing the server's idle timer. Revocation/expiry clears protected screens
+when detected. Protected navigation also revalidates before opening a destination.

@@ -436,3 +436,43 @@ This result supports the amended §8.3 server-owned expiry requirement. Absolute
 lifetime, explicit revocation, offline recovery, server-valid session retention,
 legacy reminder cleanup and remaining bilingual/device coverage are not
 established by this report. Phase 1 remains in progress.
+
+## Foreground revocation correction — 4 November 2026
+
+The user reported that revoking an open mobile session did not clear the shell
+until background return. Phase 1 destinations were local foundations with no
+server read, and the existing periodic reconnect probe ran only in an offline
+gate. The user explicitly approved a passive session-status endpoint, a
+15-second foreground check and validation before protected navigation.
+
+Added `GET /api/v1/auth/me/session-status`, returning existing `PrincipalRead`.
+Successful status authentication never updates activity or stored deadlines;
+server policy still persists terminal expiry to prevent later revival. It does
+not add privileges, settings, environment variables or schema changes. Required
+password-change state remains available without granting protected access.
+
+An app-root foreground monitor uses that endpoint without loading overlays on
+healthy checks. It suppresses overlap and stops polling while backgrounded,
+signed out, validating or disposed. Generation guards discard stale responses.
+401 clears all protected state/routes; network/service errors gate interaction.
+Protected destination, profile, preferences and dashboard navigation now perform
+ordinary principal/capability validation first. User actions retain normal
+server activity semantics; passive monitoring cannot keep idle sessions alive.
+
+Verification: 75 Flutter tests and analysis pass; English/Arabic phone/tablet
+widget regressions detect revocation while a route remains open, prevent Back
+restoration and reject revoked navigation before the next periodic check.
+Controller tests cover overlap, stale completion and offline gating; the HTTP
+contract test covers the passive bearer endpoint. All 17 focused backend tests
+pass in a new disposable DB, dropped afterward, proving unchanged activity and
+deadlines on repeated probes, normal activity refresh, idle/absolute expiry,
+non-revival, revoked/invalid/service rejection and password-change state.
+Catalogue/configuration checks pass; no catalogue keys or artifacts changed.
+Android debug APK and iOS simulator builds pass. The local stack was restarted,
+its new status route verified, and both final builds installed and launched for
+user retesting. No database schema or environment/template change was required.
+
+Foreground revocation and idle expiry with passive monitoring still require
+user/device acceptance on both platforms. Earlier user-reported idle-timeout
+success is retained; this correction does not claim a new device pass or close
+Phase 1.

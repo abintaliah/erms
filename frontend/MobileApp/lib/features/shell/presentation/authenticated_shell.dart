@@ -49,7 +49,15 @@ class AuthenticatedShell extends StatelessWidget {
         Icons.history,
       ),
     ].where((entry) => controller.destinations.contains(entry.id)).toList();
-    void openDestination(_ShellDestination entry) {
+    Future<bool> authorizeNavigation() async {
+      final allowed = await controller.authorizeNavigation();
+      return context.mounted && allowed;
+    }
+
+    void openDestination(_ShellDestination entry) async {
+      if (!await authorizeNavigation()) return;
+      if (!context.mounted) return;
+      if (!controller.destinations.contains(entry.id)) return;
       // Phase 1 owns navigation; resource workflows are delivered in phases 3, 5 and 6.
       Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -89,15 +97,26 @@ class AuthenticatedShell extends StatelessWidget {
           signOutLabel: signOut,
           userName: principal.user.localizedName ?? principal.user.name,
           userEmail: principal.user.email,
-          onDashboard: tablet ? null : () => Navigator.pop(context),
-          onPreferences: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => PreferencesScreen(
-                catalogue: catalogue,
-                controller: controller,
+          authorizeNavigation: authorizeNavigation,
+          onDashboard: tablet
+              ? null
+              : () async {
+                  if (!await authorizeNavigation()) return;
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                },
+          onPreferences: () async {
+            if (!await authorizeNavigation()) return;
+            if (!context.mounted) return;
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => PreferencesScreen(
+                  catalogue: catalogue,
+                  controller: controller,
+                ),
               ),
-            ),
-          ),
+            );
+          },
           onSignOut: controller.status == SessionStatus.signingOut
               ? null
               : controller.signOut,
@@ -174,6 +193,7 @@ class _ShellNavigation extends StatelessWidget {
     required this.signOutLabel,
     required this.userName,
     required this.userEmail,
+    required this.authorizeNavigation,
     required this.onDashboard,
     required this.onPreferences,
     required this.onSignOut,
@@ -191,6 +211,7 @@ class _ShellNavigation extends StatelessWidget {
   final String signOutLabel;
   final String userName;
   final String userEmail;
+  final Future<bool> Function() authorizeNavigation;
   final VoidCallback? onDashboard;
   final VoidCallback onPreferences;
   final VoidCallback? onSignOut;
@@ -235,32 +256,36 @@ class _ShellNavigation extends StatelessWidget {
           if (showProfile)
             ListTile(
               key: const ValueKey('shell-profile'),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => Scaffold(
-                    appBar: AppBar(title: Text(profileLabel)),
-                    body: SafeArea(
-                      child: ListView(
-                        padding: const EdgeInsets.all(24),
-                        children: [
-                          Text(
-                            userName,
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(userEmail),
-                          const SizedBox(height: 24),
-                          ListTile(
-                            title: Text(preferencesLabel),
-                            leading: const Icon(Icons.language),
-                            onTap: onPreferences,
-                          ),
-                        ],
+              onTap: () async {
+                if (!await authorizeNavigation()) return;
+                if (!context.mounted) return;
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => Scaffold(
+                      appBar: AppBar(title: Text(profileLabel)),
+                      body: SafeArea(
+                        child: ListView(
+                          padding: const EdgeInsets.all(24),
+                          children: [
+                            Text(
+                              userName,
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(userEmail),
+                            const SizedBox(height: 24),
+                            ListTile(
+                              title: Text(preferencesLabel),
+                              leading: const Icon(Icons.language),
+                              onTap: onPreferences,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
               leading: CircleAvatar(
                 backgroundColor: const Color(0xFFE0F2FE),
                 foregroundColor: const Color(0xFF087AC1),

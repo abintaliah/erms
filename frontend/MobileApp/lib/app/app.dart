@@ -28,21 +28,28 @@ class WathiqApp extends StatefulWidget {
 class _WathiqAppState extends State<WathiqApp> with WidgetsBindingObserver {
   SessionController get sessionController => widget.sessionController;
   MessageCatalogue get catalogue => widget.catalogue;
+  Timer? _sessionMonitor;
+  bool _foreground = true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _sessionMonitor = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (_foreground) unawaited(sessionController.checkForegroundSession());
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _sessionMonitor?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
       unawaited(sessionController.onBackgrounded());

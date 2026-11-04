@@ -256,6 +256,13 @@ solely because a local interval has elapsed.
 
 - Returning from the background revalidates the current principal and destination
   availability with the server before protected interaction resumes.
+- While foregrounded, the app checks session status every 15 seconds with at
+  most one passive check in flight. Checks stop in the background, on sign-out,
+  and when the app root is disposed. They must not renew session activity or
+  extend the server's idle timeout. This is a validity check, not a client timeout.
+- Protected navigation validates the current principal and destinations before
+  opening a destination. Revocation clears pushed routes and prevents Back from
+  restoring them, even when the app has never been backgrounded.
 - A server-valid session resumes regardless of time spent in the background.
 - Server expiry or revocation clears all protected in-memory state and presents
   sign-in. Successful reauthentication starts at Dashboard rather than restoring
@@ -1313,3 +1320,28 @@ policy. This is a presentation capability response, not a grant of resource
 access. Flutter must not infer these destinations from role/profile names or
 reconstruct resource authorization. Refresh it after sign-in and session
 revalidation; failures must not disclose stale protected destinations.
+
+## Approved foreground session status — 4 November 2026
+
+The user approved `GET /api/v1/auth/me/session-status` to detect foreground
+revocation/expiry without keeping an idle session alive. It uses the existing
+person-session credentials and `PrincipalRead` response, including the required
+password-change flag. Invalid, revoked, expired, inactive or non-person sessions
+receive the existing 401 response. A password-change-required person may read
+only the same principal projection already available through `/auth/me`; no
+protected destination or resource grant is added.
+
+Authentication for this exact endpoint does not update `last_seen_at` or renew
+stored expiry deadlines on success. Server policy evaluation still persists
+terminal expiry when required by the existing non-revival rule. Other
+authenticated operations retain their existing activity semantics. No schema,
+privilege, environment variable or mobile timeout setting is introduced.
+
+The foreground monitor uses the passive endpoint every 15 seconds while a
+protected session is present, with no overlapping passive requests or polling
+while full validation is running. Healthy checks do not interrupt navigation or
+show a loading overlay. A 401 clears protected memory and navigation; a network
+or service failure gates interaction with the existing safe-read Retry/Sign out
+presentation. Delayed results must not affect a newer user/session generation.
+User-initiated protected navigation uses ordinary principal/capability validation
+and therefore retains the server's normal activity semantics.

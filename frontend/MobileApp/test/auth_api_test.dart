@@ -138,6 +138,30 @@ void main() {
     expect(requests[4].headers.value(HttpHeaders.ifMatchHeader), '"1"');
   });
 
+  test(
+    'passive session status uses its bearer-authenticated nonrenewing endpoint',
+    () async {
+      late HttpRequest received;
+      final server = await _server((request) async {
+        received = request;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode(_principalJson()));
+        await request.response.close();
+      });
+      addTearDown(() => server.close(force: true));
+      final api = IoAuthApi(
+        Uri.parse('http://${server.address.address}:${server.port}'),
+      );
+      expect((await api.sessionStatus('passive-token')).user.id, 7);
+      expect(received.method, 'GET');
+      expect(received.uri.path, '/api/v1/auth/me/session-status');
+      expect(
+        received.headers.value(HttpHeaders.authorizationHeader),
+        'Bearer passive-token',
+      );
+    },
+  );
+
   test('authentication failure remains non-disclosing category', () async {
     final server = await _server((request) async {
       request.response

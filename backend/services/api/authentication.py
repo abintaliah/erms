@@ -92,7 +92,7 @@ def _roles(connection: Connection, user_id: int) -> list[dict[str, Any]]:
     ).fetchall())
 
 
-def resolve_principal(connection: Connection, token: str) -> Principal | None:
+def resolve_principal(connection: Connection, token: str, *, refresh_activity: bool = True) -> Principal | None:
     row = connection.execute(
         """
         SELECT s.id AS session_id, s.user_id, u.name, u.email, u.account_type,
@@ -122,6 +122,14 @@ def resolve_principal(connection: Connection, token: str) -> Principal | None:
             "UPDATE login_sessions SET expires_at=LEAST(expires_at,%s), absolute_expires_at=LEAST(absolute_expires_at,%s) WHERE id=%s",
             (min(idle_deadline,absolute_deadline), absolute_deadline, row['session_id']))
         return None
+    # Passive status reads must not keep an otherwise idle mobile session alive.
+    # Terminal expiry above still follows the existing non-revival policy.
+    if not refresh_activity:
+        return Principal(
+            user_id=row["user_id"], session_id=row["session_id"], name=row["name"],
+            email=row["email"], account_type=row["account_type"],
+            must_change_password=row["must_change_password"], roles=_roles(connection, row["user_id"]),
+        )
     last_seen = now if row['last_seen_at'] < now - timedelta(minutes=1) else row['last_seen_at']
     expires_at = min(_deadline(last_seen, settings['AUTH_SESSION_IDLE_MINUTES'], 60), absolute_deadline)
     connection.execute(
@@ -362,6 +370,15 @@ def me(
     principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    return principal_response(principal, connection)
+
+
+@router.get("/me/session-status", response_model=PrincipalRead)
+def session_status(
+    principal: Principal = Depends(principal_from_request),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    """Passive current-session projection; authentication does not renew activity."""
     return principal_response(principal, connection)
 
 

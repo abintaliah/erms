@@ -79,6 +79,51 @@ void main() {
     expect(controller.hasProtectedState, isFalse);
   });
 
+  test(
+    'foreground probe is passive, rejects overlap, and clears revoked state',
+    () async {
+      final api = _FakeAuthApi()..statusCompletion = Completer<AuthPrincipal>();
+      final controller = SessionController(api);
+      await controller.signIn(email: 'user@example.test', password: 'secret');
+      final check = controller.checkForegroundSession();
+      await controller.checkForegroundSession();
+      expect(api.statusReads, 1);
+      expect(api.principalReads, 0);
+      api.statusCompletion!.completeError(
+        const ApiFailure(ApiFailureKind.unauthenticated),
+      );
+      await check;
+      expect(controller.hasProtectedState, isFalse);
+      expect(controller.destinations, isEmpty);
+    },
+  );
+
+  test('late passive response cannot restore a signed-out identity', () async {
+    final api = _FakeAuthApi()..statusCompletion = Completer<AuthPrincipal>();
+    final controller = SessionController(api);
+    await controller.signIn(email: 'user@example.test', password: 'secret');
+    final check = controller.checkForegroundSession();
+    await controller.signOut();
+    api.statusCompletion!.complete(_principal());
+    await check;
+    expect(controller.hasProtectedState, isFalse);
+  });
+
+  test(
+    'passive network failure gates interaction without clearing identity',
+    () async {
+      final api = _FakeAuthApi()
+        ..principalFailure = const ApiFailure(ApiFailureKind.offline);
+      final controller = SessionController(api);
+      await controller.signIn(email: 'user@example.test', password: 'secret');
+      await controller.checkForegroundSession();
+      expect(controller.status, SessionStatus.validatingSession);
+      expect(controller.hasProtectedState, isTrue);
+      expect(controller.failure?.kind, ApiFailureKind.offline);
+      expect(await controller.authorizeNavigation(), isFalse);
+    },
+  );
+
   test('resume retains a session accepted by the server', () async {
     final api = _FakeAuthApi();
     final controller = SessionController(api);
@@ -188,6 +233,8 @@ class _FakeAuthApi implements AuthApi {
   String? lastEmail;
   ApiFailure? principalFailure;
   int principalReads = 0;
+  int statusReads = 0;
+  Completer<AuthPrincipal>? statusCompletion;
   Completer<String>? languageCompletion;
   Completer<UserPreferences>? preferenceCompletion;
 
@@ -216,6 +263,14 @@ class _FakeAuthApi implements AuthApi {
     'user-profile',
     'sign-out',
   ];
+
+  @override
+  Future<AuthPrincipal> sessionStatus(String token) async {
+    statusReads++;
+    if (statusCompletion != null) return statusCompletion!.future;
+    if (principalFailure case final failure?) throw failure;
+    return principal;
+  }
 
   @override
   Future<AuthPrincipal> currentPrincipal(String token) async {

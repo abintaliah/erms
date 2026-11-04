@@ -21,3 +21,10 @@ response, error codes, and concurrency requirements must be traced to its
 owning specification and tests.
 
 Known gaps remain governed by section 22 of the mobile specification.
+
+Approved Phase 1 additions: `/api/v1/auth/me/mobile-capabilities` supplies
+server-owned navigation availability; `/api/v1/auth/me/session-status` returns
+the existing `PrincipalRead` projection without refreshing activity on successful
+passive checks. These are separately approved in the mobile specification;
+neither grants resource access. Ordinary principal/capability validation remains
+required for protected navigation and background return.

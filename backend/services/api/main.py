@@ -320,7 +320,10 @@ async def audit_request_context(request: Request, call_next):
                         worker_id=request.headers.get("X-Worker-ID"),
                     )
                 elif session_token:
-                    principal = resolve_principal(authentication_connection, session_token)
+                    principal = resolve_principal(
+                        authentication_connection, session_token,
+                        refresh_activity=request.url.path != "/api/v1/auth/me/session-status",
+                    )
                     request.state.policy_context = (
                         load_policy_context(authentication_connection, principal)
                         if principal else None
@@ -364,7 +367,8 @@ async def audit_request_context(request: Request, call_next):
             return JSONResponse(status_code=429,content={"detail":{"code":"search_rate_limit_exceeded"}},
                                 headers={"Retry-After":"1"})
     if principal and principal.must_change_password and request.url.path not in {
-        "/api/v1/auth/me", "/api/v1/auth/change-password", "/api/v1/auth/logout"
+        "/api/v1/auth/me", "/api/v1/auth/me/session-status",
+        "/api/v1/auth/change-password", "/api/v1/auth/logout"
     }:
         return JSONResponse(status_code=403, content={"detail": "password change required"})
     if principal and cookie_token and not bearer_token and request.method not in {"GET", "HEAD", "OPTIONS"}:
