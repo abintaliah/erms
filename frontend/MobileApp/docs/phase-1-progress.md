@@ -490,3 +490,30 @@ This closes the reported foreground-revocation acceptance gap for both
 platforms. It does not establish the remaining absolute-lifetime, offline
 recovery, legacy-reminder cleanup or bilingual/device coverage. Phase 1 remains
 in progress.
+
+## Controlled offline recovery acceptance — 4 November 2026
+
+Both rebuilt apps were signed in with valid sessions. A read-only prerequisite
+inspection confirmed the current server policy (10-minute idle, 12-hour absolute
+lifetime). The identified local API process was paused for 55 seconds, from
+10:33:55 to 10:34:50 Asia/Dubai, with automatic restoration in a finally block.
+An HTTP health probe timed out during the interruption and returned 200 after
+restoration. This simulated unavailable API responses; it did not disable device
+radios or change network/security or session-policy settings. No database-backed
+test suite or fixtures targeted the persistent local database.
+
+During the interruption, the user confirmed that both Android and iOS showed
+the offline dialog and blocked navigation. After restoration, the user confirmed
+that both apps resumed the same signed-in screen without losing their place,
+either through automatic recovery or Retry (the mechanism was not distinguished).
+Post-outage logs show successful principal/capability revalidation. Record
+offline gating and valid-session recovery as passed on both platforms, combining
+automated interruption/recovery evidence with user-reported UI observations.
+
+Native/browser UI controls were unavailable in this agent session, so the agent
+did not independently inspect the dialogs, press Retry, or revoke sessions via
+WebUI. Revocation during an outage remains untested by this run; do not infer
+that case from earlier online revocation acceptance. Language, detailed Back
+behavior and radio-specific connectivity coverage remain unclaimed. The API was
+restored successfully, and the stack and both sessions were left available.
+Phase 1 remains in progress.
