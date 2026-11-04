@@ -14,11 +14,11 @@ session expiry, safe background-return validation and no session reminder.
 Historical test results are retained as history, not current acceptance gates.
 
 User-reported acceptance (4 November 2026): server-owned idle timeout worked
-successfully after the latest Android/iOS builds were installed and launched.
-Idle-timeout behavior passes on the user's report; platform(s), configured
-duration, elapsed time, language and detailed sign-in/Back-navigation outcomes
-were not specified. Do not infer both-platform coverage or absolute-lifetime,
-revocation, offline-recovery or reminder-cleanup acceptance. Phase 1 remains open.
+successfully on both Android and iOS after the latest builds were installed and
+launched. Idle-timeout behavior passes on both platforms on the user's report;
+configured duration, elapsed time, language and detailed sign-in/Back-navigation
+outcomes were not specified. Do not infer absolute-lifetime, revocation,
+offline-recovery or reminder-cleanup acceptance. Phase 1 remains open.
 
 | Requirement | Implementation | Verification | Current status |
 | --- | --- | --- | --- |
