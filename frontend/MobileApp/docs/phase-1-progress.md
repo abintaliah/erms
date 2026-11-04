@@ -422,3 +422,17 @@ revocation on background return, retention of server-valid sessions, safe offlin
 retry, no reminder prompts/delivery, and cancellation of legacy reminders on
 upgrade, on iOS/Android and in both languages. Other Phase 1 device/tablet and
 session-card review gaps remain open. This amendment does not close Phase 1.
+
+## User-reported server idle-timeout acceptance — 4 November 2026
+
+The user confirms that the server-owned idle timeout worked successfully after
+the rebuilt Android and iOS apps were installed and launched against the local
+API. Record idle-timeout behavior as passed on user-reported evidence. The user
+did not specify the tested platform(s), configured timeout, elapsed duration,
+language, or detailed sign-in/Back-navigation observations; those coverage
+dimensions remain unclaimed. This is not an independently observed device run.
+
+This result supports the amended §8.3 server-owned expiry requirement. Absolute
+lifetime, explicit revocation, offline recovery, server-valid session retention,
+legacy reminder cleanup and remaining bilingual/device coverage are not
+established by this report. Phase 1 remains in progress.

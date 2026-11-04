@@ -13,6 +13,13 @@ full-duration acceptance requirements below. Phase 1 now requires server-owned
 session expiry, safe background-return validation and no session reminder.
 Historical test results are retained as history, not current acceptance gates.
 
+User-reported acceptance (4 November 2026): server-owned idle timeout worked
+successfully after the latest Android/iOS builds were installed and launched.
+Idle-timeout behavior passes on the user's report; platform(s), configured
+duration, elapsed time, language and detailed sign-in/Back-navigation outcomes
+were not specified. Do not infer both-platform coverage or absolute-lifetime,
+revocation, offline-recovery or reminder-cleanup acceptance. Phase 1 remains open.
+
 | Requirement | Implementation | Verification | Current status |
 | --- | --- | --- | --- |
 | Server exclusively owns idle/absolute expiry (§8.3) | `SessionController` has no local timeout/clock; background return calls the existing principal/capability validation | `test/session_controller_test.dart`: server-valid resume, one validation after repeated background callbacks, server rejection, offline/retry and state isolation; `test/app_test.dart`: simulated one-day background in English/Arabic, server-valid retention and server-expired sign-in | Automated verified; new-policy device acceptance pending |
