@@ -69,16 +69,33 @@ class SupportedLanguage {
 }
 
 class IoAuthApi implements AuthApi {
-  IoAuthApi(this._baseUrl, {HttpClient? client, String? platformFamily})
-    : _client = client ?? HttpClient(),
-      _platformFamily = platformFamily ?? Platform.operatingSystem;
+  IoAuthApi(
+    this._baseUrl, {
+    HttpClient? client,
+    String? platformFamily,
+    String? deviceModel,
+  }) : _client = client ?? HttpClient(),
+       _platformFamily = platformFamily ?? Platform.operatingSystem,
+       _deviceModel = sanitizeDeviceModel(deviceModel);
 
   final Uri _baseUrl;
   final HttpClient _client;
   final String _platformFamily;
 
+  final String? _deviceModel;
+
+  static String? sanitizeDeviceModel(String? value) {
+    if (value == null) return null;
+    final safe = value
+        .replaceAll(RegExp(r'[^A-Za-z0-9 ,._+/-]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (safe.isEmpty) return null;
+    return safe.length > 100 ? safe.substring(0, 100) : safe;
+  }
+
   String get userAgent =>
-      'WathiqMobile/$mobileClientVersion ($_platformFamily)';
+      'WathiqMobile/$mobileClientVersion ($_platformFamily${_deviceModel == null ? "" : "; model=$_deviceModel"})';
 
   @override
   Future<AuthSession> signIn({

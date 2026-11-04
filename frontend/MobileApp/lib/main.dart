@@ -6,6 +6,7 @@ import 'core/localization/message_catalogue.dart';
 import 'features/auth/application/session_controller.dart';
 import 'features/auth/application/platform_session_warning.dart';
 import 'features/auth/data/auth_api.dart';
+import 'features/auth/application/platform_device_model.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +24,10 @@ Future<void> main() async {
     ),
   );
   sessionController = SessionController(
-    IoAuthApi(environment.apiBaseUrl),
+    IoAuthApi(
+      environment.apiBaseUrl,
+      deviceModel: await PlatformDeviceModel.load(),
+    ),
     warningScheduler: warning,
   );
   sessionController.addListener(() {

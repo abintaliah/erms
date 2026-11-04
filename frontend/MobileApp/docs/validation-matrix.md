@@ -74,3 +74,76 @@ three-minute timeout and a one-minute warning. Approved 15/10-minute timing and
 canonical warning text were restored afterward. Full-duration iOS boundary and
 Android runtime acceptance remain pending; accelerated evidence does not close
 the complete Phase 1 exit gate.
+
+### Mobile audit/session identification — 20 October 2026
+
+| Requirement | Implementation | Evidence | Status |
+| --- | --- | --- | --- |
+| Mobile specification §8.5: truthful native client/platform in session history | Shared `frontend/webui/session_client.py`, used by global Login Sessions and user-detail session cards; original audit user agent/source preserved | `frontend/webui/tests/test_session_client.py`: iOS/Android, version variation, browser compatibility, unknown agents; existing `test/auth_api_test.dart`: Android login and iOS authenticated request headers | Automated verified; live English/Arabic session-card review pending |
+
+| Device-model session identification (§8.5, user request 20 October 2026) | Native `erms.wathiq/device-model` adapters, bounded/sanitized optional model in `IoAuthApi` user agent, model-aware shared session presenter | `test/device_model_test.dart`: model sanitization and actual iOS/Android HTTP headers; `test/platform_device_model_test.dart`: native channel success/failure; WebUI presenter tests: native model and legacy compatibility; Android debug APK and iOS simulator builds | Automated/build verified; authenticated bilingual device-model session-card review pending |
+
+User-reported model-entry acceptance (20 October 2026): iOS session entry verified
+on the updated iPhone 18 Pro simulator app; Android platform previously reported
+as `Google sdk_gphone64_arm64 (Android)`. Exact iOS model text and review language
+were not supplied; bilingual visual coverage remains unclaimed.
+
+User-reported Android accelerated acceptance (20 October 2026): warning delivered
+in the notification panel and timeout/logout succeeded with temporary 3/1-minute
+timing. No heads-up banner was shown (`IMPORTANCE_DEFAULT` channel). Early-return
+cancellation and full-duration native acceptance remain unclaimed. Approved
+15/10-minute timing and canonical wording restored after this test.
+
+### Android return-to-app acceptance — 29 October 2026
+
+Temporary debug build with explicit `WATHIQ_ANDROID_ACCEPTANCE=true`: three-minute
+expiry, two-minute warning; implementation in `SessionController`, `main.dart`,
+and Android `MainActivity.kt`. Governs the existing §8.3 early-return cancellation
+and continuous background clock acceptance. Ordinary host tests retain canonical
+timing. Runtime early-return/re-background/expiry results remain pending.
+
+User-reported Android early-return result (29 October 2026): session continued
+after return; early-return retention passes on reported evidence, exact elapsed
+time unspecified. Prior successful warning delivery remains recorded. Current
+3/2-minute run had no visible warning; ADB observed pending-alarm cancellation
+on return. Displayed-notification cancellation and full-duration acceptance are
+not established by this run.
+
+Android notification diagnosis instrumentation (29 October 2026): debug-only
+`WathiqSessionWarning` native schedule/cancel/receive/suppress/post event logs
+support §8.3 runtime traceability without session or identity data. Device
+reproduction with logs remains pending; delivery-window overlap is observed,
+receiver suppression is not yet established.
+
+### Revised Android diagnostic timing — 29 October 2026
+
+At the user's request, the explicit Android debug acceptance build now uses
+five-minute background expiry and the unchanged two-minute warning. The native
+stale-warning cutoff and temporary bilingual wording match five minutes. This
+supersedes the earlier three-minute diagnostic setup; ordinary builds and iOS
+retain approved 15/10-minute timing. Runtime diagnosis remains pending.
+
+### Successful Android diagnostic run — 29 October 2026
+
+The user reports receiving the notification and continuing the preserved session
+on return with five-minute expiry / two-minute requested warning. Native debug
+logs confirm schedule at elapsedMs=999441, receiver delivery at 1209457,
+notification posting at 1209461, and cancellation on return at 1215899. Delivery
+was 210.016 seconds after scheduling (3m30s), 90.016 seconds after the requested
+two-minute trigger. Return/cancellation occurred at 216.458 seconds (3m36s),
+before the five-minute cutoff (1299441). This establishes delayed OS alarm
+delivery and successful notification posting/cancellation in this run, alongside
+user-reported session retention. A comparable delay with the earlier three-minute
+cutoff would suppress a stale warning; earlier runs lack receiver logs, so that
+specific suppression remains an inference. No scheduling policy was changed.
+The installed diagnostic build still uses temporary 5/2-minute timing; normal
+15/10-minute timing restoration and full-duration acceptance remain outstanding.
+
+### Normal timing restored — 2 November 2026
+
+| Requirement | Implementation | Evidence | Status |
+| --- | --- | --- | --- |
+| Approved background expiry/warning (§8.3) | Unconditional 15/10-minute `SessionController` constants; canonical localized body in `main.dart`; Android warning cutoff five minutes after requested warning; temporary acceptance switch removed | All 61 Flutter tests pass, including session boundary/scheduling and platform channel checks; `flutter analyze` clean | Source restored; rebuilt native installation and full-duration device acceptance pending |
+
+No catalogue keys or language artifacts changed. The earlier installed debug
+build retains diagnostic timing until rebuilt and reinstalled.

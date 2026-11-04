@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import Darwin
 import UserNotifications
 
 @main
@@ -14,6 +15,23 @@ import UserNotifications
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SessionWarning") else { return }
+    let modelChannel = FlutterMethodChannel(name: "erms.wathiq/device-model", binaryMessenger: registrar.messenger())
+    modelChannel.setMethodCallHandler { call, result in
+      guard call.method == "model" else { result(FlutterMethodNotImplemented); return }
+      var system = utsname()
+      uname(&system)
+      let hardware = withUnsafePointer(to: &system.machine) {
+        $0.withMemoryRebound(to: CChar.self, capacity: 256) {
+          String(cString: $0)
+        }
+      }
+      #if targetEnvironment(simulator)
+      let model = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] ?? hardware
+      result("\(model) Simulator")
+      #else
+      result(hardware)
+      #endif
+    }
     let center = UNUserNotificationCenter.current()
     let identifier = "wathiq-session-warning"
     center.removePendingNotificationRequests(withIdentifiers: [identifier])

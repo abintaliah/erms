@@ -282,6 +282,27 @@ allows the existing session-administration experience to distinguish Wathiq
 mobile sessions and platform family. It must not include a persistent device
 fingerprint or unnecessary personal data.
 
+The user agent is `WathiqMobile/<application-version> (ios; model=<model>)`
+on iOS/iPadOS and `WathiqMobile/<application-version> (android; model=<model>)`
+on Android. When the model is unavailable, omit `; model=<model>`. Audit/session
+presentation, including global Login Sessions and a user's session history,
+must identify these as **Wathiq Mobile** on **iOS** or **Android** respectively,
+in English/LTR and Arabic/RTL. Native clients must not appear as the generic
+Browser or Unknown platform.
+The platform display includes the reported model followed by the OS family.
+Android uses manufacturer/model; iOS uses its hardware model identifier (including
+an explicit Simulator suffix for simulated devices). Unknown future models retain
+their reported identifier rather than a guessed marketing name. Model collection
+failure falls back to OS family and must not prevent sign-in. Model text is
+bounded to 100 safe ASCII characters. Do not collect a user-assigned device name,
+serial number, IMEI, advertising ID, vendor ID, or another unique device ID.
+Existing sessions retain their original evidence and OS-only display; a new
+sign-in is required to record model information. Devices of the same model may
+still be distinguished through existing session timestamps/current-session state.
+The recorded raw user agent and event source remain
+unaltered; this display classification is not authentication or authorization
+evidence. Both platforms require HTTP-header and presentation regression checks.
+
 Mobile requests must also send the governed `X-Event-Source: mobile` value so
 immutable audit events identify their originating application directly. The
 API allowlist, audit filters, and presentation treat `mobile` as a controlled

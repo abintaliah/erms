@@ -16,6 +16,7 @@ from zoneinfo import available_timezones
 from nicegui import app, background_tasks, context, events, ui
 
 from .api_client import ApiError, ErmsApiClient
+from .session_client import session_client_summary as summarize_session_client
 from .remote_select import RemoteSelect
 from .audit_actor_select import bind_audit_actor_select, actor_condition
 from .classification_workspace import classification_workspace
@@ -12240,9 +12241,7 @@ def index(q: str = "") -> None:
 
         def client_summary(user_agent: str | None) -> tuple[str, str]:
             value = user_agent or render_message("webui.client_summary.text.unknown_client_a90618da")
-            browser = next((name for token, name in (("Edg/", "Microsoft Edge"), ("Chrome/", "Google Chrome"), ("Firefox/", "Mozilla Firefox"), ("Safari/", "Safari")) if token in value), "Browser")
-            platform = next((name for token, name in (("Macintosh", "macOS"), ("Windows", "Windows"), ("Android", "Android"), ("iPhone", "iOS"), ("Linux", "Linux")) if token in value), "Unknown platform")
-            return browser, platform
+            return summarize_session_client(value)
 
         async def confirm_revoke(row: dict[str, Any], *, all_for_user: bool = False) -> None:
             confirmation = ui.dialog()
@@ -16105,19 +16104,7 @@ def index(q: str = "") -> None:
 
                 def session_client_summary(user_agent: str | None) -> tuple[str, str]:
                     value = user_agent or render_message("webui.session_client_summary.text.unknown_client_4f0f1eaa")
-                    browser = next((
-                        name for token, name in (
-                            ("Edg/", "Microsoft Edge"), ("Chrome/", "Google Chrome"),
-                            ("Firefox/", "Mozilla Firefox"), ("Safari/", "Safari"),
-                        ) if token in value
-                    ), "Browser")
-                    platform = next((
-                        name for token, name in (
-                            ("Macintosh", "macOS"), ("Windows", "Windows"),
-                            ("Android", "Android"), ("iPhone", "iOS"), ("Linux", "Linux"),
-                        ) if token in value
-                    ), "Unknown platform")
-                    return browser, platform
+                    return summarize_session_client(value)
 
                 def render_user_session_card(row: dict[str, Any]) -> None:
                     browser, platform = session_client_summary(row.get("user_agent"))

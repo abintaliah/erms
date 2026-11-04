@@ -17,6 +17,14 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "erms.wathiq/device-model")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "model") {
+                    val model = Build.MODEL.orEmpty()
+                    val maker = Build.MANUFACTURER.orEmpty()
+                    result.success(if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model")
+                } else result.notImplemented()
+            }
         cancelWarning()
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "erms.wathiq/session-warning")
             .setMethodCallHandler { call, result ->
@@ -37,6 +45,9 @@ class MainActivity : FlutterActivity() {
                         if (delay == null || delay <= 0 || title == null || body == null) {
                             result.error("invalid_warning", "Invalid warning parameters", null)
                         } else {
+                            if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+                                android.util.Log.d("WathiqSessionWarning", "schedule delaySeconds=$delay elapsedMs=${SystemClock.elapsedRealtime()}")
+                            }
                             val intent = Intent(this, SessionWarningReceiver::class.java)
                                 .putExtra("title", title).putExtra("body", body)
                                 .putExtra("expiresAt", SystemClock.elapsedRealtime() + delay * 1000 + 5 * 60 * 1000)
@@ -54,6 +65,9 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun cancelWarning() {
+        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            android.util.Log.d("WathiqSessionWarning", "cancel elapsedMs=${SystemClock.elapsedRealtime()}")
+        }
         val pending = PendingIntent.getBroadcast(this, 10,
             Intent(this, SessionWarningReceiver::class.java),
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
