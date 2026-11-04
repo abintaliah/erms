@@ -517,3 +517,36 @@ that case from earlier online revocation acceptance. Language, detailed Back
 behavior and radio-specific connectivity coverage remain unclaimed. The API was
 restored successfully, and the stack and both sessions were left available.
 Phase 1 remains in progress.
+
+## Revocation during outage acceptance — 4 November 2026
+
+The user authorized automation with both mobile sessions active. A prerequisite
+read identified exactly one active Android and one active iOS session, each with
+more than eight minutes of idle lifetime remaining. The identified local API
+process was paused for 55 seconds; a health probe verified unavailable responses.
+After 46 seconds, while API responses were still unavailable, a bounded local
+administrative transaction revoked only those two mobile sessions and appended
+an individual `SESSION_REVOKED` event for each. Audit source is
+`administrative_tool`, actor type `automated_process`; no human was impersonated
+and no other sessions, credentials or policy settings were changed.
+
+The API was resumed automatically in a finally block. Post-run verification
+confirmed HTTP 200 health, both revoked flags and the two corresponding audit
+events. Request logs show unauthorized authentication after restoration. The
+user then confirmed that both Android and iOS showed sign-in after recovery or
+Retry, and Back could not restore protected screens. Record revocation during
+an outage and protected Back-state clearing as passed on both platforms, using
+automated operational evidence plus user-reported UI acceptance.
+
+Native/browser UI controls were unavailable, so on-screen behavior was not
+independently observed by the agent. Automatic recovery versus explicit Retry
+and the tested language were not distinguished. This was an API-response outage,
+not a radio/network-configuration test, and no database test suite or fixtures
+ran against the persistent database. The stack remains healthy; the two mobile
+sessions are intentionally revoked and require sign-in for further tests.
+Private operational evidence is retained in
+`.runtime/mobile-acceptance/revocation-during-outage-2026-11-04.json`.
+
+This closes the previously pending revocation-during-outage device acceptance
+on both platforms. Absolute-lifetime and other remaining Phase 1 verification
+requirements are unchanged; Phase 1 remains in progress.

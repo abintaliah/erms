@@ -20,7 +20,17 @@ dialog blocking navigation, then resumed the same signed-in screen without losin
 place after restoration. Offline gating and valid-session recovery pass on both
 platforms with user-reported UI evidence. Automatic recovery versus explicit
 Retry was not distinguished. No radio/network settings changed, and native UI
-was not independently observed. Revocation during an outage remains pending.
+was not independently observed. Revocation during an outage passed separately
+in the acceptance run below.
+
+Revocation-during-outage acceptance (4 November 2026): the identified API process
+was paused for 55 seconds; at 46 seconds, only the two active mobile sessions
+were revoked in an audited local administrative transaction. Automatic API
+restoration, HTTP 200 health, both revoked flags and individual
+`administrative_tool` / `automated_process` audit events were verified. The user
+confirmed that Android and iOS both showed sign-in after recovery/Retry and Back
+could not restore protected screens. Passed on both platforms with user-reported
+UI evidence; exact language and automatic-versus-explicit retry remain unclaimed.
 
 User-reported acceptance (4 November 2026): server-owned idle timeout worked
 successfully on both Android and iOS after the latest builds were installed and
@@ -37,7 +47,8 @@ Phase 1 remains open.
 
 | Requirement | Implementation | Verification | Current status |
 | --- | --- | --- | --- |
-| Offline gate and valid-session recovery (§16, §8.3) | Foreground passive check failure gates protected interaction; safe revalidation resumes the retained Navigator | Automated Flutter offline/stale-state regressions; controlled 55-second API-response outage with automatic restoration; user confirmed gating and retained-screen recovery on Android and iOS | Passed on both platforms with user-reported UI evidence; revocation during outage and explicit Retry-specific coverage pending |
+| Offline gate and valid-session recovery (§16, §8.3) | Foreground passive check failure gates protected interaction; safe revalidation resumes the retained Navigator | Automated Flutter offline/stale-state regressions; controlled 55-second API-response outage with automatic restoration; user confirmed gating and retained-screen recovery on Android and iOS | Passed on both platforms with user-reported UI evidence; explicit Retry-specific coverage pending |
+| Revocation during outage and protected Back-state clearing (§8.3, §17.4) | Existing server revocation and revalidation clear the session generation and protected Navigator | Controlled API outage, audited revocation of only the two mobile sessions before restoration, verified server/audit state; user confirmed sign-in and Back protection on Android and iOS | Passed on both platforms with user-reported UI evidence |
 | Foreground expiry/revocation without renewing idle activity (§8.3; approved status endpoint) | Passive `/auth/me/session-status`; one nonoverlapping 15-second foreground monitor; guarded protected navigation; generation-owned state clearing | `test_mobile_session_status.py` plus existing policy/capability tests: 17 passed in disposable DB, dropped; `test/app_test.dart`: foreground route/Back and navigation rejection in English/Arabic phone/tablet, background/disposal pause; `test/session_controller_test.dart`: passive overlap/stale/offline; `test/auth_api_test.dart`: bearer endpoint; full Flutter suite 75 passed | Automated verified; foreground revocation passed on iOS/Android (user-reported); exact latency/language/Back coverage unclaimed |
 | Server exclusively owns idle/absolute expiry (§8.3) | `SessionController` has no local timeout/clock; background return calls the existing principal/capability validation | `test/session_controller_test.dart`: server-valid resume, one validation after repeated background callbacks, server rejection, offline/retry and state isolation; `test/app_test.dart`: simulated one-day background in English/Arabic, server-valid retention and server-expired sign-in | Automated verified; new-policy device acceptance pending |
 | No session reminder or permission prompt (§8.3) | Removed Dart scheduler, Android receiver/manifest permission and all native scheduling/permission requests; startup cancels legacy identifiers only | `test/platform_configuration_test.dart` guards removal and legacy cleanup; Android APK and iOS simulator native builds pass | Static/build verified; legacy-install cleanup must be checked on devices |
