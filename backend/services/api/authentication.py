@@ -325,12 +325,30 @@ def principal_response(principal: Principal, connection: Connection) -> dict[str
         role["org_unit"] = {key: value for key, value in unit.items() if key != "translations"}
         role["org_unit"]["localized"] = localized_projection(unit, language, "name")
         roles.append(role)
+    can_manage_disposition = principal.account_type == 'person' and any(
+        role.is_information_governance and 'disposition.jobs.manage' in role.privileges
+        for role in policy.effective_roles
+    )
+    # Use the same current person-role eligibility as workflow task routing.
+    can_access_disposition_tasks = can_manage_disposition or connection.execute(
+        """SELECT EXISTS (
+            SELECT 1 FROM org_units unit
+            WHERE disposition_private.person_role(%s, unit.file_administrator_role_id)
+               OR disposition_private.person_role(%s, unit.managing_role_id)
+        ) AS allowed""",
+        (principal.user_id, principal.user_id),
+    ).fetchone()["allowed"]
     return {
         "user": user,
         "roles": roles,
         "session": {"id": principal.session_id},
         "must_change_password": principal.must_change_password,
         "previous_login_at": _previous_login_at(connection, principal),
+        "can_manage_disposition": can_manage_disposition,
+        "can_manage_disposition_templates": connection.execute(
+            "SELECT EXISTS(SELECT 1 FROM roles WHERE disposition_private.can_revise_template(id)) AS allowed"
+        ).fetchone()["allowed"],
+        "can_access_disposition_tasks": can_access_disposition_tasks,
         "global_privileges": sorted({
             privilege
             for role in policy.effective_roles
@@ -348,14 +366,17 @@ def me(
 
 
 @router.get("/me/mobile-capabilities", response_model=list[str])
-def mobile_capabilities(principal: Principal = Depends(principal_from_request)):
+def mobile_capabilities(
+    principal: Principal = Depends(principal_from_request),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
     """Approved mobile navigation availability, never a resource-access grant.
 
     These existing personal/browse contracts are open to authenticated people;
     their returned content remains filtered by the server's resource policy.
     """
     destinations = []
-    if boolean_environment("FULL_TEXT_SEARCH_ENABLED", True):
+    if settings_cache.for_connection(connection)["FULL_TEXT_SEARCH_ENABLED"]:
         destinations.append("global-search")
     destinations.extend([
         "dashboard", "classification-browser", "favourites", "recent-activity",

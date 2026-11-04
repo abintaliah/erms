@@ -107,3 +107,31 @@ native builds and focused backend compatibility tests in uniquely named
 disposable databases. Verify authenticated English/Arabic behavior against the
 integrated code before resuming Phase 1 acceptance. Do not roll back the
 database to accommodate this older checkout.
+
+## Resolution — 4 November 2026
+
+The user authorized the updates after this review. Main `0cfd587` is integrated;
+the settings and user-translation compatibility findings are resolved. The
+retained mobile capability endpoint now reads the validated database setting
+instead of the environment. Canonical catalogues and mobile assets contain
+3,984 keys, with every incoming main Arabic item and provenance preserved.
+
+After reviewing the ten inherited Arabic validator failures, the user approved
+`الوثائق الحيوية` as authoritative and correction of the specification and
+legacy validator. Seven failures were caused by that old spelling conflict;
+three were comparison failures on Arabic diacritics. Correcting the validators
+resolved all ten without altering curated wording. Artifact hashes reflect the
+merged definitions and approved specification correction.
+
+All 61 Flutter tests, Flutter analysis, both native builds, 42 focused backend
+regressions and 28 database-free validator/presenter checks pass. Backend tests
+used a new disposable database, successfully dropped afterward. Catalogue,
+terminology, Arabic-quality, provenance/hash and configuration checks pass.
+All 90 focused WebUI audit/history/localization regressions also pass, with
+the source presenter included in extracted-dialog fixture dependencies.
+The local database accepts all 55 settings and received only ten missing mobile
+drafts, preserving 3,974 existing translations. Notification readiness passes.
+
+The prior findings remain above as the review record, not outstanding defects.
+Services remain stopped; builds are not installed. Phase 1 runtime acceptance
+and administrator review of the existing mobile drafts remain pending.

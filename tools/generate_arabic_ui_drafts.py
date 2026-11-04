@@ -17,10 +17,10 @@ OUTPUT = ROOT / "frontend/webui/i18n/messages.ar.generated.json"
 PLACEHOLDER = re.compile(r"\{[a-z][a-z0-9_]*\}")
 LATIN_TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9_.:/-]*")
 ALLOWED_LATIN = {
-    "ACL", "API", "CASE-2026", "HTTP", "HTTPS", "IANA", "ID", "IP",
+    "ACL", "API", "CASE-2026", "SMTP", "HTTP", "HTTPS", "IANA", "ID", "IP",
     "ISO", "JSON", "MIME", "PDF", "POST", "SQL", "UTC", "health", "wti_",
     "application/octet-stream",
-    "CSV", "MS", "Word",  # Export format/product names retain their spelling.
+    "CSV", "MS", "Word", "DOCX", "docx", "Changa",  # Format/product/font names retain their spelling.
 }
 
 
@@ -95,24 +95,38 @@ def validate(definitions: list[dict], candidates: list[dict]) -> None:
                 f"{definition['message_key']}: unexplained Latin text {', '.join(latin)}"
             )
         source = definition["default_text"]
+        # Diacritics do not alter domain terminology. Normalize comparison only;
+        # preserve the administrator's original wording and provenance.
+        terminology_text = re.sub(
+            r"[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed]", "", text
+        )
         if re.search(r"\bAggregations?\b", source, re.IGNORECASE):
-            if "ملف" not in text or "تجميع" in text:
+            if "ملف" not in terminology_text or "تجميع" in terminology_text:
                 failures.append(
                     f"{definition['message_key']}: violates approved Aggregation → ملف/ملفات terminology"
                 )
-        if re.search(r"\bRecords?\b", source, re.IGNORECASE):
-            if "وث" not in text or "سجل" in text:
+        # In an explicitly described imperative, initial "Record" is a verb
+        # (تسجيل), not the governed document noun (وثيقة). Remaining noun uses
+        # still require the approved terminology; no message-key exceptions.
+        record_source = source
+        record_target = terminology_text
+        if definition.get('grammatical_role') in {'action', 'action label', 'imperative sentence', 'action guidance', 'dialog-title action'}:
+            if re.match(r'^Record\b', source):
+                record_target = re.sub(r'^سجل\s+', '', record_target, count=1)
+            record_source = re.sub(r'^Record\b\s*', '', source, count=1)
+        if re.search(r"\bRecords?\b", record_source, re.IGNORECASE):
+            if "وث" not in record_target or "سجل" in record_target:
                 failures.append(
                     f"{definition['message_key']}: violates approved Record → وثيقة/وثائق terminology"
                 )
         required_terms = {
             "Audit trail": "مسار التتبع",
             "Selective preservation": "الإنتقاء",
-            "Vital record": "الوثائق الهيوية",
+            "Vital record": "الوثائق الحيوية",
         }
         for english_term, approved_arabic in required_terms.items():
             if re.search(rf"\b{re.escape(english_term)}s?\b", source, re.IGNORECASE):
-                if approved_arabic not in text:
+                if approved_arabic not in terminology_text:
                     failures.append(
                         f"{definition['message_key']}: violates approved {english_term} → {approved_arabic} terminology"
                     )

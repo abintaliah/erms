@@ -147,3 +147,15 @@ The installed diagnostic build still uses temporary 5/2-minute timing; normal
 
 No catalogue keys or language artifacts changed. The earlier installed debug
 build retains diagnostic timing until rebuilt and reinstalled.
+
+### Post-upgrade integration — 4 November 2026
+
+| Requirement | Implementation | Evidence | Status |
+| --- | --- | --- | --- |
+| Server-authoritative Phase 1 destination availability (§7 and approved capability response) | Retained `/auth/me/mobile-capabilities`; search visibility reads validated database settings | `test_mobile_capabilities.py`: ordinary person session, enabled/disabled database settings despite opposite environment values, invalid session and credential-change gate; included in 42 passing disposable-database regressions | Automated verified |
+| Current database/API compatibility (§§3, 21) | Main through `0cfd587`; 55-setting registry and migration-090 user-translation authorization | Read-only settings-loader inspection against upgraded local DB; `test_application_settings_phase6.py`, `test_application_settings_phase5_authentication.py`, `test_user_translation_authorization.py`, `test_entity_translations.py`; 42 focused tests passed, disposable DB dropped | Verified for integration scope |
+| Canonical English/Arabic assets and terminology (§6) | 3,984 sorted keys per artifact/asset, preserved main Arabic entries/provenance and ten mobile keys; user-approved Vital record spelling and comparison-only diacritic normalization | `test/message_catalogue_test.dart`; catalogue/contextual terminology/Arabic-quality/hash/provenance checks; `tools/tests/test_arabic_ui_drafts.py`, `test_arabic_record_grammar.py`, `test_arabic_terminology_context.py`; 28 database-free validator/presenter checks passed | Automated verified; existing mobile drafts require human review |
+
+All 61 Flutter tests, static analysis, Android debug APK and iOS simulator builds
+pass. Authenticated English/Arabic runtime review, native installation and the
+remaining full-duration Phase 1 acceptance gate are not established by this run.

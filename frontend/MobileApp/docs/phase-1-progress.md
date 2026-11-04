@@ -339,3 +339,39 @@ keys, translation artifacts, or environment settings changed. No native build
 was installed by this restoration; the previously installed diagnostic build
 requires rebuilding/reinstalling to receive normal timing. Full-duration device
 acceptance and the remaining Phase 1 exit checks are still pending.
+
+## Main integration after database upgrade — 4 November 2026
+
+Integrated main revision `0cfd587` after the local database upgrade through
+migration 094. The merged settings registry validates all 55 database settings;
+user translations use `identity.users.administer` following migration 090.
+The approved mobile capability route, `mobile` audit source, device-model
+adapters and session presenters are retained. Mobile search availability now
+reads the validated database snapshot; environment changes cannot override it.
+
+Merged English definitions and canonical Arabic items by message key, retaining
+every main Arabic item and its provenance unchanged, ten mobile-only keys, and
+the retirement of the two obsolete user-metadata privilege keys. Both mobile
+assets now contain 3,984 keys. The user approved correcting the specification's
+Vital record spelling to `الوثائق الحيوية`; runtime terminology and the legacy
+validator agree. Diacritics are normalized only during validation. These fixes
+resolve ten inherited validator failures without rewriting curated translations.
+Artifact catalogue/specification/terminology hashes are refreshed. No new
+administrator export was promoted; existing mobile drafts still need review.
+
+Verification: all 61 Flutter tests pass, analysis is clean, and Android debug
+APK and iOS simulator builds pass. All 42 focused backend compatibility tests
+pass in a new disposable database, which was dropped. All 28 database-free
+validator/presenter checks pass. Coverage, order, blank, placeholder, stale-key,
+Arabic-quality, contextual terminology, artifact-hash and provenance checks pass;
+environment-template and configuration-authority checks also pass.
+
+All 90 focused WebUI audit/history/localization regressions pass in English
+and Arabic, including the merged disposition event labels and mobile audit
+source. AST-isolated dialog fixtures now supply the retained source presenter.
+
+The local database received only ten missing mobile drafts, protecting 3,974
+existing translations, with zero corrections/failures. Notification readiness
+passes. No services or emulators were started, and the new native builds were
+not installed. Authenticated bilingual runtime review and full-duration timeout
+acceptance remain pending; this integration does not close Phase 1.

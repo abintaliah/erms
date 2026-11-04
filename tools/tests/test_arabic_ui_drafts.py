@@ -20,5 +20,21 @@ class ReplyPrefixTests(unittest.TestCase):
             self.check_value("messaging.reply.subject_prefix", "Reply:")
 
 
+class TerminologyTests(unittest.TestCase):
+    def check_value(self, source, text):
+        validate([{"message_key": "example.term", "default_text": source}],
+                 [{"message_key": "example.term", "translated_text": text, "quality_flags": []}])
+
+    def test_diacritics_preserve_aggregation_terminology(self):
+        self.check_value("Aggregations", "المِلفّات الحاوية")
+        with self.assertRaises(ValueError):
+            self.check_value("Aggregations", "التجميعات")
+
+    def test_approved_vital_record_spelling(self):
+        self.check_value("Vital record", "الوثائق الحيوية")
+        with self.assertRaises(ValueError):
+            self.check_value("Vital record", "الوثائق الهيوية")
+
+
 if __name__ == "__main__":
     unittest.main()
