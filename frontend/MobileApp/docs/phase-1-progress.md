@@ -2,6 +2,11 @@
 
 Status: In progress
 
+Current policy (approved 4 November 2026): session expiry belongs exclusively to
+API application settings. The mobile 15-minute timeout and ten-minute reminder
+are removed. Historical entries below describing those rules are superseded;
+see the latest amendment at the end for current verification and exit checks.
+
 Started: 30 September 2026
 
 ## Completed
@@ -375,3 +380,45 @@ existing translations, with zero corrections/failures. Notification readiness
 passes. No services or emulators were started, and the new native builds were
 not installed. Authenticated bilingual runtime review and full-duration timeout
 acceptance remain pending; this integration does not close Phase 1.
+
+## Server-owned expiry amendment — 4 November 2026
+
+The user approved removing the mobile-specific background timeout and reminder.
+Specification §§8.3, 26 Phase 1 and 27.3 now require the API's configured idle and
+absolute lifetime policy to be authoritative. A server-valid session resumes
+regardless of background duration; server expiry/revocation clears protected
+state. Offline validation retains the noninteractive gate with Retry/Sign out.
+Process-restart credentials, explicit logout and user isolation remain required.
+
+Removed the local clock/cutoff, Dart warning scheduler, notification bridge,
+Android receiver and permission, and all iOS/Android reminder scheduling and
+permission requests. Native startup retains cancellation of old notification
+identifiers so an upgrade does not leave an obsolete reminder pending/displayed.
+Device-model support is retained. The historical warning panels in the approved
+mockup boards are explicitly superseded, without changing other approved layouts.
+
+Removed two unused catalogue definitions (`mobile.session.warning_title` and
+`mobile.session.warning_body`) and their artifact/mobile-asset items. All 3,982
+remaining entries retain their original wording and provenance. No administrator
+export was promoted and no new translation review is introduced. Catalogue
+coverage/order, placeholders, blank values, stale keys, terminology, Arabic
+quality and artifact-hash/provenance checks pass.
+
+The local database catalogue was synchronized: the two reminder definitions
+are deprecated, their translation/history rows remain intact, and 3,982 active
+definitions remain.
+
+All 61 Flutter checks pass, including English/Arabic one-day-background widget
+cases that resume only according to the server result. Android debug APK and
+iOS simulator builds pass. All 11 focused server-policy/capability tests pass
+in a fresh disposable database, which was dropped. The existing API settings,
+values and schema are unchanged; no environment variable/template changes are
+needed. Builds are not installed and services remain stopped.
+
+Retired acceptance: fixed 15-minute background expiry, ten-minute warning,
+permission/delivery matrix and continuous local expiry-clock tests. Current
+remaining runtime acceptance: server-configured idle/absolute expiry and
+revocation on background return, retention of server-valid sessions, safe offline
+retry, no reminder prompts/delivery, and cancellation of legacy reminders on
+upgrade, on iOS/Android and in both languages. Other Phase 1 device/tablet and
+session-card review gaps remain open. This amendment does not close Phase 1.

@@ -17,7 +17,7 @@ approved mobile specification.
 ![Phase 1 English and LTR authentication and shell](phase-1-auth-shell-en-ltr.png)
 
 The board covers sign-in, required password change, the authenticated drawer,
-the session-expiry warning, a responsive tablet shell, and central offline,
+a responsive tablet shell, and central offline,
 authorization-change, and non-disclosing error presentation.
 
 ## Arabic and RTL
@@ -39,3 +39,10 @@ mark on the authentication pages and dashboard/application-shell headers.
 Approval authorizes implementation of the already specified Phase 1 scope only.
 It does not approve new workflows, endpoints, authorization rules, or persistent
 credential storage.
+
+## Session-policy amendment — 4 November 2026
+
+The user removed the mobile background timeout and session reminder. Any warning
+shown in the historical approved boards is superseded by specification §8.3:
+server-owned expiry, background-return validation, and no reminder notification.
+The remaining approved layouts are unchanged.

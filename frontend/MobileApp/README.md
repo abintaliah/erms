@@ -90,3 +90,12 @@ Supply the same address at launch with
 emulator, reverse the selected local port through ADB before launch so that the
 emulator's loopback address reaches the host. Do not commit environment URLs or
 credentials.
+
+## Session expiry
+
+The API enforces the application settings `AUTH_SESSION_IDLE_MINUTES` and
+`AUTH_SESSION_ABSOLUTE_HOURS`. Mobile has no independent background timeout or
+session-return reminder. Returning from the background validates the session
+with the server; an unavailable server keeps protected interaction gated with
+Retry and Sign out. Process restart still requires sign-in. Native startup
+cancels reminders left by older builds without requesting notification permission.

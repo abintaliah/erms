@@ -79,81 +79,30 @@ void main() {
     expect(controller.hasProtectedState, isFalse);
   });
 
-  test('resume before fifteen minutes retains the session', () async {
-    var now = DateTime.utc(2026, 9, 30, 10);
-    final scheduler = _FakeWarningScheduler();
-    final controller = SessionController(
-      _FakeAuthApi(),
-      warningScheduler: scheduler,
-      clock: () => now,
-    );
+  test('resume retains a session accepted by the server', () async {
+    final api = _FakeAuthApi();
+    final controller = SessionController(api);
     await controller.signIn(email: 'user@example.test', password: 'password');
     await controller.onBackgrounded();
-    now = now.add(const Duration(minutes: 14, seconds: 59));
-
     expect(await controller.onResumed(), isFalse);
+    expect(api.principalReads, 1);
     expect(controller.status, SessionStatus.authenticated);
-    expect(scheduler.scheduledDelay, SessionController.warningAfter);
-    expect(scheduler.cancelled, isTrue);
   });
 
-  test('resume at fifteen minutes clears all protected state', () async {
-    var now = DateTime.utc(2026, 9, 30, 10);
-    final controller = SessionController(_FakeAuthApi(), clock: () => now);
+  test('repeated background callbacks require one server validation', () async {
+    final api = _FakeAuthApi();
+    final controller = SessionController(api);
     await controller.signIn(email: 'user@example.test', password: 'password');
     await controller.onBackgrounded();
-    now = now.add(SessionController.expireAfter);
-
-    expect(await controller.onResumed(), isTrue);
-    expect(controller.status, SessionStatus.signedOut);
-    expect(controller.hasProtectedState, isFalse);
-  });
-
-  test('warning delivery failure never extends the session', () async {
-    var now = DateTime.utc(2026, 9, 30, 10);
-    final controller = SessionController(
-      _FakeAuthApi(),
-      warningScheduler: _FakeWarningScheduler(throwOnSchedule: true),
-      clock: () => now,
-    );
-    await controller.signIn(email: 'user@example.test', password: 'password');
     await controller.onBackgrounded();
-    now = now.add(const Duration(minutes: 16));
-
-    expect(await controller.onResumed(), isTrue);
-    expect(controller.status, SessionStatus.signedOut);
+    await controller.onResumed();
+    await controller.onResumed();
+    expect(api.principalReads, 1);
+    expect(controller.hasProtectedState, isTrue);
   });
-  test(
-    'repeated background callbacks do not restart the expiry clock',
-    () async {
-      var now = DateTime.utc(2026, 10, 4);
-      final controller = SessionController(_FakeAuthApi(), clock: () => now);
-      await controller.signIn(email: 'user@example.test', password: 'password');
-      await controller.onBackgrounded();
-      now = now.add(const Duration(minutes: 9));
-      await controller.onBackgrounded();
-      now = now.add(const Duration(minutes: 6));
-      expect(await controller.onResumed(), isTrue);
-      expect(controller.hasProtectedState, isFalse);
-    },
-  );
 
   test(
-    'warning cancellation failure cannot retain signed-out identity',
-    () async {
-      final controller = SessionController(
-        _FakeAuthApi(),
-        warningScheduler: _FakeWarningScheduler(throwOnCancel: true),
-      );
-      await controller.signIn(email: 'user@example.test', password: 'password');
-      await controller.signOut();
-      expect(controller.hasProtectedState, isFalse);
-      expect(controller.destinations, isEmpty);
-    },
-  );
-
-  test(
-    'server revocation takes precedence before the background limit',
+    'server expiry or revocation clears protected state on resume',
     () async {
       final api = _FakeAuthApi();
       final controller = SessionController(api);
@@ -238,6 +187,7 @@ class _FakeAuthApi implements AuthApi {
   final Completer<AuthSession>? signInCompletion;
   String? lastEmail;
   ApiFailure? principalFailure;
+  int principalReads = 0;
   Completer<String>? languageCompletion;
   Completer<UserPreferences>? preferenceCompletion;
 
@@ -269,6 +219,7 @@ class _FakeAuthApi implements AuthApi {
 
   @override
   Future<AuthPrincipal> currentPrincipal(String token) async {
+    principalReads++;
     if (principalFailure case final error?) throw error;
     return principal;
   }
@@ -326,32 +277,6 @@ class _FakeAuthApi implements AuthApi {
     if (signOutFailure case final failure?) {
       throw failure;
     }
-  }
-}
-
-class _FakeWarningScheduler implements SessionWarningScheduler {
-  _FakeWarningScheduler({
-    this.throwOnSchedule = false,
-    this.throwOnCancel = false,
-  });
-
-  final bool throwOnSchedule;
-  final bool throwOnCancel;
-  Duration? scheduledDelay;
-  bool cancelled = false;
-
-  @override
-  Future<void> schedule(Duration delay) async {
-    if (throwOnSchedule) {
-      throw StateError('notification unavailable');
-    }
-    scheduledDelay = delay;
-  }
-
-  @override
-  Future<void> cancel() async {
-    if (throwOnCancel) throw StateError('unavailable');
-    cancelled = true;
   }
 }
 

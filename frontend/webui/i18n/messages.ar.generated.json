@@ -4,7 +4,7 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "489890f750bd612b2d71478edb3abe8d0c8f09d0650d3788bd41833c42f875d3",
-  "catalogue_sha256": "b05c429fa32405da30a1984d07e4dbf90b7a2391bca87942b4919c7493cd3270",
+  "catalogue_sha256": "0fc40ae0b01c45413b355b8060f7c0bae7491889607e4d5e4a2cbfcb56782023",
   "terminology_sha256": "2c3da448b611e9673cf83fbc76b188626a617203784bf2a7a8508554b77dda9b",
   "batch_id": "admin-export-ar-20261102132930",
   "generated_at": "2026-11-02T13:29:30.297596+04:00",
@@ -19872,36 +19872,6 @@
     {
       "message_key": "mobile.navigation.user_profile",
       "translated_text": "المستخدم/الملف الشخصي",
-      "provenance": {
-        "source_origin": "generated",
-        "generator": "OpenAI Codex",
-        "model": "OpenAI Codex",
-        "model_version": "2026-10-04",
-        "prompt_version": "mobile-phase1-contextual-ar-v1",
-        "generated_at": "2026-10-04T10:25:52.405979+00:00",
-        "batch_id": "mobile-phase1-session-20261004",
-        "kind": "machine_generated"
-      },
-      "quality_flags": []
-    },
-    {
-      "message_key": "mobile.session.warning_body",
-      "translated_text": "سيُطلب تسجيل الدخول بعد بقاء التطبيق في الخلفية لمدة 15 دقيقة.",
-      "provenance": {
-        "source_origin": "generated",
-        "generator": "OpenAI Codex",
-        "model": "OpenAI Codex",
-        "model_version": "2026-10-04",
-        "prompt_version": "mobile-phase1-contextual-ar-v1",
-        "generated_at": "2026-10-04T10:25:52.405979+00:00",
-        "batch_id": "mobile-phase1-session-20261004",
-        "kind": "machine_generated"
-      },
-      "quality_flags": []
-    },
-    {
-      "message_key": "mobile.session.warning_title",
-      "translated_text": "جلسة وثق",
       "provenance": {
         "source_origin": "generated",
         "generator": "OpenAI Codex",

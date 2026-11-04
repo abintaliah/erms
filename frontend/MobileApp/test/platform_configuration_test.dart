@@ -3,6 +3,33 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'session reminder scheduling and permissions are removed on both platforms',
+    () {
+      final manifest = File('android/app/src/main/AndroidManifest.xml')
+          .readAsStringSync();
+      final android = File(
+        'android/app/src/main/kotlin/erms/wathiq/MainActivity.kt',
+      ).readAsStringSync();
+      final ios = File('ios/Runner/AppDelegate.swift').readAsStringSync();
+      expect(manifest, isNot(contains('POST_NOTIFICATIONS')));
+      expect(manifest, isNot(contains('SessionWarningReceiver')));
+      expect(android, isNot(contains('setAndAllowWhileIdle')));
+      expect(android, isNot(contains('requestPermissions')));
+      expect(android, contains('FLAG_NO_CREATE'));
+      expect(android, contains('pending.cancel()'));
+      expect(ios, isNot(contains('requestAuthorization')));
+      expect(ios, isNot(contains('UNTimeIntervalNotificationTrigger')));
+      expect(ios, contains('removePendingNotificationRequests'));
+      expect(ios, contains('removeDeliveredNotifications'));
+      expect(
+        File('lib/features/auth/application/platform_session_warning.dart')
+            .existsSync(),
+        isFalse,
+      );
+    },
+  );
+
   test('iOS uses the Wathiq display name and phone portrait orientation', () {
     final plist = File('ios/Runner/Info.plist').readAsStringSync();
 

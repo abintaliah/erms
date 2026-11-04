@@ -39,7 +39,7 @@ API base URLs and other environment values must be supplied at build or launch
 time. Production credentials, session material, API tokens, and protected
 content must never be committed to the repository or compiled as constants.
 
-## Phase 1 session and native-warning scope
+## Phase 1 server-owned session scope
 
 Preferences, capabilities, principal and locale are process-memory state owned
 by the current session generation. Freshness comes from sign-in, explicit
@@ -49,8 +49,10 @@ write into a later generation. Errors retain existing in-memory data behind a
 noninteractive gate and never populate persistent caches. English is restored
 when identity clears; saved language remains server-authoritative.
 
-The dependency-free warning bridge sends only generic localized title/body and
-a relative delay to the OS. Neither tokens nor personal data cross or persist
-through that bridge. The native notification identifier is fixed, so another
-schedule replaces the previous warning. OS permission and scheduling failures
-are best effort. Android needs no exact-alarm or reboot scheduling permission.
+Session idle and absolute expiry belong exclusively to the API application
+settings (`AUTH_SESSION_IDLE_MINUTES` and `AUTH_SESSION_ABSOLUTE_HOURS`). The
+client records only whether a background return needs server validation; it has
+no elapsed-time cutoff, local expiry clock or reminder scheduler. Server-valid
+sessions resume, unauthenticated responses clear protected state, and network
+failures retain the noninteractive validation gate. Native startup cancels only
+legacy reminders from older builds without requesting notification permission.

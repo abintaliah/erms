@@ -14,37 +14,10 @@ enum SessionStatus {
   validatingSession,
 }
 
-abstract interface class SessionWarningScheduler {
-  Future<void> schedule(Duration delay);
-
-  Future<void> cancel();
-}
-
-class NoopSessionWarningScheduler implements SessionWarningScheduler {
-  const NoopSessionWarningScheduler();
-
-  @override
-  Future<void> cancel() async {}
-
-  @override
-  Future<void> schedule(Duration delay) async {}
-}
-
 class SessionController extends ChangeNotifier {
-  SessionController(
-    this._api, {
-    SessionWarningScheduler? warningScheduler,
-    DateTime Function()? clock,
-  }) : _warningScheduler =
-           warningScheduler ?? const NoopSessionWarningScheduler(),
-       _clock = clock ?? DateTime.now;
-
-  static const warningAfter = Duration(minutes: 10);
-  static const expireAfter = Duration(minutes: 15);
+  SessionController(this._api);
 
   final AuthApi _api;
-  final SessionWarningScheduler _warningScheduler;
-  final DateTime Function() _clock;
 
   SessionStatus status = SessionStatus.signedOut;
   AuthPrincipal? principal;
@@ -57,7 +30,7 @@ class SessionController extends ChangeNotifier {
   bool preferencesBusy = false;
   ApiFailure? preferencesFailure;
   String? _token;
-  DateTime? _backgroundedAt;
+  bool _needsResumeValidation = false;
   int _generation = 0;
   int? _validationGeneration;
 
@@ -232,51 +205,21 @@ class SessionController extends ChangeNotifier {
       // Local protected state is cleared even when server sign-out fails.
     } finally {
       if (generation == _generation) {
-        try {
-          await _warningScheduler.cancel();
-        } catch (_) {
-          // Best-effort platform cancellation cannot prevent local sign-out.
-        }
-        if (generation == _generation) {
-          _clear();
-          notifyListeners();
-        }
+        _clear();
+        notifyListeners();
       }
     }
   }
 
   Future<void> onBackgrounded() async {
-    if (!hasProtectedState || _backgroundedAt != null) {
-      return;
-    }
-    _backgroundedAt = _clock();
-    try {
-      await _warningScheduler.schedule(warningAfter);
-    } catch (_) {
-      // Warning delivery is best effort and never changes expiry behavior.
-    }
+    if (hasProtectedState) _needsResumeValidation = true;
   }
 
   Future<bool> onResumed() async {
-    try {
-      await _warningScheduler.cancel();
-    } catch (_) {
-      // Warning cancellation failure does not change session behavior.
-    }
-    final backgroundedAt = _backgroundedAt;
-    _backgroundedAt = null;
-    if (!hasProtectedState || backgroundedAt == null) {
-      return false;
-    }
-    if (_clock().difference(backgroundedAt) < expireAfter) {
-      await validateSession();
-      return !hasProtectedState;
-    }
-    ++_generation;
-    _clear();
-    signInNoticeKey = 'common.error.authentication_required';
-    notifyListeners();
-    return true;
+    if (!hasProtectedState || !_needsResumeValidation) return false;
+    _needsResumeValidation = false;
+    await validateSession();
+    return !hasProtectedState;
   }
 
   Future<void> validateSession() async {
@@ -331,7 +274,7 @@ class SessionController extends ChangeNotifier {
     principal = null;
     destinations = const [];
     _token = null;
-    _backgroundedAt = null;
+    _needsResumeValidation = false;
     effectiveLanguageTag = 'en';
     preferences = null;
     supportedLanguages = const [];

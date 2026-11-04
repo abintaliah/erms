@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wathiq_mobile/app/app.dart';
 import 'package:wathiq_mobile/core/localization/message_catalogue.dart';
+import 'package:wathiq_mobile/core/network/api_failure.dart';
 import 'package:wathiq_mobile/features/auth/application/session_controller.dart';
 import 'package:wathiq_mobile/features/auth/data/auth_api.dart';
 import 'package:wathiq_mobile/features/auth/domain/auth_principal.dart';
@@ -312,24 +313,47 @@ void main() {
     },
   );
 
-  testWidgets(
-    'lifecycle delegates backgrounding and resume to the session boundary',
-    (tester) async {
-      var now = DateTime.utc(2026, 10, 4);
-      final controller = SessionController(_FakeAuthApi(), clock: () => now);
-      await controller.signIn(email: 'user@example.test', password: 'secret');
-      await tester.pumpWidget(
-        WathiqApp(catalogue: _catalogue, sessionController: controller),
+  for (final language in ['en', 'ar']) {
+    for (final expired in [false, true]) {
+      testWidgets(
+        'server decides session after long background $language expired=$expired',
+        (tester) async {
+          final api = _FakeAuthApi(languageTag: language);
+          final controller = SessionController(api);
+          await controller.signIn(
+            email: 'user@example.test',
+            password: 'secret',
+          );
+          await tester.pumpWidget(
+            WathiqApp(catalogue: _catalogue, sessionController: controller),
+          );
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.hidden,
+          );
+          await tester.pump();
+          await tester.pump(const Duration(days: 1));
+          if (expired) {
+            api.principalFailure = const ApiFailure(
+              ApiFailureKind.unauthenticated,
+            );
+          }
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('authenticated-shell')),
+            expired ? findsNothing : findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('sign-in-notice')),
+            expired ? findsOneWidget : findsNothing,
+          );
+          expect(controller.effectiveLanguageTag, expired ? 'en' : language);
+        },
       );
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      await tester.pump();
-      now = now.add(const Duration(minutes: 15));
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('authenticated-shell')), findsNothing);
-      expect(find.byKey(const ValueKey('sign-in-notice')), findsOneWidget);
-    },
-  );
+    }
+  }
 }
 
 const _catalogue = MessageCatalogue(
@@ -428,6 +452,7 @@ class _FakeAuthApi implements AuthApi {
   final String languageTag;
   final bool searchEnabled;
   String? lastEmail;
+  ApiFailure? principalFailure;
 
   @override
   Future<AuthSession> signIn({
@@ -450,7 +475,10 @@ class _FakeAuthApi implements AuthApi {
   ];
 
   @override
-  Future<AuthPrincipal> currentPrincipal(String token) async => principal;
+  Future<AuthPrincipal> currentPrincipal(String token) async {
+    if (principalFailure case final failure?) throw failure;
+    return principal;
+  }
 
   @override
   Future<String> effectiveLanguage(String token) async => languageTag;

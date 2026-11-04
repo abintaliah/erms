@@ -23760,34 +23760,6 @@
     "is_html": false
   },
   {
-    "message_key": "mobile.session.warning_body",
-    "context_group": "mobile.session",
-    "default_text": "Sign-in will be required after 15 minutes in the background.",
-    "semantic_meaning": "Best-effort warning at ten background minutes; never claim server revocation.",
-    "common_locations": [
-      "Wathiq mobile Phase 1"
-    ],
-    "translator_guidance": "Best-effort warning at ten background minutes; never claim server revocation.",
-    "grammatical_role": "label",
-    "parameter_schema": {},
-    "rendered_example": "Sign-in will be required after 15 minutes in the background.",
-    "is_html": false
-  },
-  {
-    "message_key": "mobile.session.warning_title",
-    "context_group": "mobile.session",
-    "default_text": "Wathiq session",
-    "semantic_meaning": "Local device notification title without personal information.",
-    "common_locations": [
-      "Wathiq mobile Phase 1"
-    ],
-    "translator_guidance": "Local device notification title without personal information.",
-    "grammatical_role": "label",
-    "parameter_schema": {},
-    "rendered_example": "Wathiq session",
-    "is_html": false
-  },
-  {
     "message_key": "mobile.state.offline",
     "context_group": "mobile.state",
     "default_text": "Unable to connect. Check your connection and try again.",

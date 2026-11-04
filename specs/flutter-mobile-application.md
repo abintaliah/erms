@@ -246,28 +246,30 @@ and the next launch requires username and password. The client does not claim
 that process termination revoked or audited the still-existing server session.
 The server's existing expiry and cleanup behavior remains authoritative.
 
-### 8.3 Background timeout
+### 8.3 Server-owned session expiry
 
-The initial mobile rule is based on time continuously spent in the background:
+Session expiry is enforced exclusively by the existing API using the application
+settings `AUTH_SESSION_IDLE_MINUTES` and `AUTH_SESSION_ABSOLUTE_HOURS`.
+The mobile application must not implement its own background-duration or
+interaction-based timeout, duplicate these settings, or revoke/discard a session
+solely because a local interval has elapsed.
 
-- the threshold is 15 minutes;
-- server expiry or revocation always takes precedence;
-- returning before 15 minutes resumes the active session, subject to server
-  validation;
-- returning at or after 15 minutes discards local session state and presents
-  sign-in; and
-- successful reauthentication starts at the Dashboard rather than restoring
-  the prior protected screen.
+- Returning from the background revalidates the current principal and destination
+  availability with the server before protected interaction resumes.
+- A server-valid session resumes regardless of time spent in the background.
+- Server expiry or revocation clears all protected in-memory state and presents
+  sign-in. Successful reauthentication starts at Dashboard rather than restoring
+  a prior protected screen.
+- If validation cannot reach the server, protected interaction remains gated
+  with the existing safe-read Retry and Sign out options. Network failure is
+  not evidence that the session has expired.
+- No session-return reminder notification is scheduled or displayed, and the app
+  does not request notification permission for this purpose. An upgraded build
+  cancels any pending or displayed reminder left by an older build.
 
-At the 10-minute point the app may issue one best-effort local device warning
-that sign-in will soon be required. This is a local notification, not a server
-push notification. Its delivery is subject to platform permission, operating
-system scheduling, and application lifecycle constraints. Failure to deliver
-the warning must not extend the session or alter the 15-minute rule.
-
-An interaction-based inactivity timeout is deferred as an improvement. It
-should eventually count meaningful navigation, scrolling, searching, input, or
-actions rather than passive rendering or background refresh.
+This replaces the earlier mobile-specific fifteen-minute background limit and
+optional ten-minute warning, as approved on 4 November 2026. Process-restart
+credential requirements and explicit sign-out remain governed by §§8.2 and 8.4.
 
 ### 8.4 Explicit sign-out
 
@@ -1030,7 +1032,8 @@ Phase 1 delivers the shared secure experience used by all later workflows:
 - complete English/Arabic and LTR/RTL shell behavior;
 - phone portrait and responsive tablet orientation behavior;
 - explicit sign-out and protected state clearing;
-- the 15-minute background timeout and best-effort 10-minute warning;
+- server-enforced session expiry from application settings and safe revalidation
+  on return from the background, without a mobile timeout or reminder;
 - process-restart credential requirements;
 - mobile user-agent identification;
 - central loading, retry, revocation, non-disclosing error, and offline
@@ -1210,9 +1213,14 @@ redefining the internal correctness of established subsystems.
 
 ### 27.3 Authentication and isolation
 
-- Server expiry and revocation supersede client timing.
-- Fifteen minutes continuously in the background requires a new sign-in.
-- The optional 10-minute local warning cannot extend the session.
+- Session idle and absolute expiry are enforced by the server using application
+  settings; the mobile application has no independent timeout.
+- Background return revalidates the session; server-valid sessions resume after
+  any duration, while server-expired or revoked sessions return to sign-in.
+- Failed/offline validation gates protected interaction until validation succeeds
+  or the user signs out.
+- No session reminder notification or permission request is issued; upgrade
+  cleanup removes reminders left by older builds.
 - Process restart requires username and password.
 - Explicit sign-out uses the existing logout operation.
 - Logout, expiry, and user changes clear all protected client state.

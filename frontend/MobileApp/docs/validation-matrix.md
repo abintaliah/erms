@@ -5,6 +5,28 @@ and retained validation mapping. A row is added or updated in the same change
 as its implementation. A phase cannot complete with an unresolved delivered
 row.
 
+## Current session-policy amendment — 4 November 2026
+
+The user's approved amendment to mobile specification §8.3 supersedes all
+historical mobile 15/10-minute timing, warning-delivery, cancellation and
+full-duration acceptance requirements below. Phase 1 now requires server-owned
+session expiry, safe background-return validation and no session reminder.
+Historical test results are retained as history, not current acceptance gates.
+
+| Requirement | Implementation | Verification | Current status |
+| --- | --- | --- | --- |
+| Server exclusively owns idle/absolute expiry (§8.3) | `SessionController` has no local timeout/clock; background return calls the existing principal/capability validation | `test/session_controller_test.dart`: server-valid resume, one validation after repeated background callbacks, server rejection, offline/retry and state isolation; `test/app_test.dart`: simulated one-day background in English/Arabic, server-valid retention and server-expired sign-in | Automated verified; new-policy device acceptance pending |
+| No session reminder or permission prompt (§8.3) | Removed Dart scheduler, Android receiver/manifest permission and all native scheduling/permission requests; startup cancels legacy identifiers only | `test/platform_configuration_test.dart` guards removal and legacy cleanup; Android APK and iOS simulator native builds pass | Static/build verified; legacy-install cleanup must be checked on devices |
+| Application settings enforce current policy | Existing API uses `AUTH_SESSION_IDLE_MINUTES` / `AUTH_SESSION_ABSOLUTE_HOURS`; no duplicate mobile settings | `test_application_settings_phase5_authentication.py` and `test_mobile_capabilities.py`: 11 tests passed in a uniquely named disposable DB, dropped afterward | Verified |
+| Removed reminder text | Removed only `mobile.session.warning_title` and `mobile.session.warning_body`; synchronized 3,982 keys per source/artifact/mobile asset | Catalogue reference/stale-key, order, placeholder, blank, terminology, quality, hash and retained-provenance checks pass | Verified; existing unrelated mobile drafts still require review |
+
+All 61 Flutter tests, formatting and static analysis pass. Android and iOS native builds pass. No service setting
+or schema migration is introduced. Existing installations require the rebuilt
+app to receive this policy and clear old reminders. Phase 1 remains open for
+runtime verification of server expiry/revocation, offline retry and legacy
+notification cleanup on both platforms; a fixed fifteen-minute run is no longer
+a requirement.
+
 ## Phase 0
 
 | Implementation unit | Requirement | Implementation | Automated validation | Additional evidence | Status |
@@ -27,12 +49,12 @@ row.
 | Authentication response model | Mobile specification §§3.1, 8.1, 21, 26 Phase 1 | `lib/features/auth/domain/auth_principal.dart` | `test/auth_principal_test.dart` covers successful parsing and malformed authorization/session fields | Matches `PrincipalRead` in the existing API schema | Verified |
 | Authentication HTTP boundary | Mobile specification §§8.1–8.2, 8.4–8.5, 19, 21, 26 Phase 1 | `lib/features/auth/data/auth_api.dart` | `test/auth_api_test.dart` covers existing paths, request fields, session cookie, bearer token, localization bootstrap, mobile user-agent, governed `mobile` event source, non-disclosing failure category, and missing-cookie failure | Live iOS login reached Dashboard; the immutable `AUTHENTICATION_SUCCEEDED` event stored source `mobile` and user agent `WathiqMobile/0.1 (ios)` | Verified against local API |
 | In-memory session ownership and isolation | Mobile specification §§8.2–8.4, 18–19, 26 Phase 1 | `lib/features/auth/application/session_controller.dart` | `test/session_controller_test.dart` covers success, credential-change gate, failure, unconditional local sign-out clearing, and stale-response rejection | No persistence dependency or credential file introduced | Verified |
-| Background timeout policy | Mobile specification §8.3 and §26 Phase 1 | `SessionController` and `SessionWarningScheduler` | `test/session_controller_test.dart` covers 14:59 retention, 15:00 clearing, warning scheduling, cancellation, and warning failure | Platform notification adapter pending | Core policy verified |
+| Server-owned session policy | Mobile specification §8.3 and §26 Phase 1 | `SessionController` background-return validation | `test/session_controller_test.dart` and bilingual long-background cases in `test/app_test.dart` | Existing server authentication settings enforce expiry; see current amendment above | Automated verified; device acceptance pending |
 | Canonical mobile brand mark | Mobile specification §§5, 8.1, 26 Phase 1 and approved Phase 1 mockups | `lib/core/design/wathiq_brand.dart` | `test/app_test.dart` locates the rendered logo mark on authentication | Geometry and colors match `frontend/webui/static/brand/wathiq-mark.svg`; live device review pending | Widget verified |
 | Sign-in and required-password-change presentation | Mobile specification §§6, 8.1, 8.2, 26 Phase 1 | `AuthenticationScreen`, `PasswordChangeScreen`, `WathiqApp` composition | `test/app_test.dart` covers English/LTR, Arabic/RTL, submitted email normalization, authenticated transition, password-change gate, protected-screen absence, canonical logo, and field presence | Uses existing canonical catalogue keys; live device and service checks pending | Widget verified |
-| Effective mobile language lifecycle | Mobile specification §6, existing internationalization specification §§5–6, and §26 Phase 1 | `WathiqApp`, `SessionController`, `AuthApi.effectiveLanguage` | `test/app_test.dart` proves an Arabic device still receives English anonymous sign-in and a saved Arabic preference switches the authenticated shell to RTL; session tests verify user state clearing | Uses existing `/api/v1/i18n/bootstrap`; Preferences editing UI remains pending | Automated behavior verified |
+| Effective mobile language lifecycle | Mobile specification §6, existing internationalization specification §§5–6, and §26 Phase 1 | `WathiqApp`, `SessionController`, `AuthApi.effectiveLanguage` | `test/app_test.dart` proves an Arabic device still receives English anonymous sign-in and a saved Arabic preference switches the authenticated shell to RTL; session tests verify user state clearing | Uses existing `/api/v1/i18n/bootstrap`; Preferences editing UI is implemented and covered by `test/app_test.dart` | Automated behavior verified |
 
-## Later phases
+## Historical implementation and acceptance records
 
 Add one or more rows for every independently meaningful parser, configuration
 rule, state transition, adapter, widget, route, responsive layout, platform
