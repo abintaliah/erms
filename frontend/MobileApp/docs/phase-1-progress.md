@@ -476,3 +476,17 @@ Foreground revocation and idle expiry with passive monitoring still require
 user/device acceptance on both platforms. Earlier user-reported idle-timeout
 success is retained; this correction does not claim a new device pass or close
 Phase 1.
+
+## User-reported foreground revocation acceptance — 4 November 2026
+
+Following the foreground revocation correction in `3a00910` and the requested
+open-app retest, the user confirms that session revocation worked on both iOS
+and Android. Record foreground revocation as passed on both platforms on
+user-reported evidence. Exact detection latency, language, and detailed
+Back-navigation observations were not specified; those dimensions remain
+unclaimed. This is not an independently observed device run.
+
+This closes the reported foreground-revocation acceptance gap for both
+platforms. It does not establish the remaining absolute-lifetime, offline
+recovery, legacy-reminder cleanup or bilingual/device coverage. Phase 1 remains
+in progress.
