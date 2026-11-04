@@ -1,5 +1,25 @@
 # Phase 1 progress record
 
+## Latest acceptance and waiver — 4 November 2026
+
+The user explicitly requested skipping the manual absolute-session-lifetime
+device test. Record this as a user-approved waiver of that device check only;
+server-enforced absolute expiry remains required and its existing automated
+backend coverage is retained. This is not a device pass or a product-policy
+change.
+
+The user then confirmed completion of the requested process-restart and
+account-switch sequence for the Android/iOS apps: restart required sign-in,
+and signing in with another account retained no previous user's data. Record
+process-restart credential requirements and account-switch isolation as passed
+on user-reported acceptance of that sequence. The user explicitly confirmed
+that no data was retained after switching accounts. Exact language, device
+orientation and individual screen observations were not supplied; those coverage
+dimensions remain unclaimed. This is not an independently observed device run.
+
+Remaining bilingual/phone/tablet, session-card and other unresolved validation
+rows must still be reconciled before Phase 1 is declared complete.
+
 Status: In progress
 
 Current policy (approved 4 November 2026): session expiry belongs exclusively to

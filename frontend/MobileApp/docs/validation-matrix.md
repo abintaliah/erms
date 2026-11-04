@@ -7,6 +7,18 @@ row.
 
 ## Current session-policy amendment — 4 November 2026
 
+Latest acceptance (4 November 2026): the user confirmed the requested
+Android/iOS process-restart and account-switch sequence worked, with no previous
+user data retained after signing in with another account. Process-restart
+sign-in and account-switch isolation pass on user-reported evidence. Detailed
+language/orientation/screen coverage remains unclaimed.
+
+Manual absolute-lifetime device testing is **waived at the user's explicit
+request** (4 November 2026). The server-owned requirement and passing automated
+absolute-expiry/non-revival coverage remain; do not label the waived check a
+device pass. This is the approved reason for omitting that device check at the
+Phase 1 exit gate.
+
 The user's approved amendment to mobile specification §8.3 supersedes all
 historical mobile 15/10-minute timing, warning-delivery, cancellation and
 full-duration acceptance requirements below. Phase 1 now requires server-owned
