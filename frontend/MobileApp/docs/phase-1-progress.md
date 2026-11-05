@@ -1,5 +1,63 @@
 # Phase 1 progress record
 
+## Phase 1 closure — 5 November 2026
+
+The user explicitly approved closing Phase 1 and confirmed all three requested
+session-identification checks: Android/iOS sign-in, correct platform/device-model
+session entries, and English/Arabic presentation. Record these checks as passed
+on user-reported evidence. The revised action-triggered revocation behavior was
+also manually accepted by the user, in addition to its automated regressions.
+
+Phase 1 is closed on this explicit acceptance and the retained implementation,
+test and device evidence. The latest code verification is 74 passing Flutter
+tests, clean static analysis, and successful Android debug and iOS simulator
+builds. Phone bilingual shell review and automated landscape tablet acceptance
+are recorded below. This closure supersedes earlier phase-open statements and
+session-card review gaps; historical records remain intact.
+
+Evidence limits remain explicit: the absolute-lifetime manual test was waived
+by the user; native tablet acceptance was landscape-only with an injected test
+API; the latest revocation retest did not identify platforms or language.
+Explicit Retry versus automatic outage recovery and legacy-install reminder
+cleanup were not separately reported. Closure does not claim those observations
+or administrator publication of draft translations. No backend or WebUI change
+is included in this closure. Phase 2 (read-only content foundation) is next.
+
+## Mobile action-triggered revocation — 5 November 2026
+
+The user approved detecting revoked/expired sessions on a new request or protected
+navigation action instead of automatically signing out an untouched screen,
+and explicitly limited the work to Flutter mobile. WebUI and backend behavior,
+including immediate server revocation and the existing status endpoint, are
+unchanged.
+
+Removed the healthy-foreground 15-second monitor and the unused Flutter passive
+status API/controller path. Existing protected navigation still validates the
+principal and capabilities before opening a destination. Authenticated request
+rejection and background return still clear revoked state; generation-owned
+navigation prevents Back or late responses from restoring protected screens.
+An untouched screen issues no validity probes and remains rendered. The bounded
+reconnect probe exists only inside an already-open offline gate.
+
+Specification §§8.3, 16 and 17.4 and the approved amendment now describe this
+mobile detection timing. Historical periodic-monitor device acceptance is
+superseded; no WebUI, API route, schema, setting, environment template or
+translation catalogue changes are included.
+
+Verification: all 74 Flutter tests, analysis, Android debug APK build and iOS
+simulator debug build pass. English/Arabic phone/tablet
+widget checks simulate an entire idle day with server rejection pending, confirm
+no principal requests or sign-out during that interval, then verify that a new
+protected action clears the session and Back cannot restore it. Controller
+regressions cover 401 on explicit reads/mutations, offline navigation gating and
+late validation after sign-out. Existing background-return cases still pass.
+The user subsequently confirmed that manual testing of the revised mobile
+revocation behavior worked successfully. Record this acceptance as passed on
+user-reported evidence; the tested platform(s), language and individual scenarios
+were not specified. Earlier server idle-timeout and revocation observations are
+retained as historical evidence. This confirmation does not close unrelated
+Phase 1 verification items; Phase 1 remains open.
+
 ## Phone bilingual review and native tablet acceptance — 4 November 2026
 
 The user reports that language switching on both iOS and Android phones renders

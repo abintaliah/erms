@@ -5,6 +5,43 @@ and retained validation mapping. A row is added or updated in the same change
 as its implementation. A phase cannot complete with an unresolved delivered
 row.
 
+## Phase 1 acceptance decision — 5 November 2026
+
+Phase 1 is closed by explicit user approval. The user confirmed Android/iOS
+sign-in, correct platform/device-model session identification, and English/Arabic
+presentation review. These complete the requested session-card acceptance and
+supplement the automated unit evidence, earlier phone/tablet acceptance and
+manual acceptance of action-triggered revocation. Latest automated verification:
+74 passing Flutter tests, clean analysis, Android debug and iOS simulator builds.
+
+This decision supersedes earlier phase-open statements and session-card pending
+notes below. Historical rows retain their original evidence; they must not be
+read as newly executed tests. See `phase-1-progress.md`, “Phase 1 closure”, for
+accepted verification limitations and unclaimed observations. Phase 2 is next.
+
+## Current mobile revocation timing — 5 November 2026
+
+User-approved scope is Flutter mobile only: remove periodic foreground validity
+polling and detect revocation on a new authenticated request, protected navigation
+or background return. WebUI/backend immediate revocation and server settings are
+unchanged. Earlier periodic-monitor acceptance is historical, not a requirement
+for this revision. An untouched rendered screen intentionally stays visible.
+
+Manual acceptance update: the user confirmed that the revised behavior worked
+in manual testing. Record the revised revocation timing as passed on user-reported
+evidence, alongside the automated checks. Platform(s), language and individual
+scenarios were not specified; this does not assert additional coverage of
+background return, offline recovery or absolute expiry.
+
+| Requirement | Implementation | Verification | Status |
+| --- | --- | --- | --- |
+| No idle polling or premature local sign-out (§8.3, 5 November amendment) | Removed app-root monitor and Flutter passive-status client/controller path | `test/app_test.dart`: idle revoked route retained for a simulated day, unchanged principal-read count; subsequent protected navigation clears state and Back cannot restore it in English/Arabic phone/tablet sizes | Passed: automated checks and user-reported manual acceptance |
+| Reject the next protected request/action (§17.4) | Existing `authorizeNavigation`, read/mutation 401 handling, generation guard and background validation retained | `test/session_controller_test.dart`: explicit read/mutation rejection, offline action gating, late navigation response after sign-out; `test/app_test.dart`: next-action rejection and existing resume cases; all 74 Flutter tests and analysis pass | Automated verified |
+
+Offline recovery observations below are retained, but loss of connectivity is
+now detected by a request/action or resume rather than a healthy-screen monitor.
+No backend/WebUI, catalogue, schema or environment setting changed.
+
 ## Current session-policy amendment — 4 November 2026
 
 Latest bilingual layout acceptance (4 November 2026): user-reported iOS/Android
@@ -75,7 +112,7 @@ Phase 1 remains open.
 | Bilingual phone/tablet shell, reachable navigation and Back (§§4, 6, 7) | Existing production widgets, Preferences and canonical catalogues; new test-only native harness and iPad orientation setup helper | User reported phone checks on both platforms; `integration_test/tablet_shell_test.dart` passed on both landscape tablets; reviewed native screenshots/manifests; `test/app_test.dart` retains orientation-transition checks; all 75 unit/widget tests and analysis pass | Phone checks passed on user evidence; landscape tablet UI passed on native automation; native portrait/rotation omitted by user approval; live-server tablet authentication unclaimed |
 | Offline gate and valid-session recovery (§16, §8.3) | Foreground passive check failure gates protected interaction; safe revalidation resumes the retained Navigator | Automated Flutter offline/stale-state regressions; controlled 55-second API-response outage with automatic restoration; user confirmed gating and retained-screen recovery on Android and iOS | Passed on both platforms with user-reported UI evidence; explicit Retry-specific coverage pending |
 | Revocation during outage and protected Back-state clearing (§8.3, §17.4) | Existing server revocation and revalidation clear the session generation and protected Navigator | Controlled API outage, audited revocation of only the two mobile sessions before restoration, verified server/audit state; user confirmed sign-in and Back protection on Android and iOS | Passed on both platforms with user-reported UI evidence |
-| Foreground expiry/revocation without renewing idle activity (§8.3; approved status endpoint) | Passive `/auth/me/session-status`; one nonoverlapping 15-second foreground monitor; guarded protected navigation; generation-owned state clearing | `test_mobile_session_status.py` plus existing policy/capability tests: 17 passed in disposable DB, dropped; `test/app_test.dart`: foreground route/Back and navigation rejection in English/Arabic phone/tablet, background/disposal pause; `test/session_controller_test.dart`: passive overlap/stale/offline; `test/auth_api_test.dart`: bearer endpoint; full Flutter suite 75 passed | Automated verified; foreground revocation passed on iOS/Android (user-reported); exact latency/language/Back coverage unclaimed |
+| Action-triggered mobile revocation (§8.3, §17.4, 5 November amendment) | No healthy-foreground timer; protected requests/navigation and resume validate with the server | Current Flutter regressions: idle screen retention, next-action rejection, request 401, safe Back and late-response isolation | Passed: automated checks and user-reported manual acceptance |
 | Server exclusively owns idle/absolute expiry (§8.3) | `SessionController` has no local timeout/clock; background return calls the existing principal/capability validation | `test/session_controller_test.dart`: server-valid resume, one validation after repeated background callbacks, server rejection, offline/retry and state isolation; `test/app_test.dart`: simulated one-day background in English/Arabic, server-valid retention and server-expired sign-in | Automated verified; new-policy device acceptance pending |
 | No session reminder or permission prompt (§8.3) | Removed Dart scheduler, Android receiver/manifest permission and all native scheduling/permission requests; startup cancels legacy identifiers only | `test/platform_configuration_test.dart` guards removal and legacy cleanup; Android APK and iOS simulator native builds pass | Static/build verified; legacy-install cleanup must be checked on devices |
 | Application settings enforce current policy | Existing API uses `AUTH_SESSION_IDLE_MINUTES` / `AUTH_SESSION_ABSOLUTE_HOURS`; no duplicate mobile settings | `test_application_settings_phase5_authentication.py` and `test_mobile_capabilities.py`: 11 tests passed in a uniquely named disposable DB, dropped afterward | Verified |

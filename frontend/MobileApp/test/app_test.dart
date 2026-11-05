@@ -288,46 +288,66 @@ void main() {
   });
   for (final language in ['en', 'ar']) {
     for (final size in [const Size(390, 844), const Size(1024, 768)]) {
-      testWidgets('foreground revocation clears pushed route $language $size', (
-        tester,
-      ) async {
-        addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
-        tester.view.physicalSize = size;
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        final api = _FakeAuthApi(languageTag: language);
-        final controller = SessionController(api);
-        await controller.signIn(email: 'user@example.test', password: 'secret');
-        await tester.pumpWidget(
-          WathiqApp(catalogue: _catalogue, sessionController: controller),
-        );
-        await tester.tap(find.byKey(const ValueKey('shell-search-action')));
-        await tester.pumpAndSettle();
-        expect(
-          find.byKey(const ValueKey('destination-global-search')),
-          findsOneWidget,
-        );
-        api.principalFailure = const ApiFailure(ApiFailureKind.unauthenticated);
-        await tester.pump(const Duration(seconds: 15));
-        await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('authenticated-shell')), findsNothing);
-        expect(
-          find.byKey(const ValueKey('destination-global-search')),
-          findsNothing,
-        );
-        expect(find.byKey(const ValueKey('sign-in-notice')), findsOneWidget);
-        expect(api.statusReads, 1);
-        await tester.state<NavigatorState>(find.byType(Navigator)).maybePop();
-        await tester.pumpAndSettle();
-        expect(
-          find.byKey(const ValueKey('destination-global-search')),
-          findsNothing,
-        );
-      });
+      testWidgets(
+        'idle revoked screen remains until protected navigation $language $size',
+        (tester) async {
+          addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final api = _FakeAuthApi(languageTag: language);
+          final controller = SessionController(api);
+          await controller.signIn(
+            email: 'user@example.test',
+            password: 'secret',
+          );
+          await tester.pumpWidget(
+            WathiqApp(catalogue: _catalogue, sessionController: controller),
+          );
+          await tester.tap(find.byKey(const ValueKey('shell-search-action')));
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('destination-global-search')),
+            findsOneWidget,
+          );
+          api.principalFailure = const ApiFailure(
+            ApiFailureKind.unauthenticated,
+          );
+          final readsBeforeIdle = api.principalReads;
+          await tester.pump(const Duration(days: 1));
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('destination-global-search')),
+            findsOneWidget,
+          );
+          expect(controller.status, SessionStatus.authenticated);
+          expect(api.principalReads, readsBeforeIdle);
+          // Back is local; opening another protected destination requires the server.
+          await tester.tap(find.byType(BackButton));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('shell-search-action')));
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('authenticated-shell')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const ValueKey('destination-global-search')),
+            findsNothing,
+          );
+          expect(find.byKey(const ValueKey('sign-in-notice')), findsOneWidget);
+          await tester.state<NavigatorState>(find.byType(Navigator)).maybePop();
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('destination-global-search')),
+            findsNothing,
+          );
+        },
+      );
 
       testWidgets(
-        'navigation detects revocation before periodic check $language $size',
+        'navigation detects revocation on the next action $language $size',
         (tester) async {
           addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
           tester.view.physicalSize = size;
@@ -353,7 +373,6 @@ void main() {
             findsNothing,
           );
           expect(find.byKey(const ValueKey('sign-in-notice')), findsOneWidget);
-          expect(api.statusReads, 0);
         },
       );
     }
@@ -378,27 +397,6 @@ void main() {
     );
     expect(find.byKey(const ValueKey('shell-search-action')), findsNothing);
     expect(controller.status, SessionStatus.authenticated);
-  });
-
-  testWidgets('foreground checks stop in background and after disposal', (
-    tester,
-  ) async {
-    addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
-    final api = _FakeAuthApi();
-    final controller = SessionController(api);
-    await controller.signIn(email: 'user@example.test', password: 'secret');
-    await tester.pumpWidget(
-      WathiqApp(catalogue: _catalogue, sessionController: controller),
-    );
-    await tester.pump(const Duration(seconds: 15));
-    await tester.pumpAndSettle();
-    expect(api.statusReads, 1);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    await tester.pump(const Duration(seconds: 45));
-    expect(api.statusReads, 1);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(seconds: 45));
-    expect(api.statusReads, 1);
   });
 
   testWidgets(
@@ -571,7 +569,7 @@ class _FakeAuthApi implements AuthApi {
   bool searchEnabled;
   String? lastEmail;
   ApiFailure? principalFailure;
-  int statusReads = 0;
+  int principalReads = 0;
 
   @override
   Future<AuthSession> signIn({
@@ -594,13 +592,8 @@ class _FakeAuthApi implements AuthApi {
   ];
 
   @override
-  Future<AuthPrincipal> sessionStatus(String token) async {
-    statusReads++;
-    return currentPrincipal(token);
-  }
-
-  @override
   Future<AuthPrincipal> currentPrincipal(String token) async {
+    principalReads++;
     if (principalFailure case final failure?) throw failure;
     return principal;
   }

@@ -57,12 +57,11 @@ sessions resume, unauthenticated responses clear protected state, and network
 failures retain the noninteractive validation gate. Native startup cancels only
 legacy reminders from older builds without requesting notification permission.
 
-While foregrounded, one app-root timer checks the approved passive session-status
-endpoint every 15 seconds. There is no result cache or local expiry decision.
-Checks are scoped to the current session generation; overlapping probes, probes
-during full validation and background/signed-out probes are suppressed. The
-timer is disposed with the app root. Successful probes never renew server
-activity; failures gate protected interaction and 401 clears identity/routes.
-User-initiated destination/profile/preferences navigation performs ordinary
-principal/capability validation before pushing a route, with mounted/generation
-checks so late responses cannot reopen a stale screen.
+Revocation detection is action-triggered, as approved on 5 November 2026. There
+is no periodic validity check for a healthy foreground session. Protected
+navigation performs ordinary principal/capability validation before pushing a
+route, with mounted/generation checks so delayed responses cannot reopen stale
+screens. Authenticated failures and background return use the same clearing and
+offline-gate paths. Only an existing offline gate performs bounded foreground
+reconnect probes. The backend and WebUI are unchanged; the earlier passive
+status endpoint is retained server-side but is not used by the Flutter client.

@@ -28,3 +28,8 @@ the existing `PrincipalRead` projection without refreshing activity on successfu
 passive checks. These are separately approved in the mobile specification;
 neither grants resource access. Ordinary principal/capability validation remains
 required for protected navigation and background return.
+
+As of the user-approved 5 November 2026 Flutter-only amendment, the client no
+longer consumes `/auth/me/session-status`. Protected navigation and background
+return use `/auth/me` and mobile capabilities. The backend route and WebUI
+behavior are unchanged; no server contract is removed by this mobile change.

@@ -13,8 +13,6 @@ abstract interface class AuthApi {
 
   Future<AuthPrincipal> currentPrincipal(String token);
 
-  Future<AuthPrincipal> sessionStatus(String token);
-
   Future<List<String>> mobileCapabilities(String token);
 
   Future<String> effectiveLanguage(String token);
@@ -122,16 +120,6 @@ class IoAuthApi implements AuthApi {
   @override
   Future<AuthPrincipal> currentPrincipal(String token) async {
     final response = await _request('GET', '/api/v1/auth/me', token: token);
-    return _principal(response.payload);
-  }
-
-  @override
-  Future<AuthPrincipal> sessionStatus(String token) async {
-    final response = await _request(
-      'GET',
-      '/api/v1/auth/me/session-status',
-      token: token,
-    );
     return _principal(response.payload);
   }
 

@@ -80,49 +80,54 @@ void main() {
   });
 
   test(
-    'foreground probe is passive, rejects overlap, and clears revoked state',
-    () async {
-      final api = _FakeAuthApi()..statusCompletion = Completer<AuthPrincipal>();
-      final controller = SessionController(api);
-      await controller.signIn(email: 'user@example.test', password: 'secret');
-      final check = controller.checkForegroundSession();
-      await controller.checkForegroundSession();
-      expect(api.statusReads, 1);
-      expect(api.principalReads, 0);
-      api.statusCompletion!.completeError(
-        const ApiFailure(ApiFailureKind.unauthenticated),
-      );
-      await check;
-      expect(controller.hasProtectedState, isFalse);
-      expect(controller.destinations, isEmpty);
-    },
-  );
-
-  test('late passive response cannot restore a signed-out identity', () async {
-    final api = _FakeAuthApi()..statusCompletion = Completer<AuthPrincipal>();
-    final controller = SessionController(api);
-    await controller.signIn(email: 'user@example.test', password: 'secret');
-    final check = controller.checkForegroundSession();
-    await controller.signOut();
-    api.statusCompletion!.complete(_principal());
-    await check;
-    expect(controller.hasProtectedState, isFalse);
-  });
-
-  test(
-    'passive network failure gates interaction without clearing identity',
+    'navigation network failure gates interaction without clearing identity',
     () async {
       final api = _FakeAuthApi()
         ..principalFailure = const ApiFailure(ApiFailureKind.offline);
       final controller = SessionController(api);
       await controller.signIn(email: 'user@example.test', password: 'secret');
-      await controller.checkForegroundSession();
+      expect(await controller.authorizeNavigation(), isFalse);
       expect(controller.status, SessionStatus.validatingSession);
       expect(controller.hasProtectedState, isTrue);
       expect(controller.failure?.kind, ApiFailureKind.offline);
-      expect(await controller.authorizeNavigation(), isFalse);
     },
   );
+
+  test('late navigation validation cannot reopen signed-out state', () async {
+    final api = _FakeAuthApi()
+      ..principalCompletion = Completer<AuthPrincipal>();
+    final controller = SessionController(api);
+    await controller.signIn(email: 'user@example.test', password: 'secret');
+    final navigation = controller.authorizeNavigation();
+    await controller.signOut();
+    api.principalCompletion!.complete(_principal());
+    expect(await navigation, isFalse);
+    expect(controller.hasProtectedState, isFalse);
+  });
+
+  for (final mutation in [false, true]) {
+    test(
+      'authenticated ${mutation ? 'mutation' : 'read'} rejection clears protected state',
+      () async {
+        final api = _FakeAuthApi();
+        final controller = SessionController(api);
+        await controller.signIn(email: 'user@example.test', password: 'secret');
+        if (mutation) await controller.loadPreferences();
+        api.preferenceFailure = const ApiFailure(
+          ApiFailureKind.unauthenticated,
+        );
+        if (mutation) {
+          expect(await controller.updateLanguage('ar'), isFalse);
+        } else {
+          await controller.loadPreferences();
+        }
+        expect(controller.status, SessionStatus.signedOut);
+        expect(controller.hasProtectedState, isFalse);
+        expect(controller.preferences, isNull);
+        expect(controller.destinations, isEmpty);
+      },
+    );
+  }
 
   test('resume retains a session accepted by the server', () async {
     final api = _FakeAuthApi();
@@ -232,9 +237,9 @@ class _FakeAuthApi implements AuthApi {
   final Completer<AuthSession>? signInCompletion;
   String? lastEmail;
   ApiFailure? principalFailure;
+  ApiFailure? preferenceFailure;
   int principalReads = 0;
-  int statusReads = 0;
-  Completer<AuthPrincipal>? statusCompletion;
+  Completer<AuthPrincipal>? principalCompletion;
   Completer<String>? languageCompletion;
   Completer<UserPreferences>? preferenceCompletion;
 
@@ -265,16 +270,9 @@ class _FakeAuthApi implements AuthApi {
   ];
 
   @override
-  Future<AuthPrincipal> sessionStatus(String token) async {
-    statusReads++;
-    if (statusCompletion != null) return statusCompletion!.future;
-    if (principalFailure case final failure?) throw failure;
-    return principal;
-  }
-
-  @override
   Future<AuthPrincipal> currentPrincipal(String token) async {
     principalReads++;
+    if (principalCompletion != null) return principalCompletion!.future;
     if (principalFailure case final error?) throw error;
     return principal;
   }
@@ -299,14 +297,16 @@ class _FakeAuthApi implements AuthApi {
       ];
 
   @override
-  Future<UserPreferences> preferences(String token) async =>
-      preferenceCompletion != null
-      ? await preferenceCompletion!.future
-      : const UserPreferences(
-          languageTag: 'en',
-          workingTimezone: 'Asia/Dubai',
-          version: 1,
-        );
+  Future<UserPreferences> preferences(String token) async {
+    if (preferenceFailure case final failure?) throw failure;
+    return preferenceCompletion != null
+        ? await preferenceCompletion!.future
+        : const UserPreferences(
+            languageTag: 'en',
+            workingTimezone: 'Asia/Dubai',
+            version: 1,
+          );
+  }
 
   @override
   Future<UserPreferences> updatePreferences({
@@ -314,11 +314,14 @@ class _FakeAuthApi implements AuthApi {
     required String languageTag,
     required String workingTimezone,
     required int version,
-  }) async => UserPreferences(
-    languageTag: languageTag,
-    workingTimezone: workingTimezone,
-    version: version + 1,
-  );
+  }) async {
+    if (preferenceFailure case final failure?) throw failure;
+    return UserPreferences(
+      languageTag: languageTag,
+      workingTimezone: workingTimezone,
+      version: version + 1,
+    );
+  }
 
   @override
   Future<void> changePassword({

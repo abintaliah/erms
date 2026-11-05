@@ -256,10 +256,10 @@ solely because a local interval has elapsed.
 
 - Returning from the background revalidates the current principal and destination
   availability with the server before protected interaction resumes.
-- While foregrounded, the app checks session status every 15 seconds with at
-  most one passive check in flight. Checks stop in the background, on sign-out,
-  and when the app root is disposed. They must not renew session activity or
-  extend the server's idle timeout. This is a validity check, not a client timeout.
+- The mobile app does not poll session validity while a healthy screen remains
+  open. An already rendered screen stays visible until a new authenticated
+  request, protected navigation action, or background return detects invalidity.
+  Server revocation remains immediate; only mobile detection is action-triggered.
 - Protected navigation validates the current principal and destinations before
   opening a destination. Revocation clears pushed routes and prevents Back from
   restoring them, even when the app has never been backgrounded.
@@ -588,7 +588,7 @@ The initial application is online-only. It does not provide offline login,
 offline browsing, persistent protected caches, downloaded document access,
 queued mutations, or conflict reconciliation.
 
-When connectivity is lost:
+When an API request or background-return validation detects connectivity loss:
 
 - already rendered information remains visible in the background;
 - a centered offline popup clearly states that connection is unavailable;
@@ -627,8 +627,9 @@ sections do not have independent API requests.
 
 ### 17.4 Revocation and unavailable content
 
-If a session is revoked or expires, the app clears protected in-memory state and
-shows sign-in with a concise message. After successful sign-in it opens the
+When an authenticated request or session validation detects server revocation
+or expiry, the app clears protected in-memory state and shows sign-in with a
+concise message. After successful sign-in it opens the
 Dashboard.
 
 If a resource becomes unauthorized, deleted, or unavailable while open, the app:
@@ -1050,6 +1051,14 @@ Phase 1 delivers the shared secure experience used by all later workflows:
 Exit gate: authentication and shell behavior work on both platforms and in both
 languages without client-side authorization reconstruction.
 
+Acceptance status — 5 November 2026: Phase 1 closed by explicit user approval.
+The user confirmed Android/iOS sign-in, correct platform/device-model session
+identification, and English/Arabic presentation review. This supplements the
+retained automated checks and earlier mobile acceptance records, including the
+action-triggered revocation amendment below. See the mobile validation matrix
+and Phase 1 progress record for evidence and accepted verification limitations.
+Phase 2 is the next implementation phase.
+
 ### Phase 2 — Read-only content foundation
 
 Phase 2 delivers reusable authorized content destinations:
@@ -1321,7 +1330,11 @@ access. Flutter must not infer these destinations from role/profile names or
 reconstruct resource authorization. Refresh it after sign-in and session
 revalidation; failures must not disclose stale protected destinations.
 
-## Approved foreground session status — 4 November 2026
+## Historical foreground session status approval — 4 November 2026
+
+The mobile polling behavior in this section was superseded on 5 November 2026
+by the amendment below. The server endpoint itself is unchanged and no longer
+used by the Flutter client.
 
 The user approved `GET /api/v1/auth/me/session-status` to detect foreground
 revocation/expiry without keeping an idle session alive. It uses the existing
@@ -1345,3 +1358,27 @@ or service failure gates interaction with the existing safe-read Retry/Sign out
 presentation. Delayed results must not affect a newer user/session generation.
 User-initiated protected navigation uses ordinary principal/capability validation
 and therefore retains the server's normal activity semantics.
+
+## Mobile action-triggered revocation amendment — 5 November 2026
+
+The user approved Flutter-only revocation detection on the next authenticated
+request, protected navigation action or background return, replacing periodic
+foreground monitoring. Do not change WebUI or backend behavior for this amendment.
+
+- A healthy, untouched screen issues no periodic session-status requests and
+  does not locally sign out merely because time passes or server revocation
+  occurs elsewhere.
+- Before opening a new protected destination, the existing ordinary principal
+  and capability validation must complete successfully. If invalid, clear the
+  session generation and all protected routes; Back cannot restore them.
+- Any user-requested authenticated read or mutation that receives 401 clears
+  protected state through the existing session controller. Network/service
+  failures gate interaction with Retry/Sign out, without assuming expiry.
+- Background return still revalidates before protected interaction resumes.
+- The existing foreground reconnect probe remains only while an offline gate
+  is already open; it does not poll or keep healthy sessions alive.
+- Idle/absolute lifetime and actual revocation remain server-owned. No local
+  timeout, session reminder, new endpoint or server-setting change is introduced.
+
+Earlier immediate/periodic foreground-revocation acceptance remains historical;
+current device acceptance must use a new action/request or background return.

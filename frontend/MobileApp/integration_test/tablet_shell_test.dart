@@ -190,8 +190,6 @@ class _TabletAuthApi implements AuthApi {
   @override
   Future<AuthPrincipal> currentPrincipal(String token) async => principal;
   @override
-  Future<AuthPrincipal> sessionStatus(String token) async => principal;
-  @override
   Future<List<String>> mobileCapabilities(String token) async => [
     'global-search',
     'dashboard',

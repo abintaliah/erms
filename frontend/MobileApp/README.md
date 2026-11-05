@@ -106,6 +106,8 @@ with the server; an unavailable server keeps protected interaction gated with
 Retry and Sign out. Process restart still requires sign-in. Native startup
 cancels reminders left by older builds without requesting notification permission.
 
-While the app stays open, a passive status check runs every 15 seconds without
-refreshing the server's idle timer. Revocation/expiry clears protected screens
-when detected. Protected navigation also revalidates before opening a destination.
+The Flutter client does not periodically poll a healthy foreground session.
+Revocation/expiry is detected on the next authenticated request, protected
+navigation action or background return. An untouched screen stays visible;
+server rejection clears protected state and prevents Back from restoring it.
+Offline reconnect checks run only while the existing offline gate is open.

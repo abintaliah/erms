@@ -33,7 +33,6 @@ class SessionController extends ChangeNotifier {
   bool _needsResumeValidation = false;
   int _generation = 0;
   int? _validationGeneration;
-  int? _foregroundCheckGeneration;
 
   int get sessionGeneration => _generation;
 
@@ -266,48 +265,6 @@ class SessionController extends ChangeNotifier {
     final generation = _generation;
     await validateSession();
     return generation == _generation && status == SessionStatus.authenticated;
-  }
-
-  Future<void> checkForegroundSession() async {
-    final token = _token;
-    if (token == null ||
-        _foregroundCheckGeneration == _generation ||
-        _validationGeneration != null ||
-        (status != SessionStatus.authenticated &&
-            status != SessionStatus.passwordChangeRequired)) {
-      return;
-    }
-    final generation = _generation;
-    _foregroundCheckGeneration = generation;
-    try {
-      final refreshed = await _api.sessionStatus(token);
-      if (generation != _generation) return;
-      if (refreshed.user.id != principal?.user.id) {
-        clearForRevocation();
-      } else if (refreshed.mustChangePassword &&
-          principal?.mustChangePassword != true &&
-          (status == SessionStatus.authenticated ||
-              status == SessionStatus.passwordChangeRequired)) {
-        principal = refreshed;
-        destinations = const [];
-        status = SessionStatus.passwordChangeRequired;
-        notifyListeners();
-      }
-    } on ApiFailure catch (error) {
-      if (generation != _generation) return;
-      if (error.kind == ApiFailureKind.unauthenticated) {
-        clearForRevocation();
-      } else if (status == SessionStatus.authenticated ||
-          status == SessionStatus.passwordChangeRequired) {
-        status = SessionStatus.validatingSession;
-        failure = error;
-        notifyListeners();
-      }
-    } finally {
-      if (_foregroundCheckGeneration == generation) {
-        _foregroundCheckGeneration = null;
-      }
-    }
   }
 
   void clearForRevocation() {
