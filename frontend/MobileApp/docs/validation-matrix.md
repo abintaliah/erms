@@ -125,6 +125,14 @@ runtime verification of server expiry/revocation, offline retry and legacy
 notification cleanup on both platforms; a fixed fifteen-minute run is no longer
 a requirement.
 
+## Phase 2 preparation
+
+Phase 2 preparation (5 November 2026): `phase-2-api-map.md` maps mobile §12 and
+§26 Phase 2 to existing routes, exact detail response fields, pagination,
+authorization and existing test sources. Mapping was verified by source review
+only; no backend tests or runtime calls were executed. Recommendations in that
+document await user decisions. No Phase 2 implementation unit is complete.
+
 ## Phase 0
 
 | Implementation unit | Requirement | Implementation | Automated validation | Additional evidence | Status |

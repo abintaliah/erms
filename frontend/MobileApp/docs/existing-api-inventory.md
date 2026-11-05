@@ -22,6 +22,10 @@ owning specification and tests.
 
 Known gaps remain governed by section 22 of the mobile specification.
 
+Phase 2 route, response-field, authorization, pagination and test-source mapping
+is retained in [phase-2-api-map.md](phase-2-api-map.md). Its review questions
+require decisions before the affected implementation; it authorizes no new API.
+
 Approved Phase 1 additions: `/api/v1/auth/me/mobile-capabilities` supplies
 server-owned navigation availability; `/api/v1/auth/me/session-status` returns
 the existing `PrincipalRead` projection without refreshing activity on successful
