@@ -97,6 +97,31 @@ before_state = complete deleted row
 after_state  = null
 ```
 
+## User-entered reasons in future API designs
+
+For all new API designs, use a JSON request-body field for user-entered reasons,
+including change reasons, justifications, and audit explanations. Do not
+introduce new uses of `X-Change-Reason` for human-authored text. JSON provides
+native Unicode support and makes the field's validation and requiredness
+explicit in the endpoint schema and API documentation.
+
+Validate the reason according to the operation's requirements, then pass the
+validated Unicode text into the shared audit context before performing the
+mutation, so the same reason is persisted in the resulting audit events.
+
+Existing header-based endpoints remain supported for compatibility. Migrating
+them to JSON requires a deliberate compatibility plan; this guidance does not
+authorize removing or changing an existing endpoint's contract.
+
+## Existing change-reason header encoding
+
+The WebUI sends human-authored `X-Change-Reason` values as UTF-8 bytes.
+The API decodes the ASGI Latin-1 header representation back to UTF-8 at the
+header boundary, before validation or audit persistence. ASCII is unchanged;
+non-UTF-8 legacy input retains its Latin-1 representation. JSON reason fields
+are already Unicode and are not decoded again. The existing 2,000-character
+limit applies to decoded characters, rather than encoded bytes.
+
 ## Request and correlation identifiers
 
 `request_id` identifies one HTTP request. If one request changes several
@@ -386,3 +411,20 @@ Domain events will be appended through controlled database functions rather
 than direct client writes. Activity events such as `VIEW` and `DOWNLOAD` must be
 recorded explicitly because they do not modify an entity row and therefore
 cannot be detected by row triggers.
+
+## Localized operation names
+
+`frontend/webui/event_labels.py::EVENT_MESSAGE_KEYS` is the shared WebUI
+presentation catalogue for the 52 event codes currently emitted by the API and
+canonical schema. Audit Trail filters, timelines, event details, resource
+history, and Security Operations resolve those keys in the current session's
+language. The friendly text is maintained in the standard English and Arabic
+translation catalogues and Translation Administration.
+
+Operation codes remain unchanged in stored events, API payloads, filter values,
+and diagnostic tooltips. Unrecognized historical or integration codes are
+shown verbatim rather than assigned a potentially misleading translation.
+When adding an event emitter, add its display key and maintained-language
+translations to this catalogue. The emitter-coverage test checks literal SQL
+and Python event emitters and the Security Operations subset; dynamically
+selected operation names must also be reviewed when their emitter changes.

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 import os
 
 import psycopg
+import pytest
 
 from fastapi.testclient import TestClient
 from backend.services.api.authentication import hash_password
@@ -28,6 +29,8 @@ def test_hold_lifecycle_held_items_capabilities_and_explainer(
     assert hold["state"] == "active"
     assert hold["owner"] == {
         "id": 1, "name": "Test Administrator", "email": "admin@test.invalid", "status": "active",
+        "localized": {"language_tag": "en", "name": "Test Administrator",
+                      "description": None, "used_canonical_fallback": True},
     }
     assert hold["is_effective"] is True
     assert hold["capabilities"]["manage_held_items"] is True
@@ -226,3 +229,104 @@ def test_information_governance_profile_can_manage_held_items_without_hold_admin
         "owner_user_id":user_id,
     })
     assert denied.status_code==403
+
+
+def test_held_item_names_follow_language_and_translation_updates(client, aggregation, record):
+    """Both card types resolve related names without stale locale/entity caches."""
+    hold = _create_hold(client)
+    response = client.post(
+        f"/api/v1/holds/{hold['id']}/held-items/bulk",
+        json={"held_items": [
+            {"resource_type": "aggregation", "resource_id": aggregation["id"]},
+            {"resource_type": "record", "resource_id": record["id"]},
+        ]}, headers={"X-Change-Reason": "Test translated hold cards"},
+    )
+    assert response.status_code == 201, response.text
+    url = f"/api/v1/holds/{hold['id']}/held-items"
+    canonical = client.get(url).json()["items"]
+    level_ids = {row["security_level_id"] for row in canonical}
+    for resource, identifier, name in [
+        ("users", 1, "مدير الاختبار"),
+        *(("security-levels", identifier, "عام") for identifier in level_ids),
+    ]:
+        entity = client.get(f"/api/v1/{resource}/{identifier}").json()
+        saved = client.patch(
+            f"/api/v1/entity-translations/{resource}/{identifier}/ar",
+            json={"name": name},
+            headers={"If-Match": str(entity["version"]), "X-Change-Reason": "Translate related name"},
+        )
+        assert saved.status_code == 200, saved.text
+
+    def language(tag):
+        preference = client.get("/api/v1/preferences").json()
+        saved = client.put("/api/v1/preferences", json={
+            "language_tag": tag, "working_timezone": "Asia/Dubai",
+        }, headers={"If-Match": str(preference["version"])})
+        assert saved.status_code == 200, saved.text
+
+    language("ar")
+    for _ in range(2):
+        page = client.get(url, params={"limit": 1, "offset": 1}).json()
+        assert page["total"] == 2 and page["returned"] == 1
+        rows = client.get(url).json()["items"]
+        assert {row["resource_type"] for row in rows} == {"record", "aggregation"}
+        assert all(row["assigned_by_name"] == "مدير الاختبار" for row in rows)
+        assert all(row["security_level_name"] == "عام" for row in rows)
+    user = client.get("/api/v1/users/1").json()
+    updated = client.patch("/api/v1/entity-translations/users/1/ar", json={"name": "مدير محدث"},
+        headers={"If-Match": str(user["version"]), "X-Change-Reason": "Update translated name"})
+    assert updated.status_code == 200, updated.text
+    assert all(row["assigned_by_name"] == "مدير محدث" for row in client.get(url).json()["items"])
+    language("en")
+    restored = client.get(url).json()["items"]
+    assert [(r["assigned_by_name"], r["security_level_name"]) for r in restored] == [
+        (r["assigned_by_name"], r["security_level_name"]) for r in canonical
+    ]
+
+
+@pytest.mark.parametrize("session_status", ["completed", "failed", "uploading"])
+def test_held_upload_cleanup_and_table_specific_trigger_fields(client, record, session_status):
+    from psycopg.rows import dict_row
+    from backend.services.api.content_cleanup import cleanup_content
+
+    uploaded = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": "1"},
+        files={"file": ("held.txt", b"preserve", "text/plain")},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    component = uploaded.json()
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        content_set = connection.execute(
+            "SELECT active_content_set_id FROM digital_components WHERE id=%s", (component['id'],)
+        ).fetchone()[0]
+        session = connection.execute(
+            """INSERT INTO content_upload_sessions(digital_component_id,content_set_id,status,expires_at)
+               VALUES(%s,%s,%s,CURRENT_TIMESTAMP - interval '1 day') RETURNING id""",
+            (component['id'], content_set, session_status),
+        ).fetchone()[0]
+    hold = _create_hold(client)
+    assigned = client.post(
+        f"/api/v1/records/{record['id']}/holds", json={"hold_id": hold['id']},
+        headers={"X-Change-Reason": "Preserve uploaded evidence"},
+    )
+    assert assigned.status_code == 201, assigned.text
+    with psycopg.connect(os.environ["DATABASE_URL"], row_factory=dict_row) as connection:
+        for statement, reason in [
+            ("DELETE FROM content_upload_sessions WHERE id=%s", 'effective_hold_prevents_component_deletion'),
+            ("UPDATE content_upload_sessions SET status='expired' WHERE id=%s", 'effective_hold_prevents_component_replacement'),
+            ("UPDATE digital_components SET component_order=2 WHERE id=%s", 'effective_hold_prevents_component_reordering'),
+        ]:
+            with pytest.raises(psycopg.errors.RaiseException, match=reason):
+                with connection.transaction():
+                    connection.execute(statement, (component['id'] if 'digital_components SET' in statement else session,))
+        cleanup_content(connection)
+        assert connection.execute("SELECT id FROM content_upload_sessions WHERE id=%s", (session,)).fetchone()
+    removed = client.delete(
+        f"/api/v1/records/{record['id']}/holds",
+        headers={"X-Change-Reason": "Release preservation"},
+    )
+    assert removed.status_code == 200, removed.text
+    with psycopg.connect(os.environ["DATABASE_URL"], row_factory=dict_row) as connection:
+        cleanup_content(connection)
+        assert connection.execute("SELECT id FROM content_upload_sessions WHERE id=%s", (session,)).fetchone() is None

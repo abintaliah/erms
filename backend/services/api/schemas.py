@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from .application_settings_registry import SEARCH_RESULT_LIMIT_MAXIMUM
+
 
 NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 LocationCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
@@ -47,6 +49,7 @@ class SecurityLevelRead(SecurityLevelCreate):
 
 
 class PrivilegeRead(ApiModel):
+    required_privilege_ids: list[int] = Field(default_factory=list)
     id: int
     code: str
     name: str
@@ -107,7 +110,7 @@ class PermissionRead(ApiModel):
 
 
 class AclPrincipalGrant(ApiModel):
-    principal_type: Literal["role", "everyone", "org_unit_members"]
+    principal_type: Literal["role", "everyone", "org_unit_members", "owning_and_higher_level_unit_managers", "effective_file_administrator"]
     role_id: int | None = None
     permission_codes: list[str]
 
@@ -141,7 +144,7 @@ class ChildRecordAclReplace(ApiModel):
 
 
 class AclPrincipalRead(ApiModel):
-    principal_type: Literal["role", "everyone", "org_unit_members"]
+    principal_type: Literal["role", "everyone", "org_unit_members", "owning_and_higher_level_unit_managers", "effective_file_administrator"]
     role_id: int | None
     display_name: str
     role_code: str | None
@@ -233,7 +236,7 @@ class AuthorizationSubjectRead(ApiModel):
 
 class EffectiveAclGrantRowRead(ApiModel):
     id: int
-    principal_type: Literal["role", "everyone", "org_unit_members"]
+    principal_type: Literal["role", "everyone", "org_unit_members", "owning_and_higher_level_unit_managers", "effective_file_administrator"]
     role_id: int | None
     role_code: str | None
     role_name: str | None
@@ -242,6 +245,7 @@ class EffectiveAclGrantRowRead(ApiModel):
 
 
 class AccessExplanationAclRead(ApiModel):
+    contextual_matches: list[dict[str, Any]] = Field(default_factory=list)
     resource_type: Literal["aggregation", "record"]
     source: str
     source_resource_id: int
@@ -346,6 +350,11 @@ class GovernanceWarningRead(ApiModel):
     severity: Literal["critical", "advisory"]
 
 
+class DispositionConfigurationWarningRead(ApiModel):
+    setting_key: Literal["DISPOSITION_CLASSIFICATION_SCHEME_ID", "DISPOSITION_UPLOADED_EVIDENCE_CLASSIFICATION_ID", "DISPOSITION_GENERATED_REPORTS_CLASSIFICATION_ID"]
+    code: Literal["destination_unset", "destination_open_root_missing"]
+
+
 class GovernanceCustodyRead(ApiModel):
     security_levels: list[CustodySecurityLevelRead]
     highest_security_level: CustodySecurityLevelRead | None
@@ -354,6 +363,7 @@ class GovernanceCustodyRead(ApiModel):
     assignments: list[GovernanceAssignmentRead]
     highest_clearance_custodian_count: int
     warnings: list[GovernanceWarningRead]
+    disposition_configuration_warnings: list[DispositionConfigurationWarningRead] = Field(default_factory=list)
 
 
 class SecurityEventCountRead(ApiModel):
@@ -470,17 +480,23 @@ class SecurityLevelChangePreviewRequest(ApiModel):
     remedy: Literal["none", "raise_ancestors", "downgrade_subtree"] = "none"
 
 
+class SecurityLevelChangeVersions(ApiModel):
+    resource: int
+    aggregations: dict[str, int]
+    records: dict[str, int]
+
+
 class SecurityLevelChangeApplyRequest(SecurityLevelChangePreviewRequest):
-    preview_token: str
+    reviewed_versions: SecurityLevelChangeVersions
 
 
 class SecurityLevelChangePreviewRead(ApiModel):
-    preview_token: str
     conflict: bool
     remedy: str
     target_level_number: int
     affected_aggregations: list[dict[str, Any]]
     affected_records: list[dict[str, Any]]
+    reviewed_versions: SecurityLevelChangeVersions
 
 
 class AggregationCreate(ApiModel):
@@ -533,6 +549,7 @@ class AggregationUpdate(ApiModel):
 
 
 class AggregationRead(ApiModel):
+    created_by: str | None = None
     model_config = ConfigDict(extra="ignore")
 
     id: int
@@ -565,6 +582,13 @@ class AggregationRead(ApiModel):
     child_aggregation_acl_version: int
     child_record_acl_version: int
     version: int
+    disposition_status: int = Field(default=1, ge=1, le=13)
+    final_disposition_at: datetime | None = None
+    final_disposition_by_user_id: int | None = None
+    disposition_job_id: int | None = None
+    destruction_number: str | None = None
+    transfer_number: str | None = None
+    final_disposition_event_id: int | None = None
 
     @model_validator(mode="after")
     def derive_parent_aggregation_state(self):
@@ -638,6 +662,7 @@ class BrowseClassificationNode(ApiModel):
 
 
 class BrowseAggregationNode(ApiModel):
+    created_by: str | None = None
     id: int
     parent_aggregation_id: int | None
     classification_id: int | None
@@ -651,6 +676,8 @@ class BrowseAggregationNode(ApiModel):
     date_closed: datetime | None
     medium: Literal["digital", "physical", "mixed"] = "mixed"
     is_vital: bool = False
+    disposition_status: int = Field(default=1, ge=1, le=13)
+    disposition_job_id: int | None = None
     has_vital_descendants: bool = False
     date_of_next_review: datetime | None = None
     assigned_location: str | None = None
@@ -669,6 +696,7 @@ class BrowseAggregationNode(ApiModel):
 
 
 class BrowseRecordNode(ApiModel):
+    created_by: str | None = None
     id: int
     aggregation_id: int | None
     aggregation_number: str | None
@@ -680,6 +708,8 @@ class BrowseRecordNode(ApiModel):
     date_originated: datetime
     medium: Literal["digital", "physical", "mixed"] = "mixed"
     is_vital: bool = False
+    disposition_status: int = Field(default=1, ge=1, le=13)
+    disposition_job_id: int | None = None
     date_of_next_review: datetime | None = None
     effective_assigned_location: str | None = None
     effective_current_location: str | None = None
@@ -694,6 +724,7 @@ class BrowseRecordNode(ApiModel):
 
 
 class FavouriteAggregationRead(ApiModel):
+    created_by: str | None = None
     id: int
     aggregation_number: str
     title: str
@@ -702,6 +733,7 @@ class FavouriteAggregationRead(ApiModel):
 
 
 class FavouriteRecordRead(ApiModel):
+    created_by: str | None = None
     id: int
     record_number: str
     title: str
@@ -714,6 +746,11 @@ class FavouriteRecordRead(ApiModel):
 class FavouritesRead(ApiModel):
     aggregations: list[FavouriteAggregationRead]
     records: list[FavouriteRecordRead]
+
+
+class FavouritesPageRead(FavouritesRead):
+    application_configuration: dict[str, Any]
+    total: int | None = None
 
 
 BrowseNode = TypeVar("BrowseNode")
@@ -796,6 +833,13 @@ class AggregationRetentionRuleRead(AggregationRetentionRuleCreate):
     version: int
 
 
+class RetentionAccelerationRead(ApiModel):
+    event_id: int
+    occurred_at: datetime
+    actor_name: str | None = None
+    reason: str | None = None
+
+
 class EffectiveRetentionRuleRead(ApiModel):
     governing_root_aggregation_id: int | None = None
     classification_id: int | None = None
@@ -808,6 +852,7 @@ class EffectiveRetentionRuleRead(ApiModel):
     final_disposition: DispositionAction
     instructions: str | None = None
     justification: str | None = None
+    acceleration: RetentionAccelerationRead | None = None
 
 
 class RecordCreate(ApiModel):
@@ -906,6 +951,7 @@ class AggregationLocationPreviewRead(ApiModel):
 
 
 class RecordRead(ApiModel):
+    created_by: str | None = None
     model_config = ConfigDict(extra="ignore")
 
     id: int
@@ -930,6 +976,13 @@ class RecordRead(ApiModel):
     inherit_acl_from_parent: bool
     resource_acl_version: int
     version: int
+    disposition_status: int = Field(default=1, ge=1, le=13)
+    final_disposition_at: datetime | None = None
+    final_disposition_by_user_id: int | None = None
+    disposition_job_id: int | None = None
+    destruction_number: str | None = None
+    transfer_number: str | None = None
+    final_disposition_event_id: int | None = None
 
     @model_validator(mode="after")
     def derive_aggregation_state(self):
@@ -979,7 +1032,6 @@ class RecordDraftRead(ApiModel):
     date_created: datetime
     date_updated: datetime
     expires_at: datetime
-    status: Literal["open", "committed"]
     version: int
 
 
@@ -1005,6 +1057,10 @@ class ComponentOrderItem(ApiModel):
 
 class ComponentReorderRequest(ApiModel):
     components: list[ComponentOrderItem]
+
+
+class ComponentMoveRequest(ApiModel):
+    direction: Literal[-1, 1]
 
 
 class DigitalComponentCreate(ApiModel):
@@ -1049,11 +1105,14 @@ class DigitalComponentRead(ApiModel):
 
 
 class EventHistoryRead(ApiModel):
+    display_presentation: str | None = None
+    display_references: dict[str, str | None] = Field(default_factory=dict)
+    can_view_technical_details: bool = False
     id: int
     occurred_at: datetime
     transaction_id: int
     entity_type: str
-    entity_id: int
+    entity_id: int | None
     operation: str
     actor_user_id: int | None
     actor_name: str | None
@@ -1070,12 +1129,15 @@ class EventHistoryRead(ApiModel):
 
 
 class SelfRecentActivityRead(ApiModel):
+    created_by: str | None = None
     """A deliberately small, self-only view of a person's own recent work."""
 
     entity_type: Literal["aggregation", "record"]
     entity_id: int
     operation: Literal["CREATE", "UPDATE", "CONTENT_VIEWED"]
     occurred_at: datetime
+    title: str | None = None
+    number: str | None = None
 
 
 class OwnershipDashboardCount(ApiModel):
@@ -1108,6 +1170,7 @@ class DashboardClassificationMetrics(ApiModel):
 
 
 class DashboardRecentItem(ApiModel):
+    created_by: str | None = None
     entity_type: Literal["aggregation", "record"]
     entity_id: int
     operation: Literal["CREATE", "UPDATE", "CONTENT_VIEWED"]
@@ -1118,6 +1181,7 @@ class DashboardRecentItem(ApiModel):
 
 
 class DashboardReviewItem(ApiModel):
+    created_by: str | None = None
     entity_type: Literal["aggregation", "record"]
     entity_id: int
     date_of_next_review: datetime
@@ -1127,6 +1191,7 @@ class DashboardReviewItem(ApiModel):
 
 
 class DashboardSummaryRead(ApiModel):
+    application_configuration: dict[str, Any]
     overview_counts: dict[str, int]
     overview_medium_counts: dict[str, dict[Literal["physical", "digital", "mixed"], int]]
     overview_resource_attention_counts: dict[str, dict[Literal["vital", "held"], int]]
@@ -1170,6 +1235,8 @@ class OrgUnitCreate(ApiModel):
 
 
 class OrgUnitUpdate(ApiModel):
+    managing_role_id: int | None = None
+    file_administrator_role_id: int | None = None
     parent_org_unit_id: int | None = None
     code: NonBlankString | None = None
     name: NonBlankString | None = None
@@ -1177,6 +1244,8 @@ class OrgUnitUpdate(ApiModel):
 
 
 class OrgUnitRead(ApiModel):
+    managing_role_id: int | None = None
+    file_administrator_role_id: int | None = None
     id: int
     parent_org_unit_id: int | None
     code: str
@@ -1310,6 +1379,7 @@ class ChangePasswordRequest(ApiModel):
 
 
 class PrincipalUserRead(ApiModel):
+    localized: dict[str, Any] | None = None
     id: int
     name: str
     email: str
@@ -1317,6 +1387,7 @@ class PrincipalUserRead(ApiModel):
 
 
 class PrincipalRoleRead(ApiModel):
+    localized: dict[str, Any] | None = None
     id: int
     code: str
     name: str
@@ -1334,6 +1405,9 @@ class PrincipalRead(ApiModel):
     must_change_password: bool
     previous_login_at: datetime | None
     global_privileges: list[str]
+    can_manage_disposition: bool = False
+    can_manage_disposition_templates: bool = False
+    can_access_disposition_tasks: bool = False
 
 
 class LoginSessionRead(ApiModel):
@@ -1491,11 +1565,21 @@ class SearchSort(ApiModel):
 
 
 class SearchRequest(ApiModel):
+    # Runtime paging context; never part of a saved-search definition.
+    tab_id: UUID | None = None
+    search_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def cache_requires_tab(self):
+        if self.search_id is not None and self.tab_id is None:
+            raise ValueError("a saved result list requires its tab ID")
+        return self
+
     where: SearchExpression | None = None
     sort: list[SearchSort] = Field(default_factory=list, max_length=10)
     limit: int = Field(default=100, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
-    include: list[Literal["full_text_matches"]] = Field(default_factory=list, max_length=1)
+    include: list[Literal["full_text_matches", "record_capabilities"]] = Field(default_factory=list, max_length=2)
     debug: bool = False
 
 
@@ -1504,11 +1588,20 @@ class GlobalSearchRequest(ApiModel):
     aggregation_where: SearchExpression | None = None
     result_types: list[Literal["records", "aggregations"]] = Field(min_length=1, max_length=2)
     limit: int = Field(default=25, ge=1, le=100)
+    page: int | None = Field(default=None, ge=1, le=SEARCH_RESULT_LIMIT_MAXIMUM)
     cursor: str | None = Field(default=None, max_length=2000)
+    tab_id: UUID | None = None
+    search_id: UUID | None = None
+    result_filter: Literal["record", "aggregation"] | None = None
+    include_totals: bool = False
     debug: bool = False
 
     @model_validator(mode="after")
     def branches_match_result_types(self):
+        if self.page is not None and self.cursor is not None:
+            raise ValueError("supply a page number or a page token, not both")
+        if self.search_id is not None and self.tab_id is None:
+            raise ValueError("a saved result list requires its tab ID")
         if len(set(self.result_types)) != len(self.result_types):
             raise ValueError("result_types cannot contain duplicates")
         supplied = ({"records"} if self.record_where is not None else set()) | (

@@ -316,8 +316,8 @@ restores the root's classification-derived effective rule.
 Local rules may be used later by an authorized records administrator during
 disposition review to prolong an aggregation's retention or prevent the
 classification-derived disposition from applying. This iteration stores and
-displays the override but does not calculate disposal dates or execute a
-disposition workflow. Formal legal/regulatory holds remain a future,
+displays the override and the calculated disposition date described below,
+but does not execute a disposition workflow. Formal legal/regulatory holds remain a future,
 separately-modelled capability rather than being hidden inside unusually large
 retention periods.
 
@@ -612,36 +612,42 @@ the classification-scheme icon previously reserved when aggregation icons were
 changed to folders. Classifications do not have a second top-level navigation
 entry: they are administered in the context of their scheme.
 
-The workspace uses two coordinated master-detail rows:
+The approved 29 September 2026 redesign uses one full-width classification tree
+and separate scheme and classification details pages, following the Records and
+Aggregations details-page model:
 
-- The fixed-height upper row places the vertically scrollable scheme list and
-  scheme-creation controls on the left and the selected scheme's read-only
-  information and actions on the right.
-- Scheme list cards use a compact layout. Descriptions are limited to one line
-  with an ellipsis and provide the complete value in a hover tooltip.
-- The full-width lower row retains classification search followed by the
-  side-by-side classification tree and classification-information panes.
-- Root classifications load with scheme selection; direct children load only
-  when a branch is expanded.
-- The Classification tree header's add action sits beside Refresh and creates a
-  root classification with the selected scheme fixed as context.
-- The adjacent child-classification action is enabled only while a branch is
-  selected. It fixes both the selected scheme and branch as context and remains
-  disabled when nothing or a terminal classification is selected.
-- Selecting a classification presents its path, metadata, effective retention
-  rule, provenance, and contextual actions.
-- Complete scheme and classification metadata is presented read-only without
-  opening an edit dialog. Retention instructions and inheritance provenance are
-  part of this view; future update authorization may remove Edit without
-  removing permitted read access.
-- Codes must be displayed in full. Description and scope-note values span the
-  full detail-card width in multi-line, vertically scrollable regions.
-- A root classification has no parent, so its Parent classification value is
-  empty (`—`), not the misleading text “Root classification”. Tree nodes reserve
-  a consistent expander column so their type icons align by hierarchy depth.
-- Search results can focus their scheme and expand their ancestor path.
-- The within-scheme administrative search ORs case-insensitive literal
-  containment across code, title, description, and keywords.
+- Schemes are the tree roots. Each scheme and each classification branch loads
+  its children independently in server pages of 25, with an explicit Load more.
+- Classification siblings are always ordered by code ascending on the server.
+  Scheme roots default to code ascending and retain the scheme sort controls.
+- Scheme identity remains visible above its descendants and on every details
+  page, distinguishing identical classification codes in different schemes.
+- Clicking the node label opens the appropriate details page. The expander only
+  expands/collapses; there is no separate open-link icon.
+- Add scheme is a tree-level action. A scheme's plus creates a root classification;
+  a branch's plus creates a child. Creation locks the matching scheme and parent.
+  Terminal classifications have no child-creation action.
+- Inactive schemes and classifications use muted styling and explicit localized
+  badges. Direct inactivity, inactivity through an ancestor, and inactivity
+  through the scheme remain distinguishable without relying on color alone.
+- Scheme descriptions remain compact in the tree with full hover text. The
+  dedicated details pages show complete metadata, contextual lifecycle/edit/
+  history controls, and the existing deletion restrictions and explanations.
+- Classification details show the full ancestor path, direct/effective retention
+  and provenance, and disposal instructions. The existing current → intermediate
+  → final-disposition timeline is shared with aggregation details.
+- Codes appear in full. Descriptions and scope notes use full-width multiline
+  scroll regions. Root Parent classification is `—`.
+- Returning to the tree restores expansion, paging and filter preferences and
+  revalidates data. Details participate in the shared navigation-history trail.
+- Within-scheme search uses case-insensitive literal containment across code,
+  title, description and keywords, with bounded server pages and links to details.
+- All controls and status text support English/LTR and Arabic/RTL.
+
+Hierarchy icons mirror in Arabic so branches and terminals face the node text.
+Icons and labels have a consistent logical gap. Node codes remain visible;
+long node titles use an ellipsis and expose the complete title in a tooltip
+and accessible name.
 
 Scheme administration provides:
 
@@ -701,6 +707,23 @@ effective. When present, it displays the local rule prominently, shows the
 classification-derived rule it supersedes, and provides edit/remove actions.
 Child aggregation views show the same governing information without local-rule
 actions.
+
+For a closed governing root, the retention section displays **Calculated
+disposition date** below the three retention stages and above the provenance
+footer, followed by **Date closed**. It does not repeat the retention periods.
+The date is the root's closure date in the user's working timezone plus the
+sum of the effective current and intermediate periods in calendar years.
+A February 29 anniversary falls on February 28 when the target year is not a
+leap year. Child details use the same governing root date, not a child's
+independent closure date. No calculated date is shown when the governing root
+is open or unavailable, or its effective periods are unavailable. Dates follow
+the active language's date formatting. This is informational and does not
+override holds, confer eligibility, or execute disposition.
+
+Implementation: `frontend/webui/retention_timeline.py` and the aggregation
+details renderer in `frontend/webui/app.py`. Calendar arithmetic, leap years,
+timezone boundaries, and absent inputs are covered by
+`frontend/webui/tests/test_retention_timeline.py`.
 
 ## 16. Audit history
 

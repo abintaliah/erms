@@ -140,40 +140,35 @@ recent selections first. The number retained in this list is configured by
 
 ## Administration workspace
 
-Classification schemes and their classifications are administered together in
-one workspace. Its fixed-height upper row places the scrollable scheme list on
-the left and the selected scheme's information on the right. Selecting a scheme
-updates that adjacent read-only information pane. The full-width lower area
-retains the classification search and side-by-side classification tree and
-classification-information panes, so the current scheme remains explicit and
-does not need to be selected again when creating a classification.
-Scheme list cards are deliberately compact. Their descriptions occupy one line,
-truncate with an ellipsis when necessary, and expose the complete description
-in a hover tooltip.
+Classification schemes and their classifications share one full-width tree.
+Schemes are the roots; their identities distinguish reused classification codes.
+Click a node label to open its dedicated details page. The separate expander
+opens a branch without navigating; there is no external-link/open icon.
 
-The hierarchy is lazy-loaded: root classifications are fetched when a scheme is
-selected and a branch's direct children are fetched only when that branch is
-expanded. Schemes use the `account_tree` icon, branch classifications use the
-distinct `schema` icon, and terminal classifications use the `label` icon.
-Selecting a node shows its complete path, metadata, and effective retention
-rule, including whether that rule is direct or inherited.
+Each scheme and branch loads 25 children at a time with Load more. Classification
+siblings use server-side code-ascending order. Schemes default to code ascending
+and retain title, creation and lifecycle sorting. Scheme filtering searches the
+server rather than only the loaded page; filtered results use code order.
 
-Creation is contextual. The add icon in the Classification tree header creates
-a root classification in the selected scheme and sits beside the tree-refresh
-action. The adjacent child-classification icon creates beneath the selected
-branch with both the scheme and parent locked by context. It is disabled until
-a branch is selected and remains disabled for terminal classifications. Scheme
-lifecycle actions, scheme and classification editing, tree refresh, and
-classification search all remain in the same workspace.
+The tree's Add scheme creates a scheme. Each scheme's plus creates a root
+classification, and each branch's plus creates a child with scheme and parent
+locked. Terminals have no child-creation control. Scheme and classification
+creation/editing continue to use the existing forms and retention validation.
 
-The selected-classification pane contains audited deactivate, reactivate, and
-delete actions. Delete remains visible when unavailable, but is disabled with
-the exact reason. Deactivation is the normal alternative for a classification
-that has already participated in governance.
+Inactive schemes have a muted background and badge. Classification labels are
+muted when directly or effectively inactive, with badges identifying direct,
+ancestor or scheme inactivity. Icons still distinguish branches and terminals.
+Lifecycle, metadata, event history and deletion controls live on details pages;
+delete remains visible but disabled with its exact blocking reason.
+
+Back to classification tree restores expansion, loaded page counts and filters
+and obtains fresh data. Details also participate in the standard navigation
+history. Retention uses the same current/intermediate/final-disposition timeline
+as aggregation details, including inherited-rule source and instructions.
 
 Viewing metadata does not require entering an edit workflow. Selecting a scheme
 shows its authority, scope note, edition, publication and lifecycle dates, and
-audit timestamps in a read-only information panel. Codes are shown in full;
+audit timestamps in a read-only details page. Codes are shown in full;
 description and scope-note fields use full-width, multi-line scroll regions.
 Selecting a classification shows its authority, scope note, keywords, parent
 and full path, timestamps, and
@@ -187,6 +182,11 @@ For a root classification, **Parent classification** displays an empty value
 (`—`); “Root classification” is not presented as though it were a parent.
 Tree rows reserve the same expander space for every node so branch and terminal
 icons remain aligned at each hierarchy depth.
+
+Hierarchy icons mirror in Arabic so branches and terminals face the node text.
+Icons and labels have a consistent logical gap. Node codes remain visible;
+long node titles use an ellipsis and expose the complete title in a tooltip
+and accessible name.
 
 ## Search
 

@@ -8,13 +8,13 @@ from frontend.webui.authorization_ui import (
 def test_operation_catalogue_covers_resource_and_component_actions():
     assert "aggregation.security_level.change" in OPERATIONS["aggregation"]
     assert "record.component.replace" in OPERATIONS["record"]
-    assert operation_label("record.component.download") == "Component · Download"
+    assert operation_label("record.component.download") == "Download Digital Component"
     assert authorization_code_label("aggregation.add_record") == "Add Record"
     assert authorization_code_label("record.create") == "Create Records"
     assert authorization_code_label("record.component.replace") == "Replace Digital Component"
     assert security_level_label({
         "code": "S", "name": "Secret", "level_number": 50,
-    }) == "S — Secret (level 50)"
+    }).replace("\u2068", "").replace("\u2069", "") == "S — Secret (level 50)"
     assert security_level_label(None) == "None"
 
 
@@ -86,3 +86,43 @@ def test_profile_privilege_search_covers_code_name_and_guidance():
     assert privilege_matches_search(privilege, "recorded events")
     assert privilege_matches_search(privilege, "Security operations")
     assert not privilege_matches_search(privilege, "create records")
+
+
+def test_acl_permission_and_source_labels_use_arabic_catalogue():
+    import json
+    from pathlib import Path
+    from frontend.webui.i18n_catalogue import set_active_messages
+    from frontend.webui.authorization_ui import PERMISSION_DISPLAY_ORDER
+    artifact = json.loads((Path(__file__).parents[1] / "i18n/messages.ar.generated.json").read_text())
+    messages = {item["message_key"]: item["translated_text"] for item in artifact["items"]}
+    set_active_messages(messages)
+    try:
+        for codes in PERMISSION_DISPLAY_ORDER.values():
+            for code in codes:
+                assert operation_label(code) == messages["authorization.permission." + code]
+        assert acl_source_label({"source": "resource_override"}) == "تجاوز محلي"
+        assert acl_source_label({"source": "parent_mirror:resource_override"}) == messages["authorization.acl_source.parent_mirror"]
+    finally:
+        set_active_messages({})
+
+
+def test_access_explanation_uses_arabic_catalogue_for_gates_and_decisions():
+    import json
+    from pathlib import Path
+    from nicegui import ui
+    from frontend.webui.i18n_catalogue import set_active_messages
+    from frontend.webui.authorization_ui import GATE_LABELS, DECISION_CODE_LABELS, gate_label
+    artifact = json.loads((Path(__file__).parents[1] / 'i18n/messages.ar.generated.json').read_text())
+    messages = {item['message_key']: item['translated_text'] for item in artifact['items']}
+    with ui.column():
+        set_active_messages(messages)
+        try:
+            for code in GATE_LABELS:
+                assert gate_label(code) == messages['authorization.explanation.gate.' + code]
+            for code in DECISION_CODE_LABELS:
+                assert decision_code_label(code) == messages['authorization.explanation.decision.' + code]
+            assert gate_detail({'gate': 'authentication', 'code': 'allowed', 'passed': True}) == 'مسموح'
+            assert gate_detail({'gate': 'operation_integrity', 'passed': True}) == messages['authorization.explanation.state_allowed']
+            assert 'سري' in security_level_label({'code': 'S', 'name': 'Secret', 'localized': {'name': 'سري'}, 'level_number': 75})
+        finally:
+            set_active_messages({})

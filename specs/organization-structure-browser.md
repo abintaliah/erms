@@ -5,6 +5,25 @@
 **Prepared:** 18 September 2026  
 **Revision:** 1.5
 
+## Approved full-page redesign — 29 September 2026
+
+The approved tree-centered mockup supersedes the full-page two-pane and
+select-then-Open behavior below. The Browse page uses one full-width tree;
+node names navigate directly to the existing organization-unit, role, and user
+detail pages. Chevron controls only expand/collapse branches, pointing right
+in LTR, left in RTL, and down when expanded. The existing detail-page content and actions,
+authorization boundaries, and selector-dialog behavior remain unchanged.
+Organization Unit, Role and User detail headers place the icon/avatar beside
+the name at the reading-start edge and Back at the opposite edge. In Arabic,
+the identity is on the right and Back on the left with a right-pointing arrow;
+English uses the mirrored placement and a left-pointing Back arrow.
+Existing translated entity metadata and message keys are reused. Navigation
+back restores expansion, loaded-page boundaries, selection/assignment context,
+query, filters, and scroll position, with fresh entity reads. Search-result
+activation opens the corresponding detail page after retaining its tree path.
+All other requirements remain in force; sections describing full-page summaries
+continue to govern selector summaries where applicable.
+
 ## 1. Purpose
 
 This specification defines a navigable organization-structure browser, a
@@ -90,6 +109,24 @@ relationships do not alter tree placement and are shown in role summaries.
 A user appears beneath a role through `user_role_assignments`. The same user
 may therefore appear under several roles. Every occurrence refers to the same
 user entity and must open the same User details page.
+
+Sibling ordering is applied on the server before pagination:
+
+- Root organization units are ordered by natural ascending code.
+- Within an organization unit, all direct child organization units precede all
+  direct roles, including across page boundaries. Each group is ordered by
+  natural ascending code: `UNIT-2` precedes `UNIT-10`.
+- Within a role, user occurrences are ordered by the name actually displayed in
+  the current UI language, using language-aware alphabetical ordering. The
+  existing entity-translation fallback determines the displayed name.
+- Entity ID breaks equal sort-key ties; assignment ID is the final tie-breaker
+  for user occurrences. Ordering is deterministic for unchanged data.
+
+Codes retain the same ordering in English and Arabic. Arabic user names use
+Arabic collation; RTL changes presentation, not the ascending sort direction.
+Loading another page preserves these groups and their order. Refreshing after a
+name, code, assignment, or language change reloads the applicable ordering.
+These rules concern tree siblings, not search-result ranking or detail tables.
 
 ### 5.2 Initial state and lazy loading
 

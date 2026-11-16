@@ -3,7 +3,7 @@
 **Status:** Implemented
 **Project:** ERMS  
 **Prepared:** 18 September 2026  
-**Revision:** 0.1
+**Revision:** 0.2 — 13 November 2026: independent cleanup supervision and database-wide leadership
 
 ## 1. Purpose
 
@@ -27,6 +27,29 @@ defined separately in
 [User, Role, and Organizational-Unit Deletion](user-role-org-unit-deletion.md).
 
 ## 2. User authentication states
+
+### Sign-in feedback and language direction
+
+When a sign-in attempt is rejected with HTTP 401, the form explains that the
+credentials were not accepted and asks the user to check the login name and
+password and retry. Use identical wording for an unknown login name and an
+incorrect password. The generic session prompt “Sign in to continue” remains
+appropriate for unauthenticated protected requests, not a failed sign-in attempt.
+Other failures retain their specific existing error handling.
+
+The sign-in panel, its labels, fields and actions follow the remembered UI
+language and direction before authentication. Arabic uses RTL. Apply direction
+to the document and dialog portal as well as the panel; do not wait for the
+authenticated localization bootstrap. This keeps signed-out and signed-in
+presentation consistent without requiring authentication to restore direction.
+At desktop width the Arabic brand/marketing panel is on the right and the form
+on the left. Field labels and placeholders align right; the password visibility
+control appears at the field’s left edge. English mirrors these positions.
+The entered login name and password use an isolated LTR text direction in
+every UI language, so ASCII punctuation retains its entered order. This
+applies to masked and revealed password text and does not restrict the
+accepted character set or alter submitted credentials. Arabic field labels
+and surrounding controls remain RTL.
 
 ### 2.1 Active
 
@@ -74,12 +97,36 @@ A credential lock is not a user lifecycle status. Repeated failed local-password
 authentication attempts set `user_credentials.locked_until`. Until that time,
 new local-password authentication is rejected.
 
+Login and password-change current-password checks share the credential's
+`failed_attempt_count`, `locked_until`, `AUTH_LOCKOUT_ATTEMPTS`, and
+`AUTH_LOCKOUT_MINUTES`. Incorrect current passwords count as failed password
+authentication; new-password validation errors (including insufficient length)
+and confirmation mismatches do not increment or clear an existing counter.
+Concurrent checks must serialize on the credential row so neither endpoint nor
+another session can bypass the limit.
+
+During a credential lock, password changes are also rejected. Login retains its
+generic 401 response. Password changes return 429 with `Retry-After` seconds and
+localized cooldown feedback, including on the failure that reaches the limit.
+Blocked requests do not increase the counter or extend the deadline. Existing
+sessions are not revoked by the credential lock.
+
+At the next password check on or after `locked_until`, clear the expired lock
+and reset the counter before evaluating the submitted password. The first
+incorrect attempt after expiry counts as one of a fresh allowance. Preserve
+that reset even if a correct current password is followed by an invalid new
+password. Successful login, successful password change, and administrative
+temporary-password/recovery issuance clear the failure counter and lock.
+Failed password changes persist the counter and matching
+`AUTHENTICATION_FAILED` event atomically before returning an error; safe event
+metadata identifies `authentication_context` as `login` or `password_change`.
+
 | Condition | Cause | Duration | Scope | Existing sessions |
 | --- | --- | --- | --- | --- |
 | Active | Normal lifecycle state | Until changed | Entire account | Remain usable |
 | Inactive | Account lifecycle decision | Until reactivated | Entire account | Revoked |
 | Suspended | Administrator security action | Until unsuspended | Entire account | Revoked |
-| Credential lock | Automatic failed-login protection | Until `locked_until` or recovery | New local-password authentication | Remain usable |
+| Credential lock | Automatic failed-password protection | Until `locked_until` or recovery | New local-password authentication and password changes | Remain usable |
 
 The UI may display **Temporarily locked until ...** as a derived credential
 condition, but `locked` must not be added to `users.status`. An administrator
@@ -258,8 +305,39 @@ It supports:
 - idempotent overlapping invocation; and
 - structured counts and nonzero failure exits.
 
-Production may schedule the one-shot command or supervise exactly one `--watch`
-process per logical database. Cleanup must never start from each FastAPI worker.
+Production supervises the standalone `erms-session-cleanup.service` independently
+of API services. It is enabled at system boot; API start/stop/restart must not
+start, stop or restart cleanup. Cleanup must never start inside FastAPI workers.
+There must be at most one active cleanup process per logical PostgreSQL database.
+Optional processes on other hosts remain standbys and retry leadership every five
+seconds. Both jobs use the same dedicated database connection that holds session
+advisory lock `2026091803` across job commits and idle waits. Losing that connection
+must prevent further cleanup and exit nonzero for supervisor restart; ownership
+must never be retained across a transparent reconnect. Connection closure releases
+ownership; takeover follows PostgreSQL detecting the disconnection plus the
+standby retry delay. Use a direct database connection or session pooling, never
+transaction pooling. Each active or standby process consumes one connection.
+
+One-shot and dry-run commands also acquire leadership; when another owner exists,
+they report standby/skipped work and exit successfully without running either job.
+Stop all watch copies before deliberate one-shot maintenance. Per-job transaction
+locks remain an additional safeguard, including during upgrades from older code.
+Upgrade all cleanup copies together: an older process lacks the leadership lock.
+
+For local development, `run-local-stack.sh` starts and stops its separate cleanup
+process in tandem with the complete local stack. It preserves process ownership;
+if another copy owns this database, its process remains a standby.
+
+The same process removes expired shared search lists on its own interval and
+batch-size Application Settings (60 seconds and 5,000 lists by default). Login
+history keeps its independent interval, batch size and audit/retention rules.
+The jobs use separate transactions and advisory locks. A one-shot invocation
+runs one bounded pass of each job. `--batch-size`, `--interval-seconds` and
+`--retention-days` override login-history policy only; search-cache settings
+remain database-owned. `--dry-run` commits neither job's changes.
+SIGTERM/SIGINT wakes an idle worker immediately, allows an in-flight bounded
+transaction to finish, and prevents further passes. Forced termination rolls
+back any uncommitted transaction. Failures exit nonzero for supervisor restart.
 
 Commands and configuration are maintained in the central
 [Operational Tools Catalogue](../docs/operations.md#6-login-session-cleanup).
@@ -287,7 +365,7 @@ verify or supply the required terminal event before deleting them.
 | --- | --- | --- |
 | `AUTH_SESSION_IDLE_MINUTES` | `30` | Sliding idle lifetime |
 | `AUTH_SESSION_ABSOLUTE_HOURS` | `12` | Maximum session lifetime |
-| `AUTH_LOCKOUT_ATTEMPTS` | `5` | Failed attempts before temporary lock |
+| `AUTH_LOCKOUT_ATTEMPTS` | `5` | Shared incorrect login/current-password attempts before temporary lock |
 | `AUTH_LOCKOUT_MINUTES` | `15` | Temporary credential-lock duration |
 | `AUTH_SESSION_RETENTION_DAYS` | `90` | Retention after revocation or effective expiry |
 | `AUTH_SESSION_CLEANUP_INTERVAL_SECONDS` | `3600` | Continuous-worker delay |
@@ -300,6 +378,10 @@ verify or supply the required terminal event before deleting them.
 - Suspension and deactivation revoke active sessions transactionally.
 - Reactivation and unsuspension do not restore revoked sessions.
 - Credential lock remains derived from `locked_until`, not `users.status`.
+- Login and password-change attempts share a limit across sessions and concurrent requests.
+- Cooldown expiry resets failures before the next check; successes and recovery clear them.
+- New-password validation and confirmation errors never count as incorrect-current-password attempts.
+- Password-change lock responses include localized feedback and `Retry-After` without extending the lock.
 - Successful and failed authentication events contain required safe metadata.
 - Individual and bulk revocations contain required durable audit information.
 - No authentication event contains credential, session-token, or CSRF secrets.

@@ -1,7 +1,51 @@
 import os
 
 import psycopg
+import pytest
+from psycopg import sql
 from psycopg.types.json import Jsonb
+
+
+@pytest.mark.parametrize(
+    "language,translate_unit,translate_role,expected_unit,expected_role",
+    [
+        ("ar", True, True, "وحدة الاختبار", "مدير النظام"),
+        ("ar", True, False, "وحدة الاختبار", "System Administrator"),
+        ("ar", False, True, "Test Root", "مدير النظام"),
+        ("en", True, True, "Test Root", "System Administrator"),
+    ],
+)
+def test_creation_role_options_use_entity_translations(
+    client, language, translate_unit, translate_role, expected_unit, expected_role,
+):
+    before = client.get("/api/v1/creation-role-options").json()
+    for resource, enabled, name in (
+        ("org-units", translate_unit, "وحدة الاختبار"),
+        ("roles", translate_role, "مدير النظام"),
+    ):
+        if enabled:
+            entity = client.get(f"/api/v1/{resource}/1").json()
+            response = client.patch(
+                f"/api/v1/entity-translations/{resource}/1/ar",
+                json={"name": name},
+                headers={"If-Match": str(entity["version"]),
+                         "X-Change-Reason": "Verify creation role labels"},
+            )
+            assert response.status_code == 200, response.text
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        connection.execute(
+            """INSERT INTO user_preferences(user_id,language_tag,working_timezone)
+               VALUES (1,%s,'Asia/Dubai')
+               ON CONFLICT (user_id) DO UPDATE SET language_tag=EXCLUDED.language_tag""",
+            (language,),
+        )
+    response = client.get("/api/v1/creation-role-options")
+    assert response.status_code == 200, response.text
+    options = response.json()
+    assert [row["role_id"] for row in options] == [row["role_id"] for row in before]
+    assert options[0]["org_unit_name"] == expected_unit
+    assert options[0]["role_name"] == expected_role
+    assert options[0]["label"] == f"{expected_unit} — {expected_role}"
 
 
 def test_entity_translation_patch_merges_locales_and_uses_entity_version(client):
@@ -331,3 +375,65 @@ def test_paginated_identity_searches_sort_by_displayed_preferred_language_name(c
         assert response.json()["total"] == 2
         assert response.json()["items"][0]["name"].startswith("Zulu")
         assert response.json()["items"][0]["localized"]["name"].startswith("ال")
+
+
+@pytest.mark.parametrize(('resource', 'table', 'entity_type', 'primary'), [
+    ('roles', 'roles', 'role', 'name'),
+    ('users', 'users', 'user', 'name'),
+    ('org-units', 'org_units', 'org_unit', 'name'),
+    ('profiles', 'profiles', 'profile', 'name'),
+    ('security-levels', 'security_levels', 'security_level', 'name'),
+    ('classifications', 'classifications', 'classification', 'title'),
+    ('classification-schemes', 'classification_schemes', 'classification_scheme', 'title'),
+])
+def test_entity_translation_audit_preserves_before_after_for_all_entities(client, resource, table, entity_type, primary):
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        entity_id, previous = connection.execute(sql.SQL(
+            'SELECT id, translations FROM {} ORDER BY id LIMIT 1'
+        ).format(sql.Identifier(table))).fetchone()
+    path = f'/api/v1/entity-translations/{resource}/{entity_id}/ar'
+    current = client.get(path)
+    assert current.status_code == 200, current.text
+    version = current.json()['version']
+    for phase, values in [
+        ('add', {primary: 'الاسم التجريبي الأول', 'description': 'الوصف التجريبي الأول'}),
+        ('edit', {primary: 'الاسم التجريبي المعدل', 'description': 'الوصف التجريبي المعدل'}),
+        ('remove', {primary: None, 'description': None}),
+    ]:
+        reason = f'Audit verification: {resource} {phase}'
+        response = client.patch(path, json=values, headers={
+            'If-Match': str(version), 'X-Change-Reason': reason,
+            'X-Event-Source': 'web_ui',
+        })
+        assert response.status_code == 200, response.text
+        version = response.json()['version']
+        expected = dict(previous or {})
+        if phase == 'remove':
+            expected.pop('ar', None)
+        else:
+            expected['ar'] = values
+        expected = expected or None
+        with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+            row = connection.execute(
+                '''SELECT id,before_state,after_state,changed_fields,reason,source
+                   FROM event_history WHERE entity_type=%s AND entity_id=%s AND operation='UPDATE'
+                   ORDER BY id DESC LIMIT 1''', (entity_type, entity_id),
+            ).fetchone()
+        assert row is not None
+        event_id, before, after, changed, saved_reason, source = row
+        assert before['translations'] == previous
+        assert after['translations'] == expected
+        assert 'translations' in changed
+        assert saved_reason == reason
+        assert source == 'web_ui'
+        # Verify the API used by history screens retains the same snapshots.
+        events = client.get('/api/v1/event-history', params={
+            'entity_type': entity_type, 'entity_id': entity_id, 'operation': 'UPDATE',
+        })
+        assert events.status_code == 200, events.text
+        event = next(item for item in events.json() if item['id'] == event_id)
+        assert event['before_state']['translations'] == previous
+        assert event['after_state']['translations'] == expected
+        assert 'translations' in event['changed_fields']
+        print(f'{resource}: {phase}: database and API snapshots preserved (event {event_id})')
+        previous = expected

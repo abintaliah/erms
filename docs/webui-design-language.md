@@ -111,6 +111,29 @@ Do not make an existing renderer accept unrelated modes merely to avoid a new
 component. Reuse means shared semantics, not a single function with many
 unrelated flags.
 
+### 3.1.1 Literal localized text and markup boundaries
+
+`render_message`, `render_message_plain`, and `render_english` return literal
+text, with interpolated values independently isolated for bidirectional display.
+Pass it directly to NiceGUI text properties (labels, titles, buttons, tooltips,
+notifications and selector options). NiceGUI/Vue perform DOM text escaping;
+HTML-encoding names before that boundary displays entities such as `&#x27;`
+verbatim. Never decode entity-like user input or apply a screen-specific
+`html.unescape` workaround.
+
+When embedding a message in an HTML/Vue slot template, explicitly `html.escape`
+the complete message at that boundary. Never pass catalogue text directly to
+`ui.html` or `v-html`. For textual `.props(...)` values, use Python quoting, for
+example `f"aria-label={message!r}"`, so quotes cannot split the property string.
+Keep existing sanitized rich-content workflows separate from catalogue text.
+These are output-boundary requirements implementing the internationalization
+specification's escaping rule; ordinary translations never authorize markup.
+
+Collection editors must refresh the current bounded server page after Save,
+using its existing language, filters, sort and paging state. Do not append a
+created role to a downloaded page or reorder it by internal ID. The server
+remains responsible for sorting the complete collection before pagination.
+
 ### 3.2 Location of new shared code
 
 Small extensions may remain beside the current shared helper in `app.py`.
@@ -371,10 +394,13 @@ service identity, legal hold, or similarly consequential resource.
 - At narrower widths, the command column moves below the overview without
   hiding actions or changing their order.
 
-Record details retain the complete Digital Components interface immediately
-after the record overview/metadata region. Do not move components into a
-separate primary destination or require an additional dialog merely to reach
-the list.
+Aggregation details place Child aggregations and Records in this aggregation
+immediately below a compact header. Each section shows its count and creation
+action together. Record details place the complete Digital Components interface
+immediately below the header. Both pages use the
+[Details dialog](../specs/aggregation-and-record-page-amendment.md) for metadata
+and governed actions. Metadata comes first in reading order. Its action column
+shows common actions and keeps specialist actions under Advanced.
 
 Do not turn a detail page into a vertical sequence of unrelated full-width
 panels when a compact overview and command rail communicate the task better.
@@ -494,8 +520,8 @@ with isolated statistic cards or a decorative chart.
 
 The stages mean Current (active), Intermediate (semi-active), and Final
 disposition. The vertical blue line and stage markers express sequence. On an
-aggregation detail page, the retention panel sits beside the primary metadata
-surface and wraps below it on narrower viewports. Child-aggregation and record
+aggregation detail page, the retention panel is in the Retention rule tab of
+the Details dialog. Child-aggregation and record
 totals appear once in the metadata field named **Contains** and are not repeated
 as oversized statistics.
 
@@ -672,6 +698,9 @@ unreadable cells.
   search may be expensive or semantically meaningful.
 - Distinguish server search from filtering rows already loaded.
 - Keep related filters in one wrapping row and align their lower edges.
+- When a screen uses Search or Apply, page through the last submitted query.
+  Keep draft edits in the controls and keep the controls visible for zero
+  results. See the [server pagination contract](webui-performance.md#paginated-results-and-submitted-filters).
 - Show a concise result count/range.
 - Use deterministic sort tie-breakers so pagination does not reorder items.
 - Keep page-size choices bounded and consistent with comparable screens.
@@ -836,6 +865,135 @@ or documented style surface rather than duplicating them.
 
 ### 19.1 NiceGUI-first layout and RTL troubleshooting
 
+The record page uses native NiceGUI rows, disclosure buttons, and upload
+controls for digital components. Inspection of the old layout showed that the
+upload queue displayed its own empty state even when the separate list held
+files, and the card grid limited each file to part of the available width.
+The record page now puts the native upload trigger in the section header and
+uses the file list for the empty state. NiceGUI Upload handles the chooser,
+multiple selection, and transport. Its native drop area is limited to the
+uploader, so the record page uses a scoped overlay that passes dropped files
+to the same Quasar uploader. A container query wraps row actions at narrow
+widths, and the closed disclosure chevron mirrors in RTL.
+
+The sign-in page restores document and dialog direction before authentication,
+using the remembered localization context. Previously the direction script
+ran during authenticated bootstrap, leaving signed-out portal content without
+the full RTL setup. The native login card explicitly carries `dir` and `lang`;
+its standard NiceGUI fields and layout inherit these settings. Direction-only checks initially confirmed RTL inheritance but missed physical
+placement. Follow-up browser inspection on 4 October found the global RTL
+`.row { flex-direction: row-reverse }` double-reversed native RTL flex rows,
+and Quasar floating labels retained a physical left anchor. NiceGUI document
+direction, native card `dir`/`lang`, and standard Row/Input/Select configuration
+do not override those existing stylesheet rules or expose label-anchor spacing.
+A narrowly scoped correction inside `.wathiq-login-card` and
+`.messaging-workspace` restores native `row` flow in RTL, right-anchors field
+labels and mirrors append/prepend padding. Native components and keyboard
+behavior remain intact. Browser measurements confirmed Arabic password append
+on the left, labels on the right, and mailbox actions flowing right to left.
+The login button retains the Material login glyph: native `icon-right=login`
+places it left of Arabic text, and a button-scoped RTL horizontal transform
+mirrors the arrow. NiceGUI icon naming/position props expose no mirrored
+variant of this glyph. English keeps the original icon and position.
+Credential inputs use the native QInput `input-style` property to set
+`direction: ltr; unicode-bidi: isolate` on the editable input only. Browser
+inspection found these inputs previously inherited RTL with normal bidi.
+The field wrapper, Arabic labels and password visibility control retain RTL;
+no custom CSS is needed for credential text direction. No text, translation
+key or credential validation rule changes.
+English remains LTR. Rejected credentials use a specific neutral login error rather than
+the generic expired-session prompt, consistently for wrong names and passwords.
+Four feedback cases and two shared direction tests passed. The new English key
+`authentication.error.credentials_not_accepted` has a generated Arabic draft;
+2893-key coverage, ordering, placeholder, terminology and artifact validation
+passed. Existing translation wording/provenance was preserved; no administrator
+export was promoted. The draft was seeded to demo for review/publication while
+all 2935 previously protected translation rows remained unchanged.
+
+Administration Settings uses native NiceGUI tabs, panels, responsive grids,
+Inputs, Selects and the existing bounded RemoteSelect. On 14 October, browser
+inspection confirmed that document RTL already reached these components, but
+the legacy global reversal produced `row-reverse` inside native tabs/fields,
+and floating labels retained `left: 0`. Native direction inheritance and
+Row/Input/Select configuration cannot override those physical stylesheet rules.
+The existing correction above therefore also covers `.application-settings-page`
+and, for row flow only, `.application-settings-browser`. Final measurements show
+native `row` flow, right-anchored Arabic labels and unchanged English left anchors;
+the Arabic form settles to one column at 375px without horizontal overflow.
+Input-only LTR isolation uses the supported `input-style` property. Optional
+Select clearing uses the supported append slot and a translated native button,
+because the vendor clear label otherwise follows its process-wide English locale.
+No global vendor language or unrelated page styles change. See
+[Phase 3 verification](disposition-phase-3.md) for browser and test evidence.
+
+Saved-search cards keep the Mine/Shared badge at the top trailing edge (right
+in English, left in Arabic). A native NiceGUI three-column grid reserves space
+for the resource icon, wrapping metadata, and badge; Open occupies its own line.
+This replaces the wrapping row that could move the badge beneath long metadata.
+The source-rendered cards were checked in a local NiceGUI browser preview at
+900px and narrow 360px widths in both directions, with no card overflow; the
+Open callback retained the selected search. No custom CSS or translation changes
+were needed.
+
+Detail-page action groups align to the reading start: left in English and right
+in Arabic. Buttons keep their source order in the reading direction, and each
+wrapped line starts at that same edge. Leading button icons precede their labels
+with a visible gap. This applies to management, lifecycle, audit, hold controls,
+advanced actions, and credential actions. Identity-header Back/Favourite/Preview
+groups retain their separate opposite-side placement.
+
+On 21 October 2026, the Aggregation overview retention-card header and footer
+also adopted the existing `detail-action-row` treatment. Live inspection found
+`direction: rtl` but `flex-direction: row-reverse` on the header and button
+contents: the clock was at the physical left and acceleration at the right.
+Native NiceGUI Row offers wrapping and alignment, but cannot override that
+legacy global rule through a direction option; a fixed grid would lose the
+existing variable-width wrapping. Reusing the established scoped correction
+restores natural RTL order and logical icon spacing without new global CSS.
+Arabic source-copy drafts are repaired through the guarded explicit seed,
+not by exposing unreviewed translations to ordinary users. Demo repair filled
+543 drafts and preserved all 3,192 previously translated rows, including
+versions and provenance; the user requested that the new drafts remain
+unpublished for review. No canonical wording or provenance was replaced.
+Verification: 25 disposition-screen tests, two RTL tests, catalogue and approved
+terminology checks, and live 1440px/375px retention-card inspection. The RTL
+header/button flow is now `row`, the clock is at reading start, and the action
+is at the trailing edge. Both narrow headers wrap without header overflow;
+the RTL card also has no horizontal overflow. The existing English card
+content outside the header reports 28px overflow at 375px; that unchanged
+content is outside this header-direction correction.
+See [RTL desktop evidence](verification/retention-rtl/arabic.png) and
+[RTL narrow evidence](verification/retention-rtl/arabic-narrow.png), with
+[English comparison](verification/retention-rtl/english.png).
+
+The shared action-panel correction and verification are documented in
+[detail action RTL verification](detail-action-rtl-verification.md).
+
+The Aggregation Details dialog previously put single-line retention summaries
+directly in an expansion. Browser inspection showed that the expansion stayed
+502 px wide while its unwrapped children grew past 900 px. The expansion now
+uses a bounded NiceGUI column, one row per classification level, and wrapping
+labels for titles and instructions. The existing timeline's horizontal arrows
+are hidden at narrow dialog widths, where the stages stack in reading order.
+The metadata action column reuses the scoped button icon treatment. The
+row-direction rule stays on rows, so Arabic buttons stack in the same order as
+English with leading icons at the reading start.
+At phone widths the identity and actions wrap onto separate rows when they
+cannot fit side by side. Explicit flex bases reserve space for the identity
+and filter field because this NiceGUI build does not bundle the corresponding
+Tailwind utilities. Contained record rows reuse the existing result grid. At
+phone widths their actions occupy the second row so titles have room to read.
+
+The shared Users, Roles, and Organization Units item-card header uses a native
+NiceGUI three-column grid: icon, wrapping title/identity, and trailing status
+badge. Browser inspection found the old header inherited `direction: rtl`
+but also received the global `.row { flex-direction: row-reverse }` rule,
+placing its icon at the far left in Arabic. Standard Row alignment cannot
+correct that double reversal. The supported Grid layout follows document
+direction without a row override: the icon leads on the right in Arabic and
+the left in English, while the badge stays at the opposite edge. No Quasar or
+custom CSS fallback is needed.
+
 For developers and agents, the required troubleshooting order is:
 
 1. Reproduce the issue and inspect the existing shared component and its
@@ -962,3 +1120,17 @@ A new WebUI screen is complete only when:
     and stale-key checks pass; and
 12. this document and its reference map are updated if the approved design
     system genuinely changed.
+
+Recipient chip remove-icon spacing (4 October 2026): inspection of the shared
+remote QSelect's default removable chip found its physical negative right
+margin overlapping the Arabic label by 4.375px. NiceGUI Select's documented
+`multiple`/`use-chips`/`dense` configuration controls selection or overall sizing,
+not internal remove-icon spacing. Keeping the native chip preserves keyboard,
+removal and disabled behavior; a custom selected-item slot is unnecessary.
+The narrowly scoped remote-selector correction resets the icon margins and
+adds a 6px logical trailing margin to multiple-chip content. The logical margin
+belongs to content because Material icon elements force LTR direction even in
+an RTL field. English/LTR and Arabic/RTL browser measurements confirmed a 6px
+label/icon gap at desktop and 360px widths without chip overflow. No UI text,
+translation artifact, data request, cache or database change was introduced.
+The database-free preview was stopped and its temporary tab closed.

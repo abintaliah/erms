@@ -6,6 +6,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from psycopg import Connection
 
+from .operation_policy import operation_policy
+from .audit_context import decode_change_reason
 from .concurrency import expected_version
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .database import get_connection
@@ -44,7 +46,7 @@ CUSTODY_PRIVILEGE_CODES = (
 
 
 def _reason(request: Request) -> str:
-    reason = request.headers.get("X-Change-Reason", "").strip()
+    reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
     if not reason:
         raise HTTPException(status_code=422, detail="X-Change-Reason is required")
     return reason
@@ -149,7 +151,10 @@ def assert_continuity(connection: Connection, before_admins: int, before_custodi
 @router.get("/privileges", response_model=list[PrivilegeRead])
 def list_privileges(request: Request, response: Response, limit: int=Query(500,ge=1,le=500), offset: int=Query(0,ge=0), connection: Connection=Depends(get_connection,scope="function")):
     rows = list(connection.execute(
-        "SELECT * FROM privileges ORDER BY category,code LIMIT %s OFFSET %s", (limit,offset)
+        """SELECT privilege.*, ARRAY(SELECT required_privilege_id
+               FROM privilege_dependencies WHERE privilege_id=privilege.id
+               ORDER BY required_privilege_id) AS required_privilege_ids
+           FROM privileges privilege ORDER BY category,code LIMIT %s OFFSET %s""", (limit,offset)
     ).fetchall())
     return apply_collection_etag(request, response, rows) or rows
 
@@ -221,12 +226,14 @@ def get_profile(profile_id: int, request: Request, connection: Connection=Depend
     tags=["event history"],
     dependencies=[Depends(require_audit_view)],
 )
+@operation_policy("globally_privileged", "audit.view")
 def get_profile_history(
-    profile_id: int, connection: Connection=Depends(get_connection,scope="function"),
+    profile_id: int, limit: int = Query(500, ge=1, le=500), offset: int = Query(0, ge=0),
+    connection: Connection=Depends(get_connection,scope="function"),
 ):
     get_or_404(connection, "profiles", profile_id)
     return list_rows(
-        connection, "event_history", limit=500, offset=0,
+        connection, "event_history", limit=limit, offset=offset,
         filters={"entity_type": "profile", "entity_id": profile_id},
         order_by=("occurred_at", "id"), descending=True,
     )

@@ -2,7 +2,11 @@
 
 This is the complete macOS checklist for a new contributor. Python
 `requirements.txt` files do not install Java, Tesseract, its language packs,
-Poppler, LibreOffice, or PostgreSQL.
+Poppler, LibreOffice, or PostgreSQL. Message capture additionally requires
+veraPDF and Java: follow [the local tooling guide](local-tooling.md) after
+cloning and [the upgrade note](upgrades/message-capture-validator.md) when
+syncing an existing fork. veraPDF is a capture requirement, not a requirement
+for every application feature.
 
 1. Install Homebrew if it is not already available:
 
@@ -84,9 +88,6 @@ Poppler, LibreOffice, or PostgreSQL.
    TEXT_INDEXER_ENABLED=true
    TEXT_INDEXER_CLAIM_BATCH_SIZE=1
    TEXT_INDEXER_PROCESS_COUNT=2
-   CONTENT_INDEXING_SCHEDULING_ENABLED=true
-   FULL_TEXT_SEARCH_ENABLED=true
-   WEBUI_FULL_TEXT_SEARCH_ENABLED=true
    ```
 
 8. Start PostgreSQL 18 if it is not already running:
@@ -103,7 +104,9 @@ Poppler, LibreOffice, or PostgreSQL.
    source .env
    set +a
    "$(brew --prefix postgresql@18)/bin/psql" \
-     "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+     "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/schema.sql \
+  -f database/seeds/000_required_reference_data.sql \
+  -f database/baseline.sql
    ```
 
    For an existing database, inspect `schema_migrations` and apply only missing
@@ -181,3 +184,10 @@ Poppler, LibreOffice, or PostgreSQL.
 
 12. Open `http://127.0.0.1:8080`, upload an English or Arabic document, wait
     for indexing, and search for text contained inside it.
+
+Search/indexing policy and Audit Trail result caps are database-owned. Configure
+them through Administration Settings after bootstrap; environment assignments no
+longer enable scheduling or search. The removed WebUI flag has no authority.
+See [application-settings-upgrade.md](application-settings-upgrade.md) for the
+reviewed 34-key upgrade and [configuration-authority-inventory.json](configuration-authority-inventory.json)
+for ownership, defaults, consumers, service templates and restart requirements.

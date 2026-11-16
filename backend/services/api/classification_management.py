@@ -3,7 +3,9 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from psycopg import Connection
 
+from .operation_policy import operation_policy
 from .concurrency import expected_version
+from .disposition.acceleration import current_accelerations
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .database import get_connection
 from .entity_localization import (
@@ -37,9 +39,9 @@ from .authorization_policy import require_audit_view, require_classifications_ad
 router = APIRouter(prefix="/api/v1")
 
 
-def _history(connection: Connection, entity_type: str, entity_id: int):
+def _history(connection: Connection, entity_type: str, entity_id: int, *, limit: int = 500, offset: int = 0):
     return list_rows(
-        connection, "event_history", limit=500, offset=0,
+        connection, "event_history", limit=limit, offset=offset,
         filters={"entity_type": entity_type, "entity_id": entity_id},
         order_by=("occurred_at", "id"), descending=True,
     )
@@ -57,6 +59,7 @@ def create_scheme(payload: ClassificationSchemeCreate, connection: Connection = 
 
 
 @router.get("/classification-schemes", response_model=list[ClassificationSchemeRead], tags=["classification schemes"])
+@operation_policy("authenticated_only")
 def list_schemes(
     request: Request,
     response: Response,
@@ -102,6 +105,7 @@ def list_schemes(
 
 
 @router.post("/classification-schemes/search", response_model=None, tags=["classification schemes"])
+@operation_policy("authenticated_only")
 def search_schemes(
     request: Request, payload: SearchRequest,
     connection: Connection = Depends(get_connection, scope="function"),
@@ -150,6 +154,7 @@ def classification_counts_by_scheme(
 
 
 @router.get("/classification-schemes/{scheme_id}", response_model=ClassificationSchemeRead, tags=["classification schemes"])
+@operation_policy("authenticated_only")
 def get_scheme(scheme_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
     return localize_rows([get_or_404(connection, "classification_schemes", scheme_id)], preferred_language(connection, request), "title")[0]
 
@@ -248,8 +253,11 @@ def delete_scheme(
 
 
 @router.get("/classification-schemes/{scheme_id}/history", response_model=list[EventHistoryRead], tags=["event history"], dependencies=[Depends(require_audit_view)])
-def scheme_history(scheme_id: int, connection: Connection = Depends(get_connection, scope="function")):
-    return _history(connection, "classification_scheme", scheme_id)
+def scheme_history(
+    scheme_id: int, limit: int = Query(500, ge=1, le=500), offset: int = Query(0, ge=0),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return _history(connection, "classification_scheme", scheme_id, limit=limit, offset=offset)
 
 
 @router.post("/classifications", response_model=ClassificationRead, status_code=201, tags=["classifications"], dependencies=[Depends(require_classifications_admin)])
@@ -264,6 +272,7 @@ def create_classification(payload: ClassificationCreate, connection: Connection 
 
 
 @router.get("/classifications", response_model=list[ClassificationRead], tags=["classifications"])
+@operation_policy("authenticated_only")
 def list_classifications(
     request: Request,
     classification_scheme_id: int | None = None,
@@ -298,25 +307,33 @@ def list_classifications(
 
 
 @router.post("/classifications/search", response_model=None, tags=["classifications"])
+@operation_policy("authenticated_only")
 def search_classifications(
     request: Request, payload: SearchRequest,
+    eligible: bool = False,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     return localize_search_result(
         search_rows(
             connection, "classifications", payload,
             endpoint="/api/v1/classifications/search",
+            eligible_classifications=eligible,
         ),
         preferred_language(connection, request), "title",
     )
 
 
 @router.get("/classifications/recent", response_model=list[ClassificationRead], tags=["classifications"])
+@operation_policy("authenticated_only")
 def recent_classifications(
-    request: Request, limit: int = Query(4, ge=1, le=20),
+    request: Request, limit: int | None = Query(None, ge=1, le=20),
+    offset: int = Query(0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     principal = request.state.principal
+    from .application_settings import cache
+    configured_limit = cache.for_connection(connection)["CLASSIFICATION_RECENT_SELECTION_LIMIT"]
+    limit = min(limit if limit is not None else 20, max(0, configured_limit-offset))
     return list(connection.execute(
         """SELECT c.* FROM user_classification_selections recent
            JOIN classifications c ON c.id=recent.classification_id
@@ -324,17 +341,19 @@ def recent_classifications(
              AND classification_scheme_is_eligible(c.classification_scheme_id)
              AND classification_is_effectively_active(c.id)
              AND EXISTS (SELECT 1 FROM effective_classification_retention_rule(c.id))
-           ORDER BY recent.last_selected_at DESC LIMIT %s""",
-        (principal.user_id, limit),
+           ORDER BY recent.last_selected_at DESC,c.id DESC LIMIT %s OFFSET %s""",
+        (principal.user_id, limit, offset),
     ).fetchall())
 
 
 @router.get("/classifications/{classification_id}", response_model=ClassificationRead, tags=["classifications"])
+@operation_policy("authenticated_only")
 def get_classification(classification_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
     return localize_rows([get_or_404(connection, "classifications", classification_id)], preferred_language(connection, request), "title")[0]
 
 
 @router.get("/classifications/{classification_id}/path", response_model=list[ClassificationRead], tags=["classifications"])
+@operation_policy("authenticated_only")
 def classification_path(classification_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
     rows = connection.execute(
         """WITH RECURSIVE lineage AS (
@@ -357,6 +376,7 @@ def update_classification(
     version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    connection.execute("SELECT pg_advisory_xact_lock(7357,1)")
     return update_row(connection, "classifications", classification_id, payload.model_dump(exclude_unset=True), version)
 
 
@@ -408,11 +428,15 @@ def reactivate_classification(
 
 
 @router.get("/classifications/{classification_id}/history", response_model=list[EventHistoryRead], tags=["event history"], dependencies=[Depends(require_audit_view)])
-def classification_history(classification_id: int, connection: Connection = Depends(get_connection, scope="function")):
-    return _history(connection, "classification", classification_id)
+def classification_history(
+    classification_id: int, limit: int = Query(500, ge=1, le=500), offset: int = Query(0, ge=0),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return _history(connection, "classification", classification_id, limit=limit, offset=offset)
 
 
 @router.get("/classifications/{classification_id}/retention-rule", response_model=ClassificationRetentionRuleRead | None, tags=["retention rules"])
+@operation_policy("authenticated_only")
 def get_classification_rule(classification_id: int, connection: Connection = Depends(get_connection, scope="function")):
     get_or_404(connection, "classifications", classification_id)
     return connection.execute("SELECT * FROM classification_retention_rules WHERE classification_id=%s", (classification_id,)).fetchone()
@@ -424,6 +448,7 @@ def put_classification_rule(
     version: int | None = Query(None, ge=1),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    connection.execute("SELECT pg_advisory_xact_lock(7357,1)")
     get_or_404(connection, "classifications", classification_id)
     current = connection.execute("SELECT * FROM classification_retention_rules WHERE classification_id=%s", (classification_id,)).fetchone()
     if current is None:
@@ -438,6 +463,7 @@ def delete_classification_rule(
     classification_id: int, version: int = Depends(expected_version),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    connection.execute("SELECT pg_advisory_xact_lock(7357,1)")
     row = connection.execute("SELECT id FROM classification_retention_rules WHERE classification_id=%s", (classification_id,)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="classification retention rule not found")
@@ -446,6 +472,7 @@ def delete_classification_rule(
 
 
 @router.get("/classifications/{classification_id}/effective-retention-rule", tags=["retention rules"])
+@operation_policy("authenticated_only")
 def effective_classification_rule(classification_id: int, connection: Connection = Depends(get_connection, scope="function")):
     get_or_404(connection, "classifications", classification_id)
     row = connection.execute("SELECT * FROM effective_classification_retention_rule(%s)", (classification_id,)).fetchone()
@@ -455,18 +482,21 @@ def effective_classification_rule(classification_id: int, connection: Connection
 
 
 @router.get("/aggregations/{aggregation_id}/retention-rule", response_model=AggregationRetentionRuleRead | None, tags=["retention rules"])
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def get_aggregation_rule(aggregation_id: int, connection: Connection = Depends(get_connection, scope="function")):
     get_or_404(connection, "aggregations", aggregation_id)
     return connection.execute("SELECT * FROM aggregation_retention_rules WHERE aggregation_id=%s", (aggregation_id,)).fetchone()
 
 
 @router.put("/aggregations/{aggregation_id}/retention-rule", response_model=AggregationRetentionRuleRead, tags=["retention rules"])
+@operation_policy("resource_scoped", "classifications.administer", "aggregation.view")
 def put_aggregation_rule(
     aggregation_id: int, payload: AggregationRetentionRuleCreate,
     version: int | None = Query(None, ge=1),
     reason: str | None = Header(None, alias="X-Change-Reason"),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    connection.execute("SELECT pg_advisory_xact_lock(7357,1)")
     _required_reason(reason)
     aggregation = get_or_404(connection, "aggregations", aggregation_id)
     if aggregation["parent_aggregation_id"] is not None:
@@ -480,11 +510,13 @@ def put_aggregation_rule(
 
 
 @router.delete("/aggregations/{aggregation_id}/retention-rule", status_code=204, tags=["retention rules"])
+@operation_policy("resource_scoped", "classifications.administer", "aggregation.view")
 def delete_aggregation_rule(
     aggregation_id: int, version: int = Depends(expected_version),
     reason: str | None = Header(None, alias="X-Change-Reason"),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    connection.execute("SELECT pg_advisory_xact_lock(7357,1)")
     _required_reason(reason)
     row = connection.execute("SELECT id FROM aggregation_retention_rules WHERE aggregation_id=%s", (aggregation_id,)).fetchone()
     if row is None:
@@ -494,9 +526,11 @@ def delete_aggregation_rule(
 
 
 @router.get("/aggregations/{aggregation_id}/effective-retention-rule", response_model=EffectiveRetentionRuleRead, tags=["retention rules"])
-def effective_aggregation_rule(aggregation_id: int, connection: Connection = Depends(get_connection, scope="function")):
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
+def effective_aggregation_rule(aggregation_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
     get_or_404(connection, "aggregations", aggregation_id)
     row = connection.execute("SELECT * FROM aggregation_effective_retention_rule(%s)", (aggregation_id,)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="no effective retention rule")
-    return row
+    acceleration = current_accelerations(connection, [row["governing_root_aggregation_id"]], preferred_language(connection, request))
+    return {**row, "acceleration": acceleration.get(row["governing_root_aggregation_id"])}

@@ -10,6 +10,7 @@ def test_unprivileged_principal_cannot_see_administration_destinations():
         "audit-trail", "login-sessions", "security-levels", "profiles",
         "governance-custody",
         "security-operations",
+        "saved-search-administration",
         "aggregations", "records",
     ):
         assert not can_navigate(key, ())
@@ -28,6 +29,13 @@ def test_information_resource_destinations_require_their_exact_view_privilege():
     assert not can_navigate("aggregations", {"record.view"})
     assert not can_navigate("organization-browser", ())
     assert can_navigate("organization-browser", {"organization.browse"})
+
+
+def test_saved_search_administration_requires_its_exact_privilege():
+    assert can_navigate(
+        "saved-search-administration", {"search.saved_search.administer"},
+    )
+    assert not can_navigate("saved-search-administration", {"search.saved_search.delete"})
 
 
 def test_information_resource_add_actions_require_creation_privileges():
@@ -71,3 +79,20 @@ def test_governed_capabilities_fail_closed_when_a_response_field_is_missing():
     assert capability_allowed({"remove_component": True}, "remove_component")
     assert not capability_allowed({}, "remove_component")
     assert not capability_allowed({"remove_component": False}, "remove_component")
+
+
+def test_notification_administration_is_independent_of_exchange_monitor_and_audit():
+    assert can_navigate('messages-notifications', {'messaging.notifications.administer'})
+    assert not can_navigate('messages-notifications', {'messaging.monitor','audit.view','messaging.user_messages.exchange'})
+
+
+def test_disposition_navigation_requires_current_server_capabilities():
+    from frontend.webui.capabilities import can_navigate_disposition
+    for principal in (None, {}, {'can_manage_disposition': False}):
+        assert not can_navigate_disposition('disposition-tasks', principal)
+    reviewer = {'can_access_disposition_tasks': True, 'can_manage_disposition': False}
+    assert can_navigate_disposition('disposition-tasks', reviewer)
+    assert not can_navigate_disposition('disposition-jobs', reviewer)
+    assert not can_navigate_disposition('disposition-eligibility', reviewer)
+    assert can_navigate_disposition('disposition-job', reviewer)
+    assert can_navigate_disposition('dashboard', {})

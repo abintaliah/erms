@@ -60,6 +60,8 @@ nicegui_storage/
 *.sql.gz
 *.sql.bz2
 *.sql.xz
+database/local-backups/
+database/backups/
 
 # Environment variables and local secrets
 .env
@@ -71,6 +73,14 @@ nicegui_storage/
 *.pem
 *.key
 .secrets/
+
+# Local developer tooling and machine-specific editor state
+.local-tools/
+.kilo/
+.kile.jsonc
+.kilo/kilo.jsonc
+kilo.jsonc
+kile.jsonc
 
 # Editor and IDE settings
 .idea/
@@ -89,3 +99,9 @@ tmp/
 temp/
 *.tmp
 erms on localhost:5433.session.sql
+.kilo/kilo.jsonc
+
+# Machine-local validation tools
+.local-tools/
+# Local development processes, captured email, TLS keys and logs
+.runtime/

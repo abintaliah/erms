@@ -1,68 +1,64 @@
+from frontend.webui.classification_workspace import CLASSIFICATION_WORKSPACE_SEARCH_FIELDS
+from frontend.webui import dashboard
+from frontend.webui.tests.search_sources import search_sources
+from frontend.webui.tests.record_sources import record_sources
+from frontend.webui import entity_editor, collection_navigation, collection_state, security_operations, governance_custody
+from frontend.webui.tests.aggregation_sources import aggregation_sources
+from frontend.webui.tests.account_sources import account_sources, account_function
 from io import BytesIO
 import inspect
+from frontend.webui.tests.organization_sources import organization_sources
+from frontend.webui import login_sessions, translation_administration, hold_editor, hold_details, holds_people, holds
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from frontend.webui.app import (
-    AGGREGATION_SUMMARY_LAYOUT_CLASSES,
-    CHILD_AGGREGATION_CLASSIFICATION_HELP,
-    CLASSIFICATION_WORKSPACE_SEARCH_FIELDS,
-    CLASSIFICATION_SELECTOR_SEARCH_FIELDS,
-    RECORD_UPLOAD_WAIT_MESSAGE,
-    RECORD_DETAIL_HEADER_CLASSES,
-    RECORD_DETAIL_TITLE_CLASSES,
-    RELATIONSHIP_DISPLAY_FIELDS,
-    LIFECYCLE_ACTION_BUTTONS,
-    LAST_CUSTODIAN_MESSAGE,
-    LAST_CUSTODIAN_TITLE,
-    NAVIGATION_TRAIL_LIMIT,
-    NAVIGATION_VISIBLE_LIMIT,
-    USER_SUSPENSION_ACTION_BUTTONS,
-    STOP_PROPAGATION_CLICK_HANDLER,
-    apply_relationship_selection,
-    buffer_upload_batch,
-    component_uploader,
-    component_file_icon,
-    component_is_previewable,
-    decorate_relationship_rows,
-    deletion_blocked_report,
-    deletion_identity,
-    direct_classification_label,
-    display_value,
-    error_message,
-    show_api_error,
-    field_input,
-    format_file_size,
-    form_payload,
-    format_timestamp,
-    filter_membership_rows,
-    index,
-    medium_label,
-    user_avatar,
-    relationship_options,
-    record_draft_component_context,
-    render_component_cards,
-    requires_document_conversion,
-    role_change_requires_reason,
-    append_navigation_entry,
-    visible_navigation_indices,
-)
+from frontend.webui.app import CLASSIFICATION_SELECTOR_SEARCH_FIELDS, RELATIONSHIP_DISPLAY_FIELDS, LAST_CUSTODIAN_MESSAGE, LAST_CUSTODIAN_TITLE, STOP_PROPAGATION_CLICK_HANDLER, buffer_upload_batch, component_is_previewable, deletion_blocked_report, deletion_identity, display_value, error_message, show_api_error, format_file_size, format_timestamp, index, medium_label, user_avatar, render_component_cards, visible_navigation_indices
+from frontend.webui.aggregation_presentation import CHILD_AGGREGATION_CLASSIFICATION_HELP
+from frontend.webui.record_presentation import RECORD_UPLOAD_WAIT_MESSAGE
+from frontend.webui.organization_table import LIFECYCLE_ACTION_BUTTONS
+from frontend.webui.navigation_data import NAVIGATION_TRAIL_LIMIT
+from frontend.webui.navigation_data import NAVIGATION_VISIBLE_LIMIT
+from frontend.webui.organization_table import USER_SUSPENSION_ACTION_BUTTONS
+from frontend.webui.entity_selectors import apply_relationship_selection
+from frontend.webui.component_presentation import component_uploader
+from frontend.webui.component_presentation import component_file_icon
+from frontend.webui.resource_row_presentation import decorate_relationship_rows
+from frontend.webui.aggregation_presentation import direct_classification_label
+from frontend.webui.entity_editor_controls import field_input
+from frontend.webui.entity_editor_controls import form_payload
+from frontend.webui.entity_selectors import relationship_options
+from frontend.webui.record_editor import record_draft_component_context
+from frontend.webui.component_presentation import requires_document_conversion
+from frontend.webui.organization_editor import role_change_requires_reason
+from frontend.webui.navigation_data import append_navigation_entry
+from frontend.webui import application_shell
 from frontend.webui.api_client import ApiError
-from frontend.webui.app import native_preview_kind
+from frontend.webui.component_presentation import native_preview_kind
 from frontend.webui.entities import ENTITIES
 from frontend.webui.config import (
     classification_recent_selection_limit,
+    database_display_name,
     dashboard_favourite_item_limit,
     dashboard_recent_days,
     dashboard_recent_item_limit,
     user_details_session_limit,
 )
-from frontend.webui.app import favourite_preview, personal_dialog_list_height
+from frontend.webui.app import personal_dialog_list_height
 from frontend.webui.tests.localization_assertions import with_english_messages
 
-APP_SOURCE = with_english_messages(inspect.getsource(index))
+from frontend.webui import component_preview, components
+COMPONENT_SOURCE = inspect.getsource(component_preview) + inspect.getsource(components)
+APP_SOURCE = with_english_messages(inspect.getsource(index) + inspect.getsource(dashboard) + account_sources() + organization_sources() + aggregation_sources() + record_sources() + COMPONENT_SOURCE)
+from frontend.webui import collection_controls, personal_resources, personal_resource_views, entity_translation_editor
+COLLECTION_SOURCE = with_english_messages(inspect.getsource(collection_controls))
+PERSONAL_SOURCE = with_english_messages(inspect.getsource(personal_resources))
+PERSONAL_VIEWS_SOURCE = with_english_messages(inspect.getsource(personal_resource_views))
+TRANSLATION_SOURCE = with_english_messages(inspect.getsource(entity_translation_editor))
+
+WORKSPACE_SOURCE = (Path(__file__).parents[1] / "classification_workspace.py").read_text()
+TIMELINE_SOURCE = (Path(__file__).parents[1] / "retention_timeline.py").read_text()
 
 
 def test_direct_classification_label_uses_only_leaf_classification():
@@ -131,6 +127,17 @@ def test_phase1_preview_controls_and_entry_points_are_present():
     assert "viewer_client.run_javascript(" in viewer_source
 
 
+def test_component_surfaces_use_bounded_server_pages_and_cross_page_moves():
+    source = APP_SOURCE
+    assert "api.components(" not in source
+    assert 'component_page = {"limit": 25, "offset": 0, "total": 0}' in source
+    assert 'api.component_page(' in source
+    assert 'await api.move_component(record["id"], component["id"], direction)' in source
+    assert 'first_position = await api.component_count(record["id"]) + 1' in source
+    assert 'component_total = await api.component_count(record["id"])' in source
+    assert 'preview_page = {"limit": 50, "offset": 0, "total": 0}' in source
+
+
 def test_pdf_preview_is_isolated_from_the_arabic_ui_direction():
     assert 'ui.element("canvas").props(f"id={canvas_id} dir=ltr")' in APP_SOURCE
     viewer_source = (
@@ -139,6 +146,18 @@ def test_pdf_preview_is_isolated_from_the_arabic_ui_direction():
     assert "canvas.dir = 'ltr';" in viewer_source
     assert "context.direction = 'ltr';" in viewer_source
     assert "page.render({canvasContext: context" in viewer_source
+
+
+def test_pdf_print_does_not_wait_for_animation_frames_in_the_background_viewer():
+    viewer_source = (
+        Path(__file__).parents[1] / "static" / "pdfjs" / "erms-viewer.mjs"
+    ).read_text(encoding="utf-8")
+    print_source = viewer_source.split("async function printDocument(", 1)[1].split(
+        "window.ermsPdfViewer =", 1
+    )[0]
+    # PDF.js defaults to display intent, which schedules rendering using the
+    # opener's requestAnimationFrame. A focused print tab can suspend it.
+    assert "viewport, intent: 'print'" in print_source
 
 
 @pytest.mark.parametrize("extension", ("md", "msg", "eml", "html", "txt", "xml"))
@@ -179,9 +198,17 @@ def test_identity_administration_lists_use_one_column_governance_cards():
     assert 'select_role_details(item["id"])' in APP_SOURCE
     assert 'select_organization_unit_details(item["id"])' in APP_SOURCE
     assert 'show_memberships(item, for_user=user_view)' in APP_SOURCE
-    assert 'else await api.search_request(' in APP_SOURCE
-    assert 'include_system=True if spec.key == "roles" else None' in APP_SOURCE
-    assert '"limit": int(page["limit"]), "offset": int(page["offset"])' in APP_SOURCE
+    assert 'else await api.search_request(' in COLLECTION_SOURCE
+    assert 'include_system=True if spec.key == "roles" else None' in COLLECTION_SOURCE
+    assert '"limit": int(page["limit"]), "offset": int(page["offset"])' in COLLECTION_SOURCE
+
+
+def test_identity_card_headers_use_direction_aware_native_grid():
+    header = APP_SOURCE.split('def render_governance_cards', 1)[1].split('facts_by_resource =', 1)[0]
+    assert 'ui.grid(columns="auto minmax(0, 1fr) auto")' in header
+    assert 'governance-card-header w-full items-start gap-3' in header
+    assert 'with ui.row().classes("w-full items-start no-wrap gap-3")' not in header
+    assert header.index('governance-card-icon') < header.index('card_value(row, "name")')
 
 
 def test_governance_cards_display_and_sort_localized_entity_metadata():
@@ -189,7 +216,7 @@ def test_governance_cards_display_and_sort_localized_entity_metadata():
     assert '(row.get("localized") or {}).get(field) or row.get(field)' in APP_SOURCE
     assert 'ui.label(card_value(row, "name") or "Unnamed")' in APP_SOURCE
     assert 'ui.label(card_value(row, "description") or "No description provided")' in APP_SOURCE
-    assert 'sort=card_sort.value' in APP_SOURCE
+    assert 'sort=card_sort.value' in COLLECTION_SOURCE
     assert '(spec.key == "users" and fact_index == 2)' in APP_SOURCE
     assert '(spec.key == "profiles" and fact_index == 3)' in APP_SOURCE
     assert '(spec.key == "org-units" and fact_index in {2, 3})' in APP_SOURCE
@@ -207,14 +234,19 @@ def test_dashboard_overview_uses_compact_holdings_first_layout():
     assert '"dashboard-overview-card-heading w-full items-center no-wrap gap-3"' in APP_SOURCE
 
 
-def test_classification_tree_rtl_grid_does_not_double_mirror_expanders():
-    rtl_tree = APP_SOURCE.split('html[dir="rtl"] .classification-tree-row {', 1)[1].split('}', 1)[0]
-    assert 'grid-template-areas: "expander icon content badge"' in rtl_tree
-    assert '"badge content icon expander"' not in rtl_tree
-    assert 'html[dir="rtl"] .classification-tree-content { direction: rtl; text-align: right; }' in APP_SOURCE
-    assert 'return "chevron_left" if current_direction["value"] == "rtl" else "chevron_right"' in APP_SOURCE
-    assert 'current_direction["value"] = normalized' in APP_SOURCE
-    assert 'icon=tree_expander_icon(item["id"] in workspace["expanded"])' in APP_SOURCE
+def test_classification_tree_uses_logical_indentation_and_direction_aware_expanders():
+    assert 'padding-inline-start:' in WORKSPACE_SOURCE
+    assert '"chevron_left" if direction() == "rtl" else "chevron_right"' in WORKSPACE_SOURCE
+    assert 'aria-expanded=' in WORKSPACE_SOURCE
+    assert 'flex-row-reverse' not in WORKSPACE_SOURCE
+
+
+def test_classification_icons_point_toward_rtl_labels():
+    assert 'html[dir="rtl"] .classification-directional-icon .q-icon' in APP_SOURCE
+    assert 'transform: scaleX(-1)' in APP_SOURCE
+    assert 'if icon in {"label", "schema", "account_tree"}:' in WORKSPACE_SOURCE
+    assert 'button.classes("classification-directional-icon")' in WORKSPACE_SOURCE
+    assert 'classes("classification-directional-icon")' in WORKSPACE_SOURCE
 
 
 def test_aggregation_browser_tree_keeps_expanders_at_rtl_inline_start():
@@ -226,22 +258,13 @@ def test_aggregation_browser_tree_keeps_expanders_at_rtl_inline_start():
     assert 'py-2 pe-2 hover:bg-blue-50 cursor-pointer' in APP_SOURCE
 
 
-def test_classification_scheme_master_detail_uses_logical_rtl_order():
-    assert '.classification-scheme-selector-panel { border-inline-end:' in APP_SOURCE
-    assert 'html[dir="rtl"] .classification-scheme-master-detail' in APP_SOURCE
-    assert 'direction: rtl; flex-direction: row !important;' in APP_SOURCE
-    assert '"classification-scheme-master-detail w-full h-[420px]' in APP_SOURCE
-    assert '"classification-scheme-selector-panel w-[42%]' in APP_SOURCE
-    assert 'html[dir="rtl"] .classification-scheme-filter-sort' in APP_SOURCE
-    assert '"classification-scheme-filter-sort w-full items-center gap-2 no-wrap"' in APP_SOURCE
-    assert 'html[dir="rtl"] .classification-scheme-selector-heading' in APP_SOURCE
-    assert 'grid-template-areas: "action heading"' in APP_SOURCE
-    assert 'classification-scheme-selector-heading-action' in APP_SOURCE
-    assert 'html[dir="rtl"] .classification-scheme-list-card-row' in APP_SOURCE
-    assert 'grid-template-areas: "status content icon"' in APP_SOURCE
-    assert 'classification-scheme-list-card-icon' in APP_SOURCE
-    assert 'html[dir="rtl"] .classification-scheme-detail-identity' in APP_SOURCE
-    assert 'grid-template-areas: "content icon"' in APP_SOURCE
+def test_classification_workspace_has_exclusive_tree_and_detail_pages():
+    assert 'browser_host.set_visibility(False)' in WORKSPACE_SOURCE
+    assert 'detail_host.set_visibility(False)' in WORKSPACE_SOURCE
+    assert 'register_page("classification-scheme-details", fresh)' in WORKSPACE_SOURCE
+    assert 'register_page("classification-details", selected)' in WORKSPACE_SOURCE
+    assert 'classification-scheme-master-detail' not in WORKSPACE_SOURCE
+    assert 'open_in_new' not in WORKSPACE_SOURCE
 
 
 def test_classification_detail_rows_use_single_logical_rtl_order():
@@ -261,7 +284,8 @@ def test_classification_detail_rows_use_single_logical_rtl_order():
 
 def test_dashboard_uses_compact_favourites_and_recent_record_streams():
     assert APP_SOURCE.count("await api.dashboard_summary(") == 1
-    assert "recent_limit=50, recent_since=recent_since" in APP_SOURCE
+    assert "await api.dashboard_summary(recent_limit=50)" in APP_SOURCE
+    assert 'summary["application_configuration"]' in APP_SOURCE
     assert '"dashboard-personal-columns mt-2"' in APP_SOURCE
     assert 'ui.label("Favourites")' in APP_SOURCE
     assert 'ui.label("Recent records activity")' in APP_SOURCE
@@ -276,12 +300,12 @@ def test_dashboard_uses_compact_favourites_and_recent_record_streams():
 
 
 def test_records_and_aggregations_landing_use_dashboard_personal_panel_treatment():
-    raw_source = inspect.getsource(index)
-    source = with_english_messages(raw_source)
+    raw_source = inspect.getsource(personal_resource_views)
+    source = APP_SOURCE + PERSONAL_SOURCE + PERSONAL_VIEWS_SOURCE
     assert 'def render_resource_personal_sections(' in source
     personal = raw_source[
         raw_source.index('def render_resource_personal_sections('):
-        raw_source.index('async def show_profile_privilege_editor')
+        len(raw_source)
     ]
     assert 'localized_singular = ' in personal
     assert 'localized_plural = ' in personal
@@ -295,11 +319,10 @@ def test_records_and_aggregations_landing_use_dashboard_personal_panel_treatment
     assert '"dashboard-personal-columns w-full px-5 pt-5 pb-5"' in source
     assert source.count('"dashboard-personal-item"') >= 4
     assert 'f"dashboard-activity-badge {activity_class}"' in source
-    assert 'activity = await api.recent_resource_activity(spec.key, limit=50, since=since)' in source
-    assert 'decorated = await decorate_for_spec(spec, activity)' in source
-    assert 'api.recent_resource_activity(spec.key, limit=50, since=since)' in source
+    assert 'activity = await api.recent_resource_activity(spec.key, limit=50)' in source
+    assert 'api.recent_resource_activity(spec.key, limit=50)' in source
     assert '"CONTENT_VIEWED": ("Viewed", "visibility", "dashboard-activity-viewed")' in source
-    assert 'state["recent_activity"]' in source
+    assert 'personal.recent_activity' in PERSONAL_SOURCE
     assert 'spec.key in {"aggregations", "records"}' in source
     assert 'render_resource_personal_sections(spec)' in source
     assert 'ui.label("Your recent records activity")' not in APP_SOURCE
@@ -307,10 +330,10 @@ def test_records_and_aggregations_landing_use_dashboard_personal_panel_treatment
 
 def test_personal_view_all_dialogs_use_dedicated_scroll_container():
     assert ".dashboard-personal-dialog-list" in APP_SOURCE
-    assert APP_SOURCE.count("dashboard-personal-dialog-list") >= 6
-    assert APP_SOURCE.count("ui.scroll_area()") >= 6
-    assert APP_SOURCE.count('.props("visible")') >= 5
-    assert APP_SOURCE.count("height:min(65vh,") >= 5
+    assert (APP_SOURCE + PERSONAL_VIEWS_SOURCE + inspect.getsource(hold_details)).count("dashboard-personal-dialog-list") >= 6
+    assert (APP_SOURCE + PERSONAL_VIEWS_SOURCE + inspect.getsource(hold_details)).count("ui.scroll_area()") >= 6
+    assert (APP_SOURCE + PERSONAL_VIEWS_SOURCE + inspect.getsource(hold_details)).count('.props("visible")') >= 5
+    assert (APP_SOURCE + PERSONAL_VIEWS_SOURCE + inspect.getsource(hold_details)).count("height:min(65vh,") >= 5
     assert "dashboard-personal-panel w-full max-h-[65vh] overflow-y-auto" not in APP_SOURCE
 
 
@@ -320,20 +343,20 @@ def test_personal_dialog_list_height_is_compact_and_capped():
     assert personal_dialog_list_height(100) == 520
 
 
-def test_classification_workspace_tree_and_summary_are_taller():
-    assert '"w-full h-[870px] min-h-0 gap-4 items-stretch"' in APP_SOURCE
-    assert '"w-full h-[820px] min-h-0 gap-4 items-stretch"' not in APP_SOURCE
+def test_classification_workspace_uses_available_height_without_fixed_panels():
+    assert 'h-[870px]' not in WORKSPACE_SOURCE
+    assert 'h-[420px]' not in WORKSPACE_SOURCE
+    assert 'browser_host = ui.column().classes("classification-workspace w-full gap-3 p-3")' in WORKSPACE_SOURCE
 
 
-def test_classification_workspace_tree_is_always_sorted_by_code_ascending():
-    workspace = APP_SOURCE[APP_SOURCE.index("async def select_classification_workspace"):]
-    load_children = workspace[
-        workspace.index("async def load_children"):
-        workspace.index("async def load_classification_path")
-    ]
-    assert "rows = sorted(" in load_children
-    assert 'str(row.get("code") or "")' in load_children
-    assert 'int(row["id"])' in load_children
+def test_classification_workspace_uses_server_order_and_branch_pagination():
+    load_children = WORKSPACE_SOURCE.split("async def load_children", 1)[1].split("async def load_classification_path", 1)[0]
+    assert 'limit=PAGE_SIZE + 1, offset=len(existing)' in load_children
+    assert '"roots_only": True' in load_children
+    assert '"parent_classification_id": parent_id' in load_children
+    # The list endpoint orders the entire sibling set before applying pagination.
+    api_source = (Path(__file__).parents[3] / "backend/services/api/classification_management.py").read_text()
+    assert 'ORDER BY c.code COLLATE "C" ASC, c.id ASC LIMIT %s OFFSET %s' in api_source
 
 
 def test_dashboard_overview_shows_medium_breakdowns_and_admin_hold_total():
@@ -353,7 +376,7 @@ def test_dashboard_overview_shows_medium_breakdowns_and_admin_hold_total():
     assert '(("vital", "emergency"), ("held", "gavel"))' in APP_SOURCE
     assert 'ui.label("|").classes("dashboard-overview-separator")' in APP_SOURCE
     assert '"dashboard-overview-signals"' not in APP_SOURCE
-    assert '"dashboard.metric.components",count=component_metrics["component_count"]' in inspect.getsource(index)
+    assert '"dashboard.metric.components",count=component_metrics["component_count"]' in (((inspect.getsource(index) + inspect.getsource(dashboard)) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources()))
     assert 'ui.icon("storage", size="13px")' in APP_SOURCE
     assert 'format_file_size(component_metrics["storage_size_in_bytes"])' in APP_SOURCE
 
@@ -409,7 +432,7 @@ def test_dashboard_ends_with_top_five_digital_storage_chart_and_other_summary():
     assert '"dashboard-storage-chart"' in APP_SOURCE
     assert 'top_storage_units = ranked_storage_units[:5]' in APP_SOURCE
     assert 'other_storage_units = ranked_storage_units[5:]' in APP_SOURCE
-    assert '"dashboard.storage.other_units",count=len(other_storage_units)' in inspect.getsource(index)
+    assert '"dashboard.storage.other_units",count=len(other_storage_units)' in (((inspect.getsource(index) + inspect.getsource(dashboard)) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources()))
     assert 'ui.label("Combined remainder")' in APP_SOURCE
     assert 'int(item["storage_size_in_bytes"])' in APP_SOURCE
     assert APP_SOURCE.index(
@@ -486,7 +509,8 @@ def test_relationship_columns_replace_foreign_keys_with_business_labels():
     }
 
 
-def test_timestamp_formatter_is_human_readable():
+def test_timestamp_formatter_is_human_readable(monkeypatch):
+    monkeypatch.setattr("frontend.webui.app.current_locale_context",lambda:("en","Asia/Dubai"))
     formatted = format_timestamp("2026-09-15T08:05:00+00:00")
     assert "2026" in formatted
     assert "T08:05:00" not in formatted
@@ -511,49 +535,42 @@ def test_medium_label_uses_accessible_business_terms():
 def test_dashboard_recent_configuration(monkeypatch):
     monkeypatch.setenv("DASHBOARD_RECENT_ITEM_LIMIT", "7")
     monkeypatch.setenv("DASHBOARD_RECENT_DAYS", "14")
-    assert dashboard_recent_item_limit() == 7
-    assert dashboard_recent_days() == 14
+    assert dashboard_recent_item_limit({"DASHBOARD_RECENT_ITEM_LIMIT":7}) == 7
+    assert dashboard_recent_days({"DASHBOARD_RECENT_DAYS":14}) == 14
 
 
-def test_dashboard_favourite_configuration_and_preview(monkeypatch):
+def test_database_display_name_uses_language_override_and_default_fallback(monkeypatch):
+    monkeypatch.setenv("DATABASE_DISPLAY_NAME", "Production Database")
+    monkeypatch.setenv("DATABASE_DISPLAY_NAME_AR", "قاعدة بيانات الإنتاج")
+    monkeypatch.setenv("DATABASE_DISPLAY_NAME_FR", "Base de données de production")
+    assert database_display_name("en") == "Production Database"
+    assert database_display_name("ar-AE") == "قاعدة بيانات الإنتاج"
+    assert database_display_name("fr-FR") == "Base de données de production"
+    monkeypatch.setenv("DATABASE_DISPLAY_NAME_AR", "  ")
+    assert database_display_name("ar") == "Production Database"
+
+
+def test_database_display_name_is_required(monkeypatch):
+    monkeypatch.delenv("DATABASE_DISPLAY_NAME", raising=False)
+    with pytest.raises(RuntimeError, match="DATABASE_DISPLAY_NAME is required"):
+        database_display_name("en")
+
+
+def test_dashboard_favourite_configuration(monkeypatch):
     monkeypatch.setenv("DASHBOARD_FAVOURITE_ITEM_LIMIT", "2")
-    assert dashboard_favourite_item_limit() == 2
-    items = [{"id": 1}, {"id": 2}, {"id": 3}]
-    assert favourite_preview(items, 2) == (items[:2], True)
-    assert favourite_preview(items[:2], 2) == (items[:2], False)
+    assert dashboard_favourite_item_limit({"DASHBOARD_FAVOURITE_ITEM_LIMIT":2}) == 2
 
 
 def test_dashboard_favourite_configuration_defaults_to_five(monkeypatch):
     monkeypatch.delenv("DASHBOARD_FAVOURITE_ITEM_LIMIT", raising=False)
-    assert dashboard_favourite_item_limit() == 5
+    assert dashboard_favourite_item_limit({"DASHBOARD_FAVOURITE_ITEM_LIMIT":5}) == 5
 
 
 def test_user_details_session_limit_defaults_to_five_and_is_configurable(monkeypatch):
     monkeypatch.delenv("USER_DETAILS_SESSION_LIMIT", raising=False)
-    assert user_details_session_limit() == 5
+    assert user_details_session_limit({"USER_DETAILS_SESSION_LIMIT":5}) == 5
     monkeypatch.setenv("USER_DETAILS_SESSION_LIMIT", "8")
-    assert user_details_session_limit() == 8
-
-
-def test_membership_filters_identity_status_and_overlapping_validity():
-    rows = [
-        {
-            "id": 1, "counterpart_search": "Alya Al-Salman alya@example.test",
-            "counterpart_status": "active", "valid_from": "2026-01-01T00:00:00Z",
-            "valid_until": None,
-        },
-        {
-            "id": 2, "counterpart_search": "Sami Jari sami@example.test",
-            "counterpart_status": "suspended", "valid_from": "2025-01-01T00:00:00Z",
-            "valid_until": "2025-12-31T23:59:59Z",
-        },
-    ]
-    assert [row["id"] for row in filter_membership_rows(rows, query="alya")] == [1]
-    assert [row["id"] for row in filter_membership_rows(rows, query="SAMI@EXAMPLE")] == [2]
-    assert [row["id"] for row in filter_membership_rows(rows, status="suspended")] == [2]
-    assert [row["id"] for row in filter_membership_rows(
-        rows, valid_from="2026-06-01", valid_until="2026-06-30",
-    )] == [1]
+    assert user_details_session_limit({"USER_DETAILS_SESSION_LIMIT":8}) == 8
 
 
 def test_user_avatar_is_stable_and_uses_best_effort_initials():
@@ -569,7 +586,7 @@ def test_user_avatar_is_stable_and_uses_best_effort_initials():
 
 def test_classification_recent_selection_configuration(monkeypatch):
     monkeypatch.setenv("CLASSIFICATION_RECENT_SELECTION_LIMIT", "6")
-    assert classification_recent_selection_limit() == 6
+    assert classification_recent_selection_limit({"CLASSIFICATION_RECENT_SELECTION_LIMIT":6}) == 6
 
 
 def test_classification_workspace_search_includes_keywords():
@@ -590,38 +607,20 @@ def test_contextual_form_help_explains_disabled_controls():
     assert RECORD_UPLOAD_WAIT_MESSAGE == "Please wait until all files have finished uploading."
 
 
-def test_aggregation_summary_has_command_centre_layout():
-    assert "flex-1" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
-    assert "aggregation-command-summary" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
-    assert "min-w-[520px]" in AGGREGATION_SUMMARY_LAYOUT_CLASSES
+def test_resource_details_reuse_the_shared_header_and_keep_back_direction():
+    source = aggregation_sources() + record_sources()
+    assert source.count("render_resource_detail_header(") == 2
+    assert source.count('" icon-right=arrow_forward" if current_direction["value"] == "rtl"') >= 2
 
 
-def test_record_detail_header_matches_aggregation_title_and_action_alignment():
-    assert "items-center" in RECORD_DETAIL_HEADER_CLASSES
-    assert "no-wrap" in RECORD_DETAIL_HEADER_CLASSES
-    assert "flex-wrap" not in RECORD_DETAIL_HEADER_CLASSES
-    assert "grow" in RECORD_DETAIL_TITLE_CLASSES
-    assert "min-w-0" in RECORD_DETAIL_TITLE_CLASSES
-    source = with_english_messages(inspect.getsource(index))
-    assert 'ui.label(record["record_number"]).classes("text-xs text-primary font-semibold")' in source
-    assert 'ui.label(record["title"]).classes("text-lg font-semibold break-words")' in source
-
-
-def test_record_details_uses_the_approved_right_hand_control_column():
-    source = with_english_messages(inspect.getsource(index))
-    assert '"record-command-layout w-full"' in source
-    assert '"record-command-controls"' in source
-    assert '"detail-surface record-command-overview' in source
-    assert 'ui.label("Hold controls").classes("aggregation-panel-heading w-full")' in source
-    assert 'ui.label("Record actions").classes("aggregation-panel-heading w-full")' in source
-    assert 'ui.label("Metadata and review").classes("record-action-group-label")' in source
-    assert 'ui.label("Security, access and audit").classes("record-action-group-label")' in source
-    assert 'ui.label("Lifecycle").classes("record-action-group-label")' in source
-    assert '"Remove direct holds"' in source
+def test_record_details_keeps_components_outside_the_details_dialog():
+    source = record_sources()
+    assert '{"metadata": load_metadata, "relationships": load_relationships, "holds": load_holds}' in source
+    assert 'show_components(record, container=components_host' in source
 
 
 def test_record_detail_long_values_are_aligned_and_bounded():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     component_source = inspect.getsource(render_component_cards)
     assert ".detail-linked-entity .q-btn__content" in source
     assert "justify-content: flex-start; text-align: start; white-space: normal" in source
@@ -636,7 +635,7 @@ def test_record_detail_long_values_are_aligned_and_bounded():
 
 
 def test_identity_details_use_grouped_command_panels():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert source.count('"identity-command-layout w-full"') == 3
     assert 'ui.label("Organization unit actions")' in source
     assert 'ui.label("Role actions")' in source
@@ -651,7 +650,8 @@ def test_identity_details_use_grouped_command_panels():
     assert 'assignment_results = ui.element("div").classes(' in source
     assert 'assignment_page_size = 5' in source
     assert 'def render_assignment_cards()' in source
-    assert 'page_rows = rows[offset:offset + assignment_page_size]' in source
+    assert 'await api.user_roles(user_id, limit=assignment_page_size, offset=offset, **criteria)' in source
+    assert 'for item in assignment_state["items"]:' in source
     assert 'assignment_previous = ui.button(' in source
     assert 'assignment_next = ui.button(' in source
     assert '"governance-list-facts user-role-assignment-facts"' in source
@@ -666,9 +666,9 @@ def test_identity_details_use_grouped_command_panels():
 
 
 def test_user_details_localize_controlled_values_and_assignment_facts():
-    source = inspect.getsource(index)
+    source = ((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources()))
     assert '(person.get("localized") or {}).get("name") or person["name"]' in source
-    assert 'roles = [item.get("counterpart") or {} for item in assignments]' in source
+    assert 'role = item.get("counterpart") or {}' in source
     assert 'title=localized_account_type(person["account_type"])' in source
     assert 'ui.badge(localized_account_type(person["account_type"])' in source
     assert 'localized_lifecycle_value(person["status"])' in source
@@ -682,18 +682,36 @@ def test_user_details_localize_controlled_values_and_assignment_facts():
 
 
 def test_saved_search_audiences_and_memberships_use_bounded_enriched_pages():
-    source = inspect.getsource(index)
+    source = (((inspect.getsource(index) + search_sources()) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources()))
     assert 'def bind_remote_saved_audience_select(' in source
     assert 'if len(term) < 2:' in source
-    assert 'api.saved_search_audience_options(\n                    audience_kind, query=term, limit=25, offset=0,' in source
+    assert 'api.saved_search_audience_options(\n                    audience_kind, query=term, limit=25, offset=offset,' in source
     assert 'await api.saved_search_audience_options()' not in source
-    assert 'api.user_roles(\n                        entity["id"], limit=assignment_page["limit"]' in source
+    assert 'reader = api.user_roles if for_user else api.role_users' in source
+    assert 'await reader(entity["id"], offset=offset, **params)' in source
     assert 'counterpart = assignment.get("counterpart") or {}' in source
     assert 'counterpart_rows = await asyncio.gather' not in source
 
 
+def test_saved_search_audience_controls_accept_typed_remote_queries():
+    import ast
+
+    tree = ast.parse((((inspect.getsource(index) + search_sources()) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
+    save_search = next(node for node in ast.walk(tree)
+                       if isinstance(node, ast.AsyncFunctionDef) and node.name == "save_search")
+    controls = [node for node in ast.walk(save_search)
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "select"
+                and any(keyword.arg == "multiple" and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value is True for keyword in node.keywords)]
+    assert len(controls) == 2
+    for control in controls:
+        assert any(keyword.arg == "with_input" and isinstance(keyword.value, ast.Constant)
+                   and keyword.value.value is True for keyword in control.keywords)
+
+
 def test_org_unit_details_show_dedicated_holdings_summary_and_card_style_labels():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert 'holdings_metrics = unit["holdings_metrics"]' in source
     assert 'ui.label("Holdings summary")' in source
     assert '"Visible holdings owned by this organization unit"' in source
@@ -708,7 +726,7 @@ def test_org_unit_details_show_dedicated_holdings_summary_and_card_style_labels(
 
 
 def test_org_unit_parent_values_navigate_to_parent_details():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert 'spec.key == "org-units"' in source
     assert 'and fact_index == 0' in source
     assert 'parent_id=row["parent_org_unit_id"]' in source
@@ -719,7 +737,7 @@ def test_org_unit_parent_values_navigate_to_parent_details():
 
 
 def test_org_unit_details_show_clickable_vertical_lineage_before_holdings():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     lineage_index = source.index('ui.label("Organizational lineage")')
     holdings_index = source.index('ui.label("Holdings summary")')
     assert lineage_index < holdings_index
@@ -737,14 +755,14 @@ def test_org_unit_details_show_clickable_vertical_lineage_before_holdings():
 
 
 def test_role_and_user_metadata_field_names_use_card_style_labels():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert source.count('ui.label(label).classes("detail-field-label")') >= 2
     for label in ("Email address", "Account type", "Status", "External ID", "Created", "User ID"):
         assert f'ui.label("{label}").classes("detail-field-label")' in source
 
 
 def test_role_details_relationship_values_navigate_to_details_pages():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert 'role.get("org_unit_code"), role.get("org_unit_name")' in source
     assert 'role.get("supervisor_role_code"), role.get("supervisor_role_name")' in source
     assert 'select_organization_unit_details(' in source
@@ -755,7 +773,7 @@ def test_role_details_relationship_values_navigate_to_details_pages():
 
 
 def test_role_details_group_profile_privileges_with_names_and_codes():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert 'profile_privileges = role.get("profile_privileges") or []' in source
     assert 'privileges_by_category: dict[str, list[dict[str, Any]]]' in source
     assert 'ui.label("Privileges inherited from profile")' in source
@@ -767,7 +785,7 @@ def test_role_details_group_profile_privileges_with_names_and_codes():
 
 
 def test_user_details_use_fixed_blue_avatar_and_one_column_session_cards():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert 'render_user_avatar(person, size="64px")' in source
     assert 'session_results = ui.element("div").classes("login-session-card-grid w-full")' in source
     assert 'def render_user_session_card(row: dict[str, Any])' in source
@@ -776,7 +794,7 @@ def test_user_details_use_fixed_blue_avatar_and_one_column_session_cards():
 
 
 def test_governance_catalogues_use_one_column_cards():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + organization_sources() + record_sources() + inspect.getsource(holds) + inspect.getsource(hold_details)))
     assert 'if spec.key in {"security-levels", "profiles", "users", "roles", "org-units"}:' in source
     assert '"governance-card-list w-full px-5"' in source
     assert '"governance-list-card shadow-none"' in source
@@ -795,7 +813,7 @@ def test_governance_catalogues_use_one_column_cards():
 
 
 def test_hold_held_items_use_one_column_cards():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + organization_sources() + record_sources() + inspect.getsource(holds) + inspect.getsource(hold_details)))
     assert 'ui.label("No held items match these filters.")' in source
     assert 'update_held_item_selection(row: dict[str, Any], selected: bool)' in source
     assert '.tooltip("Remove from this hold")' in source
@@ -812,7 +830,6 @@ def test_scalar_display_columns_are_not_rendered_as_relationship_links():
         "org_unit_display",
         "parent_org_unit_display",
         "profile_display",
-        "scheme_display",
     }
     scalar_fields = {
         "medium_display", "vital_display", "review_display", "location_display",
@@ -846,10 +863,7 @@ def test_governed_collection_rows_open_details_instead_of_direct_editors():
 
 
 def test_governed_metadata_editor_fails_closed_without_modify_capability():
-    editor = APP_SOURCE[
-        APP_SOURCE.index("async def open_editor("):
-        APP_SOURCE.index("async def show_memberships(")
-    ]
+    editor = with_english_messages(inspect.getsource(entity_editor))
     capability_check = editor.index(
         'editor_capabilities = await api.resource_capabilities('
     )
@@ -862,16 +876,13 @@ def test_governed_metadata_editor_fails_closed_without_modify_capability():
 
 
 def test_entity_translation_editor_loads_selected_language_automatically():
-    editor = APP_SOURCE[
-        APP_SOURCE.index("async def open_editor("):
-        APP_SOURCE.index("async def show_memberships(")
-    ]
-    assert 'language_control.on_value_change(' in editor
-    assert 'background_tasks.create(load_entity_translation())' in editor
-    assert 'if language_control.value:' in editor
-    assert 'await load_entity_translation()' in editor
-    assert 'icon="refresh"' in editor
-    assert 'icon="download"' not in editor
+    editor = with_english_messages(inspect.getsource(entity_editor))
+    assert 'language_control.on_value_change(' in TRANSLATION_SOURCE
+    assert 'background_tasks.create(load_entity_translation())' in TRANSLATION_SOURCE
+    assert 'if language_control.value:' in TRANSLATION_SOURCE
+    assert 'await load_entity_translation()' in TRANSLATION_SOURCE
+    assert 'icon="refresh"' in TRANSLATION_SOURCE
+    assert 'icon="download"' not in TRANSLATION_SOURCE
     assert '''multilingual_fields = {
                     "classification-schemes": ("title", "description"),
                     "classifications": ("title", "description"),
@@ -883,23 +894,20 @@ def test_entity_translation_editor_loads_selected_language_automatically():
                 }''' in editor
     multilingual_configuration = editor[
         editor.index("multilingual_fields = {"):
-        editor.index("if not creating and spec.key in multilingual_fields:")
+        editor.index("if not creating and spec.key in multilingual_fields and translation_edit_allowed:")
     ]
     assert '"aggregations":' not in multilingual_configuration
     assert '"records":' not in multilingual_configuration
 
 
 def test_entity_translations_are_saved_by_the_main_entity_action_for_all_seven_entities():
-    editor = APP_SOURCE[
-        APP_SOURCE.index("async def open_editor("):
-        APP_SOURCE.index("async def show_memberships(")
-    ]
+    editor = with_english_messages(inspect.getsource(entity_editor))
     for entity in (
         "classification-schemes", "classifications", "users", "roles",
         "org-units", "security-levels", "profiles",
     ):
         assert f'"{entity}":' in editor
-    assert "def pending_entity_translation()" in editor
+    assert "def pending_entity_translation()" in TRANSLATION_SOURCE
     assert "prepare_entity_translation_update()" in editor
     assert "saved_translation = await api.update_entity_translation(" in editor
     assert 'saved["version"], reason' in editor
@@ -907,25 +915,23 @@ def test_entity_translations_are_saved_by_the_main_entity_action_for_all_seven_e
 
 
 def test_profile_uses_one_reason_for_canonical_and_translation_changes():
-    editor = APP_SOURCE[
-        APP_SOURCE.index("async def open_editor("):
-        APP_SOURCE.index("async def show_memberships(")
-    ]
-    assert 'None if spec.key == "profiles" else ui.input(' in editor
-    assert 'profile_change_reason\n                                if spec.key == "profiles" else translation_reason' in editor
+    editor = with_english_messages(inspect.getsource(entity_editor))
+    assert 'None if uses_external_reason else ui.input(' in TRANSLATION_SOURCE
+    assert 'uses_external_reason=spec.key == "profiles"' in editor
+    assert 'get_external_reason() if uses_external_reason else translation_reason' in ' '.join(TRANSLATION_SOURCE.split())
+    assert 'get_external_reason=lambda: profile_change_reason' in editor
     assert 'if not creating and spec.key == "profiles":' in editor
     assert 'if not creating and spec.key == "profiles" and not translation_only:' not in editor
 
 
 def test_builtin_role_editor_is_translation_only():
-    editor = APP_SOURCE[
-        APP_SOURCE.index("async def open_editor("):
-        APP_SOURCE.index("async def show_memberships(")
-    ]
+    editor = with_english_messages(inspect.getsource(entity_editor))
     assert 'translation_only = bool(' in editor
-    assert '(spec.key == "roles" and row.get("is_system"))' in editor
+    assert 'protected_organization_role(spec.key, row)' in editor
+    assert 'return resource == "roles" and row.get("is_system")' in organization_sources()
     assert 'spec.key == "profiles"' in editor
-    assert 'row.get("code") == "TEXT_INDEXER_SERVICE"' in editor
+    assert 'profile_translation_only(spec.key, row)' in editor
+    assert 'row.get("code") == "TEXT_INDEXER_SERVICE"' in (Path(__file__).parents[1] / 'security_administration.py').read_text()
     assert 'if translation_only:\n                        controls[field.name].disable()' in editor
     translation_only_save = editor[
         editor.index("if translation_only:", editor.index("async def save()")):
@@ -939,26 +945,21 @@ def test_builtin_role_editor_is_translation_only():
 
 
 def test_detail_pages_use_light_blue_metadata_and_retention_visual_system():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert 'primary="#268bd2"' in source
     assert ".detail-field-label" in source
     assert ".retention-card" in source
-    assert 'entity_metadata_label("Current retention (years)")' in source
-    assert 'f"{effective_rule[\\"current_period_years\\"]} years"' in source
-    assert 'localized_disposition_value(final_disposition)' in source
-    assert 'localized_disposition_value(retention["final_disposition"])' in source
-    assert '"aggregation-browser-retention-facts"' in source
-    assert '"aggregation-browser-retention-fact gap-2"' in source
-    assert '.aggregation-browser-retention-facts {' in source
+    assert "render_retention_stages(" in source
+    assert 'count=rule["current_period_years"]' in TIMELINE_SOURCE
+    assert 'disposition_label(rule["final_disposition"])' in TIMELINE_SOURCE
     assert 'grid-template-columns: repeat(3, minmax(0, 1fr))' in source
-    assert 'entity_metadata_label("Intermediate retention (years)")' in source
-    assert 'entity_metadata_label("Final disposition")' in source
     assert 'ui.label(str(len(children))).classes("text-2xl font-bold text-primary")' not in source
-    assert '"retention-card aggregation-retention-compact shadow-none p-4 gap-3"' in source
+    assert 'render_retention_stages(effective_rule, localized_disposition_value, compact=True)' in source
+    assert '"resource-retention-details w-full min-w-0 gap-3 px-3 pb-3"' in source
 
 
 def test_application_shell_is_flat_and_uses_one_background():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())) + inspect.getsource(application_shell) + inspect.getsource(login_sessions) + inspect.getsource(security_operations))
     assert "with ui.header().classes" in source
     assert "ui.header(elevated=True)" not in source
     assert "background: var(--erms-bg); color: var(--erms-ink);" in source
@@ -966,13 +967,15 @@ def test_application_shell_is_flat_and_uses_one_background():
     assert 'ui.image("/static/brand/wathiq-mark.svg?v=2")' in source
     assert 'ui.label("wathiq").classes("erms-brand-name")' in source
     assert 'ui.label("ERMS")' not in source
-    assert "family=Righteous&display=swap" in source
+    assert 'href="/static/fonts/righteous/righteous.css?v=1"' in source
+    assert "family=Righteous" not in source
     assert "font-family: Righteous, Inter" in source
-    assert "family=Changa:wght@400;500;600;700" in source
+    assert 'href="/static/fonts/changa/changa.css?v=1"' in source
+    assert "family=Changa" not in source
     assert 'font-family: Changa, Tahoma, Arial, "Segoe UI", sans-serif' in source
     assert 'html[dir="rtl"] .erms-brand {' in source
     assert 'direction: rtl; flex-direction: row !important;' in source
-    assert 'html[dir="rtl"] .erms-brand-name {' in source
+    assert 'html[dir="rtl"] .erms-brand-name,' in source
     assert 'html[dir="rtl"] .erms-page-title-row {' in source
     assert '"erms-page-title-row items-center no-wrap gap-2"' in source
     assert "Noto Sans Arabic" not in source
@@ -994,7 +997,7 @@ def test_application_shell_is_flat_and_uses_one_background():
     assert 'await api.login_sessions_page(' in source
     assert ".login-session-action-button" in source
     assert "<q-btn-dropdown" not in source
-    assert 'ui.row().classes("w-full items-center no-wrap gap-4")' in source
+    assert 'ui.row().classes("w-full items-center no-wrap gap-4", remove="row")' in source
     assert 'ui.row().classes("items-center no-wrap gap-2 flex-none")' in source
     assert 'ui.label("Search results").classes("text-lg font-semibold")' in source
     assert '"Filter displayed results"' in source
@@ -1003,39 +1006,63 @@ def test_application_shell_is_flat_and_uses_one_background():
     assert 'not key.endswith("_display") or key in sortable_relationships' in source
 
 
-def test_aggregation_records_use_compact_authorized_expandable_rows():
-    source = with_english_messages(inspect.getsource(index))
-    assert 'load_record_result_context(' in source
-    assert 'record["_components"] = components if record_capabilities.get("list_components") else []' in source
-    assert 'record["_can_preview"] = bool(' in source
-    assert 'record_capabilities.get("view_component")' in source
+def test_aggregation_records_use_compact_rows_with_page_capabilities():
+    source = aggregation_sources()
+    assert 'child_limit, record_limit = 10, 25' in source
+    assert '"include": ["record_capabilities"]' in source
     assert 'render_compact_resource_result(' in source
-    assert 'components=record.get("_components", [])' in source
-    assert 'can_expand_components=bool(record.get("_can_expand_components"))' in source
-    assert '"Search code, name, or parent unit"' in source
-    assert '"Search code, name, or organization unit"' in source
-    assert '"Search name or email"' in source
-    assert '"All account types"' in source
-    assert '"w-full items-center gap-3 px-5 pt-2 pb-1 mb-2"' in source
-    assert ':rows-per-page-options="[10,25,50,100]"' in source
-    assert '"Filter records"' in source
-    assert 'record_page_result = await api.search_request("records", {' in source
-    assert '"limit": 10, "offset": (record_page_number - 1) * 10' in source
-    assert 'contained_record_page = ui.pagination(' in source
-    assert 'state["aggregation_child_return"] = {' in source
-    assert '"expanded_records": sorted(expanded_child_records)' in source
-    assert 'restore_compact_result_anchor(child_return.get("anchor"))' in source
+    assert 'can_expand_components=bool(count)' in source
+    assert 'restore_compact_result_anchor(anchor, fallback_id=records_heading)' in source
 
 
 def test_brand_assets_are_exposed_through_the_frontend_static_route():
     module_source = inspect.getsource(inspect.getmodule(index))
     assert 'app.add_static_files("/static/brand"' in module_source
+    assert 'app.add_static_files("/static/fonts"' in module_source
     assert 'title="wathiq"' in module_source
     assert 'favicon=Path(__file__).with_name("static") / "brand" / "wathiq-mark.svg"' in module_source
 
 
+def test_changa_is_bundled_for_local_browser_delivery():
+    font_dir = Path(__file__).parents[1] / "static" / "fonts" / "changa"
+    stylesheet = (font_dir / "changa.css").read_text(encoding="utf-8")
+
+    assert "fonts.googleapis.com" not in stylesheet
+    assert "fonts.gstatic.com" not in stylesheet
+    assert 'font-weight: 400 700;' in stylesheet
+    for filename in (
+        "changa-arabic.woff2",
+        "changa-latin-ext.woff2",
+        "changa-latin.woff2",
+    ):
+        assert f'url("./{filename}")' in stylesheet
+        assert (font_dir / filename).read_bytes().startswith(b"wOF2")
+    assert "SIL OPEN FONT LICENSE Version 1.1" in (
+        font_dir / "OFL.txt"
+    ).read_text(encoding="utf-8")
+
+
+def test_righteous_is_bundled_for_local_brand_delivery():
+    font_dir = Path(__file__).parents[1] / "static" / "fonts" / "righteous"
+    stylesheet = (font_dir / "righteous.css").read_text(encoding="utf-8")
+
+    assert "fonts.googleapis.com" not in stylesheet
+    assert "fonts.gstatic.com" not in stylesheet
+    assert 'font-family: "Righteous";' in stylesheet
+    assert "font-weight: 400;" in stylesheet
+    for filename in (
+        "righteous-latin-ext.woff2",
+        "righteous-latin.woff2",
+    ):
+        assert f'url("./{filename}")' in stylesheet
+        assert (font_dir / filename).read_bytes().startswith(b"wOF2")
+    assert "SIL OPEN FONT LICENSE Version 1.1" in (
+        font_dir / "OFL.txt"
+    ).read_text(encoding="utf-8")
+
+
 def test_record_detail_aggregation_navigation_uses_click_handler_not_route_link():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert "on_click=open_containing_aggregation" in source
     assert 'ui.label(value.get("name") or "—").classes(' in source
     assert 'ui.label(value["code"]).classes(' in source
@@ -1044,7 +1071,7 @@ def test_record_detail_aggregation_navigation_uses_click_handler_not_route_link(
 
 
 def test_aggregation_detail_classification_is_split_and_navigable():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert "async def open_parent_classification()" in source
     assert 'initial_scheme_id=classification["classification_scheme_id"]' in source
     assert 'initial_classification_id=classification["id"]' in source
@@ -1055,7 +1082,7 @@ def test_aggregation_detail_classification_is_split_and_navigable():
 
 
 def test_child_aggregation_shows_clickable_parent_instead_of_inherited_classification():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert "async def open_parent_aggregation()" in source
     assert 'governing_relationship = (' in source
     assert '"parent_aggregation", "Parent aggregation"' in source
@@ -1067,7 +1094,7 @@ def test_child_aggregation_shows_clickable_parent_instead_of_inherited_classific
 
 
 def test_aggregation_detail_relationship_context_does_not_use_removed_global_cache():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert "aggregation_context_by_id = {" in source
     assert 'aggregation_context_by_id.get(current.get("parent_aggregation_id"))' in source
     assert "aggregation_context_by_id.get(source_id)" in source
@@ -1075,9 +1102,9 @@ def test_aggregation_detail_relationship_context_does_not_use_removed_global_cac
 
 
 def test_detail_page_editors_resolve_api_entity_resources_explicitly():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert 'record, on_saved=refresh_record_view, resource_key="records"' in source
-    assert 'current, on_saved=open_aggregation,\n                                        resource_key="aggregations"' in source
+    assert 'current, on_saved=refresh, resource_key="aggregations"' in source
     assert '"aggregation-details": "aggregations"' in source
     assert '"record-details": "records"' in source
 
@@ -1106,15 +1133,15 @@ def test_navigation_visible_entries_retain_first_and_recent_pages():
 
 
 def test_navigation_drawer_does_not_load_or_render_entity_counts():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())) + inspect.getsource(application_shell) + inspect.getsource(login_sessions) + inspect.getsource(security_operations))
     assert "navigation_badges" not in source
     assert "refresh_navigation_counts" not in source
     assert "active_count" not in source
-    assert "page_state.update(total=int(page.get(\"total\", 0)), active=int(page.get(\"active\", 0)))" in source
+    assert 'page_state.update(offset=offset, total=int(page.get("total", 0)), active=int(page.get("active", 0)))' in source
 
 
 def test_navigation_drawer_collapses_to_clickable_icon_rail():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())) + inspect.getsource(application_shell) + inspect.getsource(login_sessions) + inspect.getsource(security_operations))
     assert '"width=300 mini-width=64 show-if-above"' in source
     assert '"width=300 mini-width=64 show-if-above bordered"' not in source
     assert '"Browse", "lan", navigation_key="organization-browser"' in source
@@ -1135,7 +1162,7 @@ def test_navigation_drawer_collapses_to_clickable_icon_rail():
 
 
 def test_rtl_navigation_mirrors_icon_label_alignment_and_active_edge():
-    source = inspect.getsource(index)
+    source = ((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources()))
     assert 'html[dir="rtl"] .erms-nav-link .q-btn__content {' in source
     assert "direction: rtl; flex-direction: row; justify-content: flex-start;" in source
     assert 'html[dir="rtl"] .erms-nav-link .q-btn__content .block {' in source
@@ -1146,7 +1173,7 @@ def test_rtl_navigation_mirrors_icon_label_alignment_and_active_edge():
 
 
 def test_breadcrumbs_resolve_static_labels_in_the_active_language():
-    source = inspect.getsource(index)
+    source = (((inspect.getsource(index) + inspect.getsource(dashboard)) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources()))
     assert "def localized_breadcrumb_label(entry: dict[str, Any])" in source
     assert '"dashboard": "navigation.item.dashboard"' in source
     assert '"full-text-search": "webui.run_global_search.text.search_results_ecc13a7a"' in source
@@ -1155,7 +1182,9 @@ def test_breadcrumbs_resolve_static_labels_in_the_active_language():
     assert '"org-units": "navigation.item.org_units"' in source
     assert '"translations": "navigation.item.translations"' in source
     assert "message_key = breadcrumb_message_keys.get(page)" in source
-    assert '"label_key": None if dynamic_label else breadcrumb_message_keys.get(page)' in source
+    from frontend.webui.navigation_controller import NavigationController
+    assert 'label_key=lambda page: breadcrumb_message_keys.get(page)' in source
+    assert '"label_key": None if dynamic_label else self._label_key(page)' in inspect.getsource(NavigationController.register_navigation)
     assert "label = localized_breadcrumb_label(entry)" in source
     assert "label if label != entry.get(\"label\")" in source
     assert "erms-breadcrumb-row" in source
@@ -1163,7 +1192,7 @@ def test_breadcrumbs_resolve_static_labels_in_the_active_language():
 
 
 def test_translation_administration_supports_governed_artifact_round_trips():
-    source = inspect.getsource(index)
+    source = inspect.getsource(translation_administration)
     assert 'icon="download"' in source
     assert 'icon="upload_file"' in source
     assert "async def export_artifact_dialog()" in source
@@ -1189,15 +1218,15 @@ def test_translation_administration_supports_governed_artifact_round_trips():
     assert "export_localization_artifact(\n                            target_language" in source
     assert "artifact_language = str(artifact.get(\"language_tag\")" in source
     assert "preview_localization_import(artifact_language, artifact)" in source
-    assert 'state["translation_language"] = selected["language_tag"]' in source
+    assert 'translation_state["translation_language"] = selected["language_tag"]' in source
     assert "await select_translation_administration()" in source
 
 
 def test_translation_administration_preserves_expanded_context_and_scroll_after_edit():
-    source = inspect.getsource(index)
-    assert 'expanded_contexts = set(state.get("translation_expanded_contexts") or [])' in source
+    source = inspect.getsource(translation_administration)
+    assert 'expanded_contexts = set(translation_state.get("translation_expanded_contexts") or [])' in source
     assert 'def set_translation_context_expanded(context_group: str, expanded: bool)' in source
-    assert 'state["translation_expanded_contexts"] = sorted(expanded_contexts)' in source
+    assert 'translation_state["translation_expanded_contexts"] = sorted(expanded_contexts)' in source
     assert 'value=filters_active or group in expanded_contexts' in source
     assert 'on_value_change=lambda event, context=group: set_translation_context_expanded(' in source
     assert 'async def load_messages(reset: bool=False, restore_scroll: float | None = None)' in source
@@ -1206,14 +1235,13 @@ def test_translation_administration_preserves_expanded_context_and_scroll_after_
 
 
 def test_translation_administration_reveals_filtered_matches_and_ignores_stale_requests():
-    source = inspect.getsource(index)
-    translation_source = source[
-        source.index("async def select_translation_administration("):
-        source.index("async def guarded_page_navigation(")
-    ]
-    advanced_condition_source = source[
-        source.index("def render_condition("):
-        source.index("def render_group(")
+    source = ((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources()))
+    translation_source = inspect.getsource(translation_administration)
+    source += translation_source
+    search_source = search_sources()
+    advanced_condition_source = search_source[
+        search_source.index("def render_condition("):
+        search_source.index("def render_group(")
     ]
     assert 'message_load = {"sequence": 0}' in source
     assert 'request_sequence = message_load["sequence"]' in source
@@ -1227,7 +1255,7 @@ def test_translation_administration_reveals_filtered_matches_and_ignores_stale_r
 
 
 def test_navigation_links_scroll_independently_when_the_drawer_is_taller_than_the_viewport():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())) + inspect.getsource(application_shell) + inspect.getsource(login_sessions) + inspect.getsource(security_operations))
     assert 'drawer_factory = ui.right_drawer if initial_direction == "rtl" else ui.left_drawer' in source
     assert 'drawer.props(remove="side")' not in source
     assert 'ui.scroll_area().classes("erms-nav-scroll w-full h-full")' in source
@@ -1237,15 +1265,16 @@ def test_navigation_links_scroll_independently_when_the_drawer_is_taller_than_th
 
 
 def test_empty_navigation_sections_are_hidden_with_their_links():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())) + inspect.getsource(application_shell) + inspect.getsource(login_sessions) + inspect.getsource(security_operations))
     assert "drawer_sections: list[tuple[Any, tuple[str, ...]]]" in source
-    assert "any(link_visibility.get(key, False) for key in section_keys)" in source
+    assert "bool(visible_links.intersection(section_keys))" in source
     assert "refresh_drawer_visibility(privileges)" in source
     assert "not drawer_collapsed" in source
 
 
 def test_governance_custody_page_explains_qualification_and_empty_configuration():
-    source = with_english_messages(inspect.getsource(index))
+    assert 'with ui.row().classes("w-full items-center justify-end gap-2")' in inspect.getsource(governance_custody)
+    source = with_english_messages(inspect.getsource(governance_custody) + (((inspect.getsource(index) + inspect.getsource(dashboard)) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())) + inspect.getsource(application_shell) + inspect.getsource(login_sessions) + inspect.getsource(security_operations))
     assert "Checks that someone can always manage and recover access to protected records" in source
     assert "At least one active person must be able to manage information" in source
     assert "Governance role enabled" in source
@@ -1287,13 +1316,13 @@ def test_governance_custody_page_explains_qualification_and_empty_configuration(
 
 
 def test_login_session_statuses_and_security_operations_use_compact_cards():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages((((inspect.getsource(index) + inspect.getsource(dashboard)) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())) + inspect.getsource(application_shell) + inspect.getsource(login_sessions) + inspect.getsource(security_operations))
     assert 'localized_lifecycle_value(row.get("status"))' in source
     assert '"expired": "grey-7",' in source
     assert ').props("outline")' in source
     assert 'security_event_host = ui.element("div").classes(' in source
-    assert 'def render_security_event_cards()' in source
-    assert 'page_rows = event_rows[offset:offset + 10]' in source
+    assert 'def render_security_event_cards(items: list[dict[str, Any]])' in source
+    assert 'await api.security_events(' in source
     assert 'ui.label("No recent security events in this period.")' in source
     assert 'f"Technical code: {row[\'decision_code\']}"' in source
     assert '"Open role", icon="open_in_new"' not in source
@@ -1322,12 +1351,13 @@ def test_login_session_statuses_and_security_operations_use_compact_cards():
     assert "min-height: 54px; padding: 0 18px;" in source
     assert ".erms-brand-mark { width: 28px; height: 33px;" in source
     assert 'with ui.footer().classes("erms-footer items-center")' in source
-    assert 'ui.label("Designed and built by Sharjah Archives")' in source
+    assert 'f"Database: {database_display_name(initial_language)}"' in source
     assert ".erms-footer-credit" in source
+    assert ".erms-footer-database" in source
     assert 'replace="text-positive text-lg"' in source
     assert "#popup { display: none !important; }" in source
     assert 'ui.label("wathiq").classes("wathiq-login-word")' in source
-    assert 'login_submit = ui.button("Continue to wathiq"' in source
+    assert 'login_submit = ui.button(\n                        "Continue to wathiq"' in source
     assert 'drawer.hide()' in source
     assert 'drawer.show()' in source
     assert "Sign in to ERMS" not in source
@@ -1337,10 +1367,10 @@ def test_login_session_statuses_and_security_operations_use_compact_cards():
     assert 'content_card.classes(remove="erms-dashboard-card")' in source
     assert 'drawer.props(add="mini")' in source
     assert 'drawer.props(remove="mini")' in source
-    assert 'drawer.classes(add="erms-drawer--collapsed")' in source
-    assert 'ui.button(icon="chevron_left")' in source
-    assert 'icon=chevron_right' in source
-    assert 'icon="menu"' not in source
+    assert 'drawer.classes(add="erms-drawer--collapsed p-0")' in source
+    assert 'icon="chevron_right" if initial_direction == "rtl" else "chevron_left"' in source
+    assert "('chevron_left' if initial_direction == 'rtl' else 'chevron_right')" in source
+    assert 'mobile_navigation = navigation_menu(' in source
     assert "erms-drawer-toggle" in source
     assert "erms-profile-action" in source
     assert "erms-profile-menu" in source
@@ -1368,11 +1398,8 @@ def test_login_session_statuses_and_security_operations_use_compact_cards():
 
 
 def test_forced_password_change_precedes_authenticated_data_loading():
-    source = with_english_messages(inspect.getsource(index))
-    login_flow = source[
-        source.index("async def submit_login()"):
-        source.index('login_submit.on("click", submit_login)')
-    ]
+    source = with_english_messages((((inspect.getsource(index) + inspect.getsource(dashboard)) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
+    login_flow = account_function("submit_login")
     assert "await reload_favourites()" not in login_flow
     forced_change_gate = login_flow.index('if principal["must_change_password"]:')
     assert forced_change_gate < login_flow.index(
@@ -1382,26 +1409,17 @@ def test_forced_password_change_precedes_authenticated_data_loading():
     assert "await load_localization_context()" not in login_flow
     assert "await refresh_hold_navigation()" not in login_flow
 
-    restored_flow = source[
-        source.index("async def initialize_authenticated_ui()"):
-        source.index("ui.timer(0.05, initialize_authenticated_ui")
-    ]
+    restored_flow = account_function("initialize_authenticated_ui")
     restored_gate = restored_flow.index('if principal["must_change_password"]:')
     assert restored_gate < restored_flow.index(
         "await prepare_authenticated_workspace(principal)"
     )
 
-    workspace_setup = source[
-        source.index("async def prepare_authenticated_workspace("):
-        source.index("async def load_login_animation()")
-    ]
+    workspace_setup = account_function("prepare_authenticated_workspace")
     assert "await load_localization_context()" in workspace_setup
     assert "await refresh_hold_navigation()" in workspace_setup
 
-    password_flow = source[
-        source.index("async def show_change_password()"):
-        source.index("async def sign_out()")
-    ]
+    password_flow = account_function("show_change_password")
     password_changed = password_flow.index(
         'await api.change_password(current.value or "", new.value or "")'
     )
@@ -1418,18 +1436,12 @@ def test_forced_password_change_precedes_authenticated_data_loading():
 
 
 def test_network_animation_loads_for_login_and_restored_sessions():
-    source = with_english_messages(inspect.getsource(index))
-    animation_loader = source[
-        source.index("async def load_login_animation()"):
-        source.index("async def initialize_authenticated_ui()")
-    ]
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
+    animation_loader = account_function("load_login_animation")
     assert "page_client.run_javascript(" in animation_loader
     assert "ui.run_javascript(" not in animation_loader
 
-    initialization = source[
-        source.index("async def initialize_authenticated_ui()"):
-        source.index("ui.timer(0.05, initialize_authenticated_ui")
-    ]
+    initialization = account_function("initialize_authenticated_ui")
     assert initialization.index(
         "background_tasks.create(load_login_animation())"
     ) < initialization.index('token = app.storage.user.get("session_token")')
@@ -1491,14 +1503,14 @@ def test_permanent_deletion_uses_stable_identity_and_preserves_blocker_reports()
 
 
 def test_identity_detail_actions_are_explicitly_permanent():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert source.count('"Permanently delete", icon="delete_forever"') >= 3
     assert "if deletion_blocked_report(error) is not None:" in source
     assert "await confirm_identity_deletion(" in source
 
 
 def test_aggregation_browser_load_more_preserves_the_previous_last_child_anchor():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert 'browse_item_dom_id(current["items"][-1])' in source
     assert "render_tree_preserving_scroll(anchor_id=append_anchor_id)" in source
     assert "anchor.getBoundingClientRect().top" in source
@@ -1506,9 +1518,9 @@ def test_aggregation_browser_load_more_preserves_the_previous_last_child_anchor(
 
 
 def test_organization_browser_selectors_have_persistent_confirmation_action():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert '"Clear selection"' not in source
-    assert 'f"Select {selection_mode.replace(\'_\', \' \')}"' in source
+    assert 'f"Select {selection_entity_label}"' in source
     assert "selection_confirm_button.disable()" in source
     assert "selection_confirm_button.enable()" in source
     assert "apply_relationship_selection(" in source
@@ -1521,20 +1533,20 @@ def test_organization_browser_selectors_have_persistent_confirmation_action():
 
 
 def test_organization_browser_does_not_shadow_the_page_guidance_control():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert "summary_guidance = (" in source
     assert "ui.label(summary_guidance)" in source
     assert "                guidance = (\n" not in source
 
 
 def test_organization_browser_hides_detail_links_without_destination_privilege():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert 'can_open_organization_detail(node["type"], privileges)' in source
-    assert '(auth_state.get("principal") or {}).get("global_privileges", [])' in source
+    assert '(session.principal or {}).get("global_privileges", [])' in source
 
 
 def test_organization_browser_localizes_statuses_summary_and_rtl_disclosures():
-    source = inspect.getsource(index)
+    source = ((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources()))
     assert "organization-browser-node-row" in source
     assert "organization-browser-expander" in source
     assert "organization-browser-disclosure" in source
@@ -1552,14 +1564,13 @@ def test_organization_browser_localizes_statuses_summary_and_rtl_disclosures():
     assert "organization-browser-summary-value" in source
 
 
-def test_organization_browser_places_tree_on_the_leading_side_in_rtl():
-    source = inspect.getsource(index)
-    assert 'page_layout_class = "" if is_selector else "organization-browser-page-layout"' in source
-    assert "organization-browser-page-tree w-1/2" in source
-    assert 'html[dir="rtl"] .organization-browser-page-layout' in source
-    assert "flex-direction: row !important;" in source
-    assert 'html[dir="rtl"] .organization-browser-page-tree' in source
-    assert "border-left-width: 1px !important;" in source
+def test_organization_browser_has_one_full_width_tree_and_explicit_directional_icons():
+    source = ((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources()))
+    assert "organization-browser-page-tree w-full min-w-0 h-full overflow-auto" in source
+    assert "organization-browser-page-tree w-1/2" not in source
+    assert "icon=tree_expander_icon(key in expanded)" in source
+    assert 'html[dir="rtl"] .organization-browser-disclosure' not in source
+    assert 'html[dir="rtl"] .organization-browser-page-tree' not in source
 
 
 def test_browsed_relationship_selection_adds_option_and_value_atomically():
@@ -1598,23 +1609,24 @@ def test_suspend_action_remains_visible_but_disabled_for_inactive_users():
     assert 'icon="play_circle"' in USER_SUSPENSION_ACTION_BUTTONS
 
 
-def test_dashboard_recent_configuration_rejects_non_positive_values(monkeypatch):
+def test_database_owned_ui_limits_require_api_values_and_ignore_old_environment(monkeypatch):
     monkeypatch.setenv("DASHBOARD_RECENT_ITEM_LIMIT", "0")
-    with pytest.raises(RuntimeError, match="must be at least 1"):
-        dashboard_recent_item_limit()
-
     monkeypatch.setenv("DASHBOARD_FAVOURITE_ITEM_LIMIT", "0")
-    with pytest.raises(RuntimeError, match="must be at least 1"):
-        dashboard_favourite_item_limit()
+    assert dashboard_recent_item_limit({"DASHBOARD_RECENT_ITEM_LIMIT":7}) == 7
+    assert dashboard_favourite_item_limit({"DASHBOARD_FAVOURITE_ITEM_LIMIT":2}) == 2
+    with pytest.raises(KeyError):
+        dashboard_recent_item_limit({})
+    with pytest.raises(KeyError):
+        dashboard_favourite_item_limit({})
 
 
 def test_organizational_ownership_is_presented_on_details_and_dashboard():
-    source = with_english_messages(inspect.getsource(index))
-    raw_source = inspect.getsource(index)
+    source = with_english_messages((((inspect.getsource(index) + inspect.getsource(dashboard)) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
+    raw_source = (((inspect.getsource(index) + inspect.getsource(dashboard)) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources()))
     assert '"Owning organizational unit"' in source
     assert "await api.dashboard_summary(" in source
     assert 'dashboard_load_state = {"running": False}' in source
-    assert 'if dashboard_load_state["running"]:' in source
+    assert 'if not dashboard_view_is_current() or dashboard_load_state["running"]:' in source
     assert 'ui.label("Holdings by organizational unit")' in source
     assert "Only units where you have an effective role; counts respect your access." in source
     assert '"dashboard-holdings-list"' in source
@@ -1640,14 +1652,14 @@ def test_organizational_ownership_is_presented_on_details_and_dashboard():
 
 
 def test_metadata_editor_shows_read_only_owning_org_unit_context():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     assert '"Owning organizational unit", value=owner_label' in source
     assert '.props("outlined readonly")' in source
     assert "Move the resource through the governed move action to change it." in source
 
 
 def test_record_creation_explains_and_enforces_parent_owner_role_context():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     parent_position = source.index('controls["aggregation_id"] = field_input(')
     create_for_position = source.index('label="Create for *"', parent_position)
     assert parent_position < create_for_position
@@ -1676,7 +1688,7 @@ def test_record_creation_explains_and_enforces_parent_owner_role_context():
 
 
 def test_aggregation_creation_places_parent_before_role_and_explains_ownership():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     aggregation_parent_position = source.index(
         'controls["parent_aggregation_id"] = field_input('
     )
@@ -1694,7 +1706,7 @@ def test_aggregation_creation_places_parent_before_role_and_explains_ownership()
 
 
 def test_required_fields_are_visually_marked_and_explained():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     field_source = inspect.getsource(field_input)
     assert 'webui.field_input.text.label_29445dc3' in field_source
     assert 'localized_label = entity_metadata_label(field.label)' in field_source
@@ -1703,9 +1715,9 @@ def test_required_fields_are_visually_marked_and_explained():
 
 
 def test_governed_move_and_root_ownership_correction_are_exposed():
-    source = with_english_messages(inspect.getsource(index))
-    assert source.count('"Advanced", caption="Specialist') == 2
-    assert source.count('icon="tune", value=False') == 2
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
+    assert source.count('classes("resource-advanced-actions w-full")') == 2
+    assert source.count('value=False).props("dense").classes("resource-advanced-actions w-full")') == 2
     assert "show_aggregation_move" in source
     assert "show_ownership_correction_action" in source
     assert "show_acl_defaults" in source
@@ -1718,7 +1730,7 @@ def test_governed_move_and_root_ownership_correction_are_exposed():
 
 
 def test_acl_editor_presents_contextual_org_unit_members_principal():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages((Path(__file__).parents[1] / 'access_control_dialogs.py').read_text())
     assert '"Add all org unit members"' in source
     assert '"principal_type": "org_unit_members"' in source
     assert 'ui.label("All org unit members")' in source
@@ -1732,7 +1744,9 @@ def test_component_display_helpers_prioritize_readable_file_information():
     assert format_file_size(None) == "—"
     assert component_file_icon("application/pdf") == "picture_as_pdf"
     assert component_file_icon("image/jpeg") == "image"
-    assert component_file_icon("application/octet-stream") == "draft"
+    assert component_file_icon("application/xml") == "description"
+    assert component_file_icon("application/octet-stream") == "description"
+    assert component_file_icon(None) == "description"
 
 
 def test_component_uploader_batches_multiple_files_into_one_handler():
@@ -1765,7 +1779,7 @@ def test_review_and_location_experience_has_accessible_text_labels():
     assert '"dashboard-review-columns"' in source
     assert '"dashboard-review-group"' in source
     assert '"dashboard-review-item"' in source
-    assert '"dashboard.resource.identity",type=dashboard_resource_type(resource),number=number' in inspect.getsource(index)
+    assert '"dashboard.resource.identity",type=dashboard_resource_type(resource),number=number' in (((inspect.getsource(index) + inspect.getsource(dashboard)) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources()))
     assert 'ui.label("Change location")' in source
     assert 'ui.input("Assigned location"' in source
     assert 'ui.input("Current location"' in source
@@ -1805,14 +1819,14 @@ def test_record_and_aggregation_searches_use_shared_compact_results():
     assert "show_medium=True" in source
     assert 'parent_aggregation=parent' not in source
     assert 'icon="folder", on_click=lambda _, parent=parent_aggregation' not in source
-    assert 'await decorate_record_search_components(decorated_rows)' in source
+    assert 'await decorate_record_search_components(decorated)' in COLLECTION_SOURCE
     assert 'flex: 0 0 92px; width: 92px;' in source
     assert 'font-variant-numeric: tabular-nums;' in source
 
 
 def test_entity_search_return_restores_page_row_and_expansion_state():
     source = APP_SOURCE
-    assert '"entity_result_states": {}' in source
+    assert collection_state.new_collection_state()['entity_result_states'] == {}
     assert '"entity_result_state": {' in source
     assert 'restored_result_state["expanded_results"] = set(' in source
     assert 'result_state["return_anchor"] = f"compact-result-{resource}-{int(item[\'id\'])}"' in source
@@ -1821,7 +1835,7 @@ def test_entity_search_return_restores_page_row_and_expansion_state():
 
 
 def test_entity_page_favourites_reuse_dashboard_compact_item_treatment():
-    source = with_english_messages(inspect.getsource(index))
+    source = PERSONAL_VIEWS_SOURCE
     favourites_source = source[
         source.index("def render_entity_favourites_section"):
         source.index("def render_resource_personal_sections")
@@ -1833,48 +1847,30 @@ def test_entity_page_favourites_reuse_dashboard_compact_item_treatment():
 
 
 def test_record_and_aggregation_searches_keep_favourites_and_recents_visible():
-    source = with_english_messages(inspect.getsource(index))
+    source = with_english_messages(((inspect.getsource(index) + account_sources()) + (organization_sources() + aggregation_sources() + record_sources())))
     render_table_source = source[source.index("def render_table(spec: EntitySpec)"):]
     assert render_table_source.count("render_resource_personal_sections(spec)") >= 2
-    assert "same favourites and recent-activity context" in render_table_source
+    assert "render_entity_compact_results(spec)\n                render_resource_personal_sections(spec)" in render_table_source
 
 
 def test_classification_workspace_reuses_path_loaded_for_tree_reveal():
-    workspace_source = APP_SOURCE[
-        APP_SOURCE.index("async def select_classification_workspace("):
-        APP_SOURCE.index("async def hold_reason_dialog(")
-    ]
-    assert '"children": {}, "children_more": {}, "paths": {}' in workspace_source
-    assert workspace_source.count("api.classification_path(") == 1
-    assert workspace_source.count("load_classification_path(") == 3
-    assert 'workspace["paths"] = {}' in workspace_source
-
-
-def test_resource_personal_sections_load_lazily_and_update_their_own_host():
-    source = APP_SOURCE
-    select_source = source[
-        source.index("async def select_entity("):
-        source.index("async def select_classification_workspace(")
-    ]
-    assert 'state["personal_sections_loading"][key] = True' in select_source
-    assert "background_tasks.create(refresh_personal_sections())" in select_source
-    assert 'state["personal_section_hosts"].get(resource_key)' in select_source
-    assert "render_resource_personal_sections(\n                                resource_spec, container=personal_host," in select_source
+    assert WORKSPACE_SOURCE.count("api.classification_path(") == 1
+    assert WORKSPACE_SOURCE.count("load_classification_path(") == 2
+    assert 'workspace["paths"].clear()' in WORKSPACE_SOURCE
+    assert 'workspace["paths"][selected["id"]][:-1]' in WORKSPACE_SOURCE
+    assert 'if not current(revision):' in WORKSPACE_SOURCE
 
 
 def test_committed_navigation_cancels_abandoned_reads():
     register_source = APP_SOURCE[
-        APP_SOURCE.index("def register_navigation("):
-        APP_SOURCE.index("async def breadcrumb_back(")
+        APP_SOURCE.index("def prepare_navigation("):
+        APP_SOURCE.index("async def restore_navigation_entry(")
     ]
     assert "api.cancel_pending_reads()" in register_source
 
 
 def test_dashboard_complete_review_list_uses_server_side_pages():
-    dashboard_source = APP_SOURCE[
-        APP_SOURCE.index("async def select_dashboard("):
-        APP_SOURCE.index("async def select_organization_unit_details(")
-    ]
+    dashboard_source = inspect.getsource(dashboard)
     assert 'page = {"offset": 0, "limit": 25, "loading": False}' in dashboard_source
     assert "limit=page[\"limit\"], offset=page[\"offset\"]" in dashboard_source
     assert 'has_more = len(fetched) > page["limit"]' in dashboard_source
@@ -1882,10 +1878,7 @@ def test_dashboard_complete_review_list_uses_server_side_pages():
 
 
 def test_identity_lists_use_stable_name_first_ordering():
-    load_source = APP_SOURCE[
-        APP_SOURCE.index("async def load_rows("):
-        APP_SOURCE.index("async def select_entity(")
-    ]
+    load_source = COLLECTION_SOURCE
     assert '"sort": "level_number" if spec.key == "security-levels" else "name"' in load_source
     assert '{"field": page["sort"], "direction": "asc"}' in load_source
     assert '[{"field": "id", "direction": "asc"}]' in load_source
@@ -1912,10 +1905,7 @@ def test_role_and_organization_unit_details_localize_fields_and_rtl_facts():
 
 
 def test_hold_people_selectors_use_independent_remote_typeahead_not_shared_search():
-    holds_source = APP_SOURCE[
-        APP_SOURCE.index("async def open_hold_editor("):
-        APP_SOURCE.index("async def select_translation_administration(")
-    ]
+    holds_source = inspect.getsource(hold_editor) + inspect.getsource(hold_details)
     assert 'api.list("users", limit=500)' not in holds_source
     assert holds_source.count("bind_remote_people_select(") >= 3
     assert "people_query = ui.input(" not in holds_source
@@ -1927,10 +1917,7 @@ def test_hold_people_selectors_use_independent_remote_typeahead_not_shared_searc
 
 
 def test_remote_people_typeahead_is_debounced_and_preserves_selected_people():
-    helper_source = APP_SOURCE[
-        APP_SOURCE.index("def bind_remote_people_select("):
-        APP_SOURCE.index("def bind_remote_scheme_select(")
-    ]
+    helper_source = inspect.getsource(holds_people)
     assert "term = query.strip()" in helper_source
     assert "if len(term) < 2:" in helper_source
     assert 'await api.active_people(term, limit=25, offset=0)' in helper_source

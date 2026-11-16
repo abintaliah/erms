@@ -8,6 +8,13 @@
     {"code": "TS", "name": "Top Secret", "level_number": 100, "prevents_disposition": true}
   ],
   "privileges": [
+    {"code": "disposition.jobs.manage", "category": "administration", "reserved": false},
+    {"code": "app.settings.manage", "category": "administration", "reserved": false},
+    {"code": "relationships.link", "category": "record", "reserved": false},
+    {"code": "relationships.administer", "category": "administration", "reserved": false},
+    {"code": "messaging.user_messages.exchange", "category": "administration"},
+    {"code": "messaging.monitor", "category": "administration"},
+    {"code": "messaging.notifications.administer", "category": "administration"},
     {"code": "authorization.administer", "category": "administration"},
     {"code": "authorization.explain", "category": "administration"},
     {"code": "security_levels.administer", "category": "administration"},
@@ -21,7 +28,6 @@
     {"code": "localization.administer", "category": "administration", "reserved": true},
     {"code": "classification_scheme.modify_metadata", "category": "administration"},
     {"code": "classification.modify_metadata", "category": "administration"},
-    {"code": "user.modify_metadata", "category": "administration"},
     {"code": "role.modify_metadata", "category": "administration"},
     {"code": "org_unit.modify_metadata", "category": "administration"},
     {"code": "security_level.modify_metadata", "category": "administration"},
@@ -31,7 +37,7 @@
     {"code": "content.index.execute", "category": "administration"},
     {"code": "search.query.debug", "category": "administration"},
     {"code": "search.saved_search.save", "category": "administration"},
-    {"code": "search.saved_search.administrator", "category": "administration"},
+    {"code": "search.saved_search.administer", "category": "administration"},
     {"code": "search.saved_search.delete", "category": "administration"},
     {"code": "record.component.reindex", "category": "component"},
     {"code": "aggregation.view", "category": "aggregation"},
@@ -142,6 +148,8 @@
       "name": "System Administrator",
       "purpose": "Platform administration without governed-content bypass",
       "privilege_codes": [
+        "messaging.monitor",
+        "messaging.notifications.administer",
         "authorization.administer",
         "authorization.explain",
         "security_levels.administer",
@@ -155,10 +163,11 @@
         "profile.modify_metadata",
         "search.query.debug",
         "search.saved_search.save",
-        "search.saved_search.administrator",
+        "search.saved_search.administer",
         "search.saved_search.delete",
         "record.component.reindex",
-        "audit.view"
+        "audit.view",
+        "app.settings.manage"
       ]
     },
     {
@@ -175,7 +184,7 @@
         "audit.view",
         "search.query.debug",
         "search.saved_search.save",
-        "search.saved_search.administrator",
+        "search.saved_search.administer",
         "search.saved_search.delete",
         "record.component.reindex",
         "aggregation.view",
@@ -205,7 +214,10 @@
         "record.component.share",
         "record.component.print",
         "security.resource.downgrade",
-        "closure.correct_record_placement"
+        "closure.correct_record_placement",
+        "relationships.link",
+        "relationships.administer",
+        "disposition.jobs.manage"
       ]
     },
     {
@@ -222,6 +234,7 @@
         "audit.view",
         "search.query.debug",
         "search.saved_search.save",
+        "search.saved_search.administer",
         "search.saved_search.delete",
         "record.component.reindex",
         "aggregation.view",
@@ -251,7 +264,10 @@
         "record.component.share",
         "record.component.print",
         "security.resource.downgrade",
-        "closure.correct_record_placement"
+        "closure.correct_record_placement",
+        "relationships.link",
+        "relationships.administer",
+        "disposition.jobs.manage"
       ]
     }
   ]

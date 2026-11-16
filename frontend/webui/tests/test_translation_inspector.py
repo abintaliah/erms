@@ -4,7 +4,7 @@ from frontend.webui.i18n_catalogue import load_english_manifest
 
 
 ROOT = Path(__file__).parents[3]
-APP_SOURCE = (ROOT / "frontend/webui/app.py").read_text()
+APP_SOURCE = "\n".join((ROOT / f"frontend/webui/{name}.py").read_text() for name in ("app", "translation_administration", "translation_inspector"))
 INSPECTOR_SOURCE = (
     ROOT / "frontend/webui/static/translation-inspector.js"
 ).read_text()
@@ -92,7 +92,7 @@ def test_inspector_panel_supports_copy_and_filtered_administration_navigation():
 def test_inspector_refreshes_persistent_brand_chrome_after_being_enabled():
     assert "def refresh_inspectable_chrome()" in APP_SOURCE
     assert 'brand_name.text = render_message("webui.index.label.wathiq_d1dfb800")' in APP_SOURCE
-    assert 'brand_row.props("aria-label=\'" + accessible_name + "\'")' in APP_SOURCE
+    assert "brand_row.props('aria-label=' + repr(accessible_name))" in APP_SOURCE
     assert "if enabled:\n            refresh_inspectable_chrome()" in APP_SOURCE
 
 
@@ -107,7 +107,7 @@ def test_inspector_does_not_assign_keys_to_user_authored_values():
 
 def test_inspector_can_always_be_disabled_from_the_user_menu():
     assert "closest('[data-inspector-ignore]')" in INSPECTOR_SOURCE
-    assert "data-inspector-ignore=true" in APP_SOURCE
+    assert "data-inspector-ignore=true" in (Path(__file__).parents[1] / "application_shell.py").read_text()
 
 
 def test_inspector_metadata_cannot_flash_visible_translation_keys():
@@ -124,4 +124,23 @@ def test_translation_administration_pages_complete_context_groups():
     assert 'page["total"]=group_total' in APP_SOURCE
     assert 'len(grouped)' in APP_SOURCE
     assert 'group_total and not data["items"] and page["offset"]' in APP_SOURCE
-    assert 'state["translation_offset"] = 0' in APP_SOURCE
+    assert 'translation_state["translation_offset"] = 0' in APP_SOURCE
+
+
+def test_copied_inspector_text_is_searchable_without_altering_visible_characters():
+    from nicegui import ui
+    from frontend.webui.i18n_catalogue import (
+        _diagnostic_marker, disable_diagnostic_metadata, enable_diagnostic_metadata,
+        strip_diagnostic_metadata,
+    )
+    with ui.column() as host:
+        enable_diagnostic_metadata(host.client.id)
+        try:
+            for text in ('وسط الحفظ', 'Medium', 'نصّ عربي ❤️'):
+                marked = _diagnostic_marker('entity_metadata.field.medium', text)
+                assert marked != text
+                assert strip_diagnostic_metadata(marked) == text
+                assert strip_diagnostic_metadata(text) == text
+                assert strip_diagnostic_metadata(marked + ' / ' + marked) == text + ' / ' + text
+        finally:
+            disable_diagnostic_metadata(host.client.id)

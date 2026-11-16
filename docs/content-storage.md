@@ -60,11 +60,21 @@ The complete logical file always has an authoritative SHA-256 checksum and
 - `POST /api/v1/records/{record_id}/digital-components/upload`
 - `GET /api/v1/digital-components/{id}/content`
 - `GET /api/v1/digital-components/{id}/rendition`
+- `GET` / `HEAD /api/v1/record-drafts/{draft_id}/components/{component_id}/rendition`
 - `PUT /api/v1/digital-components/{id}/content` with `If-Match`
 - `DELETE /api/v1/digital-components/{id}/content` with `If-Match`
 
 Clients do not need to know whether content is segmented or, later, stored in
 S3. File bytes are never copied into `event_history`.
+
+Staged preview reads verified segments from `record_draft_component_blobs` under
+the owning open draft's authorization boundary. It reuses the saved viewer's
+format handling, conversion limits and temporary conversion cleanup, with
+private, no-store responses and byte-range support. It does not promote bytes
+to permanent content sets or create saved-record content-view events. Staged
+sources requiring conversion are materialized only within the configured
+rendition size limit; native previews remain bounded by the upload policy. No
+rendition cache is retained. See [record drafts](record-drafts.md).
 
 ## Cleanup
 
@@ -99,3 +109,17 @@ large scale or high concurrency.
 
 The detailed design, lifecycle, migration rules, and acceptance criteria are in
 [`specs/segmented-postgresql-content-storage.md`](../specs/segmented-postgresql-content-storage.md).
+
+## Database-managed policy
+
+Upload maximum, segment size/checksums, upload-session lifetime, cleanup interval,
+conversion timeout and rendition maximum now come from Administration Settings.
+The API uses one validated settings snapshot throughout each upload/conversion;
+changes converge within 30 seconds without restart. The storage backend and
+LibreOffice executable remain deployment environment settings. Existing segments
+and checksums retain their stored representation when policy changes.
+
+Content cleanup loads a fresh snapshot for one shot and the shared 30-second
+cache before each watch pass. Its interval override is optional; the fixed
+bounded batch default of 100 is unchanged. See the
+[reviewed legacy migration](application-settings-upgrade.md) before upgrade startup.

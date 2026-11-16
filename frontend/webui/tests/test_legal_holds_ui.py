@@ -7,8 +7,13 @@ CLIENT = Path(__file__).parents[1] / "api_client.py"
 HOLDS_API = Path(__file__).parents[3] / "backend" / "services" / "api" / "holds.py"
 
 
+def hold_sources():
+    return "\n".join(APP.with_name(name+".py").read_text() for name in
+        ("app", "hold_editor", "hold_resources", "holds", "hold_details", "hold_navigation", "holds_people", "aggregation_details", "record_details", "entity_editor"))
+
+
 def test_holds_workspace_and_navigation_are_wired():
-    source = with_english_messages(APP.read_text(encoding="utf-8"))
+    source = with_english_messages(hold_sources() + APP.with_name("application_shell.py").read_text() + APP.with_name("login_sessions.py").read_text())
     assert '"Holds", "gavel", navigation_key="holds"' in source
     assert 'async def select_holds()' in source
     assert 'async def select_hold_details(hold_id: int)' in source
@@ -22,7 +27,7 @@ def test_holds_workspace_and_navigation_are_wired():
     assert 'last_page=ui.button("Last"' in source
     assert '.tooltip("Open resource")' in source
     assert '.tooltip("Remove from this hold")' in source
-    assert '"Remove from all holds"' in source
+    assert '"Remove direct holds"' in source
     assert 'color="positive" if hold["state"]=="active" else "blue-grey"' in source
     assert 'render_user_avatar(contributor, size="25px").style(' in source
     assert '"margin-inline-end:5px !important"' in source
@@ -42,8 +47,10 @@ def test_holds_workspace_and_navigation_are_wired():
     assert 'value=(hold or {}).get("owner_user_id"), label="Owner", with_input=True' in source
     assert 'control._props["display-value"]' not in source
     assert '"hold-held-item-filter-primary w-full"' in source
-    assert '"hold-held-item-filter-secondary w-full"' in source
-    assert 'with ui.row().classes("w-full items-center justify-end gap-2")' in source
+    assert 'with ui.grid(columns=4).classes("w-full gap-3")' in source
+    # Scope this contract to the hold filter actions. The former whole-host
+    # search accidentally matched the unrelated custody pager's layout.
+    assert 'with ui.row().classes("detail-action-row w-full items-center justify-start gap-2")' in APP.with_name('hold_details.py').read_text()
     assert '"width:1280px;max-width:calc(100vw - 48px)"' in source
     assert 'update_held_item_selection(row: dict[str, Any], selected: bool)' in source
     assert 'update_candidate_selection(row: dict[str, Any], selected: bool)' in source
@@ -59,7 +66,7 @@ def test_holds_workspace_and_navigation_are_wired():
 
 
 def test_hold_details_localizes_state_validity_and_protection_values():
-    source = APP.read_text(encoding="utf-8")
+    source = hold_sources()
     details = source[source.index("async def select_hold_details("):]
     assert 'localized_hold_states = {' in details
     assert 'render_message("webui.select_holds.select.active_f5bdb37b")' in details
@@ -76,7 +83,7 @@ def test_hold_details_localizes_state_validity_and_protection_values():
 
 
 def test_hold_listing_localizes_card_labels_states_and_open_ended_validity():
-    source = APP.read_text(encoding="utf-8")
+    source = hold_sources()
     listing = source[source.index("async def select_holds()"):source.index("async def select_hold_details(")]
     assert 'ui.badge(hold_state_label' in listing
     assert 'render_message("webui.select_hold_details.label.owner_7d141da3")' in listing
@@ -96,7 +103,7 @@ def test_hold_listing_localizes_card_labels_states_and_open_ended_validity():
 
 def test_hold_api_projects_owner_and_contributor_names_in_preferred_language():
     source = HOLDS_API.read_text(encoding="utf-8")
-    assert "from .entity_localization import localize_rows, preferred_language" in source
+    assert "from .entity_localization import localize_rows, localized_projection, preferred_language" in source
     assert "localized: dict[str, Any] | None = None" in source
     assert "user_account.status,user_account.translations" in source
     assert "u.status,u.translations FROM hold_contributors" in source
@@ -107,7 +114,7 @@ def test_hold_api_projects_owner_and_contributor_names_in_preferred_language():
 
 
 def test_hold_person_buttons_keep_avatars_on_the_rtl_leading_edge():
-    source = APP.read_text(encoding="utf-8")
+    source = hold_sources()
     assert 'html[dir="rtl"] .hold-person-button .q-btn__content' in source
     assert '"hold-person-button self-start -ml-2"' in source
     assert '"hold-person-button gap-1"' in source
@@ -115,21 +122,20 @@ def test_hold_person_buttons_keep_avatars_on_the_rtl_leading_edge():
 
 
 def test_hold_mutations_collect_reasons_and_refresh_live_state():
-    source = with_english_messages(APP.read_text(encoding="utf-8"))
+    source = with_english_messages(hold_sources())
     assert 'async def hold_reason_dialog(' in source
     assert 'Reason for updating this hold' in source
     assert 'Reason for removing this direct assignment' in source
-    assert 'Remove from all holds? Inherited protection from parent aggregations will remain.' in source
-    assert 'Remove from all holds? Inherited protection from its aggregation hierarchy will remain.' in source
+    assert 'Remove all directly assigned holds? Protection inherited from parent aggregations will remain.' in source
     assert 'api.effective_holds("record", record_id)' in source
-    assert 'api.effective_holds("aggregation", current["id"])' in source
-    assert 'effective_holds, "record", record_id' in source
-    assert 'effective_holds, "aggregation", current["id"]' in source
+    assert 'api.effective_holds("aggregation", identifier)' in source
+    assert 'render_effective_holds(holds, "record", record_id' in source
+    assert 'render_effective_holds(holds, "aggregation", identifier' in source
     assert 'Remove from this hold' in source
 
 
 def test_hold_editor_datetime_conversion_uses_application_timezone_without_javascript():
-    source = with_english_messages(APP.read_text(encoding="utf-8"))
+    source = with_english_messages(hold_sources())
     hold_editor = source[source.index("async def open_hold_editor("):source.index("async def add_resource_to_hold_dialog(")]
     assert "ui.run_javascript" not in hold_editor
     assert 'return parsed.astimezone().strftime("%Y-%m-%dT%H:%M")' in hold_editor
@@ -137,41 +143,26 @@ def test_hold_editor_datetime_conversion_uses_application_timezone_without_javas
     assert "Dates currently use the application timezone." in source
 
 
-def test_aggregation_command_centre_matches_the_approved_two_column_layout():
-    source = with_english_messages(APP.read_text(encoding="utf-8"))
-    assert '"aggregation-command-layout w-full p-5"' in source
-    assert '"Aggregation overview"' in source
-    assert '"detail-surface aggregation-actions-panel shadow-none p-4 gap-3"' in source
-    assert '"Metadata and review"' in source
-    assert '"Lifecycle"' in source
-    assert '"Security, access and audit"' in source
-    assert '"detail-surface aggregation-hold-controls shadow-none p-4 gap-3"' in source
-    assert '"Hold controls"' in source
+def test_aggregation_details_reuse_hold_actions_and_retention_timeline():
+    source = with_english_messages(hold_sources())
+    retention = (APP.parent / "retention_timeline.py").read_text()
+    assert 'render_effective_holds(holds, "aggregation", identifier' in source
     assert '"Remove direct holds"' in source
-    assert '"aggregation-child-preview-grid mx-5 mb-3"' in source
-    assert 'for child in children:' in source
-    assert 'f"{child[\'aggregation_number\']} · {child_status}"' in source
-    assert '"aggregation-retention-stages w-full"' in source
-    assert '"aggregation-retention-footer w-full"' in source
-    assert 'grid-column: 1 / -1; grid-row: 2' in source
-    assert '"w-full text-sm font-semibold text-slate-800"' in source
-    assert "localized_disposition_value(final_disposition)" in source
-    assert '.aggregation-retention-stage:not(:last-child)::after' in source
-    assert 'padding-inline-start: 30px' in source
+    assert '"aggregation-child-preview-grid w-full"' in source
+    assert '"aggregation-retention-stages w-full"' in retention
+    assert 'disposition_label(rule["final_disposition"])' in retention
     assert 'html[dir="rtl"] .aggregation-retention-stage:not(:last-child)::after' in source
-    assert 'content: "←"' in source
-    assert '.aggregation-overview-actions .q-btn' in source
 
 
 def test_access_explainer_renders_redaction_safe_hold_constraints():
-    source = with_english_messages(APP.read_text(encoding="utf-8"))
+    source = with_english_messages(hold_sources() + APP.with_name('access_explanation_dialog.py').read_text())
     assert 'result.get("resource_state_constraints", [])' in source
     assert 'details restricted' in source
     assert 'An effective legal hold prevents this' in source
 
 
 def test_security_level_change_remains_separate_from_hold_frozen_metadata():
-    source = with_english_messages(APP.read_text(encoding="utf-8"))
+    source = with_english_messages(hold_sources() + APP.with_name('security_level_controls.py').read_text())
     assert 'async def show_security_level_change(' in source
     assert 'if capabilities.get("change_security_level"):' in source
     assert 'await api.preview_security_level_change({' in source
@@ -182,7 +173,7 @@ def test_security_level_change_remains_separate_from_hold_frozen_metadata():
     assert '"none": "Change only this resource"' in source
     assert '"raise_ancestors": "Also raise parent aggregations as needed"' in source
     assert '"downgrade_subtree": "Also lower contained resources as needed"' in source
-    assert "props.opt.value === 0" in source
+    assert "__REMEDY_DESCRIPTIONS__[props.opt.value]" in source
     assert 'popup-content-style="width:572px;max-width:calc(100vw - 64px)"' in source
     assert "white-space:normal; overflow-wrap:anywhere" in source
 

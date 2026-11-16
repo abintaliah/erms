@@ -8,13 +8,17 @@ from psycopg import Connection
 
 def preferred_language(connection: Connection, request: Request) -> str:
     principal = getattr(request.state, "principal", None)
-    if principal is not None:
+    return preferred_language_for_user(connection, principal.user_id if principal else None)
+
+
+def preferred_language_for_user(connection: Connection, user_id: int | None) -> str:
+    if user_id is not None:
         row = connection.execute(
             """SELECT language.language_tag
                  FROM user_preferences preference
                  JOIN supported_languages language USING(language_tag)
                 WHERE preference.user_id=%s AND language.is_enabled""",
-            (principal.user_id,),
+            (user_id,),
         ).fetchone()
         if row is not None:
             return row["language_tag"]

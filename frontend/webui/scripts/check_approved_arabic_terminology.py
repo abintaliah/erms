@@ -38,13 +38,19 @@ RULES = (
     Rule("Security Level", r"\bsecurity levels?\b", r"درج(?:ة|ات)\s+(?:ال)?سرية", r"مستو(?:ى|يات)\s+(?:ال)?سرية"),
     Rule("Selective Preservation", r"\bselective preservation\b", r"الإنتقاء"),
     Rule("Permanent Preservation", r"\bpermanent preservation\b", r"حفظ الدائم"),
-    Rule("Vital record", r"\bvital records?\b", r"الوثائق الهيوية"),
+    Rule("Vital record", r"\bvital records?\b", r"الوثائق الحيوية"),
     Rule("Checksum", r"\bchecksums?\b", r"مجموع التحقق"),
     Rule("System Administrator", r"\bSystem Administrators?\b", r"مسؤول(?:و|ي|ا)?\s+النظام"),
     Rule("Dashboard", r"\bdashboard\b", r"لوحة المعلومات"),
     Rule("Scheme", r"\b(?:classification )?schemes?\b", r"(?:نظام|نظم)\s+(?:ال)?تصنيف"),
     Rule("Classification", r"\bclassifications?\b", r"تصنيف"),
     Rule("Destruction", r"\bdestruction\b", r"إتلاف"),
+    Rule("Disposition Job", r"\bdisposition jobs?\b", r"عملي(?:ة|ات)\s+(?:ال)?تصرف"),
+    Rule("Destruction Job", r"\bdestruction jobs?\b", r"عملي(?:ة|ات)\s+(?:ال)?إتلاف"),
+    Rule("Task", r"^Task$", r"^(?:ال)?مهمة$"),
+    Rule("Tasks", r"^Tasks$", r"^(?:ال)?مهام$"),
+    Rule("My Tasks", r"^My Tasks$", r"^مهامي$"),
+    Rule("Role", r"^Role$", r"^الدور$"),
     Rule("Mixed (record medium)", r"^Mixed$", r"^هجين$"),
     Rule("Physical (record medium)", r"^Physical$", r"^مادي$"),
     Rule("Close (aggregation lifecycle action)", r"^Close aggregation$|^Close$", r"إغلاق"),
@@ -57,6 +63,15 @@ RULES = (
 )
 
 
+def is_record_verb(source: str) -> bool:
+    """The glossary's Record noun does not translate the imperative verb."""
+    return bool(re.match(
+        r'^Record (?:external (?:approval|rejection|destruction approval)|'
+        r'the required physical-destruction confirmation|the received decision)\b',
+        source,
+    ))
+
+
 def main() -> None:
     definitions = json.loads(ENGLISH.read_text(encoding="utf-8"))
     artifact = json.loads(ARABIC.read_text(encoding="utf-8"))
@@ -65,8 +80,13 @@ def main() -> None:
     matched = {rule.term: 0 for rule in RULES}
     for definition in definitions:
         source = definition["default_text"]
-        target = translations[definition["message_key"]]
+        # Diacritics enrich Arabic wording without changing its terminology.
+        # Normalize only for comparison; preserve the canonical translation.
+        target = re.sub(r"[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed]", "",
+                        translations[definition["message_key"]])
         for rule in RULES:
+            if rule.term == 'Record' and is_record_verb(source):
+                continue
             if not re.search(rule.source, source, re.IGNORECASE):
                 continue
             matched[rule.term] += 1

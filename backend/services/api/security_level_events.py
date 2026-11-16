@@ -7,6 +7,8 @@ from fastapi import HTTPException, Request
 from psycopg import Connection
 
 
+from .audit_context import decode_change_reason
+
 def level_number(connection: Connection, security_level_id: int) -> int:
     row = connection.execute(
         "SELECT level_number FROM security_levels WHERE id=%s", (security_level_id,)
@@ -26,7 +28,7 @@ def validate_security_level_change(
         return None, level_number(connection, old_security_level_id), level_number(connection, old_security_level_id)
     old_number = level_number(connection, old_security_level_id)
     new_number = level_number(connection, new_security_level_id)
-    reason = request.headers.get("X-Change-Reason", "").strip() or None
+    reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip() or None
     if new_number < old_number and reason is None:
         raise HTTPException(
             status_code=422,

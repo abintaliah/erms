@@ -7,6 +7,7 @@ from typing import Any, Literal
 from fastapi import HTTPException, Request
 from psycopg import Connection
 
+from .audit_context import decode_change_reason
 from .authorization_admin import (
     CUSTODY_PRIVILEGE_CODES,
     _effective_people_for_privilege,
@@ -121,6 +122,7 @@ def analyze_deletion(
             blockers.append(_block("reserved_role", "The reserved system-administrator role cannot be deleted."))
         counts = _counts(connection, {
             "subordinate_roles": ("SELECT count(*) FROM roles WHERE supervisor_role_id=%s", (entity_id,)),
+            "unit_designations": ("SELECT count(*) FROM org_units WHERE managing_role_id=%s OR file_administrator_role_id=%s", (entity_id, entity_id)),
             "user_assignments": ("SELECT count(*) FROM user_role_assignments WHERE role_id=%s", (entity_id,)),
             "aggregation_acl_grants": ("SELECT count(*) FROM aggregation_acl_grants WHERE role_id=%s", (entity_id,)),
             "record_acl_grants": ("SELECT count(*) FROM record_acl_grants WHERE role_id=%s", (entity_id,)),
@@ -132,6 +134,8 @@ def analyze_deletion(
         cascades["user_assignments"] = counts["user_assignments"]
         if counts["subordinate_roles"]:
             blockers.append(_block("supervises_roles", "Assign or remove every subordinate role's supervisor before deletion.", count=counts["subordinate_roles"]))
+        if counts["unit_designations"]:
+            blockers.append(_block("role_designated_by_unit", "Clear or replace organizational-unit role designations before deletion.", count=counts["unit_designations"]))
         acl_count = sum(counts[name] for name in counts if "acl_grants" in name)
         if acl_count:
             blockers.append(_block("role_has_acl_grants", "Transfer or explicitly remove every live and default-child ACL grant before deletion.", count=acl_count, **{name: value for name, value in counts.items() if "acl_grants" in name}))
@@ -190,7 +194,7 @@ def analyze_deletion(
 def permanently_delete(
     connection: Connection, request: Request, kind: EntityKind, entity_id: int, version: int,
 ) -> dict[str, Any]:
-    reason = request.headers.get("X-Change-Reason", "").strip()
+    reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
     if not reason:
         raise HTTPException(status_code=422, detail="X-Change-Reason is required")
     principal = getattr(request.state, "principal", None)

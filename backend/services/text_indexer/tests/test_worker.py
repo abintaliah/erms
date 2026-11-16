@@ -133,3 +133,89 @@ def test_supervisor_workers_watch_their_parent_and_auth_failure_stops_pool():
     assert "process.exitcode == AUTH_FAILURE_EXIT_CODE" in main_source
     assert "sibling.terminate()" in main_source
     assert "os.getppid() != supervisor_pid" in supervisor_source
+
+
+@pytest.mark.parametrize('failure', ['connect', 'timeout', 503])
+def test_api_outage_retries_in_place_and_recovers(monkeypatch, caplog, failure):
+    worker = _worker(monkeypatch)
+    request = httpx.Request('POST', 'http://api/jobs/claim')
+    error = (httpx.ConnectError('refused', request=request) if failure == 'connect'
+             else httpx.ReadTimeout('timeout', request=request) if failure == 'timeout'
+             else httpx.HTTPStatusError('unavailable', request=request,
+                  response=httpx.Response(failure, request=request)))
+    attempts = 0
+    sleeps = []
+    class Done(Exception):
+        pass
+    def claim():
+        nonlocal attempts
+        attempts += 1
+        if attempts <= 7:
+            raise error
+        return []
+    def sleep(delay):
+        sleeps.append(delay)
+        if attempts == 8:
+            raise Done()
+    worker._claim = claim
+    monkeypatch.setattr(worker_module.time, 'sleep', sleep)
+    with caplog.at_level('INFO'), pytest.raises(Done):
+        worker.run()
+    assert sleeps == [1, 2, 4, 8, 16, 30, 30, 1]
+    assert sum('API unavailable' in r.message for r in caplog.records) == 1
+    assert sum('connection restored' in r.message for r in caplog.records) == 1
+    assert not any(r.exc_info for r in caplog.records)
+
+
+@pytest.mark.parametrize('status', [401, 403, 409, 422])
+def test_claim_authentication_and_contract_failures_are_not_retried(monkeypatch, status):
+    worker = _worker(monkeypatch)
+    request = httpx.Request('POST', 'http://api/jobs/claim')
+    def claim():
+        raise httpx.HTTPStatusError('rejected', request=request,
+                                    response=httpx.Response(status, request=request))
+    worker._claim = claim
+    monkeypatch.setattr(worker_module.time, 'sleep', lambda _: pytest.fail('must not retry'))
+    with pytest.raises(httpx.HTTPStatusError):
+        worker.run()
+
+
+def test_once_mode_does_not_hide_connection_failure(monkeypatch):
+    worker = _worker(monkeypatch)
+    def claim():
+        raise httpx.ConnectError('refused')
+    worker._claim = claim
+    with pytest.raises(httpx.ConnectError):
+        worker.run(once=True)
+
+
+def test_ctrl_c_during_restart_delay_does_not_spawn_another_worker(monkeypatch):
+    from backend.services.text_indexer import __main__ as main
+    signals = {}
+    starts = []
+    class Process:
+        pid = 123
+        exitcode = 1
+        def __init__(self, **kwargs):
+            pass
+        def start(self):
+            starts.append(self)
+        def is_alive(self):
+            return False
+        def join(self, **kwargs):
+            pass
+    monkeypatch.setattr(main.multiprocessing, 'get_context', lambda _: SimpleNamespace(Process=Process))
+    monkeypatch.setattr(main.signal, 'signal', lambda signum, handler: signals.update({signum:handler}))
+    sleeps = 0
+    def sleep(_):
+        nonlocal sleeps
+        sleeps += 1
+        if sleeps == 2:
+            signals[main.signal.SIGINT]()
+    monkeypatch.setattr(main.time, 'sleep', sleep)
+    from dataclasses import dataclass
+    @dataclass
+    class PoolSettings:
+        worker_id: str
+    main.run_pool(PoolSettings(worker_id='test'), 1)
+    assert len(starts) == 1

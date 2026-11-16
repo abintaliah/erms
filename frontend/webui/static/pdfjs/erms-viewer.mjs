@@ -89,7 +89,10 @@ async function printDocument(encoded, mimeType = 'application/pdf') {
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
       root.appendChild(canvas);
-      await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
+      // The new tab backgrounds this module's window. Display rendering waits
+      // for requestAnimationFrame there, which can stop while it is hidden.
+      // PDF.js print intent renders without that foreground-only scheduler.
+      await page.render({canvasContext: canvas.getContext('2d'), viewport, intent: 'print'}).promise;
       status.textContent = `Preparing page ${pageNumber} of ${pdfDocument.numPages}…`;
     }
     status.textContent = `${pdfDocument.numPages} page${pdfDocument.numPages === 1 ? '' : 's'} ready`;

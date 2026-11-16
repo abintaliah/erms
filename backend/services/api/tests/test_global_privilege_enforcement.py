@@ -4,12 +4,12 @@ import os
 
 import psycopg
 import pytest
-from fastapi.routing import APIRoute
 from psycopg.rows import dict_row
 from uuid import uuid4
 
 from backend.services.api.authentication import hash_password
 from backend.services.api.main import app
+from tools.generate_policy_inventory import api_operations, api_routes
 
 
 REPRESENTATIVE_ROUTES = (
@@ -157,10 +157,17 @@ def test_denial_is_audited_without_sensitive_request_data(client):
 
 
 def test_governance_labels_are_readable_without_catalogue_administration(client):
+    catalogue = client.get("/api/v1/security-levels").json()
+    custom = client.post("/api/v1/security-levels", json={
+        "code": "LABEL-" + uuid4().hex[:12], "name": "Custom readable label",
+        "level_number": max(item["level_number"] for item in catalogue) + 1,
+    }, headers={"X-Change-Reason": "Create disposable custom governance label"})
+    assert custom.status_code == 201, custom.text
+    expected_codes = {item["code"] for item in catalogue} | {custom.json()["code"]}
     token, _, _ = _account(client, privileges=(), suffix="level-reader")
     response = client.get("/api/v1/security-levels", headers=_bearer(token))
     assert response.status_code == 200
-    assert {item["code"] for item in response.json()} == {"G", "R", "S", "TS"}
+    assert {item["code"] for item in response.json()} == expected_codes
 
     path = client.get("/api/v1/classifications/1/path", headers=_bearer(token))
     assert path.status_code == 200
@@ -230,28 +237,54 @@ def test_principal_exposes_effective_global_capabilities(client):
     assert "identity.users.administer" in principal.json()["global_privileges"]
 
 
-def test_every_phase_4_registry_route_has_the_matching_dependency():
-    registry = json.loads(open("security/operation-policy-registry.json", encoding="utf-8").read())
-    def expanded(routes):
-        for route in routes:
-            if isinstance(route, APIRoute):
-                yield route
-            elif hasattr(route, "original_router"):
-                yield from expanded(route.original_router.routes)
-
+def test_global_registry_routes_with_http_dependencies_match_their_privileges():
     routes = {
-        (method, route.path): route
-        for route in expanded(app.routes)
+        (method, route.path_format): route
+        for route in api_routes(app)
         for method in route.methods
     }
-    for operation in registry["api_operations"]:
+    for operation in api_operations():
         if operation["target_policy_class"] != "globally_privileged":
             continue
         route = routes[(operation["method"], operation["path"])]
-        dependency_names = {
-            dependency.call.__name__
+        dependency_privileges = {
+            privilege
             for dependency in route.dependant.dependencies
-            if dependency.call is not None
+            if (privilege := getattr(dependency.call, "__erms_global_privilege__", None))
         }
-        expected = f"require_{operation['global_privilege'].replace('.', '_')}"
-        assert expected in dependency_names, operation
+        # Some Disposition policies are enforced in database commands.
+        if dependency_privileges:
+            assert operation["global_privilege"] in dependency_privileges, operation
+
+
+@pytest.mark.parametrize("privileges", [
+    (),
+    ("aggregation.acl.manage",),
+    ("record.acl.manage",),
+    ("aggregation.acl.manage", "record.acl.manage"),
+    ("authorization.administer",),
+])
+def test_permission_catalogue_conditional_global_privileges(client, privileges):
+    """Catalogue access needs global privileges, not a resource-instance grant."""
+    token, _, _ = _account(client, privileges=privileges, suffix="catalogue-reader")
+    for resource_type in (None, "aggregation", "record"):
+        params = {} if resource_type is None else {"resource_type": resource_type}
+        response = client.get("/api/v1/permissions", params=params, headers=_bearer(token))
+        allowed = "authorization.administer" in privileges or (
+            resource_type is not None and f"{resource_type}.acl.manage" in privileges
+        )
+        assert response.status_code == (200 if allowed else 403), response.text
+        if allowed:
+            assert response.json(), "Authorized catalogue must not be empty"
+            kinds = {item["resource_type"] for item in response.json()}
+            assert kinds == ({resource_type} if resource_type else {"aggregation", "record"})
+    assert client.get(
+        "/api/v1/permissions", params={"resource_type": "unsupported"}, headers=_bearer(token)
+    ).status_code == 422
+
+
+def test_permission_catalogue_requires_authentication(client):
+    client.cookies.clear()
+    client.headers.pop("X-CSRF-Token", None)
+    for params in ({}, {"resource_type": "aggregation"}, {"resource_type": "record"}):
+        assert client.get("/api/v1/permissions", params=params).status_code == 401

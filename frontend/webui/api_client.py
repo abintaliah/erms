@@ -54,11 +54,14 @@ class ErmsApiClient:
         self._inflight_reads: dict[str, asyncio.Task[Any]] = {}
         self._reference_cache: dict[str, dict[str, Any]] = {}
         self._session_token: str | None = None
+        self._session_revision = 0
         self._unauthorized_handler: Callable[[], Any] | None = None
 
     def set_session_token(self, token: str | None) -> None:
         """Keep authentication attached to this browser page's API client."""
         if token != self._session_token:
+            self._session_revision += 1
+            self.cancel_pending_reads()
             self.clear_reference_cache()
         self._session_token = token
 
@@ -79,14 +82,22 @@ class ErmsApiClient:
         await self._client.aclose()
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        session_revision = self._session_revision
         with_metadata = bool(kwargs.pop("_with_metadata", False))
+        cancellable_read = bool(kwargs.pop("_cancellable_read", False))
         headers = dict(kwargs.pop("headers", {}))
+        # httpx defaults string header values to ASCII. Reasons are human text;
+        # send their UTF-8 bytes while leaving ordinary ASCII headers unchanged.
+        for name, value in list(headers.items()):
+            if name.lower() == "x-change-reason" and isinstance(value, str):
+                headers[name] = value.encode("utf-8")
         headers.setdefault("X-Event-Source", "web_ui")
         if self._session_token:
             headers.setdefault("Authorization", f"Bearer {self._session_token}")
         kwargs["headers"] = headers
         normalized_method = method.upper()
-        if normalized_method not in {"GET", "HEAD"}:
+        if normalized_method not in {"GET", "HEAD"} and not cancellable_read:
+            # Explicit read-only POST previews do not invalidate reference data.
             # Reference lists are intentionally broad: any successful or failed
             # mutation may affect labels, eligibility, status, or authorization.
             self.clear_reference_cache()
@@ -104,7 +115,7 @@ class ErmsApiClient:
                 task = asyncio.create_task(
                     self._perform_request(
                         normalized_method, path, kwargs,
-                        with_metadata=with_metadata,
+                        with_metadata=with_metadata, session_revision=session_revision,
                     )
                 )
                 self._inflight_reads[request_key] = task
@@ -113,9 +124,10 @@ class ErmsApiClient:
                         key, completed,
                     )
                 )
-            return copy.deepcopy(await asyncio.shield(task))
+            return copy.deepcopy(await task if cancellable_read else await asyncio.shield(task))
         return await self._perform_request(
             normalized_method, path, kwargs, with_metadata=with_metadata,
+            session_revision=session_revision,
         )
 
     def _finish_inflight_read(
@@ -128,7 +140,7 @@ class ErmsApiClient:
 
     async def _perform_request(
         self, method: str, path: str, kwargs: dict[str, Any], *,
-        with_metadata: bool = False,
+        with_metadata: bool = False, session_revision: int | None = None,
     ) -> Any:
         try:
             async with self._request_slots:
@@ -139,6 +151,10 @@ class ErmsApiClient:
             raise
         except httpx.HTTPError as error:
             raise ApiError(503, "Cannot connect to the ERMS API") from error
+        # A completed request from an old account must neither publish its
+        # payload nor let its 401 handler revoke the newly signed-in account.
+        if session_revision is not None and session_revision != self._session_revision:
+            raise asyncio.CancelledError
         if response.is_error:
             try:
                 detail = response.json().get("detail", response.text)
@@ -153,7 +169,8 @@ class ErmsApiClient:
             payload = None
         else:
             content_type = response.headers.get("content-type", "")
-            payload = response.json() if "json" in content_type else response.content
+            is_attachment = response.headers.get("content-disposition", "").lower().startswith("attachment")
+            payload = response.json() if "json" in content_type and not is_attachment else response.content
         if with_metadata:
             return {
                 "status_code": response.status_code,
@@ -378,10 +395,13 @@ class ErmsApiClient:
 
     async def my_recent_activity(
         self, *, limit: int = 6, since: datetime | None = None,
+        entity_type: str | None = None,
     ) -> list[dict[str, Any]]:
         params: dict[str, Any] = {"limit": limit}
         if since is not None:
             params["since"] = since.isoformat()
+        if entity_type is not None:
+            params["entity_type"] = entity_type
         return await self.request("GET", "/api/v1/auth/me/recent-activity", params=params)
 
     async def profile_references(self) -> list[dict[str, Any]]:
@@ -417,14 +437,14 @@ class ErmsApiClient:
         return await self.request("GET", "/api/v1/auth/sessions", params=params)
 
     async def login_sessions_page(
-        self, user_id: int | None = None, *, limit: int = 20, offset: int = 0,
+        self, user_id: int | None = None, *, limit: int | None = 20, offset: int = 0,
         query: str = "", session_status: str = "all",
         sort_by: str = "date_created", descending: bool = True,
         date_field: str = "date_created", from_timestamp: str | None = None,
         until_timestamp: str | None = None,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {
-            "limit": limit, "offset": offset, "query": query,
+            **({"limit":limit} if limit is not None else {}), "offset": offset, "query": query,
             "session_status": session_status, "sort_by": sort_by,
             "descending": descending, "date_field": date_field,
         }
@@ -536,8 +556,11 @@ class ErmsApiClient:
     async def get(self, resource: str, entity_id: int) -> dict[str, Any]:
         return await self.request("GET", f"/api/v1/{resource}/{entity_id}")
 
-    async def favourites(self) -> dict[str, list[dict[str, Any]]]:
-        return await self.request("GET", "/api/v1/favourites")
+    async def favourites(self, *, preview=None, kind=None, limit=None, offset=0) -> dict[str, Any]:
+        params = {key: value for key, value in dict(preview=preview, kind=kind, limit=limit).items() if value is not None}
+        if limit is not None:
+            params["offset"] = offset
+        return await self.request("GET", "/api/v1/favourites", **({"params": params} if params else {}))
 
     async def favourite(self, resource: str, entity_id: int) -> None:
         if resource not in {"aggregations", "records"}:
@@ -559,21 +582,24 @@ class ErmsApiClient:
 
     async def organization_roots(
         self, *, limit: int = 25, offset: int = 0,
+        audience: str | None = None,
     ) -> list[dict[str, Any]]:
         return await self.request(
             "GET", "/api/v1/browse/organization/roots",
-            params={"limit": limit, "offset": offset},
+            params={"limit": limit, "offset": offset, **({"audience": audience} if audience else {})},
         )
 
     async def organization_children(
         self, org_unit_id: int, *, include_roles: bool = True,
         limit: int = 25, unit_offset: int = 0, role_offset: int = 0,
+        audience: str | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         return await self.request(
             "GET", f"/api/v1/browse/organization/org-units/{org_unit_id}/children",
             params={
                 "include_roles": str(include_roles).lower(), "limit": limit,
                 "unit_offset": unit_offset, "role_offset": role_offset,
+                **({"audience": audience} if audience else {}),
             },
         )
 
@@ -595,15 +621,18 @@ class ErmsApiClient:
 
     async def search_organization(
         self, query: str, *, entity_type: str = "all", status: str = "all",
+        audience: str | None = None, limit: int = 50, offset: int = 0,
     ) -> list[dict[str, Any]]:
         return await self.request(
             "GET", "/api/v1/browse/organization/search",
-            params={"query": query, "entity_type": entity_type, "status": status},
+            params={"query": query, "entity_type": entity_type, "status": status,
+                    "limit": limit, "offset": offset, **({"audience": audience} if audience else {})},
         )
 
     async def browse_page(
         self, path: str, *, cursor: str | None = None, query: str = "", limit: int = 50,
         owning_org_unit_id: int | None = None,
+        record_creation: bool = False, digital_only: bool = False,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {"limit": limit}
         if cursor:
@@ -612,11 +641,16 @@ class ErmsApiClient:
             params["query"] = query
         if owning_org_unit_id is not None:
             params["owning_org_unit_id"] = owning_org_unit_id
+        if record_creation:
+            params.update(record_creation=True, digital_only=digital_only)
         return await self.request("GET", f"/api/v1/browse/{path}", params=params)
 
-    async def history(self, resource: str, entity_id: int, *, limit: int = 200) -> list[dict[str, Any]]:
+    async def history(
+        self, resource: str, entity_id: int, *, limit: int = 200, offset: int = 0,
+    ) -> list[dict[str, Any]]:
         return await self.request(
-            "GET", f"/api/v1/{resource}/{entity_id}/history", params={"limit": limit}
+            "GET", f"/api/v1/{resource}/{entity_id}/history",
+            params={"limit": limit, "offset": offset},
         )
 
     async def permissions_catalogue(self, resource_type: str) -> list[dict[str, Any]]:
@@ -713,21 +747,59 @@ class ErmsApiClient:
         return await self.request("DELETE", f"/api/v1/{resource_type}s/{resource_id}/holds",
                                   headers={"X-Change-Reason": reason})
 
-    async def explainable_users(self) -> list[dict[str, Any]]:
-        return await self.request("GET", "/api/v1/authorization/explainable-users")
+    async def explainable_users(self, *, query: str = "", limit: int = 25, offset: int = 0) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/authorization/explainable-users", params={"q": query, "limit": limit, "offset": offset})
 
     async def governance_custody(self) -> dict[str, Any]:
         return await self.request("GET", "/api/v1/authorization/governance-custody")
 
+    async def application_configuration(self) -> dict[str, Any]:
+        """One finite, uncached page/dialog snapshot from the API authority."""
+        return await self.request("GET", "/api/v1/application-configuration")
+
+    async def application_settings(self) -> dict[str, Any]:
+        return await self.request("GET", "/api/v1/application-settings")
+
+    async def save_application_settings(self, changes, reason: str) -> dict[str, Any]:
+        return await self.request("PUT", "/api/v1/application-settings",
+                                  json={"changes": changes}, headers={"X-Change-Reason": reason})
+
+    async def test_smtp_send(self, recipient: str) -> dict[str, Any]:
+        # SMTP operations use the administrator's configured socket timeout;
+        # the ordinary 30-second API read timeout must not imply a failed send.
+        return await self.request("POST", "/api/v1/application-settings/test-send",
+                                  json={"recipient": recipient}, timeout=httpx.Timeout(None, connect=5))
+
     async def security_summary(
         self, *, hours: int = 24, start_at: str | None = None, end_at: str | None = None,
+        recent_event_limit: int | None = None, denial_group_limit: int | None = None,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {"hours": hours}
         if start_at:
             params["start_at"] = start_at
         if end_at:
             params["end_at"] = end_at
+        if recent_event_limit is not None:
+            params["recent_event_limit"] = recent_event_limit
+        if denial_group_limit is not None:
+            params["denial_group_limit"] = denial_group_limit
         return await self.request("GET", "/api/v1/security-operations/summary", params=params)
+
+    async def security_events(
+        self, *, start_at: str, end_at: str, limit: int, offset: int,
+    ) -> list[dict[str, Any]]:
+        return await self.request(
+            "GET", "/api/v1/security-operations/events",
+            params={"start_at": start_at, "end_at": end_at, "limit": limit, "offset": offset},
+        )
+
+    async def security_denial_groups(
+        self, *, start_at: str, end_at: str, limit: int, offset: int,
+    ) -> list[dict[str, Any]]:
+        return await self.request(
+            "GET", "/api/v1/security-operations/denial-groups",
+            params={"start_at": start_at, "end_at": end_at, "limit": limit, "offset": offset},
+        )
 
     async def security_reconciliation(self) -> dict[str, Any]:
         return await self.request("GET", "/api/v1/security-operations/reconciliation")
@@ -740,7 +812,7 @@ class ErmsApiClient:
         result["source_resource_id"] = result.get("effective_acl_source_id")
         return result
 
-    async def resource_capabilities(self, resource: str, entity_id: int) -> dict[str, bool]:
+    async def resource_capabilities(self, resource: str, entity_id: int) -> dict[str, bool | int]:
         response = await self.request(
             "GET", f"/api/v1/{resource}/{entity_id}/capabilities",
         )
@@ -818,14 +890,23 @@ class ErmsApiClient:
     async def event_history_operations(self) -> list[str]:
         return await self.request("GET", "/api/v1/event-history/operations")
 
+    async def audit_actors(self, query: str, *, entity_type=None, actor_type=None):
+        params = {"q": query, "limit": 25}
+        if entity_type:
+            params["entity_type"] = entity_type
+        if actor_type:
+            params["actor_type"] = actor_type
+        return await self.request("GET", "/api/v1/event-history/actors", params=params, _cancellable_read=True)
+
     async def event_history_filter_options(self) -> dict[str, list[str]]:
         return await self.request("GET", "/api/v1/event-history/filter-options")
 
     async def search_request(
-        self, resource: str, payload: dict[str, Any], **params: Any,
+        self, resource: str, payload: dict[str, Any], *, advanced: bool = False, **params: Any,
     ) -> dict[str, Any]:
+        operation = "advanced-search" if advanced else "search"
         return await self.request(
-            "POST", f"/api/v1/{resource}/search", json=payload,
+            "POST", f"/api/v1/{resource}/{operation}", json=payload,
             params={key: value for key, value in params.items() if value is not None},
         )
 
@@ -854,7 +935,12 @@ class ErmsApiClient:
         self, resource: str, search_fields: tuple[str, ...], query: str = "", *,
         limit: int = 25, offset: int = 0,
         filters: dict[str, Any] | None = None,
+        eligible_classifications: bool = False,
     ) -> dict[str, Any]:
+        # All record/aggregation relationship pickers also match description.
+        # Preserve the caller's primary field for sorting and avoid duplicates.
+        if resource in {"aggregations", "records"}:
+            search_fields = tuple(dict.fromkeys((*search_fields, "description")))
         conditions: list[dict[str, Any]] = [
             {"field": field, "operator": "eq", "value": value}
             for field, value in (filters or {}).items()
@@ -873,17 +959,24 @@ class ErmsApiClient:
         }
         if conditions:
             payload["where"] = {"and": conditions}
-        return await self.search_request(resource, payload)
+        return await self.search_request(
+            resource, payload,
+            **({"eligible": True} if eligible_classifications else {}),
+        )
 
     async def administration_reference_page(
         self, resource: str, *, query: str = "", sort: str = "name",
         limit: int = 25, offset: int = 0,
+        filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if resource not in {"profiles", "security-levels"}:
             raise ValueError("unsupported administration reference page")
         return await self.request(
             "GET", f"/api/v1/{resource}/page",
-            params={"q": query or None, "sort": sort, "limit": limit, "offset": offset},
+            params={key: value for key, value in {
+                "q": query or None, "sort": sort, "limit": limit, "offset": offset,
+                **(filters or {}),
+            }.items() if value is not None},
         )
 
     async def full_text_search(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -951,15 +1044,17 @@ class ErmsApiClient:
         )
         return result.get("closure")
 
+    async def effective_record_closure(self, record_id: int) -> dict[str, Any] | None:
+        result = await self.request("GET", f"/api/v1/records/{record_id}/effective-closure")
+        return result.get("closure")
+
     async def dashboard_summary(
-        self, *, recent_limit: int, recent_since: datetime,
+        self, *, recent_limit: int | None = None, recent_since: datetime | None = None,
     ) -> dict[str, Any]:
         return await self.request(
             "GET", "/api/v1/dashboard/summary",
-            params={
-                "recent_limit": recent_limit,
-                "recent_since": recent_since.isoformat(),
-            },
+            params={**({"recent_limit":recent_limit} if recent_limit is not None else {}),
+                    **({"recent_since":recent_since.isoformat()} if recent_since is not None else {})},
         )
 
     async def dashboard_reviews(
@@ -969,35 +1064,8 @@ class ErmsApiClient:
             "GET", "/api/v1/dashboard/reviews",
             # Fetch one look-ahead row so the UI can enable Next without a
             # separate count query or downloading every review.
-            params={"state": state, "limit": limit + 1, "offset": offset},
+            params={"state": state, "limit": limit, "offset": offset, "lookahead": True},
         )
-
-    async def search(
-        self, resource: str, query: str, fields: tuple[str, ...],
-        *, owning_org_unit_id: int | None = None,
-    ) -> list[dict[str, Any]]:
-        term = query.strip()
-        if not term:
-            return []
-        conditions = [
-            {"field": field, "operator": "contains_ci", "value": term}
-            for field in fields
-        ]
-        where: dict[str, Any] = {"or": conditions}
-        if owning_org_unit_id is not None and resource in {"aggregations", "records"}:
-            where = {"and": [
-                where,
-                {
-                    "field": "owning_org_unit_id", "operator": "eq",
-                    "value": owning_org_unit_id,
-                },
-            ]}
-        result = await self.request(
-            "POST",
-            f"/api/v1/{resource}/search",
-            json={"where": where, "limit": 100, "offset": 0},
-        )
-        return result["items"]
 
     async def _recent_entities_from_events(
         self,
@@ -1090,20 +1158,17 @@ class ErmsApiClient:
             else datetime.fromisoformat(since.replace("Z", "+00:00")) if since
             else None
         )
-        activity = await self.my_recent_activity(limit=limit, since=parsed_since)
-        entries = [item for item in activity if item["entity_type"] == entity_type]
-        results = await asyncio.gather(
-            *(self.get(resource, entry["entity_id"]) for entry in entries),
-            return_exceptions=True,
-        )
+        activity = await self.my_recent_activity(limit=limit, since=parsed_since, entity_type=entity_type)
         return [
             {
-                **result,
+                "id": entry["entity_id"],
+                "title": entry["title"],
+                f"{entity_type}_number": entry["number"],
+                "created_by": entry.get("created_by"),
                 "_activity_at": entry["occurred_at"],
                 "_operation": entry["operation"],
             }
-            for entry, result in zip(entries, results)
-            if isinstance(result, dict)
+            for entry in activity
         ]
 
     async def recently_created(
@@ -1224,13 +1289,43 @@ class ErmsApiClient:
             files={"file": (name, content, mime_type or "application/octet-stream")},
         )
 
-    async def components(self, record_id: int) -> list[dict[str, Any]]:
+    async def component_page(
+        self, record_id: int, *, limit: int = 25, offset: int = 0,
+    ) -> dict[str, Any]:
+        """Return one authorized, deterministically ordered component page."""
+        return await self.search_request("digital-components", {
+            "where": {"field": "record_id", "operator": "eq", "value": record_id},
+            "sort": [
+                {"field": "component_order", "direction": "asc"},
+                {"field": "id", "direction": "asc"},
+            ],
+            "limit": limit,
+            "offset": offset,
+        })
+
+    async def component_count(self, record_id: int) -> int:
+        return int((await self.component_page(record_id, limit=1))["total"])
+
+    async def previewable_component_page(
+        self, record_id: int, *, limit: int, offset: int = 0,
+        selected_component_id: int | None = None,
+    ) -> dict[str, Any]:
+        params = {"limit": limit, "offset": offset}
+        if selected_component_id is not None:
+            params["selected_component_id"] = selected_component_id
         return await self.request(
-            "GET", "/api/v1/digital-components", params={"record_id": record_id}
+            "GET", f"/api/v1/records/{record_id}/digital-components/previewable", params=params,
         )
 
     async def reorder_components(self, record_id: int, components: list[dict[str, int]]) -> None:
         await self.request("PUT", f"/api/v1/records/{record_id}/digital-components/order", json={"components": components})
+
+    async def move_component(self, record_id: int, component_id: int, direction: int) -> None:
+        await self.request(
+            "POST",
+            f"/api/v1/records/{record_id}/digital-components/{component_id}/move",
+            json={"direction": direction},
+        )
 
     async def delete_component(self, component_id: int, version: int) -> None:
         await self.request("DELETE", f"/api/v1/digital-components/{component_id}", headers={"If-Match": str(version)})
@@ -1265,6 +1360,9 @@ class ErmsApiClient:
     async def draft_components(self, draft_id: int) -> list[dict[str, Any]]:
         return await self.request("GET", f"/api/v1/record-drafts/{draft_id}/components")
 
+    async def view_draft_component(self, draft_id: int, component_id: int) -> bytes:
+        return await self.request("GET", f"/api/v1/record-drafts/{draft_id}/components/{component_id}/rendition")
+
     async def upload_draft_component(self, draft_id: int, component_order: int, name: str, content: bytes, mime_type: str) -> dict[str, Any]:
         return await self.request(
             "POST", f"/api/v1/record-drafts/{draft_id}/components",
@@ -1279,21 +1377,21 @@ class ErmsApiClient:
         await self.request("DELETE", f"/api/v1/record-drafts/{draft_id}/components/{component_id}")
 
     async def commit_record_draft(
-        self, draft_id: int, creator_acl_role_id: int | None = None,
+        self, draft_id: int, creator_acl_role_id: int | None = None, *, capture: bool = False,
     ) -> dict[str, Any]:
         params = (
             {"creator_acl_role_id": creator_acl_role_id}
             if creator_acl_role_id is not None else None
         )
         return await self.request(
-            "POST", f"/api/v1/record-drafts/{draft_id}/commit", params=params,
+            "POST", f"/api/v1/record-drafts/{draft_id}/commit", params=params, timeout=660 if capture else 30,
         )
 
     async def discard_record_draft(self, draft_id: int) -> None:
         await self.request("DELETE", f"/api/v1/record-drafts/{draft_id}")
 
-    async def recent_classifications(self, limit: int = 4) -> list[dict[str, Any]]:
-        return await self.request("GET", "/api/v1/classifications/recent", params={"limit": limit})
+    async def recent_classifications(self, limit: int | None = None, offset: int = 0) -> list[dict[str, Any]]:
+        return await self.request("GET", "/api/v1/classifications/recent", params={**({"limit":limit} if limit is not None else {}), "offset":offset})
 
     async def classification_path(self, classification_id: int) -> list[dict[str, Any]]:
         return await self.request("GET", f"/api/v1/classifications/{classification_id}/path")
@@ -1347,3 +1445,46 @@ class ErmsApiClient:
             f"/api/v1/user-role-assignments/{assignment_id}",
             headers={"If-Match": str(version)},
         )
+
+    async def disposition_page(self, path: str, **parameters: Any) -> dict[str, Any]:
+        """Live bounded pages; use the existing identity-scoped in-flight reads."""
+        return await self.request('GET', '/api/v1/disposition/' + path,
+                                  params={key: value for key, value in parameters.items() if value is not None})
+
+    async def disposition_approval_summary(self, task_id, *, acting_role_id, task_version, changes, version):
+        return await self.request('POST',f'/api/v1/disposition/tasks/{task_id}/approval-summary',
+                                  json={'acting_role_id':acting_role_id,'task_version':task_version,'changes':changes},
+                                  headers={'If-Match':str(version)},_cancellable_read=True)
+
+    async def disposition_command(self, path: str, payload: dict[str, Any], *, reason: str,
+                                  version: int | None = None) -> dict[str, Any]:
+        headers = {'X-Change-Reason': reason}
+        if version is not None:
+            headers['If-Match'] = str(version)
+        return await self.request('POST', '/api/v1/disposition/' + path, json=payload, headers=headers)
+
+
+    async def correct_disposition_evidence(self, job_id, document_id, *, version, command_id,
+                                           acting_role_id, destination_token, reason, name, content, mime_type):
+        return await self.request('POST',f'/api/v1/disposition/jobs/{job_id}/documents/{document_id}/corrections',
+          data={'command_id':str(command_id),'acting_role_id':str(acting_role_id),'destination_token':destination_token},
+          files={'file':(name,content,mime_type)},headers={'If-Match':str(version),'X-Change-Reason':reason})
+
+    async def revise_disposition_template(self, job_id, kind, *, command_id, acting_role_id,
+                                          expected_reference, reason, name, content):
+        return await self.request('POST',(f'/api/v1/disposition/jobs/{job_id}/templates' if job_id is not None else '/api/v1/disposition/templates')+f'/{kind}/revisions',
+          data={'command_id':str(command_id),'acting_role_id':str(acting_role_id),'expected_reference':expected_reference},
+          files={'file':(name,content,'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
+          headers={'X-Change-Reason':reason})
+
+    async def record_external_decision(self,task_id,*,version,command_id,acting_role_id,task_version,request_document_id,
+            decision,correction_notes,destruction_number,destination_token,name,content,mime_type):
+        data={'command_id':str(command_id),'acting_role_id':str(acting_role_id),'task_version':str(task_version),
+          'request_document_id':str(request_document_id),'decision':decision,'destination_token':destination_token}
+        if correction_notes is not None:data['correction_notes']=correction_notes
+        if destruction_number is not None:data['destruction_number']=destruction_number
+        return await self.request('POST',f'/api/v1/disposition/tasks/{task_id}/external-decision',data=data,
+          files={'file':(name,content,mime_type)},headers={'If-Match':str(version)})
+
+    async def confirm_physical(self,task_id,*,version,command_id,acting_role_id,task_version,successful,certificate_reference,destination_token,name,content,mime_type):
+        return await self.request('POST',f'/api/v1/disposition/tasks/{task_id}/physical-confirmation',data={'command_id':str(command_id),'acting_role_id':str(acting_role_id),'task_version':str(task_version),'successful':str(successful).lower(),'certificate_reference':certificate_reference,'destination_token':destination_token},files={'file':(name,content,mime_type)},headers={'If-Match':str(version)})

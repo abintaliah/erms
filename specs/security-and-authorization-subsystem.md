@@ -4,7 +4,7 @@
 **Approved:** 19 September 2026
 **Project:** ERMS / wathiq  
 **Prepared:** 19 September 2026  
-**Revision:** 0.7 — reserved defunct-organization holdings-transfer privilege
+**Revision:** 0.9 — bounded historical actor autocomplete and capped Audit Trail search
 
 ## 1. Purpose
 
@@ -136,6 +136,33 @@ resource ACL for governed content, subject to the restrictions in Section 12.
 It is not a system-administrator role and is not a universal authorization
 bypass.
 
+### 3.7.1 Why governance status belongs to the Role
+
+`is_information_governance` remains an explicit attribute of the Role, not the
+Profile. This placement is reaffirmed on 21 October 2026; it clarifies the
+existing model without changing authorization behavior.
+
+A Profile defines reusable action capabilities. A Role defines an organizational
+responsibility, with its own clearance, organizational owner, and assignments.
+Information-governance status designates that responsibility and its qualified
+access treatment; it is not implied by possession of a particular capability
+set or by a role or Profile display name.
+
+Two roles may deliberately share a Profile while only one is designated for
+information governance. Placing the flag on the Profile would force all roles
+using it to share that status, or require duplicate Profiles merely to preserve
+the distinction. Editing or replacing a shared capability Profile must not
+implicitly confer or remove a role's governance designation. Profile changes
+can still affect privileges and therefore whether the role qualifies for a
+particular operation or continuity safeguard.
+
+Retain the existing effective-assignment, role/organization activation, global
+privilege, clearance, and resource-state checks. In particular, the governance
+role used for ACL bypass must itself supply the required clearance; governance
+status is not a universal bypass. Assigning `INFO_GOV_MGR`, `INFO_GOV_OFFICER`, or
+a custom Profile does not itself replace the explicit role flag. Existing
+operation-specific Profile checks remain applicable where separately specified.
+
 ## 4. Security levels
 
 ### 4.1 Data and ordering
@@ -193,6 +220,16 @@ but it does not itself change ordinary read or write authorization.
   baseline level.
 
 ### 4.3 Container security invariant
+
+Ordinary aggregation and record creation/edit forms offer only security levels
+at or below both the caller's highest effective-role clearance and the selected
+parent aggregation's level (when a parent exists). Aggregation edits also exclude
+levels below the security level of their contents. These constraints apply before
+selector pagination and text filtering, are refreshed when the parent changes,
+and clear a previously selected level if it becomes invalid. Explanatory text
+under the field describes both ceilings and the aggregation content minimum.
+The separate governed **Change security level** action retains its administrative
+hierarchy remedies and their existing authorization and atomic validation rules.
 
 An aggregation is a security envelope. Its level must be equal to or more
 restrictive than every aggregation and record anywhere within its branch:
@@ -343,7 +380,7 @@ The initial catalogue is:
 
 | Code | Purpose |
 | --- | --- |
-| `authorization.administer` | Create and maintain profiles, profile privileges, role-profile assignments, governance-role flags, and resource ACLs |
+| `authorization.administer` | Create and maintain profiles, profile privileges, role-profile assignments, governance-role flags, and child-default ACL administration |
 | `authorization.explain` | Diagnose effective access for another user, subject to the examiner's own resource access and clearance |
 | `security_levels.administer` | Create and maintain the security-level catalogue |
 | `identity.users.administer` | Create, edit, activate, deactivate, suspend, unsuspend, issue temporary passwords for, and eventually delete users |
@@ -699,7 +736,7 @@ inert until both gates are satisfied.
 
 ### 7.2 Synthetic Everyone principal
 
-Everyone is an ACL-only synthetic principal representing every authenticated
+Within authorization, Everyone is an ACL-only synthetic principal representing every authenticated
 user account. It is not a row in `roles`, is not seeded, has no organizational
 unit, has no assignments, has no profile, has no security level, cannot be
 renamed or deleted, and never appears in the organization tree or role
@@ -815,7 +852,14 @@ ACL configuration while retaining deliberate branch-level control.
 
 The default child-record ACL remains a record-permission template and cannot
 directly mirror the aggregation resource ACL because the two use different
-permission catalogues. It defaults to Everyone/all and can be customized.
+permission catalogues. On creation, it is initialized with the aggregation's
+creator ACL role and All org unit members record grant sets defined in Sections
+9.3, 9.4, and 10.1 of
+[Organizational Ownership and Default ACLs](organizational-ownership-and-default-acls.md),
+plus the Owning and Higher-Level Unit Managers and Effective File Administrator
+record grants defined in Section 4.2 of
+[Hierarchical Oversight Default ACLs](hierarchical-oversight-default-acls.md).
+An authorized ACL manager can customize this template.
 
 Changing an ACL near the top of a mirrored chain may affect an arbitrarily deep
 subtree. Preview and validation must therefore traverse all affected descendants
@@ -1035,9 +1079,18 @@ mappings are:
 | Add/replace/remove/reorder | Matching component privilege | `record.view` and matching component permission |
 | Change aggregation level | `aggregation.security_level.change` | `aggregation.security_level.change` |
 | Change record level | `record.security_level.change` | `record.security_level.change` |
-| Manage resource ACL | Matching `*.acl.manage` plus `authorization.administer` | Matching `*.acl.manage` permission |
+| Manage individual resource ACL | Matching `*.acl.manage` | Matching `*.acl.manage` permission |
+| Manage child-default ACL | `aggregation.acl.manage` plus `authorization.administer` | `aggregation.acl.manage` permission |
 | View entity history | `audit.view` | Matching `*.history.view` permission |
 | Explain another user's access | `authorization.explain` | Examiner must independently view and clear the resource |
+
+Individual aggregation and record ACL reads and replacements do not require
+`authorization.administer`. They require the matching resource ACL-management
+global privilege and effective resource permission, subject to existing visibility,
+clearance, and governance rules. The permission catalogue for a specified resource
+type is available to holders of its ACL-management global privilege; unrestricted
+catalogue access remains restricted to authorization administrators.
+
 
 Root aggregation creation has no parent ACL, so its global privilege and
 clearance/default/continuity checks are the complete resource authorization.
@@ -1653,6 +1706,104 @@ protected metadata the actor was not allowed to see. Rate limiting or
 aggregation may be used for repeated identical denials without losing incident
 visibility.
 
+### 18.1 Audit Trail actor name/email filter
+
+The system-wide Audit Trail must provide a localizable **Actor name or email**
+searchable selector alongside **Actor type**. Actor type continues to distinguish users
+from automated processes; the new filter identifies activity using the actor's
+name or email. A nonblank search matches a case-insensitive literal substring
+of either persisted `actor_name` or `actor_email`. Trim surrounding search
+whitespace; a blank value imposes no actor-name/email restriction. Characters
+used as SQL wildcard syntax must be treated literally.
+
+After at least two non-whitespace characters, show debounced server suggestions
+from the current users table by literal case-insensitive name/email substring.
+Return at most 25 users per request, with an indication to refine the text when
+more matches exist. The lookup must not query event history or perform event
+visibility checks. Suggestions show current user names/emails and are independent
+of the event-type and actor-type filters. Existing audit.view authorizes this
+bounded lookup; no additional directory privilege is required.
+
+If no user matches, retain the typed characters without any historical lookup.
+Apply uses that unselected text to search immutable audit snapshots, including
+renamed/deleted users and automated processes, under existing event authorization.
+
+Selecting a user filters by persisted `actor_user_id`, including that user's
+history across renames and account deletion. If text is
+entered without selecting a suggestion, retain the literal substring behavior
+below. Clearing selection/text removes the actor restriction. Suggestions are
+independent of the current event scope; all active filters continue to apply
+to the final event search. Selected labels remain available
+while more suggestions are loaded. Debounce for 200 ms, cancel superseded reads,
+and ignore responses after newer input or page navigation. Show localizable
+short-input, empty, refinement and failure guidance without a suggestion cache.
+
+`GET /api/v1/event-history/actors?q=<text>&limit=25` requires `audit.view`, accepts
+legacy optional `entity_type` and `actor_type` parameters without using them to
+constrain directory suggestions, and returns `items` containing
+`actor_user_id`, `actor_name`, `actor_email`, `actor_type`, plus `has_more`.
+Query length is bounded to 128 characters and the server limits suggestions to
+25. No user-directory privilege is added.
+
+Audit Trail searches return only the newest matching events up to deployment
+setting `AUDIT_TRAIL_SEARCH_RESULT_LIMIT` (positive integer, default 1,000), with
+50 per UI page. The server enforces this cap: counts stop after detecting limit
++ 1 matches, `total` is capped at the configured limit, and search responses
+include the effective `result_cap` and `truncated`. Offsets at or beyond the
+limit are rejected; a page crossing the cap is shortened. When truncated, show a localizable notice that users must refine the
+search with text or other filters to find more specific events. Do not download
+1,000 rows to paginate in the browser. Default event-history search ordering is
+newest occurrence first, with descending ID as the deterministic tie-breaker.
+
+Use actor-ID/time/ID and time/ID indexes for identity and chronological search,
+trigram indexes for actor-name/email substrings. Indexed raw candidate predicates may narrow
+the work, but the existing authorized projection still decides matches/counts.
+Never use a raw candidate match as permission to disclose an actor. Unsupported
+or negated/null branches must not change authorization or filter semantics.
+
+For unselected text on Apply, match event-time actor snapshots rather than the current
+user directory, so historical activity remains searchable after a user is
+renamed or deleted. A partial name or shared name can match multiple actors;
+the field does not imply that a name is a unique user identifier. Events without
+either snapshot do not match a nonblank search.
+
+Combine this condition with all other active Audit Trail filters using AND;
+name/email alternatives within this condition use OR. Apply the filter on the
+server before pagination and counting, reset to the first page when filters
+are applied, and clear it through the existing filter-reset action. Retain the
+existing entity-type presets, including the Messages Monitor audit shortcut.
+Do not download the user directory or event collection to filter in the browser.
+
+Existing `audit.view`, event authorization, and redaction rules remain in force.
+The filter must not disclose protected actor details through matches, result
+counts or redacted envelopes: historical actor fields hidden from the viewer
+must not be usable as matches. No additional user-directory privilege is
+required. English and maintained-language labels and hints follow the normal
+translation review/publication workflow.
+
+**Verification gate:** Verify current-user name/email suggestions without event-history access, no-match text
+retention, case-insensitive partial matching, literal wildcard characters,
+two-character suggestions, the 25-suggestion cap,
+selection and clearing, retained selections, stale/abandoned requests, the
+1,000-event result cap and refinement notice, realistic-volume query plans, surrounding
+whitespace and blank reset, null snapshots, renamed/deleted accounts, multiple
+actors sharing a name, AND composition with every existing filter, first-page
+reset and server pagination/count consistency. Verify authorization and
+redaction prevent hidden actor fields from influencing matches or counts, and
+verify the Messages Monitor preset, repeated navigation, and English/LTR and
+Arabic/RTL rendering. Record implementation paths and passing evidence before
+declaring this addition complete. Database-backed tests use newly created,
+uniquely named disposable databases and clean them up after success or failure.
+
+Implementation and verification (2026-10-05): `select_audit_trail` builds the
+actor OR condition inside the existing AND filter expression and bounded search
+request. The authorized history view masks protected actor fields in the
+canonical schema and migration 046. Actor-search and migration tests in
+`scheme_transfer/tests/test_export_audit.py`, English/Arabic navigation tests in
+`test_messaging_monitor_navigation.py`, and live responsive browser checks are
+recorded in
+[`docs/verification/classification-export-audit/verification.md`](../docs/verification/classification-export-audit/verification.md).
+
 ## 19. Caching and performance
 
 Correctness precedes caching. The first implementation may calculate decisions
@@ -2105,3 +2256,20 @@ Revision 0.6 resolves the remaining ACL and deployment-policy questions:
    effective custodian count from reaching zero.
 
 No authorization-policy decisions remain open from the revision 0.5 review.
+
+
+The messaging subsystem separately supports a synthetic Everyone audience for
+human messages, as specified in notifications-and-messaging.md. This does not
+create a role, grant privileges, change ACL matching, or bypass effective-role
+and security-clearance gates. Messaging expansion uses its own recipient
+eligibility rules; ACL matching still represents all authenticated accounts.
+
+### Built-in File Administrator profile
+
+`FILE_ADMIN` (File Administrator) is a built-in profile using the 34 privileges
+approved from the demo profile on 2026-10-21, enumerated in canonical schema SQL
+and migration 073. Its creation does not assign users, designate an organization
+unit's File Administrator role, or confer Information Governance status. Existing
+resource authorization and workflow checks remain mandatory. Upgrade migration
+073 promotes an exact existing match in place; conflicting profiles require
+explicit reconciliation rather than automatic privilege replacement.

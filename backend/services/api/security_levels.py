@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
-import secrets
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from psycopg import Connection
 
+from .operation_policy import operation_policy
+from .audit_context import decode_change_reason
 from .concurrency import expected_version
 from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .database import get_connection
@@ -48,9 +45,6 @@ router = APIRouter(
     prefix="/api/v1",
     tags=["security levels"],
 )
-_PREVIEW_SECRET = secrets.token_bytes(32)
-
-
 def _level(connection: Connection, level_id: int) -> dict[str, Any]:
     row = connection.execute("SELECT * FROM security_levels WHERE id=%s", (level_id,)).fetchone()
     if row is None:
@@ -115,27 +109,6 @@ def _subtree_above(connection: Connection, aggregation_id: int, target: int) -> 
     return aggregations, records
 
 
-def _unsigned_payload(data: dict[str, Any]) -> bytes:
-    return json.dumps(data, sort_keys=True, separators=(",", ":")).encode()
-
-
-def _sign(data: dict[str, Any]) -> str:
-    body = _unsigned_payload(data)
-    signature = hmac.new(_PREVIEW_SECRET, body, hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(body + signature).decode().rstrip("=")
-
-
-def _verify(token: str) -> dict[str, Any]:
-    try:
-        raw = base64.urlsafe_b64decode(token + "=" * (-len(token) % 4))
-        body, signature = raw[:-32], raw[-32:]
-        if not hmac.compare_digest(signature, hmac.new(_PREVIEW_SECRET, body, hashlib.sha256).digest()):
-            raise ValueError
-        return json.loads(body)
-    except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
-        raise HTTPException(status_code=409, detail="invalid or expired security-level preview") from error
-
-
 def _build_preview(connection: Connection, request: SecurityLevelChangePreviewRequest) -> dict[str, Any]:
     target = _level(connection, request.target_security_level_id)
     resource = _resource(connection, request.resource_type, request.resource_id)
@@ -164,16 +137,13 @@ def _build_preview(connection: Connection, request: SecurityLevelChangePreviewRe
         "aggregations": {str(row["id"]): row["version"] for row in affected_aggregations},
         "records": {str(row["id"]): row["version"] for row in affected_records},
     }
-    request_data = request.model_dump()
-    payload = {"request": request_data, "versions": versions}
     return {
-        "preview_token": _sign(payload),
         "conflict": conflict,
         "remedy": request.remedy,
         "target_level_number": target["level_number"],
         "affected_aggregations": affected_aggregations,
         "affected_records": affected_records,
-        "_payload": payload,
+        "reviewed_versions": versions,
     }
 
 
@@ -187,6 +157,7 @@ def create_security_level(payload: SecurityLevelCreate, connection: Connection =
 
 
 @router.get("/security-levels", response_model=list[SecurityLevelRead])
+@operation_policy("authenticated_only")
 def list_security_levels(
     request: Request,
     response: Response,
@@ -207,14 +178,51 @@ def list_security_levels(
 
 
 @router.get("/security-levels/page")
+@operation_policy("authenticated_only")
 def page_security_levels(
     request: Request, q: str | None = None,
+    assignable: bool = False,
+    parent_aggregation_id: int | None = None,
+    aggregation_id: int | None = None,
     sort: str = Query("level_number", pattern="^(level_number|code|name)$"),
     limit: int = Query(25, ge=1, le=50), offset: int = Query(0, ge=0),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     predicate = "WHERE (%s::text IS NULL OR level.code ILIKE '%%'||%s||'%%' OR level.name ILIKE '%%'||%s||'%%' OR level.description ILIKE '%%'||%s||'%%')"
     parameters = (q, q, q, q)
+    minimum = None
+    maximum = None
+    if assignable:
+        maximum = connection.execute("""SELECT max(level.level_number) AS value
+            FROM user_role_assignments assignment
+            JOIN roles role ON role.id=assignment.role_id
+            JOIN security_levels level ON level.id=role.security_level_id
+            WHERE assignment.user_id=current_user_id()
+              AND assignment.valid_from<=CURRENT_TIMESTAMP
+              AND (assignment.valid_until IS NULL OR assignment.valid_until>CURRENT_TIMESTAMP)
+              AND role_effectively_active(role.id)""").fetchone()["value"]
+        for resource_id in {parent_aggregation_id, aggregation_id} - {None}:
+            if not connection.execute(
+                "SELECT id FROM aggregations WHERE id=%s AND current_user_can_view_aggregation(id)",
+                (resource_id,),
+            ).fetchone():
+                raise HTTPException(status_code=404, detail="aggregation not found")
+        if parent_aggregation_id is not None:
+            parent_level = connection.execute("""SELECT level.level_number FROM aggregations parent
+                JOIN security_levels level ON level.id=parent.security_level_id WHERE parent.id=%s""",
+                (parent_aggregation_id,),
+            ).fetchone()["level_number"]
+            maximum = min(maximum, parent_level) if maximum is not None else None
+        if aggregation_id is not None:
+            minimum = connection.execute("""SELECT max(level.level_number) AS value
+                FROM security_levels level JOIN (
+                    SELECT security_level_id FROM aggregations WHERE parent_aggregation_id=%s
+                    UNION ALL SELECT security_level_id FROM records WHERE aggregation_id=%s
+                ) child ON child.security_level_id=level.id""",
+                (aggregation_id, aggregation_id),
+            ).fetchone()["value"]
+        predicate += " AND level.level_number<=%s AND (%s::integer IS NULL OR level.level_number>=%s)"
+        parameters += (maximum, minimum, minimum)
     total = connection.execute(
         f"SELECT count(*) value FROM security_levels level {predicate}", parameters,
     ).fetchone()["value"]
@@ -229,10 +237,12 @@ def page_security_levels(
         (*parameters, limit, offset),
     ).fetchall())
     items = localize_rows(rows, preferred_language(connection, request), "name")
-    return {"items": items, "total": total, "limit": limit, "offset": offset}
+    return {"items": items, "total": total, "limit": limit, "offset": offset,
+            **({"minimum_level": minimum, "maximum_level": maximum} if assignable else {})}
 
 
 @router.get("/security-levels/{level_id}", response_model=SecurityLevelRead)
+@operation_policy("authenticated_only")
 def get_security_level(level_id: int, request: Request, connection: Connection = Depends(get_connection, scope="function")):
     return localize_rows([get_or_404(connection, "security_levels", level_id)], preferred_language(connection, request), "name")[0]
 
@@ -244,11 +254,12 @@ def get_security_level(level_id: int, request: Request, connection: Connection =
     dependencies=[Depends(require_audit_view)],
 )
 def get_security_level_history(
-    level_id: int, connection: Connection=Depends(get_connection, scope="function"),
+    level_id: int, limit: int = Query(500, ge=1, le=500), offset: int = Query(0, ge=0),
+    connection: Connection=Depends(get_connection, scope="function"),
 ):
     get_or_404(connection, "security_levels", level_id)
     return list_rows(
-        connection, "event_history", limit=500, offset=0,
+        connection, "event_history", limit=limit, offset=offset,
         filters={"entity_type": "security_level", "entity_id": level_id},
         order_by=("occurred_at", "id"), descending=True,
     )
@@ -285,6 +296,7 @@ def delete_security_level(
 
 
 @router.post("/security-level-changes/preview", response_model=SecurityLevelChangePreviewRead)
+@operation_policy("resource_scoped")
 def preview_security_level_change(
     payload: SecurityLevelChangePreviewRequest,
     connection: Connection = Depends(get_connection, scope="function"),
@@ -308,26 +320,24 @@ def preview_security_level_change(
             connection, "aggregation", payload.destination_aggregation_id,
             source_permission, receive_permission, lock=False,
         )
-    preview = _build_preview(connection, payload)
-    preview.pop("_payload", None)
-    return preview
+    return _build_preview(connection, payload)
 
 
 @router.post("/security-level-changes/apply")
+@operation_policy("resource_scoped")
 def apply_security_level_change(
     payload: SecurityLevelChangeApplyRequest,
     request: Request,
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    reason = request.headers.get("X-Change-Reason", "").strip()
+    reason = decode_change_reason(request.headers.get("X-Change-Reason", "")).strip()
     if not reason:
         raise HTTPException(status_code=422, detail="X-Change-Reason is required")
-    original = _verify(payload.preview_token)
-    preview_request = SecurityLevelChangePreviewRequest(**payload.model_dump(exclude={"preview_token"}))
-    if original["request"] != preview_request.model_dump():
-        raise HTTPException(status_code=409, detail="security-level preview does not match request")
+    preview_request = SecurityLevelChangePreviewRequest(
+        **payload.model_dump(exclude={"reviewed_versions"})
+    )
     current = _build_preview(connection, preview_request)
-    if current["_payload"]["versions"] != original["versions"]:
+    if current["reviewed_versions"] != payload.reviewed_versions.model_dump():
         raise HTTPException(status_code=412, detail="security-level preview is stale")
     if current["conflict"] and payload.remedy == "none":
         raise HTTPException(status_code=409, detail="security_hierarchy_violation")
@@ -367,6 +377,9 @@ def apply_security_level_change(
     target_level = _level(connection, target_id)
     if target_level["level_number"] < old_level["level_number"]:
         require_global(connection, "security.resource.downgrade")
+    connection.execute(
+        "SELECT set_config('app.security_level_change_authorized','authorized',true)"
+    )
     for row in current["affected_records"]:
         connection.execute("UPDATE records SET security_level_id=%s WHERE id=%s", (target_id, row["id"]))
     for row in current["affected_aggregations"]:
@@ -380,8 +393,11 @@ def apply_security_level_change(
     if payload.destination_aggregation_id is not None:
         assignments.append(f"{parent_column}=%s")
         parameters.append(payload.destination_aggregation_id)
-    parameters.append(payload.resource_id)
-    connection.execute(f"UPDATE {table} SET {','.join(assignments)} WHERE id=%s", parameters)
+    if target_id != old_level["id"] or payload.destination_aggregation_id is not None:
+        parameters.append(payload.resource_id)
+        connection.execute(
+            f"UPDATE {table} SET {','.join(assignments)} WHERE id=%s", parameters
+        )
     append_security_level_event(
         connection,
         entity_type=payload.resource_type,

@@ -78,6 +78,8 @@ def run_pool(settings: Settings, count: int) -> None:
                         slot, process.exitcode,
                     )
                     time.sleep(1)
+                    if stopping:
+                        break
                     workers[slot] = start(slot)
     finally:
         for process in workers.values():

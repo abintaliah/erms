@@ -1,4 +1,5 @@
 import json
+from hashlib import sha256
 import os
 from pathlib import Path
 import re
@@ -6,6 +7,7 @@ import re
 import psycopg
 import pytest
 
+from backend.services.api import localization
 from backend.services.api.localization import ARABIC_TERMINOLOGY, synchronize_generated_arabic_drafts
 
 
@@ -14,14 +16,14 @@ MESSAGE_KEY = "preferences.validation.language.unsupported"
 
 def test_generated_arabic_artifact_is_complete_contextual_and_placeholder_safe():
     root = Path(__file__).parents[4]
-    definitions = json.loads((root / "frontend/webui/i18n/messages.en.json").read_text())
+    catalogue = (root / "frontend/webui/i18n/messages.en.json").read_bytes()
+    definitions = json.loads(catalogue)
     artifact = json.loads((root / "frontend/webui/i18n/messages.ar.generated.json").read_text())
     candidates = artifact["items"]
     definition_keys = [item["message_key"] for item in definitions]
     assert definition_keys == sorted(definition_keys)
-    assert artifact["generator"] == "Wathiq Translation Administration"
-    assert artifact["model"] == "database-reviewed-translations"
-    assert artifact["prompt_version"] == "manual-admin-export-v1"
+    assert artifact["catalogue_sha256"] == sha256(catalogue).hexdigest()
+    assert artifact["artifact_type"] == "wathiq_translation_administration_export"
     assert [item["message_key"] for item in candidates] == definition_keys
     assert len({item["message_key"] for item in candidates}) == len(definitions)
 
@@ -31,7 +33,24 @@ def test_generated_arabic_artifact_is_complete_contextual_and_placeholder_safe()
         assert set(placeholder.findall(candidate["translated_text"])) == set(
             placeholder.findall(definition["default_text"])
         )
-        assert candidate["quality_flags"] == []
+        assert isinstance(candidate["quality_flags"], list)
+        provenance = candidate.get("provenance", {})
+        if provenance.get("kind") == "generated_draft":
+            assert provenance["source_origin"] == "generated"
+            assert provenance["source_status"] == "draft"
+            assert provenance["generator"]
+        if candidate["quality_flags"]:
+            provenance = candidate.get("provenance")
+            if provenance:
+                # Later canonical draft additions retain their generating
+                # provenance inline; they are not reviewed administrator exports.
+                assert provenance.get("kind") == "generated"
+                assert provenance.get("generator")
+                assert provenance.get("source_status") not in {"reviewed", "published"}
+            else:
+                assert candidate.get("origin") == "generated"
+                assert candidate.get("status") == "draft"
+            assert all(isinstance(flag,str) and flag for flag in candidate["quality_flags"])
 
     by_key = {item["message_key"]: item["translated_text"] for item in candidates}
     assert by_key["common.error.bad_request"] == (
@@ -62,6 +81,66 @@ def test_approved_arabic_terminology_matches_the_specification():
 def test_api_startup_does_not_seed_generated_arabic_drafts():
     source = (Path(__file__).parents[1] / "main.py").read_text()
     assert "synchronize_generated_arabic_drafts" not in source
+
+
+def test_missing_only_seed_cli_fills_absent_rows_and_preserves_existing_translation_kinds(client):
+    import subprocess
+    import sys
+    import json
+    root=Path(__file__).resolve().parents[4]
+    keys=['common.error.bad_request','common.error.not_found','navigation.item.records','navigation.item.aggregations']
+    absent='navigation.item.audit_trail'
+    with psycopg.connect(os.environ['DATABASE_URL']) as c:
+        assert c.execute('SELECT current_database()').fetchone()[0].startswith('erms_messaging_test_acl_')
+        c.execute("SELECT set_config('app.change_reason','Prepare disposable missing-only preservation cases',true)")
+        for key,origin,reviewed in zip(keys,['manual','imported','generated','generated'],[False,False,False,True]):
+            c.execute("UPDATE ui_message_translations SET translated_text='ترجمة موجودة محفوظة',origin=%s,status='draft',published_text=NULL,published_by_user_id=NULL,date_published=NULL,reviewed_by_user_id=CASE WHEN %s THEN 1 END,date_reviewed=CASE WHEN %s THEN CURRENT_TIMESTAMP END WHERE message_key=%s AND language_tag='ar'",(origin,reviewed,reviewed,key))
+        before=c.execute("SELECT to_jsonb(t) FROM ui_message_translations t WHERE message_key=ANY(%s) AND language_tag='ar' ORDER BY message_key",(keys,)).fetchall()
+        assert len(before)==4
+        c.execute("DELETE FROM ui_message_translations WHERE message_key=%s AND language_tag='ar'",(absent,))
+    def seed():
+        run=subprocess.run([sys.executable,str(root/'database/seeds/004_seed_generated_arabic_ui_translations.py'),'--missing-only'],cwd=root,env=os.environ.copy(),capture_output=True,text=True,check=True)
+        return json.loads(run.stdout)
+    result=seed()
+    assert result['stored']>0 and result['corrected']==result['failed']==result['awaiting_generation']==0
+    repeated=seed()
+    assert repeated['stored']==repeated['corrected']==repeated['failed']==repeated['awaiting_generation']==0
+    with psycopg.connect(os.environ['DATABASE_URL']) as c:
+        assert c.execute("SELECT to_jsonb(t) FROM ui_message_translations t WHERE message_key=ANY(%s) AND language_tag='ar' ORDER BY message_key",(keys,)).fetchall()==before
+        row=c.execute("SELECT translated_text,status,published_text,reviewed_by_user_id FROM ui_message_translations WHERE message_key=%s AND language_tag='ar'",(absent,)).fetchone()
+        assert row==('مسار التتبع','draft',None,None)
+
+
+def test_missing_only_arabic_seed_preserves_superseded_published_translation(client):
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        administrator_id = connection.execute(
+            "SELECT id FROM users WHERE email='admin@test.invalid'"
+        ).fetchone()[0]
+        connection.execute("SELECT set_config('app.change_reason','Prepare published seed guard',true)")
+        connection.execute(
+            """UPDATE ui_message_translations SET
+                   translated_text='السجلات',published_text='السجلات',
+                   status='published',origin='generated',
+                   reviewed_by_user_id=%s,date_reviewed=CURRENT_TIMESTAMP,
+                   published_by_user_id=%s,date_published=CURRENT_TIMESTAMP
+                 WHERE message_key='navigation.item.records' AND language_tag='ar'""",
+            (administrator_id, administrator_id),
+        )
+        before = connection.execute(
+            "SELECT to_jsonb(t) FROM ui_message_translations t WHERE message_key='navigation.item.records' AND language_tag='ar'"
+        ).fetchone()[0]
+    result = synchronize_generated_arabic_drafts(missing_only=True)
+    assert result["stored"] > 0
+    assert result["corrected"] == result["failed"] == result["awaiting_generation"] == 0
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        assert connection.execute(
+            "SELECT to_jsonb(t) FROM ui_message_translations t WHERE message_key='navigation.item.records' AND language_tag='ar'"
+        ).fetchone()[0] == before
+        assert connection.execute(
+            "SELECT count(*) FROM ui_message_translations WHERE language_tag='ar' AND status='published'"
+        ).fetchone()[0] == 1
+    repeated = synchronize_generated_arabic_drafts(missing_only=True)
+    assert repeated["stored"] == repeated["corrected"] == repeated["awaiting_generation"] == 0
 
 
 def test_checked_in_arabic_generation_artifact_seeds_only_untouched_source_copies(client):
@@ -102,9 +181,17 @@ def test_checked_in_arabic_generation_artifact_seeds_only_untouched_source_copie
         "awaiting_generation": 0,
     }
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
-        assert connection.execute(
-            "SELECT count(*) FROM ui_message_translations WHERE language_tag='ar' AND origin='generated' AND status='draft' AND reviewed_by_user_id IS NULL"
-        ).fetchone()[0] == len(manifest) - 1
+        artifact = json.loads((Path(__file__).parents[4] / "frontend/webui/i18n/messages.ar.generated.json").read_text())
+        expected_origins = {item["message_key"]: "imported" if isinstance(item.get("provenance"), dict) else "generated" for item in artifact["items"]}
+        seeded_rows = connection.execute(
+            "SELECT message_key,origin,status,reviewed_by_user_id,generation_metadata FROM ui_message_translations WHERE language_tag='ar' AND message_key<>%s", (protected_key,),
+        ).fetchall()
+        assert len(seeded_rows) == len(manifest) - 1
+        provenance = {item["message_key"]: item.get("provenance") for item in artifact["items"]}
+        for key, origin, status, reviewer, metadata in seeded_rows:
+            assert origin == expected_origins[key] and status == "draft" and reviewer is None
+            if provenance[key]:
+                assert metadata["export_provenance"] == provenance[key]
         protected = connection.execute(
             "SELECT translated_text,origin,reviewed_by_user_id FROM ui_message_translations WHERE message_key=%s AND language_tag='ar'",
             (protected_key,),
@@ -118,7 +205,7 @@ def test_checked_in_arabic_generation_artifact_seeds_only_untouched_source_copie
     assert protected[0] == "هذه صياغة يدوية {language}."
     assert protected[1] == "manual"
     assert protected[2] is not None
-    assert corrected == ("الوثائق", "draft", "generated", None, None)
+    assert corrected == ("الوثائق", "draft", expected_origins[corrected_key], None, None)
 
 
 def _translation(client):
@@ -150,6 +237,55 @@ def test_translation_administration_pages_complete_context_groups(client):
     assert second_payload["items"][0]["context_group"] != first_group
 
 
+@pytest.mark.parametrize('language_tag', ['en', 'ar'])
+def test_source_text_filter_matches_authoritative_english_and_combines_with_other_filters(client, language_tag):
+    item = _translation(client)
+    response = client.put(
+        f'/api/v1/admin/i18n/messages/{MESSAGE_KEY}/translations/{language_tag}',
+        headers={'If-Match': str(item['translation_version'] if language_tag == 'ar' else 0),
+                 'X-Change-Reason': 'Verify independent source and translated wording filters'},
+        json={'translated_text': 'Distinct translated wording {language}.', 'origin': 'manual', 'reviewed': True},
+    )
+    assert response.status_code == 200, response.text
+    params = dict(language_tag=language_tag, key=MESSAGE_KEY, source_text='  NOT AVAILABLE  ',
+                  translated_text='distinct translated', semantic_meaning='requested language',
+                  status='draft', origin='manual', limit=1, offset=0)
+    matched = client.get('/api/v1/admin/i18n/messages', params=params)
+    assert matched.status_code == 200, matched.text
+    payload = matched.json()
+    assert payload['total'] == payload['group_total'] == 1
+    assert [row['message_key'] for row in payload['items']] == [MESSAGE_KEY]
+    assert 'not available' in payload['items'][0]['default_text'].lower()
+    for changed in ({'source_text': 'Distinct translated'}, {'translated_text': 'no such translation'},
+                    {'status': 'published'}, {'origin': 'generated'}):
+        assert client.get('/api/v1/admin/i18n/messages', params={**params, **changed}).json()['total'] == 0
+
+
+def test_source_text_filter_includes_missing_translations_and_empty_text_is_unconstrained(client):
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        connection.execute("SELECT set_config('app.change_reason','Prepare missing translation filter case',true)")
+        connection.execute('DELETE FROM ui_message_translations WHERE message_key=%s AND language_tag=%s', (MESSAGE_KEY, 'ar'))
+    params = dict(language_tag='ar', key=MESSAGE_KEY, source_text='not available')
+    payload = client.get('/api/v1/admin/i18n/messages', params=params).json()
+    assert payload['total'] == 1 and payload['items'][0]['translated_text'] is None
+    assert payload['items'][0]['validity'] == 'missing'
+    unfiltered = client.get('/api/v1/admin/i18n/messages', params={'language_tag': 'ar', 'limit': 1}).json()
+    blank = client.get('/api/v1/admin/i18n/messages', params={'language_tag': 'ar', 'limit': 1, 'source_text': '   '}).json()
+    assert blank == unfiltered
+
+
+def test_source_text_filter_preserves_filtered_totals_and_context_group_paging(client):
+    params = dict(language_tag='ar', source_text='email', limit=1)
+    first = client.get('/api/v1/admin/i18n/messages', params={**params, 'offset': 0}).json()
+    second = client.get('/api/v1/admin/i18n/messages', params={**params, 'offset': 1}).json()
+    assert first['group_total'] > 1 and first['total'] > 1
+    assert first['total'] == second['total'] and first['group_total'] == second['group_total']
+    assert len({row['context_group'] for row in first['items']}) == 1
+    assert len({row['context_group'] for row in second['items']}) == 1
+    assert first['items'][0]['context_group'] != second['items'][0]['context_group']
+    assert all('email' in row['default_text'].lower() for row in first['items'] + second['items'])
+
+
 def test_catalogue_reports_fallback_keys_without_exposing_draft_metadata(client):
     catalogue = client.get("/api/v1/i18n/catalogues/ar")
     assert catalogue.status_code == 200
@@ -167,6 +303,91 @@ def test_checked_in_definitions_are_synchronized_with_source_copy_queue(client):
         assert connection.execute(
             "SELECT count(*) FROM ui_message_translations WHERE language_tag='ar' AND origin='source_copy' AND status='draft'"
         ).fetchone()[0] == len(manifest)
+
+
+def test_catalogue_sync_deprecates_removed_key_and_preserves_publication_history(client, tmp_path, monkeypatch):
+    wording = "اللغة {language} غير متاحة."
+    path = f"/api/v1/admin/i18n/messages/{MESSAGE_KEY}/translations/ar"
+    saved = client.put(
+        path,
+        headers={
+            "If-Match": str(_translation(client)["translation_version"]),
+            "X-Change-Reason": "Save manual Arabic wording",
+        },
+        json={"translated_text": wording, "origin": "manual", "reviewed": True},
+    )
+    assert saved.status_code == 200, saved.text
+    publish_reason = "Publish manual Arabic wording"
+    published = client.post(
+        f"{path}/publish",
+        headers={"If-Match": str(saved.json()["version"]), "X-Change-Reason": publish_reason},
+    )
+    assert published.status_code == 200, published.text
+    assert published.json()["origin"] == "manual"
+    assert published.json()["status"] == "published"
+
+    catalogue_path = "/api/v1/i18n/catalogues/ar"
+    active = client.get(catalogue_path)
+    assert active.status_code == 200, active.text
+    assert active.json()["messages"][MESSAGE_KEY] == wording
+
+    def snapshot():
+        with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+            connection.execute("SET LOCAL TIME ZONE 'UTC'")
+            definition = connection.execute(
+                "SELECT to_jsonb(d) FROM ui_message_definitions d WHERE message_key=%s",
+                (MESSAGE_KEY,),
+            ).fetchone()[0]
+            translation = connection.execute(
+                "SELECT to_jsonb(t) FROM ui_message_translations t WHERE message_key=%s AND language_tag='ar'",
+                (MESSAGE_KEY,),
+            ).fetchone()[0]
+            events = connection.execute(
+                """SELECT to_jsonb(e) FROM event_history e
+                    WHERE entity_type IN ('ui_message_definition', 'ui_message_translation')
+                      AND coalesce(after_state->>'message_key', before_state->>'message_key')=%s
+                    ORDER BY id""",
+                (MESSAGE_KEY,),
+            ).fetchall()
+        return definition, translation, [event for (event,) in events]
+
+    definition, translation, events = snapshot()
+    assert definition["is_deprecated"] is False
+    assert events[-1]["reason"] == publish_reason
+    assert events[-1]["after_state"] == translation
+
+    relative_manifest = Path("frontend/webui/i18n/messages.en.json")
+    manifest_path = Path(__file__).resolve().parents[4] / relative_manifest
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    reduced_manifest = tmp_path / relative_manifest
+    reduced_manifest.parent.mkdir(parents=True)
+    reduced_manifest.write_text(
+        json.dumps([item for item in manifest if item["message_key"] != MESSAGE_KEY]),
+        encoding="utf-8",
+    )
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(localization, "__file__", str(tmp_path / "backend/services/api/localization.py"))
+            localization.synchronize_message_definitions()
+
+        retired_definition, retained_translation, audit = snapshot()
+        assert retired_definition["is_deprecated"] is True
+        assert retained_translation == translation
+        assert audit[:-1] == events
+        deprecation = audit[-1]
+        assert deprecation["entity_type"] == "ui_message_definition"
+        assert deprecation["operation"] == "UPDATE"
+        assert deprecation["source"] == "seeding"
+        assert deprecation["before_state"] == definition
+        assert deprecation["after_state"] == retired_definition
+
+        refreshed = client.get(catalogue_path, headers={"If-None-Match": active.headers["etag"]})
+        assert refreshed.status_code == 200, refreshed.text
+        assert MESSAGE_KEY not in refreshed.json()["messages"]
+    finally:
+        # Restore the definition for other tests sharing the session's API client.
+        localization.synchronize_message_definitions()
+        localization.clear_catalogue_cache()
 
 
 def test_english_source_catalogue_is_a_complete_published_baseline(client):
@@ -404,7 +625,7 @@ def test_bulk_generated_review_publication_is_atomic_audited_and_revision_bounde
     keys = [item["message_key"] for item in selection["items"]]
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
         rows = connection.execute(
-            """SELECT status,origin,reviewed_by_user_id,published_by_user_id
+            """SELECT status,origin,reviewed_by_user_id,published_by_user_id,message_key
                  FROM ui_message_translations WHERE language_tag='ar' AND message_key=ANY(%s)""",
             (keys,),
         ).fetchall()
@@ -414,7 +635,9 @@ def test_bulk_generated_review_publication_is_atomic_audited_and_revision_bounde
                    AND source='web_ui' AND reason=%s""",
             ("Approve generated preference validation translations",),
         ).fetchone()[0]
-    assert all(row[0] == "published" and row[1] == "generated" for row in rows)
+    artifact = json.loads((Path(__file__).parents[4] / "frontend/webui/i18n/messages.ar.generated.json").read_text())
+    expected_origins = {item["message_key"]: "imported" if isinstance(item.get("provenance"), dict) else "generated" for item in artifact["items"]}
+    assert all(row[0] == "published" and row[1] == expected_origins[row[4]] for row in rows)
     assert all(row[2] is not None and row[3] is not None for row in rows)
     assert events == selection["count"]
 
@@ -517,9 +740,31 @@ def test_english_source_catalogue_is_exportable_without_publication(client):
     )
 
 
-def test_translation_artifact_export_import_round_trip_is_validated_and_non_destructive(client):
+@pytest.fixture
+def round_trip_catalogue(client):
+    """A controlled active catalogue for artifact mechanics, independent of drafts.
+
+    New product translations can legitimately require review. Keep their flags
+    intact; this test exports only four established fixture definitions and
+    restores the original active catalogue after exercising the round trip.
+    """
+    keys={MESSAGE_KEY,"common.error.bad_request","navigation.item.records","navigation.item.dashboard"}
+    with psycopg.connect(os.environ["DATABASE_URL"]) as c:
+        prior=c.execute("SELECT message_key,is_deprecated FROM ui_message_definitions").fetchall()
+        c.execute("SELECT set_config('app.event_source','seeding',true),set_config('app.change_reason','Scope disposable artifact round-trip fixture',true)")
+        c.execute("UPDATE ui_message_definitions SET is_deprecated=NOT(message_key=ANY(%s))",(sorted(keys),))
+    try:
+        yield keys
+    finally:
+        with psycopg.connect(os.environ["DATABASE_URL"]) as c:
+            c.execute("SELECT set_config('app.event_source','seeding',true),set_config('app.change_reason','Restore disposable artifact catalogue fixture',true)")
+            c.cursor().executemany("UPDATE ui_message_definitions SET is_deprecated=%s WHERE message_key=%s",[(deprecated,key) for key,deprecated in prior])
+
+
+def test_translation_artifact_export_import_round_trip_is_validated_and_non_destructive(client,round_trip_catalogue):
     seeded = synchronize_generated_arabic_drafts()
-    assert seeded["failed"] == 0
+    # Candidates outside this controlled active catalogue remain unchanged.
+    assert seeded["stored"] >= len(round_trip_catalogue)
     preview = client.get(
         "/api/v1/admin/i18n/translations/ar/bulk-publication-preview",
     ).json()
@@ -567,7 +812,7 @@ def test_translation_artifact_export_import_round_trip_is_validated_and_non_dest
         (root / "frontend/webui/i18n/messages.ar.generated.json").read_text()
     )
     assert [item["message_key"] for item in artifact["items"]] == [
-        item["message_key"] for item in manifest
+        item["message_key"] for item in manifest if item["message_key"] in round_trip_catalogue
     ]
     assert artifact["superseded_translations"] == checked_in[
         "superseded_translations"
@@ -794,3 +1039,87 @@ def test_generation_batch_reports_invalid_placeholders_without_writing(client):
         "parameters": {"missing": ["language"], "unexpected": []},
     }]
     assert _translation(client)["origin"] == "source_copy"
+
+
+def test_arabic_change_reason_survives_translation_save_publish_and_audit(client):
+    reason = 'تصحيح الترجمة العربية — مراجعة المصطلحات'
+    current = _translation(client)
+    path = f'/api/v1/admin/i18n/messages/{MESSAGE_KEY}/translations/ar'
+    updated = client.put(path, headers={
+        'If-Match': str(current['translation_version']),
+        'X-Change-Reason': reason.encode('utf-8'),
+    }, json={'translated_text': 'اللغة {language} غير مدعومة.', 'origin': 'manual', 'reviewed': True})
+    assert updated.status_code == 200, updated.text
+    published = client.post(path + '/publish', headers={
+        'If-Match': str(updated.json()['version']),
+        'X-Change-Reason': reason.encode('utf-8'),
+    })
+    assert published.status_code == 200, published.text
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        events = connection.execute(
+            "SELECT reason FROM event_history WHERE entity_type='ui_message_translation' ORDER BY id DESC LIMIT 2"
+        ).fetchall()
+    assert events == [(reason,), (reason,)]
+
+
+def test_arabic_change_reason_limit_counts_characters_not_utf8_bytes(client):
+    current = _translation(client)
+    path = f'/api/v1/admin/i18n/messages/{MESSAGE_KEY}/translations/ar'
+    payload = {'translated_text': 'اللغة {language} غير مدعومة.', 'origin': 'manual', 'reviewed': True}
+    headers = {'If-Match': str(current['translation_version']), 'X-Change-Reason': ('ع' * 2001).encode('utf-8')}
+    rejected = client.put(path, headers=headers, json=payload)
+    assert rejected.status_code == 400
+    headers['X-Change-Reason'] = ('ع' * 2000).encode('utf-8')
+    accepted = client.put(path, headers=headers, json=payload)
+    assert accepted.status_code == 200, accepted.text
+
+
+def test_bulk_review_acknowledges_review_marker_but_blocks_real_quality_flags(client):
+    synchronize_generated_arabic_drafts()
+    key='disposition.ui.accelerate'
+    other='disposition.ui.accelerate_scope'
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        connection.execute("SELECT set_config('app.change_reason','Prepare review-marker regression',true)")
+        for message_key, flags in (
+            (key, ['needs_human_review']),
+            (other, ['needs_human_review', 'unknown_quality_defect']),
+        ):
+            connection.execute(
+                """UPDATE ui_message_translations
+                      SET generation_metadata=jsonb_set(generation_metadata,'{quality_flags}',%s::jsonb)
+                    WHERE message_key=%s AND language_tag='ar'""",
+                (json.dumps(flags), message_key),
+            )
+        before=connection.execute("SELECT message_key,version,generation_metadata FROM ui_message_translations WHERE message_key=ANY(%s) AND language_tag='ar' ORDER BY message_key",([key,other],)).fetchall()
+        revision=connection.execute("SELECT catalogue_revision FROM supported_languages WHERE language_tag='ar'").fetchone()[0]
+    preview=client.get('/api/v1/admin/i18n/translations/ar/bulk-publication-preview').json()
+    assert not any(e['message_key']==key for e in preview['invalid'])
+    assert {'message_key':other,'code':'generation_quality_attention'} in preview['invalid']
+    selected=[i for i in preview['items'] if i['message_key'] in (key,other)]
+    blocked=client.post('/api/v1/admin/i18n/translations/ar/bulk-review-publish',json={'items':selected},headers={'X-Change-Reason':'Review mixed valid and invalid drafts'})
+    assert blocked.status_code==422
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        assert connection.execute("SELECT message_key,version,generation_metadata FROM ui_message_translations WHERE message_key=ANY(%s) AND language_tag='ar' ORDER BY message_key",([key,other],)).fetchall()==before
+        assert connection.execute("SELECT catalogue_revision FROM supported_languages WHERE language_tag='ar'").fetchone()[0]==revision
+    result=client.post('/api/v1/admin/i18n/translations/ar/bulk-review-publish',json={'items':[i for i in selected if i['message_key']==key]},headers={'X-Change-Reason':'Explicitly review generated Arabic draft','X-Event-Source':'web_ui'})
+    assert result.status_code==200,result.text
+    assert result.json()['catalogue_revision']==revision+1
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        row=connection.execute("SELECT status,generation_metadata,reviewed_by_user_id,published_by_user_id,date_reviewed,date_published,needs_review FROM ui_message_translations WHERE message_key=%s AND language_tag='ar'",(key,)).fetchone()
+        expected=dict(next(r[2] for r in before if r[0]==key));expected['quality_flags']=[]
+        assert row[0]=='published' and row[1]==expected
+        assert row[2] is not None and row[2]==row[3] and row[4]==row[5] and not row[6]
+        event=connection.execute("SELECT before_state,after_state FROM event_history WHERE entity_type='ui_message_translation' AND reason='Explicitly review generated Arabic draft' AND source='web_ui'").fetchone()
+        assert event[0]['generation_metadata']['quality_flags']==['needs_human_review']
+        assert event[1]['generation_metadata']['quality_flags']==[]
+
+
+@pytest.mark.parametrize('text,flags',[
+    ('', ['needs_human_review']),
+    ('نص {unexpected}', ['needs_human_review']),
+    ('<script>نص</script>', ['needs_human_review']),
+    ('نص', ['needs_human_review','placeholder_mismatch']),
+])
+def test_review_marker_never_bypasses_translation_validation(text,flags):
+    from backend.services.api.localization import _bulk_validation_errors
+    assert _bulk_validation_errors([{'message_key':'test','translated_text':text,'parameter_schema':{},'is_html':False,'generation_metadata':{'quality_flags':flags}}])

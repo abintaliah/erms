@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .i18n_catalogue import render_message
+
 
 OPERATIONS = {
     "aggregation": (
@@ -100,6 +102,9 @@ AUTHORIZATION_CODE_LABELS = {
 
 
 PRIVILEGE_HELP = {
+    "app.settings.manage": "Manage validated application configuration and protected SMTP credentials.",
+    'relationships.administer': 'Maintain aggregation and record relationship catalogues.',
+    'relationships.link': 'Create and remove named links between resources you can view.',
     "authorization.administer": "Create and maintain authorization profiles and their privilege assignments. Shows the Profiles and Governance custody pages in navigation.",
     "authorization.explain": "Inspect why a person is allowed or denied an operation on protected information.",
     "security_levels.administer": "Create and maintain the security levels used for roles, aggregations, and records. Shows the Security levels page in navigation.",
@@ -185,10 +190,60 @@ def privilege_matches_search(privilege: dict[str, Any], query: str) -> bool:
 def decision_code_label(code: str | None) -> str:
     if not code:
         return "—"
-    return DECISION_CODE_LABELS.get(code, code.replace("_", " ").title())
+    return localized_decision_label(code)
 
+
+PERMISSION_MESSAGE_KEYS = {
+    "aggregation.acl.manage": "authorization.permission.aggregation.acl.manage",
+    "aggregation.add_child": "authorization.permission.aggregation.add_child",
+    "aggregation.add_record": "authorization.permission.aggregation.add_record",
+    "aggregation.close": "authorization.permission.aggregation.close",
+    "aggregation.delete": "authorization.permission.aggregation.delete",
+    "aggregation.history.view": "authorization.permission.aggregation.history.view",
+    "aggregation.location.change": "authorization.permission.aggregation.location.change",
+    "aggregation.modify_metadata": "authorization.permission.aggregation.modify_metadata",
+    "aggregation.move": "authorization.permission.aggregation.move",
+    "aggregation.receive_child": "authorization.permission.aggregation.receive_child",
+    "aggregation.receive_record": "authorization.permission.aggregation.receive_record",
+    "aggregation.reclassify": "authorization.permission.aggregation.reclassify",
+    "aggregation.reopen": "authorization.permission.aggregation.reopen",
+    "aggregation.review_date.change": "authorization.permission.aggregation.review_date.change",
+    "aggregation.security_level.change": "authorization.permission.aggregation.security_level.change",
+    "aggregation.view": "authorization.permission.aggregation.view",
+    "aggregation.vital_status.change": "authorization.permission.aggregation.vital_status.change",
+    "record.acl.manage": "authorization.permission.record.acl.manage",
+    "record.component.add": "authorization.permission.record.component.add",
+    "record.component.download": "authorization.permission.record.component.download",
+    "record.component.list": "authorization.permission.record.component.list",
+    "record.component.print": "authorization.permission.record.component.print",
+    "record.component.remove": "authorization.permission.record.component.remove",
+    "record.component.reorder": "authorization.permission.record.component.reorder",
+    "record.component.replace": "authorization.permission.record.component.replace",
+    "record.component.share": "authorization.permission.record.component.share",
+    "record.component.view": "authorization.permission.record.component.view",
+    "record.delete": "authorization.permission.record.delete",
+    "record.history.view": "authorization.permission.record.history.view",
+    "record.modify_metadata": "authorization.permission.record.modify_metadata",
+    "record.move": "authorization.permission.record.move",
+    "record.review_date.change": "authorization.permission.record.review_date.change",
+    "record.security_level.change": "authorization.permission.record.security_level.change",
+    "record.view": "authorization.permission.record.view",
+    "record.vital_status.change": "authorization.permission.record.vital_status.change",
+}
+
+ACL_SOURCE_MESSAGE_KEYS = {
+    "resource_override": "authorization.acl_source.resource_override",
+    "parent_custom_default": "authorization.acl_source.parent_custom_default",
+    "parent_default": "authorization.acl_source.parent_default",
+    "mirror_resource_acl": "authorization.acl_source.mirror_resource_acl",
+    "custom": "authorization.acl_source.custom",
+    "local": "authorization.acl_source.local",
+    "parent_mirror": "authorization.acl_source.parent_mirror",
+}
 
 def operation_label(code: str) -> str:
+    if code in PERMISSION_MESSAGE_KEYS:
+        return render_message(PERMISSION_MESSAGE_KEYS[code])
     return code.split(".", 1)[-1].replace("_", " ").replace(".", " · ").title()
 
 
@@ -202,10 +257,12 @@ def authorization_code_label(code: str) -> str:
 
 def security_level_label(level: dict[str, Any] | None) -> str:
     if not level:
-        return "None"
-    return (
-        f"{level.get('code') or '—'} — {level.get('name') or 'Unnamed'} "
-        f"(level {level.get('level_number', '—')})"
+        return render_message("authorization.explanation.no_clearance")
+    return render_message(
+        "authorization.explanation.security_level",
+        code=level.get("code") or "—",
+        name=(level.get("localized") or {}).get("name") or level.get("name") or "—",
+        level=level.get("level_number", "—"),
     )
 
 
@@ -219,15 +276,10 @@ def ordered_permission_catalogue(
 def acl_source_label(acl: dict[str, Any]) -> str:
     source = str(acl.get("source") or acl.get("effective_acl_source") or "local")
     if source.startswith("parent_mirror:"):
-        return "Parent Mirrored ACL"
-    return {
-        "resource_override": "Local Override",
-        "parent_custom_default": "Parent Custom Default",
-        "parent_default": "Parent Default",
-        "mirror_resource_acl": "Mirrored Resource ACL",
-        "custom": "Custom Template",
-        "local": "Local",
-    }.get(source, source.replace("_", " ").title())
+        source = "parent_mirror"
+    if source in ACL_SOURCE_MESSAGE_KEYS:
+        return render_message(ACL_SOURCE_MESSAGE_KEYS[source])
+    return source.replace("_", " ").title()
 
 
 def aggregation_reference_label(aggregation: dict[str, Any]) -> str:
@@ -239,12 +291,46 @@ def aggregation_reference_label(aggregation: dict[str, Any]) -> str:
 def gate_detail(gate: dict[str, Any]) -> str:
     if gate.get("gate") == "operation_integrity":
         if gate.get("passed"):
-            return "The resource's current state permits this operation."
+            return render_message('authorization.explanation.state_allowed')
         if gate.get("detail") == "resource_is_effectively_closed":
-            return "The aggregation, or one of its ancestors, is closed and does not permit this operation."
-        return "A business-state rule prevents this operation."
-    return str(gate.get("detail") or gate.get("code") or "").replace("_", " ").capitalize()
+            return render_message('authorization.explanation.state_closed')
+        return render_message('authorization.explanation.state_denied')
+    if gate.get("detail") == "information_governance_bypass":
+        return render_message('authorization.explanation.bypass')
+    if gate.get("gate") == "resource_acl" and gate.get("detail"):
+        return "، ".join(operation_label(code.strip()) for code in gate["detail"].split(","))
+    return decision_code_label(gate.get("code"))
 
 
 def denied_gate(explanation: dict[str, Any]) -> dict[str, Any] | None:
     return next((gate for gate in explanation.get("gates", []) if not gate.get("passed")), None)
+
+
+def gate_label(code: str) -> str:
+    return {
+        'authentication': render_message('authorization.explanation.gate.authentication'),
+        'effective_roles': render_message('authorization.explanation.gate.effective_roles'),
+        'operation_integrity': render_message('authorization.explanation.gate.operation_integrity'),
+        'global_privilege': render_message('authorization.explanation.gate.global_privilege'),
+        'security_clearance': render_message('authorization.explanation.gate.security_clearance'),
+        'resource_acl': render_message('authorization.explanation.gate.resource_acl'),
+    }.get(code, code)
+
+
+def localized_decision_label(code: str) -> str:
+    return {
+        'allowed': render_message('authorization.explanation.decision.allowed'),
+        'authentication_required': render_message('authorization.explanation.decision.authentication_required'),
+        'session_revoked': render_message('authorization.explanation.decision.session_revoked'),
+        'session_expired': render_message('authorization.explanation.decision.session_expired'),
+        'user_inactive': render_message('authorization.explanation.decision.user_inactive'),
+        'user_suspended': render_message('authorization.explanation.decision.user_suspended'),
+        'user_locked': render_message('authorization.explanation.decision.user_locked'),
+        'no_effective_role': render_message('authorization.explanation.decision.no_effective_role'),
+        'insufficient_privilege': render_message('authorization.explanation.decision.insufficient_privilege'),
+        'insufficient_clearance': render_message('authorization.explanation.decision.insufficient_clearance'),
+        'insufficient_resource_permission': render_message('authorization.explanation.decision.insufficient_resource_permission'),
+        'operation_not_allowed': render_message('authorization.explanation.decision.operation_not_allowed'),
+        'resource_not_found': render_message('authorization.explanation.decision.resource_not_found'),
+        'unspecified': render_message('authorization.explanation.decision.unspecified'),
+    }.get(code, code)

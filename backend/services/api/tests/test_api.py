@@ -30,8 +30,9 @@ def test_health(client: TestClient):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["full_text_search_enabled"] is True
-    assert body["content_indexing_scheduling_enabled"] is True
+    # Phase 6 moved this policy to the database with an approved false default.
+    assert body["full_text_search_enabled"] is False
+    assert body["content_indexing_scheduling_enabled"] is False
     assert body["localization"]["ready"] is True
 
 
@@ -98,7 +99,7 @@ def test_aggregation_crud_and_hierarchy(client: TestClient, aggregation: dict):
     assert client.get(f"/api/v1/aggregations/{child['id']}").status_code == 404
 
 
-def test_medium_hierarchy_creation_and_empty_only_changes(client: TestClient):
+def test_medium_hierarchy_creation_and_compatible_changes(client: TestClient):
     physical = client.post("/api/v1/aggregations", json={
         "aggregation_number": "PHY-001", "title": "Physical root",
         "classification_id": 1, "medium": "physical",
@@ -130,7 +131,7 @@ def test_medium_hierarchy_creation_and_empty_only_changes(client: TestClient):
         headers={"If-Match": str(physical["version"])},
     )
     assert change_response.status_code == 422
-    assert change_response.json()["detail"]["code"] == "medium_change_requires_empty_aggregation"
+    assert change_response.json()["detail"]["code"] == "aggregation_medium_contents_conflict"
 
 
 def test_mixed_aggregation_accepts_every_record_medium(client: TestClient, aggregation: dict):
@@ -465,6 +466,10 @@ def test_closed_aggregation_makes_its_entire_subtree_immutable(client: TestClien
         f"/api/v1/records/{record['id']}/digital-components/upload",
         data={"component_order": 1}, files={"file": ("locked.txt", b"locked", "text/plain")},
     ).json()
+    client.post(
+        f"/api/v1/records/{record['id']}/digital-components/upload",
+        data={"component_order": 2}, files={"file": ("also-locked.txt", b"locked", "text/plain")},
+    )
 
     future = client.patch(
         f"/api/v1/aggregations/{root['id']}", json={"date_closed": "2999-01-01T00:00:00Z"},
@@ -501,6 +506,10 @@ def test_closed_aggregation_makes_its_entire_subtree_immutable(client: TestClien
     assert client.delete(
         f"/api/v1/digital-components/{component['id']}",
         headers={"If-Match": str(component["version"])},
+    ).status_code == 409
+    assert client.post(
+        f"/api/v1/records/{record['id']}/digital-components/{component['id']}/move",
+        json={"direction": 1},
     ).status_code == 409
     assert client.post(
         f"/api/v1/records/{record['id']}/digital-components/upload",
@@ -1061,7 +1070,7 @@ def test_upload_download_replace_and_delete_content(client: TestClient, record: 
 
 
 def test_segmented_content_and_byte_ranges(client: TestClient, record: dict, monkeypatch):
-    monkeypatch.setenv("CONTENT_SEGMENT_SIZE_BYTES", "4")
+    set_content_settings(client, CONTENT_SEGMENT_SIZE_BYTES=4)
     payload = b"0123456789ABC"
     uploaded = client.post(
         f"/api/v1/records/{record['id']}/digital-components/upload",
@@ -1119,8 +1128,7 @@ def test_200_mib_upload_is_segmented_and_reconstructs_exactly(
     source_digest = hashlib.sha256()
     write_block = bytes(range(256)) * 4096  # 1 MiB deterministic block
 
-    monkeypatch.setenv("MAX_UPLOAD_SIZE_BYTES", str(file_size))
-    monkeypatch.setenv("CONTENT_SEGMENT_SIZE_BYTES", str(segment_size))
+    set_content_settings(client, MAX_UPLOAD_SIZE_BYTES=file_size, CONTENT_SEGMENT_SIZE_BYTES=segment_size)
 
     try:
         with source_path.open("wb") as source:
@@ -1232,7 +1240,7 @@ def test_pdf_print_rendition_uses_print_authorization_route(client: TestClient, 
     ),
 )
 def test_additional_text_and_email_formats_use_libreoffice_pdf_conversion(
-    monkeypatch, extension: str, mime_type: str, expected_method: str,
+    client, monkeypatch, extension: str, mime_type: str, expected_method: str,
 ):
     expected_pdf = b"%PDF-1.7\n% converted test fixture\n%%EOF"
 
@@ -1249,14 +1257,14 @@ def test_additional_text_and_email_formats_use_libreoffice_pdf_conversion(
     monkeypatch.setattr(document_conversion.subprocess, "run", convert)
 
     rendition, method = document_conversion.pdf_rendition(
-        b"synthetic source", f"source{extension}", mime_type,
+        b"synthetic source", f"source{extension}", mime_type, settings=content_snapshot(),
     )
 
     assert rendition == expected_pdf
     assert method == expected_method
 
 
-def test_email_extraction_timeout_fails_preview_safely(monkeypatch):
+def test_email_extraction_timeout_fails_preview_safely(client, monkeypatch):
     monkeypatch.setattr(
         document_conversion.subprocess,
         "run",
@@ -1267,7 +1275,7 @@ def test_email_extraction_timeout_fails_preview_safely(monkeypatch):
 
     with pytest.raises(document_conversion.ConversionUnavailable, match="preview preparation timed out"):
         document_conversion.pdf_rendition(
-            b"synthetic MSG", "message.msg", "application/vnd.ms-outlook",
+            b"synthetic MSG", "message.msg", "application/vnd.ms-outlook", settings=content_snapshot(),
         )
 
 
@@ -1315,10 +1323,17 @@ def test_browser_native_image_preview_preserves_mime_type_and_is_audited(client:
     }
     assert ("record", record["id"]) in viewed_resources
     assert ("aggregation", record["aggregation_id"]) in viewed_resources
+    for kind, identifier in (("record", record["id"]), ("aggregation", record["aggregation_id"])):
+        scoped = client.get("/api/v1/auth/me/recent-activity", params={"entity_type": kind})
+        assert scoped.status_code == 200, scoped.text
+        viewed = next(item for item in scoped.json() if item["operation"] == "CONTENT_VIEWED")
+        assert viewed["entity_id"] == identifier
+        assert viewed["title"] and viewed["number"]
+        assert set(viewed) == {"entity_type", "entity_id", "operation", "occurred_at", "title", "number"}
 
 
 def test_upload_size_limit(client: TestClient, record: dict, monkeypatch):
-    monkeypatch.setenv("MAX_UPLOAD_SIZE_BYTES", "4")
+    set_content_settings(client, MAX_UPLOAD_SIZE_BYTES=4)
     response = client.post(
         f"/api/v1/records/{record['id']}/digital-components/upload",
         data={"component_order": "1"},
@@ -1329,6 +1344,7 @@ def test_record_draft_commits_metadata_and_ordered_content_atomically(client, ag
     draft_response = client.post("/api/v1/record-drafts", json={})
     assert draft_response.status_code == 201
     draft = draft_response.json()
+    assert "status" not in draft
     updated = client.patch(f"/api/v1/record-drafts/{draft['id']}", json={
         "aggregation_id": aggregation["id"], "record_number": "REC-DRAFT-1",
         "title": "Created as a package", "description": "Metadata and files commit together",
@@ -1365,6 +1381,17 @@ def test_record_draft_commits_metadata_and_ordered_content_atomically(client, ag
     assert [item["file_name"] for item in components] == ["second.pdf", "first.txt"]
     assert client.get(f"/api/v1/digital-components/{components[0]['id']}/content").content == b"second"
     assert client.get(f"/api/v1/record-drafts/{draft['id']}").status_code == 404
+
+
+def test_record_draft_contract_has_no_redundant_status_column():
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        assert connection.execute(
+            """SELECT EXISTS (
+                   SELECT 1 FROM information_schema.columns
+                   WHERE table_schema='public' AND table_name='record_drafts'
+                     AND column_name='status'
+               )"""
+        ).fetchone()[0] is False
 
 
 def test_record_draft_component_can_be_removed_and_incomplete_commit_rolls_back(client, aggregation):
@@ -1437,3 +1464,68 @@ def test_committed_components_can_be_reordered_and_removed_without_order_gaps(cl
     ).status_code == 204
     remaining = client.get("/api/v1/digital-components", params={"record_id": record["id"]}).json()
     assert [item["component_order"] for item in remaining] == [1, 2]
+
+
+def test_component_search_pages_and_single_move_cross_page_boundary(client, record):
+    with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+        with connection.cursor() as cursor:
+            cursor.executemany(
+                """INSERT INTO digital_components
+                       (record_id,component_order,file_name,mime_type,size_in_bytes,
+                        checksum_algo,checksum_value)
+                   VALUES (%s,%s,%s,'text/plain',0,'sha256',%s)""",
+                [
+                    (record["id"], position, f"component-{position:03}.txt", f"sum-{position}")
+                    for position in range(1, 106)
+                ],
+            )
+
+    def page(offset: int):
+        response = client.post("/api/v1/digital-components/search", json={
+            "where": {"field": "record_id", "operator": "eq", "value": record["id"]},
+            "sort": [{"field": "component_order", "direction": "asc"}],
+            "limit": 25,
+            "offset": offset,
+        })
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    first = page(0)
+    assert first["total"] == 105
+    assert first["returned"] == 25
+    assert [item["component_order"] for item in first["items"]] == list(range(1, 26))
+    second = page(25)
+    assert [item["component_order"] for item in second["items"]] == list(range(26, 51))
+    last = page(100)
+    assert last["returned"] == 5
+    assert [item["component_order"] for item in last["items"]] == list(range(101, 106))
+
+    boundary_component = second["items"][0]
+    moved = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/{boundary_component['id']}/move",
+        json={"direction": -1},
+    )
+    assert moved.status_code == 204, moved.text
+    assert page(0)["items"][-1]["id"] == boundary_component["id"]
+    assert page(25)["items"][0]["file_name"] == "component-025.txt"
+
+    invalid = client.post(
+        f"/api/v1/records/{record['id']}/digital-components/{boundary_component['id']}/move",
+        json={"direction": 2},
+    )
+    assert invalid.status_code == 422
+
+
+def set_content_settings(client, **values):
+    current = {i['key']:i for i in client.get('/api/v1/application-settings').json()['items']}
+    response = client.put('/api/v1/application-settings',json={'changes':[
+        {'key':key,'expected_version':current[key]['version'],'value':value} for key,value in values.items()]},
+        headers={'X-Change-Reason':'Set disposable content test policy'})
+    assert response.status_code == 200,response.text
+
+
+def content_snapshot():
+    from backend.services.api.application_settings import load_snapshot
+    from psycopg.rows import dict_row
+    with psycopg.connect(os.environ['DATABASE_URL'],row_factory=dict_row) as connection:
+        return load_snapshot(connection)

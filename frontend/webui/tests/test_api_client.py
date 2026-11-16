@@ -181,7 +181,7 @@ def test_dashboard_reviews_fetches_one_small_page_with_lookahead():
     assert asyncio.run(exercise()) == []
     assert captured == {
         "path": "/api/v1/dashboard/reviews",
-        "params": {"state": "overdue", "limit": "26", "offset": "50"},
+        "params": {"state": "overdue", "limit": "25", "offset": "50", "lookahead": "true"},
     }
 
 
@@ -234,33 +234,6 @@ def test_localization_catalogue_uses_etag_and_handles_not_modified():
         "authorization": "Bearer session-token",
     }
     assert result == {"not_modified": True, "etag": '"ar-17"'}
-
-
-def test_search_builds_controlled_or_grammar():
-    captured = {}
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        captured["path"] = request.url.path
-        captured["body"] = json.loads(request.content)
-        return httpx.Response(200, json={"items": [{"id": 4}], "total": 1})
-
-    async def exercise():
-        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
-        try:
-            return await client.search("records", "annual", ("record_number", "title"))
-        finally:
-            await client.close()
-
-    rows = asyncio.run(exercise())
-
-    assert rows == [{"id": 4}]
-    assert captured["path"] == "/api/v1/records/search"
-    assert captured["body"]["where"] == {
-        "or": [
-            {"field": "record_number", "operator": "contains_ci", "value": "annual"},
-            {"field": "title", "operator": "contains_ci", "value": "annual"},
-        ]
-    }
 
 
 def test_saved_search_execution_uses_the_dedicated_endpoint():
@@ -358,49 +331,6 @@ def test_entity_translation_update_is_locale_scoped_and_versioned():
     assert captured == {
         "method": "PATCH", "path": "/api/v1/entity-translations/roles/7/ar",
         "body": {"name": "مدير"}, "version": "3", "reason": "Add Arabic name",
-    }
-
-
-def test_classification_search_uses_literal_case_insensitive_containment():
-    captured = {}
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        captured["body"] = json.loads(request.content)
-        return httpx.Response(200, json={"items": [], "total": 0})
-
-    async def exercise():
-        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
-        try:
-            await client.search("classifications", "finance", ("code", "title"))
-        finally:
-            await client.close()
-
-    asyncio.run(exercise())
-    assert captured["body"]["where"]["or"][0] == {
-        "field": "code", "operator": "contains_ci", "value": "finance",
-    }
-
-
-def test_resource_search_can_scope_results_to_an_organizational_owner():
-    captured = {}
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        captured["body"] = json.loads(request.content)
-        return httpx.Response(200, json={"items": [], "total": 0})
-
-    async def exercise():
-        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
-        try:
-            await client.search(
-                "records", "finance", ("record_number", "title"),
-                owning_org_unit_id=14,
-            )
-        finally:
-            await client.close()
-
-    asyncio.run(exercise())
-    assert captured["body"]["where"]["and"][1] == {
-        "field": "owning_org_unit_id", "operator": "eq", "value": 14,
     }
 
 
@@ -775,34 +705,29 @@ def test_recently_updated_uses_self_activity_without_audit_access():
     ]
 
 
-def test_recent_resource_activity_hydrates_content_views_for_aggregations():
+@pytest.mark.parametrize(("resource", "entity_type"), [("aggregations", "aggregation"), ("records", "record")])
+def test_recent_resource_activity_uses_one_scoped_card_request(resource, entity_type):
     requests = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        requests.append(request.url.path)
-        if request.url.path == "/api/v1/auth/me/recent-activity":
-            return httpx.Response(200, json=[{
-                "entity_type": "aggregation", "entity_id": 8,
-                "operation": "CONTENT_VIEWED", "occurred_at": "2026-09-25T18:00:00Z",
-            }])
-        assert request.url.path == "/api/v1/aggregations/8"
-        return httpx.Response(200, json={"id": 8, "title": "Parent aggregation"})
+        requests.append((request.url.path, dict(request.url.params)))
+        return httpx.Response(200, json=[{
+            "entity_type": entity_type, "entity_id": 8, "title": "Activity resource",
+            "number": "ITEM-8", "operation": "CONTENT_VIEWED", "occurred_at": "2026-09-25T18:00:00Z",
+        }])
 
     async def exercise():
         client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
         try:
-            return await client.recent_resource_activity("aggregations")
+            return await client.recent_resource_activity(resource)
         finally:
             await client.close()
 
     assert asyncio.run(exercise()) == [{
-        "id": 8, "title": "Parent aggregation",
-        "_activity_at": "2026-09-25T18:00:00Z",
-        "_operation": "CONTENT_VIEWED",
+        "id": 8, "title": "Activity resource", f"{entity_type}_number": "ITEM-8",
+        "_activity_at": "2026-09-25T18:00:00Z", "_operation": "CONTENT_VIEWED",
     }]
-    assert requests == [
-        "/api/v1/auth/me/recent-activity", "/api/v1/aggregations/8",
-    ]
+    assert requests == [("/api/v1/auth/me/recent-activity", {"limit": "50", "entity_type": entity_type})]
 
 
 @pytest.mark.parametrize(
@@ -963,6 +888,46 @@ def test_component_download_view_and_print_use_distinct_authorized_routes():
     ]
 
 
+def test_component_page_preserves_server_pagination_and_move_contract():
+    captured = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content or b"{}")
+        captured.append((request.method, request.url.path, body))
+        if request.url.path.endswith("/search"):
+            return httpx.Response(200, json={
+                "items": [{"id": 31, "component_order": 26}],
+                "total": 105, "limit": 25, "offset": 25, "returned": 1,
+            })
+        return httpx.Response(204)
+
+    async def exercise():
+        client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
+        try:
+            page = await client.component_page(7, limit=25, offset=25)
+            await client.move_component(7, 31, -1)
+            return page
+        finally:
+            await client.close()
+
+    page = asyncio.run(exercise())
+    assert page["total"] == 105
+    search = captured[0]
+    assert search[0:2] == ("POST", "/api/v1/digital-components/search")
+    assert search[2] == {
+        "where": {"field": "record_id", "operator": "eq", "value": 7},
+        "sort": [
+            {"field": "component_order", "direction": "asc"},
+            {"field": "id", "direction": "asc"},
+        ],
+        "limit": 25,
+        "offset": 25,
+    }
+    assert captured[1] == (
+        "POST", "/api/v1/records/7/digital-components/31/move", {"direction": -1},
+    )
+
+
 def test_entity_history_uses_read_only_timeline_route():
     captured = {}
 
@@ -1022,6 +987,11 @@ def test_security_operations_client_routes_are_read_only():
         client = ErmsApiClient("http://api.test", transport=httpx.MockTransport(handler))
         try:
             await client.security_summary(hours=48)
+            await client.security_summary(hours=24, recent_event_limit=10)
+            await client.security_events(
+                start_at="2030-01-01T00:00:00Z", end_at="2030-01-02T00:00:00Z",
+                limit=10, offset=100,
+            )
             await client.security_reconciliation()
         finally:
             await client.close()
@@ -1029,6 +999,11 @@ def test_security_operations_client_routes_are_read_only():
     asyncio.run(exercise())
     assert seen == [
         ("GET", "/api/v1/security-operations/summary", {"hours": "48"}),
+        ("GET", "/api/v1/security-operations/summary", {"hours": "24", "recent_event_limit": "10"}),
+        ("GET", "/api/v1/security-operations/events", {
+            "start_at": "2030-01-01T00:00:00Z", "end_at": "2030-01-02T00:00:00Z",
+            "limit": "10", "offset": "100",
+        }),
         ("GET", "/api/v1/security-operations/reconciliation", {}),
     ]
 
@@ -1080,3 +1055,167 @@ def test_effective_closure_uses_narrow_resource_endpoint():
 
     assert asyncio.run(exercise())["id"] == 9
     assert seen == ["/api/v1/aggregations/42/effective-closure"]
+
+
+@pytest.mark.parametrize('reason', ['تصحيح الترجمة العربية', 'Arabic العربية — café 100%', 'Plain ASCII reason'])
+def test_translation_change_reason_round_trips_as_utf8(reason):
+    from starlette.datastructures import Headers
+    from backend.services.api.audit_context import decode_change_reason
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        received = Headers(raw=[(name.lower(), value) for name, value in request.headers.raw])['x-change-reason']
+        assert decode_change_reason(received) == reason
+        assert request.headers['if-match'] == '3'
+        return httpx.Response(200, json={'version': 4})
+
+    async def exercise():
+        client = ErmsApiClient('http://api.test', transport=httpx.MockTransport(handler))
+        try:
+            await client.update_localization_translation('test.key', 'ar', {'translated_text': 'ترجمة'}, 3, reason)
+            await client.publish_localization_translation('test.key', 'ar', 3, reason)
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(('wire', 'expected'), [
+    (None, ''),
+    ('Plain ASCII', 'Plain ASCII'),
+    ('café', 'café'),
+    ('تصحيح عربي', 'تصحيح عربي'),
+    ('تصحيح عربي'.encode('utf-8').decode('latin-1'), 'تصحيح عربي'),
+])
+def test_change_reason_decoder_preserves_supported_inputs(wire, expected):
+    from backend.services.api.audit_context import decode_change_reason
+    assert decode_change_reason(wire) == expected
+
+
+def test_classification_relationship_search_requests_eligible_partial_matches():
+    captured = {}
+
+    async def handler(request):
+        captured['params'] = dict(request.url.params)
+        captured['payload'] = __import__('json').loads(request.content)
+        return httpx.Response(200, json={'items': [], 'total': 0})
+
+    async def exercise():
+        client = ErmsApiClient('http://api.test', transport=httpx.MockTransport(handler))
+        try:
+            await client.relationship_page(
+                'classifications', ('code', 'title', 'description', 'keywords'),
+                'part', eligible_classifications=True,
+            )
+        finally:
+            await client.close()
+
+    asyncio.run(exercise())
+    assert captured['params'] == {'eligible': 'true'}
+    assert captured['payload']['limit'] == 25
+    assert captured['payload']['where']['and'] == [{'or': [
+        {'field': field, 'operator': 'contains_ci', 'value': 'part'}
+        for field in ('code', 'title', 'description', 'keywords')
+    ]}]
+
+
+def test_json_attachment_remains_download_bytes():
+    payload = b'{"package_type":"classification_scheme_export"}'
+    async def handler(request):
+        return httpx.Response(200, content=payload, headers={
+            'Content-Type':'application/json',
+            'Content-Disposition':'attachment; filename="scheme.json"',
+        })
+    async def exercise():
+        client = ErmsApiClient('http://api.test', transport=httpx.MockTransport(handler))
+        try:
+            return await client.request('GET','/api/v1/classification-schemes/1/export', params={'format':'json'})
+        finally:
+            await client.close()
+    assert asyncio.run(exercise()) == payload
+
+
+def test_audit_actor_read_can_cancel_transport_and_retains_normal_auth_headers():
+    started = asyncio.Event()
+    cancelled = []
+    observed = []
+    async def handler(request):
+        observed.append((request.url.path, request.url.params['q'], request.headers['authorization']))
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.append(True)
+            raise
+    async def exercise():
+        client = ErmsApiClient('http://api.test', transport=httpx.MockTransport(handler))
+        client.set_session_token('fixture-token')
+        try:
+            task = asyncio.create_task(client.audit_actors('Ab', entity_type='record'))
+            await started.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert cancelled == [True]
+        finally:
+            await client.close()
+    asyncio.run(exercise())
+    assert observed == [('/api/v1/event-history/actors', 'Ab', 'Bearer fixture-token')]
+
+
+def test_approval_summary_is_cancellable_read_only_post_and_preserves_reference_cache():
+    captured=[]
+    async def handler(request):
+        captured.append(request)
+        return httpx.Response(200,json={'proposal_count':0})
+    async def exercise():
+        client=ErmsApiClient('http://api.test',transport=httpx.MockTransport(handler))
+        try:
+            client._reference_cache['preserve']={'data':[]}
+            result=await client.disposition_approval_summary(8,acting_role_id=7,task_version=3,changes=[],version=2)
+            assert result['proposal_count']==0 and 'preserve' in client._reference_cache
+        finally:await client.close()
+    asyncio.run(exercise())
+    assert captured[0].method=='POST' and captured[0].url.path=='/api/v1/disposition/tasks/8/approval-summary'
+    assert captured[0].headers['if-match']=='2'
+    assert json.loads(captured[0].content)=={'acting_role_id':7,'task_version':3,'changes':[]}
+
+
+def test_smtp_test_posts_only_recipient_and_honors_smtp_timeout_without_retry():
+    calls=[]
+    async def handler(request):
+        calls.append(request)
+        return httpx.Response(200,json={'outcome':'smtp_accepted','smtp_code':250})
+    async def exercise():
+        client=ErmsApiClient('http://api.test',transport=httpx.MockTransport(handler))
+        try:
+            result=await client.test_smtp_send('recipient@test.invalid')
+            assert result['outcome']=='smtp_accepted'
+        finally:await client.close()
+    asyncio.run(exercise())
+    assert len(calls)==1 and calls[0].method=='POST'
+    assert calls[0].url.path=='/api/v1/application-settings/test-send'
+    assert json.loads(calls[0].content)=={'recipient':'recipient@test.invalid'}
+    assert calls[0].extensions['timeout']['read'] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('status', [200,401])
+async def test_late_previous_session_response_cannot_publish_or_revoke_new_identity(status):
+    started, release = asyncio.Event(), asyncio.Event()
+    async def handle(request):
+        started.set()
+        await release.wait()
+        return httpx.Response(status,json={'detail':'old session','private':'A'})
+    client = ErmsApiClient('http://fixture',transport=httpx.MockTransport(handle))
+    unauthorized = []
+    client.set_unauthorized_handler(lambda:unauthorized.append(True))
+    client.set_session_token('A')
+    # Use POST to test even requests which cannot be cancelled as pending reads.
+    pending = asyncio.create_task(client.request('POST','/fixture'))
+    await started.wait()
+    client.set_session_token('B')
+    release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await pending
+    assert unauthorized == []
+    await client.close()
