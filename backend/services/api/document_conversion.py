@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from backend.services.processing_workspace import working_copy_fds
+from backend.services.component_formats import CONVERTIBLE_EXTENSIONS
+
 import os
 import shutil
 import subprocess
@@ -7,7 +10,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .config import integer_environment
+
+
+def _run(*args,**kwargs):
+    return subprocess.run(*args,pass_fds=working_copy_fds(),**kwargs)
 
 
 class ConversionUnavailable(RuntimeError):
@@ -16,14 +22,6 @@ class ConversionUnavailable(RuntimeError):
 
 class UnsupportedPreview(RuntimeError):
     pass
-
-
-CONVERTIBLE_EXTENSIONS = {
-    ".doc", ".docx", ".odt", ".rtf",
-    ".xls", ".xlsx", ".ods", ".csv",
-    ".ppt", ".pptx", ".odp",
-    ".md", ".msg", ".eml", ".html", ".txt", ".xml",
-}
 
 
 def _libreoffice_binary() -> str:
@@ -36,7 +34,7 @@ def _libreoffice_binary() -> str:
     return binary
 
 
-def pdf_rendition(content: bytes, file_name: str, mime_type: str) -> tuple[bytes, str]:
+def pdf_rendition(content: bytes, file_name: str, mime_type: str, *, settings, temporary_root=None) -> tuple[bytes, str]:
     """Return PDF bytes and the rendering method used."""
     if mime_type.lower() == "application/pdf" or content.startswith(b"%PDF-"):
         return content, "original"
@@ -45,9 +43,9 @@ def pdf_rendition(content: bytes, file_name: str, mime_type: str) -> tuple[bytes
     if suffix not in CONVERTIBLE_EXTENSIONS:
         raise UnsupportedPreview(f"in-app preview is not supported for {suffix or mime_type}")
 
-    timeout = integer_environment("DOCUMENT_CONVERSION_TIMEOUT_SECONDS", 60, minimum=1)
-    maximum = integer_environment("MAX_RENDITION_SIZE_BYTES", 100 * 1024 * 1024, minimum=1)
-    with tempfile.TemporaryDirectory(prefix="erms-rendition-") as temporary:
+    timeout = settings["DOCUMENT_CONVERSION_TIMEOUT_SECONDS"]
+    maximum = settings["MAX_RENDITION_SIZE_BYTES"]
+    with tempfile.TemporaryDirectory(prefix="erms-rendition-",dir=temporary_root) as temporary:
         workspace = Path(temporary)
         source = workspace / f"source{suffix}"
         output = workspace / "output"
@@ -78,7 +76,7 @@ def pdf_rendition(content: bytes, file_name: str, mime_type: str) -> tuple[bytes
             if suffix != ".xlsx":
                 conversion_source = workspace / "source.html"
             try:
-                extraction = subprocess.run(
+                extraction = _run(
                     [
                         sys.executable,
                         str(Path(__file__).with_name(intermediary)),
@@ -108,7 +106,7 @@ def pdf_rendition(content: bytes, file_name: str, mime_type: str) -> tuple[bytes
             "--convert-to", "pdf", "--outdir", str(output), str(conversion_source),
         ]
         try:
-            completed = subprocess.run(
+            completed = _run(
                 command, check=False, capture_output=True, timeout=timeout,
                 env={**os.environ, "SAL_DISABLE_OPENCL": "1"},
             )

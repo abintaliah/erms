@@ -141,3 +141,19 @@ Local deployment: migration 043 and separate seeds were applied to `erms`;
 both producers were activated under administrator `yya@sa.gov.ae` with operational
 owner `Legal governance`. Both requested accounts were verified as active,
 effective governors. API health reports notification readiness without issues.
+
+## Revised governor audience — 4 October 2026
+
+The user revised the audience requirement: information governors receive only
+approaching-expiry reminders. Responsibility-assignment notifications go only
+to the newly assigned active owner/contributor; a governor personally assigned
+receives their own assignment notification like any other responsible person.
+The expiry audience and seven-day rule are unchanged.
+
+This revision supersedes the earlier both-producer audience extension above.
+`assigned_audience` implements the revised specification; assignment contract
+version 3 and migration 044 upgrade existing deployments without modifying
+administrator configurations, templates, or historical notifications. New
+installations use the separate latest producer seed. No schema DDL is needed.
+The regression test explicitly excludes governors from assignment deliveries
+and includes effective governors in expiry deliveries, excluding expired roles.

@@ -1,12 +1,13 @@
 import hashlib
 import os
 from dataclasses import dataclass
+from contextlib import contextmanager
 from typing import BinaryIO, Iterator, Protocol
 
 from fastapi import HTTPException, UploadFile, status
 from psycopg import Connection
 
-from .config import boolean_environment, integer_environment
+from .application_settings import cache as settings_cache
 from .database import pool
 
 
@@ -25,23 +26,24 @@ class ContentLocation:
 
 
 class ContentStorage(Protocol):
-    def store_upload(self, connection: Connection, component_id: int, upload: UploadFile) -> UploadedContent: ...
-    def store_draft_upload(self, connection: Connection, draft_component_id: int, upload: UploadFile) -> UploadedContent: ...
+    def store_upload(self, connection: Connection, component_id: int, upload: UploadFile, *, settings=None) -> UploadedContent: ...
+    def store_draft_upload(self, connection: Connection, draft_component_id: int, upload: UploadFile, *, settings=None) -> UploadedContent: ...
     def promote_draft(self, connection: Connection, draft_component_id: int, component_id: int) -> None: ...
+    def read_draft(self, connection: Connection, draft_component_id: int) -> bytes | None: ...
     def location(self, connection: Connection, component_id: int) -> ContentLocation | None: ...
     def iter_content(self, location: ContentLocation, start: int = 0, end: int | None = None) -> Iterator[bytes]: ...
     def read(self, connection: Connection, component_id: int) -> bytes | None: ...
     def delete(self, connection: Connection, component_id: int) -> bool: ...
 
 
-def inspect_upload(upload: UploadFile) -> UploadedContent:
+def inspect_upload(upload: UploadFile, settings) -> UploadedContent:
     """Measure and hash a spooled upload without retaining the file in memory."""
     digest = hashlib.sha256()
     total = 0
     count = 0
-    maximum = integer_environment("MAX_UPLOAD_SIZE_BYTES", 50 * 1024 * 1024, minimum=1)
+    maximum = settings["MAX_UPLOAD_SIZE_BYTES"]
     upload.file.seek(0)
-    while content := upload.file.read(_segment_size()):
+    while content := upload.file.read(settings["CONTENT_SEGMENT_SIZE_BYTES"]):
         total += len(content)
         if total > maximum:
             upload.file.seek(0)
@@ -55,27 +57,20 @@ def inspect_upload(upload: UploadFile) -> UploadedContent:
     return UploadedContent(total, digest.hexdigest(), count)
 
 
-def _segment_size() -> int:
-    value = integer_environment("CONTENT_SEGMENT_SIZE_BYTES", 16 * 1024 * 1024, minimum=1)
-    if value > 64 * 1024 * 1024:
-        raise RuntimeError("CONTENT_SEGMENT_SIZE_BYTES must not exceed 67108864")
-    return value
-
-
-def _segment_digest(content: bytes) -> tuple[str | None, str | None]:
-    if not boolean_environment("CONTENT_SEGMENT_CHECKSUMS_ENABLED", True):
+def _segment_digest(content: bytes, settings) -> tuple[str | None, str | None]:
+    if not settings["CONTENT_SEGMENT_CHECKSUMS_ENABLED"]:
         return None, None
     return "sha256", hashlib.sha256(content).hexdigest()
 
 
 def _stream_segments(
-    connection: Connection, source: BinaryIO, insert_sql: str, owner_id: int,
+    connection: Connection, source: BinaryIO, insert_sql: str, owner_id: int, settings,
 ) -> UploadedContent:
     digest = hashlib.sha256()
     total = 0
     segment_no = 0
-    maximum = integer_environment("MAX_UPLOAD_SIZE_BYTES", 50 * 1024 * 1024, minimum=1)
-    while content := source.read(_segment_size()):
+    maximum = settings["MAX_UPLOAD_SIZE_BYTES"]
+    while content := source.read(settings["CONTENT_SEGMENT_SIZE_BYTES"]):
         total += len(content)
         if total > maximum:
             raise HTTPException(
@@ -83,7 +78,7 @@ def _stream_segments(
                 detail=f"file exceeds the configured {maximum}-byte upload limit",
             )
         digest.update(content)
-        algorithm, segment_checksum = _segment_digest(content)
+        algorithm, segment_checksum = _segment_digest(content, settings)
         connection.execute(
             insert_sql,
             (owner_id, segment_no, len(content), algorithm, segment_checksum, content),
@@ -94,8 +89,9 @@ def _stream_segments(
 
 class PostgreSQLContentStorage:
     def store_upload(
-        self, connection: Connection, component_id: int, upload: UploadFile,
+        self, connection: Connection, component_id: int, upload: UploadFile, *, settings=None,
     ) -> UploadedContent:
+        settings = settings if settings is not None else settings_cache.for_connection(connection)
         old = connection.execute(
             "SELECT active_content_set_id FROM digital_components WHERE id = %s FOR UPDATE",
             (component_id,),
@@ -109,10 +105,11 @@ class PostgreSQLContentStorage:
         session = connection.execute(
             """INSERT INTO content_upload_sessions
                    (digital_component_id, content_set_id, status, expires_at)
-               VALUES (%s, %s, 'uploading', CURRENT_TIMESTAMP + (%s * interval '1 second'))
+               VALUES (%s, %s, 'uploading', CURRENT_TIMESTAMP + (LEAST(%s::numeric, EXTRACT(EPOCH FROM
+                   (TIMESTAMPTZ '9999-12-31 00:00:00+00' - CURRENT_TIMESTAMP))) * interval '1 second'))
                RETURNING id""",
             (component_id, content_set["id"],
-             integer_environment("CONTENT_UPLOAD_SESSION_TTL_SECONDS", 86400, minimum=1)),
+             settings["CONTENT_UPLOAD_SESSION_TTL_SECONDS"]),
         ).fetchone()
         uploaded = _stream_segments(
             connection, upload.file,
@@ -120,7 +117,7 @@ class PostgreSQLContentStorage:
                    (content_set_id, segment_no, segment_size,
                     segment_checksum_algo, segment_checksum_value, content)
                VALUES (%s, %s, %s, %s, %s, %s)""",
-            content_set["id"],
+            content_set["id"], settings,
         )
         connection.execute(
             """UPDATE content_upload_sessions SET status = 'finalizing',
@@ -158,14 +155,16 @@ class PostgreSQLContentStorage:
         return uploaded
 
     def store_draft_upload(
-        self, connection: Connection, draft_component_id: int, upload: UploadFile,
+        self, connection: Connection, draft_component_id: int, upload: UploadFile, *, settings=None,
     ) -> UploadedContent:
+        settings = settings if settings is not None else settings_cache.for_connection(connection)
         session = connection.execute(
             """INSERT INTO content_upload_sessions (draft_component_id, status, expires_at)
-               VALUES (%s, 'uploading', CURRENT_TIMESTAMP + (%s * interval '1 second'))
+               VALUES (%s, 'uploading', CURRENT_TIMESTAMP + (LEAST(%s::numeric, EXTRACT(EPOCH FROM
+                   (TIMESTAMPTZ '9999-12-31 00:00:00+00' - CURRENT_TIMESTAMP))) * interval '1 second'))
                RETURNING id""",
             (draft_component_id,
-             integer_environment("CONTENT_UPLOAD_SESSION_TTL_SECONDS", 86400, minimum=1)),
+             settings["CONTENT_UPLOAD_SESSION_TTL_SECONDS"]),
         ).fetchone()
         uploaded = _stream_segments(
             connection, upload.file,
@@ -173,7 +172,7 @@ class PostgreSQLContentStorage:
                    (record_draft_component_id, segment_no, segment_size,
                     segment_checksum_algo, segment_checksum_value, content)
                VALUES (%s, %s, %s, %s, %s, %s)""",
-            draft_component_id,
+            draft_component_id, settings,
         )
         connection.execute(
             """UPDATE record_draft_components SET size_in_bytes = %s,
@@ -190,6 +189,23 @@ class PostgreSQLContentStorage:
             (uploaded.segment_count, uploaded.size_in_bytes, session["id"]),
         )
         return uploaded
+
+    def read_draft(self, connection: Connection, draft_component_id: int) -> bytes | None:
+        """Read a completed staging upload on the caller's authorized transaction.
+
+        The rendition route holds the component row against deletion/promotion;
+        no new connection, permanent content set or cache is created.
+        """
+        if not connection.execute(
+            "SELECT id FROM record_draft_components WHERE id=%s AND content_status='available'",
+            (draft_component_id,),
+        ).fetchone():return None
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT content FROM record_draft_component_blobs WHERE record_draft_component_id=%s ORDER BY segment_no",
+                (draft_component_id,),
+            )
+            return b"".join(bytes(row['content']) for row in cursor)
 
     def promote_draft(
         self, connection: Connection, draft_component_id: int, component_id: int,
@@ -247,6 +263,9 @@ class PostgreSQLContentStorage:
             return
         offset = 0
         with pool.connection() as connection:
+            # Keep an authorized in-flight stream ahead of the erasure lock;
+            # a stream starting after deletion cannot recover an old snapshot.
+            if not connection.execute("""SELECT r.id FROM records r JOIN digital_components d ON d.record_id=r.id JOIN digital_component_content_sets s ON s.digital_component_id=d.id WHERE s.id=%s AND r.disposition_status<>10 FOR SHARE OF r""",(location.content_set_id,)).fetchone():return
             with connection.cursor(name=f"content_stream_{location.content_set_id}") as cursor:
                 cursor.execute(
                     """SELECT segment_size, content FROM digital_component_blobs
@@ -289,3 +308,69 @@ def configured_storage() -> ContentStorage:
     if backend != "postgresql":
         raise RuntimeError(f"unsupported CONTENT_STORAGE_BACKEND: {backend}")
     return PostgreSQLContentStorage()
+
+
+@dataclass(frozen=True)
+class GovernedUpload:
+    """Server-owned staging reference; never accepted from an HTTP client."""
+    draft_id: int
+    component_id: int
+    file_name: str
+    mime_type: str
+    size_in_bytes: int
+    checksum_value: str
+
+
+@contextmanager
+def stage_governed_upload(upload: UploadFile, settings, *, connection_factory=None):
+    """Stage bounded segments before taking workflow/destination locks.
+
+    An ownerless, unplaced internal draft is invisible to personal draft APIs.
+    Each segment commits separately. Final record/component/document promotion
+    uses the caller's one domain transaction. Abandonment uses existing draft
+    and upload-session expiry cleanup; normal exit always removes the staging.
+    No filesystem storage, new setting or content bytes in audit metadata.
+    """
+    factory = connection_factory or pool.connection
+    inspected = inspect_upload(upload, settings)
+    name = (upload.filename or 'unnamed').replace('\\', '/').rsplit('/', 1)[-1] or 'unnamed'
+    mime = upload.content_type or 'application/octet-stream'
+    draft_id = None
+    try:
+        with factory() as c:
+            with c.transaction():
+                draft_id = c.execute("INSERT INTO record_drafts(owner_user_id,medium) VALUES(NULL,'digital') RETURNING id").fetchone()['id']
+                component_id = c.execute('''INSERT INTO record_draft_components
+                 (draft_id,component_order,file_name,mime_type,size_in_bytes,checksum_algo,checksum_value)
+                 VALUES(%s,1,%s,%s,%s,'sha256',%s) RETURNING id''',
+                 (draft_id,name,mime,inspected.size_in_bytes,inspected.checksum_value)).fetchone()['id']
+                session_id = c.execute('''INSERT INTO content_upload_sessions(draft_component_id,status,expires_at)
+                 VALUES(%s,'uploading',CURRENT_TIMESTAMP + (LEAST(%s::numeric,EXTRACT(EPOCH FROM
+                   (TIMESTAMPTZ '9999-12-31 00:00:00+00' - CURRENT_TIMESTAMP))) * interval '1 second')) RETURNING id''',
+                 (component_id,settings['CONTENT_UPLOAD_SESSION_TTL_SECONDS'])).fetchone()['id']
+            digest = hashlib.sha256(); count = 0; size = 0
+            while chunk := upload.file.read(settings['CONTENT_SEGMENT_SIZE_BYTES']):
+                size += len(chunk)
+                if size > settings['MAX_UPLOAD_SIZE_BYTES']:
+                    raise HTTPException(413, detail='file exceeds the configured upload limit')
+                digest.update(chunk)
+                algorithm, checksum = _segment_digest(chunk, settings)
+                with c.transaction():
+                    c.execute('''INSERT INTO record_draft_component_blobs
+                     (record_draft_component_id,segment_no,segment_size,segment_checksum_algo,segment_checksum_value,content)
+                     VALUES(%s,%s,%s,%s,%s,%s)''',(component_id,count,len(chunk),algorithm,checksum,chunk))
+                    count += 1
+                    c.execute('''UPDATE content_upload_sessions SET next_segment_no=%s,bytes_received=%s,
+                     date_updated=CURRENT_TIMESTAMP WHERE id=%s''',(count,size,session_id))
+            if size != inspected.size_in_bytes or digest.hexdigest() != inspected.checksum_value:
+                raise HTTPException(409, detail='upload changed while staging')
+            with c.transaction():
+                c.execute('''UPDATE record_draft_components SET content_status='available',segment_count=%s,
+                 upload_completed_at=CURRENT_TIMESTAMP WHERE id=%s''',(count,component_id))
+                c.execute("UPDATE content_upload_sessions SET status='completed',date_updated=CURRENT_TIMESTAMP WHERE id=%s",(session_id,))
+        yield GovernedUpload(draft_id,component_id,name,mime,size,inspected.checksum_value)
+    finally:
+        upload.file.seek(0)
+        if draft_id is not None:
+            with factory() as c:
+                c.execute('DELETE FROM record_drafts WHERE id=%s AND owner_user_id IS NULL',(draft_id,))

@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+import math
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from psycopg import Connection
 
-from .config import boolean_environment, integer_environment
+from .operation_policy import operation_policy
+from .config import boolean_environment
+from .application_settings import cache as settings_cache
 from .database import get_connection
 from .entity_localization import localized_projection, preferred_language_for_user
 from .authorization_policy import (
@@ -29,11 +32,6 @@ SESSION_COOKIE = "erms_session"
 CSRF_COOKIE = "erms_csrf"
 # Provisioning identifier only; runtime authorization never grants by role name.
 SYSTEM_ADMIN_ROLE = "system-administrator"
-IDLE_MINUTES = integer_environment("AUTH_SESSION_IDLE_MINUTES", 30, minimum=1)
-ABSOLUTE_HOURS = integer_environment("AUTH_SESSION_ABSOLUTE_HOURS", 12, minimum=1)
-LOCKOUT_ATTEMPTS = integer_environment("AUTH_LOCKOUT_ATTEMPTS", 5, minimum=1)
-LOCKOUT_MINUTES = integer_environment("AUTH_LOCKOUT_MINUTES", 15, minimum=1)
-PASSWORD_MIN_LENGTH = integer_environment("AUTH_PASSWORD_MIN_LENGTH", 12, minimum=8)
 COOKIE_SECURE = boolean_environment("AUTH_COOKIE_SECURE", False)
 password_hasher = PasswordHasher()
 
@@ -53,14 +51,30 @@ def hash_secret(value: str) -> bytes:
 
 
 def hash_password(password: str) -> str:
-    validate_password(password)
+    """Hash already validated application passwords or explicit seed fixtures."""
     return password_hasher.hash(password)
 
 
-def validate_password(password: str) -> None:
-    if len(password) < PASSWORD_MIN_LENGTH:
-        raise ValueError(f"password must contain at least {PASSWORD_MIN_LENGTH} characters")
+def validate_password(password: str, settings) -> None:
+    minimum = settings["AUTH_PASSWORD_MIN_LENGTH"]
+    if len(password) < minimum:
+        raise ValueError(f"password must contain at least {minimum} characters")
 
+
+
+def _deadline(instant: datetime, units: int, seconds_per_unit: int) -> datetime:
+    """Represent valid large policy durations without datetime overflow."""
+    maximum = datetime.max.replace(tzinfo=timezone.utc) - timedelta(days=1)
+    seconds = units * seconds_per_unit
+    if seconds >= (maximum - instant).total_seconds():
+        return maximum
+    return instant + timedelta(seconds=seconds)
+
+
+def temporary_password(settings) -> str:
+    password = secrets.token_urlsafe(max(15, (settings['AUTH_PASSWORD_MIN_LENGTH'] * 3 + 3) // 4))
+    validate_password(password, settings)
+    return password
 
 def _roles(connection: Connection, user_id: int) -> list[dict[str, Any]]:
     return list(connection.execute(
@@ -81,10 +95,21 @@ def _roles(connection: Connection, user_id: int) -> list[dict[str, Any]]:
 
 
 def resolve_principal(connection: Connection, token: str) -> Principal | None:
+    # Serialize simultaneous authentication/expiry/revocation work on this
+    # session, but do not take FOR UPDATE: inserting search_results_cache
+    # references this row via a foreign key and holds KEY SHARE until commit.
+    # FOR UPDATE unnecessarily conflicts with that reference; NO KEY UPDATE
+    # permits it while still conflicting with other session updates/deletes.
+    # This is valid because authentication changes timestamps, never the session
+    # primary key. Keep the lock through the policy checks and timestamp update
+    # below so concurrent requests cannot race session expiry or revive it.
+    # The caller must also keep this synchronous transaction off an async event
+    # loop: unrelated session writes can still cause legitimate lock waits.
     row = connection.execute(
         """
         SELECT s.id AS session_id, s.user_id, u.name, u.email, u.account_type,
-               c.must_change_password
+               c.must_change_password, s.date_created, s.last_seen_at,
+               s.expires_at, s.absolute_expires_at, CURRENT_TIMESTAMP AS evaluated_at
         FROM login_sessions s
         JOIN users u ON u.id = s.user_id
         JOIN user_credentials c ON c.user_id = u.id
@@ -94,18 +119,27 @@ def resolve_principal(connection: Connection, token: str) -> Principal | None:
           AND s.absolute_expires_at > CURRENT_TIMESTAMP
           AND u.status = 'active'
           AND u.account_type = 'person'
+        FOR NO KEY UPDATE OF s
         """, (hash_secret(token),)
     ).fetchone()
     if not row:
         return None
+    settings = settings_cache.for_connection(connection)
+    now = row['evaluated_at']
+    idle_deadline = _deadline(row['last_seen_at'], settings['AUTH_SESSION_IDLE_MINUTES'], 60)
+    absolute_deadline = _deadline(row['date_created'], settings['AUTH_SESSION_ABSOLUTE_HOURS'], 3600)
+    if min(idle_deadline, absolute_deadline) <= now:
+        # Persist terminal expiry before a later policy increase can revive it.
+        connection.execute(
+            "UPDATE login_sessions SET expires_at=LEAST(expires_at,%s), absolute_expires_at=LEAST(absolute_expires_at,%s) WHERE id=%s",
+            (min(idle_deadline,absolute_deadline), absolute_deadline, row['session_id']))
+        return None
+    last_seen = now if row['last_seen_at'] < now - timedelta(minutes=1) else row['last_seen_at']
+    expires_at = min(_deadline(last_seen, settings['AUTH_SESSION_IDLE_MINUTES'], 60), absolute_deadline)
     connection.execute(
-        """
-        UPDATE login_sessions
-        SET last_seen_at = CURRENT_TIMESTAMP,
-            expires_at = LEAST(CURRENT_TIMESTAMP + make_interval(mins => %s), absolute_expires_at)
-        WHERE id = %s AND last_seen_at < CURRENT_TIMESTAMP - interval '1 minute'
-        """, (IDLE_MINUTES, row["session_id"])
-    )
+        """UPDATE login_sessions SET last_seen_at=%s, expires_at=%s, absolute_expires_at=%s
+           WHERE id=%s AND (last_seen_at,expires_at,absolute_expires_at) IS DISTINCT FROM (%s,%s,%s)""",
+        (last_seen, expires_at, absolute_deadline, row['session_id'],last_seen,expires_at,absolute_deadline))
     return Principal(
         user_id=row["user_id"], session_id=row["session_id"], name=row["name"],
         email=row["email"], account_type=row["account_type"],
@@ -139,6 +173,60 @@ def _client_context(request: Request) -> tuple[str | None, str | None]:
 
 def _timestamp(value: Any) -> str | None:
     return value.isoformat() if value is not None else None
+
+
+def _clear_expired_credential_lock(
+    connection: Connection, credential: dict[str, Any], now: datetime,
+) -> bool:
+    """Called with the credential row locked, before either password check."""
+    if credential["locked_until"] is None or credential["locked_until"] > now:
+        return False
+    connection.execute(
+        "UPDATE user_credentials SET failed_attempt_count=0, locked_until=NULL, date_updated=%s WHERE user_id=%s",
+        (now, credential["user_id"]),
+    )
+    credential.update(failed_attempt_count=0, locked_until=None)
+    return True
+
+
+def _record_password_failure(
+    connection: Connection, credential: dict[str, Any], request: Request,
+    now: datetime, settings, *, context: str,
+) -> datetime | None:
+    attempts = credential["failed_attempt_count"] + 1
+    locked_until = (
+        _deadline(now, settings["AUTH_LOCKOUT_MINUTES"], 60)
+        if attempts >= settings["AUTH_LOCKOUT_ATTEMPTS"] else None
+    )
+    connection.execute(
+        "UPDATE user_credentials SET failed_attempt_count=%s, last_failed_at=%s, locked_until=%s, date_updated=%s WHERE user_id=%s",
+        (attempts, now, locked_until, now, credential["user_id"]),
+    )
+    client_ip, user_agent = _client_context(request)
+    _append_event(connection, credential["user_id"], "AUTHENTICATION_FAILED", {
+        "client_ip": client_ip,
+        "user_agent": user_agent,
+        "failed_attempt_count": attempts,
+        "lock_applied": bool(locked_until),
+        "locked_until": _timestamp(locked_until),
+        "authentication_context": context,
+    })
+    # HTTP errors must not roll back the failure or its matching audit event.
+    connection.commit()
+    return locked_until
+
+
+def _password_change_locked(locked_until: datetime, now: datetime) -> HTTPException:
+    seconds = max(1, math.ceil((locked_until - now).total_seconds()))
+    return HTTPException(
+        status_code=429,
+        detail={
+            "code": "password_attempts_locked",
+            "message_key": "authentication.error.password_attempts_locked",
+            "parameters": {"seconds": seconds},
+        },
+        headers={"Retry-After": str(seconds)},
+    )
 
 
 def _session_snapshot(row: dict[str, Any]) -> dict[str, Any]:
@@ -191,11 +279,13 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
 
 @router.post("/login", response_model=PrincipalRead)
+@operation_policy("public")
 def login(payload: LoginRequest, request: Request, response: Response, connection: Connection = Depends(get_connection, scope="function")):
+    settings = settings_cache.for_connection(connection)
     generic = HTTPException(status_code=401, detail="invalid email or password")
     row = connection.execute(
         """
-        SELECT u.id, u.name, u.email, u.account_type, u.status,
+        SELECT u.id, c.user_id, u.name, u.email, u.account_type, u.status,
                c.password_hash, c.must_change_password, c.temporary_expires_at,
                c.failed_attempt_count, c.locked_until
         FROM users u JOIN user_credentials c ON c.user_id = u.id
@@ -208,34 +298,22 @@ def login(payload: LoginRequest, request: Request, response: Response, connectio
         raise generic
     if row["locked_until"] and row["locked_until"] > now:
         raise generic
+    expired_lock_cleared = _clear_expired_credential_lock(connection, row, now)
     try:
         valid = password_hasher.verify(row["password_hash"], payload.password)
     except (VerifyMismatchError, InvalidHashError):
         valid = False
     if not valid:
-        attempts = row["failed_attempt_count"] + 1
-        locked_until = now + timedelta(minutes=LOCKOUT_MINUTES) if attempts >= LOCKOUT_ATTEMPTS else None
-        connection.execute(
-            "UPDATE user_credentials SET failed_attempt_count=%s, last_failed_at=%s, locked_until=%s, date_updated=%s WHERE user_id=%s",
-            (attempts, now, locked_until, now, row["id"]),
-        )
-        client_ip, user_agent = _client_context(request)
-        _append_event(connection, row["id"], "AUTHENTICATION_FAILED", {
-            "client_ip": client_ip,
-            "user_agent": user_agent,
-            "failed_attempt_count": attempts,
-            "lock_applied": bool(locked_until),
-            "locked_until": _timestamp(locked_until),
-        })
-        # The request intentionally ends with an HTTP error. Persist the failure
-        # before raising so the dependency cleanup cannot roll back lockout state.
-        connection.commit()
+        _record_password_failure(connection, row, request, now, settings, context="login")
         raise generic
     if row["temporary_expires_at"] and row["temporary_expires_at"] <= now:
+        if expired_lock_cleared:
+            connection.commit()
         raise HTTPException(status_code=401, detail="temporary password has expired")
     token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
-    expires_at = now + timedelta(minutes=IDLE_MINUTES)
-    absolute_at = now + timedelta(hours=ABSOLUTE_HOURS)
+    expires_at = _deadline(now, settings['AUTH_SESSION_IDLE_MINUTES'], 60)
+    absolute_at = _deadline(now, settings['AUTH_SESSION_ABSOLUTE_HOURS'], 3600)
+    expires_at = min(expires_at, absolute_at)
     client_ip, user_agent = _client_context(request)
     session = connection.execute(
         """
@@ -301,12 +379,30 @@ def principal_response(principal: Principal, connection: Connection) -> dict[str
         role["org_unit"] = {key: value for key, value in unit.items() if key != "translations"}
         role["org_unit"]["localized"] = localized_projection(unit, language, "name")
         roles.append(role)
+    can_manage_disposition = principal.account_type == 'person' and any(
+        role.is_information_governance and 'disposition.jobs.manage' in role.privileges
+        for role in policy.effective_roles
+    )
+    # Use the same current person-role eligibility as workflow task routing.
+    can_access_disposition_tasks = can_manage_disposition or connection.execute(
+        """SELECT EXISTS (
+            SELECT 1 FROM org_units unit
+            WHERE disposition_private.person_role(%s, unit.file_administrator_role_id)
+               OR disposition_private.person_role(%s, unit.managing_role_id)
+        ) AS allowed""",
+        (principal.user_id, principal.user_id),
+    ).fetchone()["allowed"]
     return {
         "user": user,
         "roles": roles,
         "session": {"id": principal.session_id},
         "must_change_password": principal.must_change_password,
         "previous_login_at": _previous_login_at(connection, principal),
+        "can_manage_disposition": can_manage_disposition,
+        "can_manage_disposition_templates": connection.execute(
+            "SELECT EXISTS(SELECT 1 FROM roles WHERE disposition_private.can_revise_template(id)) AS allowed"
+        ).fetchone()["allowed"],
+        "can_access_disposition_tasks": can_access_disposition_tasks,
         "global_privileges": sorted({
             privilege
             for role in policy.effective_roles
@@ -316,6 +412,7 @@ def principal_response(principal: Principal, connection: Connection) -> dict[str
 
 
 @router.get("/me", response_model=PrincipalRead)
+@operation_policy("authenticated_only")
 def me(
     principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
@@ -323,93 +420,27 @@ def me(
     return principal_response(principal, connection)
 
 
-@router.get("/me/recent-activity", response_model=list[SelfRecentActivityRead])
+@router.get("/me/recent-activity", response_model=list[SelfRecentActivityRead],
+            response_model_exclude_unset=True)
+@operation_policy("authenticated_only")
 def my_recent_activity(
     limit: int = Query(6, ge=1, le=50),
     since: datetime | None = None,
+    entity_type: Literal["aggregation", "record"] | None = None,
     principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    """Return only the caller's own recent governed-resource work.
+    """Return the caller's own activity, with card fields on a scoped request."""
+    from .application_configuration import recent_since_default
+    from .recent_activity import recent_activity
 
-    This is not an audit-trail endpoint: it contains no audit snapshots,
-    reasons, other actors, or resources the caller can no longer view.
-    """
-    return list(connection.execute(
-        """WITH governed_resource_events AS (
-               SELECT DISTINCT ON (event.entity_type,event.entity_id,event.operation)
-                      event.id,event.entity_type,event.entity_id,event.operation,
-                      event.occurred_at
-                 FROM event_history AS event
-                WHERE event.actor_user_id=%s
-                  AND event.entity_type IN ('aggregation','record')
-                  AND event.operation IN ('CREATE','UPDATE')
-                  AND (%s::timestamptz IS NULL OR event.occurred_at >= %s)
-                ORDER BY event.entity_type,event.entity_id,event.operation,
-                         event.occurred_at DESC,event.id DESC
-           ), content_view_targets AS (
-               SELECT event.id,'record'::text AS entity_type,
-                      component.record_id AS entity_id,event.operation,event.occurred_at
-                 FROM event_history event
-                 JOIN digital_components component ON component.id=event.entity_id
-                WHERE event.actor_user_id=%s
-                  AND event.entity_type='digital_component'
-                  AND event.operation='CONTENT_VIEWED'
-                  AND (%s::timestamptz IS NULL OR event.occurred_at >= %s)
-               UNION ALL
-               SELECT event.id,'aggregation'::text AS entity_type,
-                      record.aggregation_id AS entity_id,event.operation,event.occurred_at
-                 FROM event_history event
-                 JOIN digital_components component ON component.id=event.entity_id
-                 JOIN records record ON record.id=component.record_id
-                WHERE event.actor_user_id=%s
-                  AND event.entity_type='digital_component'
-                  AND event.operation='CONTENT_VIEWED'
-                  AND (%s::timestamptz IS NULL OR event.occurred_at >= %s)
-           ), content_view_events AS (
-               SELECT DISTINCT ON (entity_type,entity_id)
-                      id,entity_type,entity_id,operation,occurred_at
-                 FROM content_view_targets
-                ORDER BY entity_type,entity_id,occurred_at DESC,id DESC
-           ), latest_resource_events AS (
-               SELECT * FROM governed_resource_events
-               UNION ALL
-               SELECT * FROM content_view_events
-           ), matching_events AS (
-               SELECT event.entity_type,event.entity_id,event.operation,event.occurred_at,
-                      row_number() OVER (
-                          PARTITION BY event.entity_type, event.operation
-                          ORDER BY event.occurred_at DESC, event.id DESC
-                      ) AS position
-                 FROM latest_resource_events AS event
-                WHERE (
-                      (event.entity_type='aggregation' AND EXISTS (
-                          SELECT 1 FROM aggregations resource
-                           WHERE resource.id=event.entity_id
-                             AND current_user_can_view_aggregation(resource.id)
-                      ))
-                      OR
-                      (event.entity_type='record' AND EXISTS (
-                          SELECT 1 FROM records resource
-                           WHERE resource.id=event.entity_id
-                             AND current_user_can_view_record(resource.id)
-                      ))
-                  )
-           )
-           SELECT entity_type, entity_id, operation, occurred_at
-             FROM matching_events
-            WHERE position <= %s
-            ORDER BY occurred_at DESC, entity_type, entity_id""",
-        (
-            principal.user_id, since, since,
-            principal.user_id, since, since,
-            principal.user_id, since, since,
-            limit,
-        ),
-    ).fetchall())
+    if since is None:
+        since = recent_since_default(settings_cache.for_connection(connection)["DASHBOARD_RECENT_DAYS"])
+    return recent_activity(connection, principal.user_id, since, limit, entity_type)
 
 
 @router.post("/logout", status_code=204)
+@operation_policy("authenticated_only")
 def logout(response: Response, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
     session = connection.execute(
         """UPDATE login_sessions SET revoked_at=CURRENT_TIMESTAMP, revoked_by=%s
@@ -431,20 +462,35 @@ def logout(response: Response, principal: Principal = Depends(principal_from_req
 
 
 @router.post("/change-password", status_code=204)
-def change_password(payload: ChangePasswordRequest, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
-    credential = connection.execute("SELECT password_hash FROM user_credentials WHERE user_id=%s", (principal.user_id,)).fetchone()
+@operation_policy("authenticated_only")
+def change_password(payload: ChangePasswordRequest, request: Request, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
+    settings = settings_cache.for_connection(connection)
+    credential = connection.execute(
+        "SELECT user_id, password_hash, failed_attempt_count, locked_until FROM user_credentials WHERE user_id=%s FOR UPDATE",
+        (principal.user_id,),
+    ).fetchone()
+    now = datetime.now(timezone.utc)
+    if credential["locked_until"] and credential["locked_until"] > now:
+        raise _password_change_locked(credential["locked_until"], now)
+    expired_lock_cleared = _clear_expired_credential_lock(connection, credential, now)
     try:
         valid = password_hasher.verify(credential["password_hash"], payload.current_password)
     except (VerifyMismatchError, InvalidHashError):
         valid = False
     if not valid:
+        locked_until = _record_password_failure(connection, credential, request, now, settings, context="password_change")
+        if locked_until:
+            raise _password_change_locked(locked_until, now)
         raise HTTPException(status_code=400, detail="current password is incorrect")
     try:
+        validate_password(payload.new_password, settings)
         new_hash = hash_password(payload.new_password)
     except ValueError as error:
+        if expired_lock_cleared:
+            connection.commit()
         raise HTTPException(status_code=422, detail=str(error)) from error
     connection.execute(
-        "UPDATE user_credentials SET password_hash=%s, must_change_password=false, temporary_expires_at=NULL, password_changed_at=CURRENT_TIMESTAMP, date_updated=CURRENT_TIMESTAMP WHERE user_id=%s",
+        "UPDATE user_credentials SET password_hash=%s, must_change_password=false, temporary_expires_at=NULL, failed_attempt_count=0, locked_until=NULL, password_changed_at=CURRENT_TIMESTAMP, date_updated=CURRENT_TIMESTAMP WHERE user_id=%s",
         (new_hash, principal.user_id),
     )
     other_sessions = connection.execute(
@@ -496,7 +542,7 @@ def list_sessions(
 @router.get("/sessions/page", dependencies=[Depends(require_identity_sessions_admin)])
 def page_sessions(
     user_id: int | None = None,
-    limit: int = Query(20, ge=1, le=100),
+    limit: int | None = Query(None, ge=1, le=100),
     offset: int = Query(0, ge=0),
     query: str = Query("", max_length=200),
     session_status: str = Query("all", pattern="^(all|active|expired|revoked)$"),
@@ -508,6 +554,9 @@ def page_sessions(
     principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
+    if limit is None:
+        from .application_settings import cache
+        limit = min(cache.for_connection(connection)["USER_DETAILS_SESSION_LIMIT"],50) if user_id is not None else 20
     sort_columns = {
         "date_created": "date_created", "last_seen_at": "last_seen_at",
         "expires_at": "expires_at", "status": "status", "client_ip": "client_ip",
@@ -566,6 +615,7 @@ def page_sessions(
 
 
 @router.delete("/sessions/{session_id}", status_code=204)
+@operation_policy("authenticated_only")
 def revoke_session(session_id: int, request: Request, principal: Principal = Depends(principal_from_request), connection: Connection = Depends(get_connection, scope="function")):
     target = connection.execute("SELECT user_id FROM login_sessions WHERE id=%s", (session_id,)).fetchone()
     if not target:
@@ -605,7 +655,7 @@ def issue_temporary_password(user_id: int, principal: Principal = Depends(princi
         raise HTTPException(status_code=404, detail="user not found")
     if user["account_type"] != "person" or not user["email"]:
         raise HTTPException(status_code=422, detail="local passwords require a person account with an email address")
-    password = secrets.token_urlsafe(15)
+    password = temporary_password(settings_cache.for_connection(connection))
     password_hash = hash_password(password)
     temporary_expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
     connection.execute(

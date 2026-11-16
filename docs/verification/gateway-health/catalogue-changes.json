@@ -1,0 +1,17 @@
+{
+  "added_keys": [
+    "messaging.monitor.address_ambiguous",
+    "messaging.monitor.endpoint_unavailable",
+    "messaging.monitor.gateway_endpoint",
+    "messaging.monitor.instance_id",
+    "messaging.monitor.last_report",
+    "messaging.monitor.overdue"
+  ],
+  "changed_keys": [],
+  "removed_keys": [],
+  "existing_arabic_items_preserved": 2895,
+  "administrator_export_promoted": false,
+  "new_drafts_require_review": true,
+  "english_sha256": "6531a4e0c3daab369869a06768485a4404c2974bc8bbcf1dbdf78123ce9c6e20",
+  "arabic_artifact_sha256": "bb3d7898069c3e2f417304ba44c534dca57b1c356588ef80585140b5e045f47c"
+}

@@ -7,11 +7,13 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from psycopg import Connection, sql
 
+from .operation_policy import operation_policy
 from .saved_searches import audience_eligibility_sql
 from .search import record_destination_clause
 from .database import get_connection
 from .entity_localization import localized_projection, preferred_language
 from .authorization_policy import require_organization_browse
+from .creator_attribution import add_creator_names
 from .schemas import (
     AggregationRead,
     BrowseAggregationNode,
@@ -38,6 +40,7 @@ ORG_UNIT_NODE_SQL = """
     )
     SELECT unit.id, unit.parent_org_unit_id, unit.code, unit.name, unit.translations,
            unit.description, unit.status, unit.date_created,
+           unit.managing_role_id, unit.file_administrator_role_id,
            unit.date_deactivated, unit.version,
            CASE WHEN EXISTS (
                SELECT 1 FROM ancestors
@@ -136,6 +139,7 @@ def _page(
     query_columns: tuple[str, ...],
     limit: int,
     cursor: str | None,
+    resource_kind: Literal["aggregation", "record"] | None = None,
 ) -> dict[str, Any]:
     normalized_query = query.strip()
     filters: list[str] = []
@@ -166,6 +170,8 @@ def _page(
     ).fetchall())
     has_more = len(rows) > limit
     items = rows[:limit]
+    if resource_kind is not None:
+        add_creator_names(connection, ((resource_kind, item) for item in items))
     next_cursor = None
     if has_more and items:
         last = items[-1]
@@ -195,7 +201,7 @@ AGGREGATION_SOURCE = """
            classification.code AS classification_code,
            classification.title AS classification_title,
            a.aggregation_number, a.title, a.description, a.date_created,
-           a.date_opened, a.date_closed, a.medium, a.is_vital,
+           a.date_opened, a.date_closed, a.medium, a.is_vital, a.disposition_status, a.disposition_job_id,
            aggregation_has_vital_descendants(a.id) AS has_vital_descendants,
            a.date_of_next_review, a.assigned_location, a.current_location,
            aggregation_effective_assigned_location(a.id) AS effective_assigned_location,
@@ -227,7 +233,7 @@ RECORD_SOURCE = """
            CASE WHEN current_user_can_view_aggregation(r.aggregation_id) THEN owner.aggregation_number END AS aggregation_number,
            CASE WHEN current_user_can_view_aggregation(r.aggregation_id) THEN owner.title END AS aggregation_title,
            r.record_number, r.title, r.description,
-           r.date_created, r.date_originated, r.medium, r.is_vital,
+           r.date_created, r.date_originated, r.medium, r.is_vital, r.disposition_status, r.disposition_job_id,
            r.date_of_next_review,
            aggregation_effective_assigned_location(r.aggregation_id) AS effective_assigned_location,
            aggregation_effective_current_location(r.aggregation_id) AS effective_current_location,
@@ -250,6 +256,7 @@ RECORD_SOURCE = """
 
 
 @router.get("/classification-schemes", response_model=list[ClassificationSchemeRead])
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def browse_schemes(
     q: str = Query("", max_length=200),
     limit: int = Query(25, ge=1, le=50), offset: int = Query(0, ge=0),
@@ -268,6 +275,7 @@ def browse_schemes(
     "/classification-schemes/{scheme_id}/roots",
     response_model=BrowsePage[BrowseClassificationNode],
 )
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def browse_classification_roots(
     scheme_id: int, limit: int = Query(50, ge=1, le=100), cursor: str | None = None,
     query: str = Query("", max_length=200),
@@ -291,6 +299,7 @@ def browse_classification_roots(
     "/classifications/{classification_id}/children",
     response_model=BrowsePage[BrowseClassificationNode],
 )
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def browse_classification_children(
     classification_id: int, limit: int = Query(50, ge=1, le=100), cursor: str | None = None,
     query: str = Query("", max_length=200),
@@ -310,6 +319,7 @@ def browse_classification_children(
     "/classifications/{classification_id}/aggregations",
     response_model=BrowsePage[BrowseAggregationNode],
 )
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def browse_classification_aggregations(
     classification_id: int, limit: int = Query(50, ge=1, le=100), cursor: str | None = None,
     query: str = Query("", max_length=200),
@@ -331,7 +341,7 @@ def browse_classification_aggregations(
         connection, scope=f"classification:{classification_id}:aggregations:owner:{owning_org_unit_id}:create:{record_creation}:digital:{digital_only}",
         source_sql=AGGREGATION_SOURCE + " AND a.classification_id=%s AND a.parent_aggregation_id IS NULL" + owner_sql + destination_sql,
         parameters=[classification_id, *([owning_org_unit_id] if owning_org_unit_id is not None else [])], key_column="aggregation_number", query=query,
-        query_columns=("aggregation_number", "title"), limit=limit, cursor=cursor,
+        query_columns=("aggregation_number", "title"), limit=limit, cursor=cursor, resource_kind="aggregation",
     )
 
 
@@ -339,6 +349,7 @@ def browse_classification_aggregations(
     "/aggregations/{aggregation_id}/children",
     response_model=BrowsePage[BrowseAggregationNode],
 )
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def browse_aggregation_children(
     aggregation_id: int, limit: int = Query(50, ge=1, le=100), cursor: str | None = None,
     query: str = Query("", max_length=200),
@@ -355,7 +366,7 @@ def browse_aggregation_children(
         connection, scope=f"aggregation:{aggregation_id}:children:owner:{owning_org_unit_id}:create:{record_creation}:digital:{digital_only}",
         source_sql=AGGREGATION_SOURCE + " AND a.parent_aggregation_id=%s" + owner_sql + destination_sql,
         parameters=[aggregation_id, *([owning_org_unit_id] if owning_org_unit_id is not None else [])], key_column="aggregation_number", query=query,
-        query_columns=("aggregation_number", "title"), limit=limit, cursor=cursor,
+        query_columns=("aggregation_number", "title"), limit=limit, cursor=cursor, resource_kind="aggregation",
     )
 
 
@@ -363,6 +374,7 @@ def browse_aggregation_children(
     "/aggregations/{aggregation_id}/records",
     response_model=BrowsePage[BrowseRecordNode],
 )
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def browse_aggregation_records(
     aggregation_id: int, limit: int = Query(50, ge=1, le=100), cursor: str | None = None,
     query: str = Query("", max_length=200),
@@ -376,11 +388,12 @@ def browse_aggregation_records(
         connection, scope=f"aggregation:{aggregation_id}:records:owner:{owning_org_unit_id}",
         source_sql=RECORD_SOURCE + " AND r.aggregation_id=%s" + owner_sql,
         parameters=[aggregation_id, *([owning_org_unit_id] if owning_org_unit_id is not None else [])], key_column="record_number", query=query,
-        query_columns=("record_number", "title"), limit=limit, cursor=cursor,
+        query_columns=("record_number", "title"), limit=limit, cursor=cursor, resource_kind="record",
     )
 
 
 @router.get("/aggregations/{aggregation_id}/summary", response_model=BrowseAggregationNode)
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def browse_aggregation_summary(
     aggregation_id: int, connection: Connection = Depends(get_connection, scope="function"),
 ):
@@ -393,6 +406,7 @@ def browse_aggregation_summary(
 
 
 @router.get("/records/{record_id}/summary", response_model=BrowseRecordNode)
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def browse_record_summary(
     record_id: int, connection: Connection = Depends(get_connection, scope="function"),
 ):
@@ -577,6 +591,18 @@ def browse_org_unit_summary(
     row["name"] = localized["name"]
     row["description"] = localized["description"]
     row.pop("translations", None)
+    designated_roles = {
+        role["id"]: role for role in connection.execute(
+            "SELECT id,code,name,translations FROM roles WHERE id=ANY(%s)",
+            ([role_id for role_id in (row.get("managing_role_id"), row.get("file_administrator_role_id")) if role_id is not None],),
+        ).fetchall()
+    }
+    for field in ("managing_role", "file_administrator_role"):
+        role = designated_roles.get(row.get(field + "_id"))
+        if role is not None:
+            role = {"id": role["id"], "code": role["code"],
+                    "name": localized_projection(role, language_tag, "name")["name"]}
+        row[field] = role
     if row["parent_org_unit_id"]:
         row["parent"] = connection.execute(
             "SELECT id, code, name, translations FROM org_units WHERE id=%s", (row["parent_org_unit_id"],),
@@ -722,6 +748,7 @@ def search_organization_structure(
     entity_type: Literal["all", "org_unit", "role", "user"] = "all",
     status: Literal["all", "active", "inactive", "suspended"] = "all",
     limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     audience: Literal["roles", "org-units"] | None = None,
     _authorization: Any = Depends(require_organization_browse),
     connection: Connection = Depends(get_connection, scope="function"),
@@ -732,89 +759,67 @@ def search_organization_structure(
     pattern = f"%{query.strip()}%"
     status_filter = "TRUE" if status == "all" else "source.effective_status=%s"
     status_parameters: tuple[Any, ...] = () if status == "all" else (status,)
-    results: list[dict[str, Any]] = []
-    if entity_type in {"all", "org_unit"}:
-        results.extend({"type": "org_unit", **row} for row in connection.execute(
-            f"""WITH RECURSIVE paths AS (
-                    SELECT unit.id, unit.parent_org_unit_id,
-                           ARRAY[unit.id]::bigint[] AS reverse_path
-                      FROM org_units unit
-                    UNION ALL
-                    SELECT paths.id, parent.parent_org_unit_id,
-                           paths.reverse_path || parent.id
-                      FROM paths JOIN org_units parent
-                        ON parent.id=paths.parent_org_unit_id
-                )
-                SELECT source.id, source.code, source.name, source.description,
-                       source.translations, source.status,
-                       source.effective_status, source.audience_selectable,
-                       (SELECT array_agg(path_id ORDER BY ordinal DESC)
-                          FROM unnest(path.reverse_path) WITH ORDINALITY p(path_id, ordinal)
-                       ) AS org_unit_path
-                  FROM ({unit_source}) source
-                  JOIN paths path ON path.id=source.id AND path.parent_org_unit_id IS NULL
-                 WHERE (source.code ILIKE %s OR source.name ILIKE %s OR COALESCE(source.description,'') ILIKE %s
-                        OR COALESCE(source.translations::text, '') ILIKE %s)
-                   AND {status_filter} AND source.audience_selectable
-                 ORDER BY source.code LIMIT %s""",
-            (pattern, pattern, pattern, pattern, *status_parameters, limit),
-        ).fetchall())
-    if entity_type in {"all", "role"}:
-        results.extend({"type": "role", **row} for row in connection.execute(
-            f"""WITH RECURSIVE paths AS (
-                    SELECT unit.id, unit.parent_org_unit_id,
-                           ARRAY[unit.id]::bigint[] AS reverse_path
-                      FROM org_units unit
-                    UNION ALL
-                    SELECT paths.id, parent.parent_org_unit_id,
-                           paths.reverse_path || parent.id
-                      FROM paths JOIN org_units parent
-                        ON parent.id=paths.parent_org_unit_id
-                )
-                SELECT source.id, source.code, source.name, source.description,
-                       source.translations, source.status,
-                       source.effective_status, source.audience_selectable, source.org_unit_id,
-                       (SELECT array_agg(path_id ORDER BY ordinal DESC)
-                          FROM unnest(path.reverse_path) WITH ORDINALITY p(path_id, ordinal)
-                       ) AS org_unit_path
-                  FROM ({role_source}) source
-                  JOIN paths path ON path.id=source.org_unit_id AND path.parent_org_unit_id IS NULL
-                 WHERE (source.code ILIKE %s OR source.name ILIKE %s OR COALESCE(source.description,'') ILIKE %s
-                        OR COALESCE(source.translations::text, '') ILIKE %s)
-                   AND {status_filter} AND source.audience_selectable
-                 ORDER BY source.code LIMIT %s""",
-            (pattern, pattern, pattern, pattern, *status_parameters, limit),
-        ).fetchall())
+    paths = """WITH RECURSIVE paths AS (
+        SELECT unit.id, ARRAY[unit.id]::bigint[] AS path
+          FROM org_units unit WHERE unit.parent_org_unit_id IS NULL
+        UNION ALL
+        SELECT child.id, paths.path || child.id
+          FROM org_units child JOIN paths ON child.parent_org_unit_id=paths.id
+    )"""
+    branches = []
+    parameters: list[Any] = []
+    for kind, source, parent_column, kind_order in (
+        ("org_unit", unit_source, "id", 0),
+        ("role", role_source, "org_unit_id", 1),
+    ):
+        if entity_type not in {"all", kind}:
+            continue
+        # These expressions come from the fixed branches above, not user input.
+        unit_id = ", source.org_unit_id" if kind == "role" else ""
+        branches.append(f"""
+            SELECT {kind_order} AS kind_order, match.code AS sort_key, match.id AS sort_id,
+                   NULL::bigint AS assignment_id, to_jsonb(match) AS item
+              FROM (
+                  SELECT '{kind}' AS type, source.id, source.code, source.name,
+                         source.description, source.translations, source.status,
+                         source.effective_status, source.audience_selectable{unit_id},
+                         paths.path AS org_unit_path
+                    FROM ({source}) source JOIN paths ON paths.id=source.{parent_column}
+                   WHERE (source.code ILIKE %s OR source.name ILIKE %s
+                          OR COALESCE(source.description,'') ILIKE %s
+                          OR COALESCE(source.translations::text,'') ILIKE %s)
+                     AND {status_filter} AND source.audience_selectable
+              ) match
+        """)
+        parameters.extend((pattern, pattern, pattern, pattern, *status_parameters))
     if entity_type in {"all", "user"}:
-        results.extend({"type": "user", **row} for row in connection.execute(
-            f"""WITH RECURSIVE paths AS (
-                    SELECT unit.id, unit.parent_org_unit_id,
-                           ARRAY[unit.id]::bigint[] AS reverse_path
-                      FROM org_units unit
-                    UNION ALL
-                    SELECT paths.id, parent.parent_org_unit_id,
-                           paths.reverse_path || parent.id
-                      FROM paths JOIN org_units parent
-                        ON parent.id=paths.parent_org_unit_id
-                )
-                SELECT DISTINCT person.id, person.name, person.translations,
-                              person.email, person.status,
-                              assignment.role_id, assignment.id AS assignment_id,
-                              role.code AS role_code, role.name AS role_name,
-                              role.translations AS role_translations,
-                              (SELECT array_agg(path_id ORDER BY ordinal DESC)
-                                 FROM unnest(path.reverse_path) WITH ORDINALITY p(path_id, ordinal)
-                              ) AS org_unit_path
-                   FROM users person
-              LEFT JOIN user_role_assignments assignment ON assignment.user_id=person.id
-              LEFT JOIN roles role ON role.id=assignment.role_id
-              LEFT JOIN paths path ON path.id=role.org_unit_id AND path.parent_org_unit_id IS NULL
-                  WHERE (person.name ILIKE %s OR COALESCE(person.email,'') ILIKE %s
-                         OR COALESCE(person.translations::text, '') ILIKE %s)
-                    AND {status_filter.replace('source.effective_status', 'person.status')}
-               ORDER BY person.name, person.id LIMIT %s""",
-            (pattern, pattern, pattern, *status_parameters, limit),
-        ).fetchall())
+        branches.append(f"""
+            SELECT 2 AS kind_order, match.name AS sort_key, match.id AS sort_id,
+                   match.assignment_id, to_jsonb(match) AS item
+              FROM (
+                  SELECT 'user' AS type, person.id, person.name, person.translations,
+                         person.email, person.status, assignment.role_id,
+                         assignment.id AS assignment_id, role.code AS role_code,
+                         role.name AS role_name, role.translations AS role_translations,
+                         paths.path AS org_unit_path
+                    FROM users person
+               LEFT JOIN user_role_assignments assignment ON assignment.user_id=person.id
+               LEFT JOIN roles role ON role.id=assignment.role_id
+               LEFT JOIN paths ON paths.id=role.org_unit_id
+                   WHERE (person.name ILIKE %s OR COALESCE(person.email,'') ILIKE %s
+                          OR COALESCE(person.translations::text,'') ILIKE %s)
+                     AND {status_filter.replace('source.effective_status', 'person.status')}
+              ) match
+        """)
+        parameters.extend((pattern, pattern, pattern, *status_parameters))
+    union = " UNION ALL ".join(branches)
+    results = [row["item"] for row in connection.execute(
+        f"""{paths}
+            SELECT item FROM ({union}) matches
+             ORDER BY kind_order, sort_key, sort_id, assignment_id
+             LIMIT %s OFFSET %s""",
+        (*parameters, limit, offset),
+    ).fetchall()]
     language_tag = preferred_language(connection, request)
     for row in results:
         if row["type"] in {"org_unit", "role", "user"}:
@@ -825,4 +830,4 @@ def search_organization_structure(
                 language_tag,
                 "name",
             )["name"]
-    return results[:limit]
+    return results

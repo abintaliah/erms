@@ -8,6 +8,10 @@
     {"code": "TS", "name": "Top Secret", "level_number": 100, "prevents_disposition": true}
   ],
   "privileges": [
+    {"code": "disposition.jobs.manage", "category": "administration", "reserved": false},
+    {"code": "app.settings.manage", "category": "administration", "reserved": false},
+    {"code": "relationships.link", "category": "record", "reserved": false},
+    {"code": "relationships.administer", "category": "administration", "reserved": false},
     {"code": "messaging.user_messages.exchange", "category": "administration"},
     {"code": "messaging.monitor", "category": "administration"},
     {"code": "messaging.notifications.administer", "category": "administration"},
@@ -24,7 +28,6 @@
     {"code": "localization.administer", "category": "administration", "reserved": true},
     {"code": "classification_scheme.modify_metadata", "category": "administration"},
     {"code": "classification.modify_metadata", "category": "administration"},
-    {"code": "user.modify_metadata", "category": "administration"},
     {"code": "role.modify_metadata", "category": "administration"},
     {"code": "org_unit.modify_metadata", "category": "administration"},
     {"code": "security_level.modify_metadata", "category": "administration"},
@@ -163,7 +166,8 @@
         "search.saved_search.administer",
         "search.saved_search.delete",
         "record.component.reindex",
-        "audit.view"
+        "audit.view",
+        "app.settings.manage"
       ]
     },
     {
@@ -210,7 +214,10 @@
         "record.component.share",
         "record.component.print",
         "security.resource.downgrade",
-        "closure.correct_record_placement"
+        "closure.correct_record_placement",
+        "relationships.link",
+        "relationships.administer",
+        "disposition.jobs.manage"
       ]
     },
     {
@@ -257,7 +264,10 @@
         "record.component.share",
         "record.component.print",
         "security.resource.downgrade",
-        "closure.correct_record_placement"
+        "closure.correct_record_placement",
+        "relationships.link",
+        "relationships.administer",
+        "disposition.jobs.manage"
       ]
     }
   ]

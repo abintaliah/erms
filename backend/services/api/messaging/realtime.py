@@ -18,6 +18,7 @@ import psycopg
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from starlette.responses import StreamingResponse
 
+from ..operation_policy import operation_policy
 from ..authentication import SESSION_COOKIE, hash_secret
 from ..config import integer_environment
 from ..database import database_url, pool
@@ -121,6 +122,7 @@ class Gateway:
         self.connection = None
         self.task = None
         self.ready = False
+        self.health_changed = asyncio.Event()
         self.generation = 0
         self.stopping = False
         self.notifications_received = 0
@@ -219,6 +221,7 @@ class Gateway:
                     await connection.execute("LISTEN " + CHANNEL)
                     self.ready = True
                     self.generation += 1
+                    self.health_changed.set()
                     backoff = 1
                     for group in tuple(self.clients.values()):
                         for client in tuple(group):
@@ -233,8 +236,11 @@ class Gateway:
                         "Messaging listener disconnected; durable Inbox remains available"
                     )
             finally:
+                was_ready = self.ready
                 self.ready = False
                 self.connection = None
+                if was_ready:
+                    self.health_changed.set()
             if self.stopping:
                 return
             await asyncio.sleep(backoff)
@@ -346,6 +352,7 @@ class BoundedStream(StreamingResponse):
 
 
 @router.get("/stream/sse")
+@operation_policy("relationship_scoped")
 async def sse_stream(request: Request):
     token = credentials(request)
     user = await asyncio.to_thread(authenticate, token)

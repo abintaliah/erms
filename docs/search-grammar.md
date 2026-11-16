@@ -9,6 +9,8 @@ unapproved column names from clients.
 ```text
 POST /api/v1/aggregations/search
 POST /api/v1/records/search
+POST /api/v1/aggregations/advanced-search
+POST /api/v1/records/advanced-search
 POST /api/v1/digital-components/search
 POST /api/v1/event-history/search
 POST /api/v1/users/search
@@ -17,6 +19,31 @@ POST /api/v1/roles/search
 POST /api/v1/user-role-assignments/search
 POST /api/v1/full-text-search
 ```
+
+Global Search ranks once and uses that ranking to return the requested page and
+save the combined result list. The administrator-controlled
+`SEARCH_RESULT_LIMIT` caps Global Search, Advanced Search, and aggregation/record page filters. The default is
+1,000 and the allowed range is 1 to 5,000. The Global Search page token
+references the saved list for the authenticated login and browser tab. Later
+pages recheck access before returning records or file details. If the saved
+list is gone, the WebUI repeats the submitted query once with a page number
+in place of the old search ID and token.
+See [the Global Search contract](../specs/full-text-search.md#103-global-search-endpoint).
+
+Advanced Search endpoints use the current Application Setting. Uncached legacy
+requests reject offsets at or beyond the cap; cached requests clamp to the last
+available page. The response includes `result_cap` and
+`truncated`. Smaller limits already stored in legacy saved searches still
+apply. Clients can select a page size. The Records and Aggregations collection
+filters use the ordinary search endpoints with the same administrator result cap
+when using the tab search contract. These requests supply `tab_id` (NiceGUI's
+connected `client.tab_id`) and receive `search_id`. Paging repeats the submitted
+criteria/sort plus both IDs; an unavailable or mismatched list is rebuilt in the
+same request. All four search screens share the existing PostgreSQL cache slot,
+not one slot per endpoint. Fingerprints discriminate search type and criteria;
+list IDs, user/login identity and tab identity must also match. Saved-search
+execution accepts the same runtime IDs; saved definitions must not contain them.
+Relationship selectors omit the runtime IDs and do not replace tab results.
 
 The ordinary `GET` collection endpoints remain available for simple equality
 filters. Use the search endpoints for boolean logic, ranges, sets, null tests,
@@ -136,6 +163,15 @@ empty.
 
 ## Full-text expressions
 
+File content is matched one indexed text chunk at a time. Within one query
+string, `alpha beta` needs both words in the same chunk; `"alpha beta"` cannot
+match across a chunk boundary; `alpha -beta` can match a chunk without `beta`
+even if another chunk contains it. Single-chunk files cover all their indexed
+text. Matching file names or enabled metadata may independently qualify a
+resource. This accepted limitation applies to every full-text caller and does
+not change JSON Boolean groups combining resource predicates. See the
+[matching-scope contract](../specs/full-text-search.md#1011-matching-scope-and-multi-chunk-limitations).
+
 Records, aggregations, and digital components support a controlled full-text
 leaf anywhere a comparison can appear:
 
@@ -173,9 +209,10 @@ not create attribution or affect positive relevance.
 `aggregation_where` branches. `result_types` must exactly match the supplied
 branches; omitting a branch excludes that resource type rather than matching
 every resource. The two branches share the 50-condition budget. Pages contain
-at most 100 results and use the returned opaque `next_cursor`; a cursor is
-rejected if reused with a different canonical query. The response also reports
-whether authorized content is pending indexing.
+at most 100 results. The opaque `next_cursor` page token is rejected if used
+with a different canonical query. A caller can supply a numbered `page`
+instead of a token; the response reports the page served. The response also
+reports whether authorized content is pending indexing.
 
 ## Privileged diagnostics
 
@@ -242,6 +279,25 @@ records with “draft” in the title:
 `id`, `parent_aggregation_id`, `aggregation_number`, `title`, `description`,
 `date_created`, `date_opened`, `date_closed`
 
+Aggregation searches additionally accept these **filter-only** effective-rule
+fields (also supported in schema-version-1 saved searches):
+
+- `effective_retention.current_period_years`
+- `effective_retention.intermediate_period_years`
+- `effective_retention.final_disposition`
+
+Periods accept nonnegative whole years with `eq`, `ne`, `gt`, `gte`, `lt`,
+`lte`, `between`, `in`, and `not_in`. The action accepts `eq`, `ne`, `in`, and
+`not_in` with `destruction`, `transfer_to_external_archive`,
+`selective_preservation`, or `retain_as_local_archives`. These fields reject
+null/text operators, Records targets, and sorting.
+
+The governing root's local rule overrides its effective classification rule;
+children use the same governing rule. Values are configured durations and
+actions, resolved afresh before counts and pagination, for both open and closed
+aggregations under existing visibility rules. See the
+[approved extension](../specs/advanced-search-effective-retention-extension.md).
+
 ### Records
 
 `id`, `aggregation_id`, `record_number`, `title`, `description`, `date_created`,
@@ -279,7 +335,8 @@ records with “draft” in the title:
 `id`, `user_id`, `role_id`, `date_assigned`, `valid_from`,
 `valid_until`
 
-The same field allowlists apply to sorting. Case-insensitive text operators are
+The same ordinary field allowlists apply to sorting; filter-only fields are
+excluded. Case-insensitive text operators are
 valid only for text fields. Null operators are valid only for nullable fields.
 
 ## Safety and complexity limits
@@ -292,3 +349,12 @@ valid only for text fields. Null operators are valid only for nullable fields.
 - A request can contain at most 10 sort fields.
 - A response can contain at most 500 items.
 - Invalid queries return HTTP `422 Unprocessable Entity`.
+
+## Search performance acceptance
+
+All search and filtering implementations must follow the normative
+[search performance contract](search-performance.md). Use SQL for matching, authorization, ranking and paging;
+reuse batch permission calculations and indexable candidate predicates.
+Changes require the disposable large-data correctness and latency gate: more
+than 50,000 aggregations and 150,000 records, a 1,000-result cap, exact expected
+counts/ranking/order, and every measured response within 3 seconds.

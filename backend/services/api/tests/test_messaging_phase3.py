@@ -68,7 +68,8 @@ def gateways(count=2, on_start=None):
                     "5",
                 ],
                 cwd=ROOT,
-                env={**os.environ, "MESSAGING_STREAM_HEARTBEAT_SECONDS": "1"},
+                env={**os.environ, "MESSAGING_STREAM_HEARTBEAT_SECONDS": "1",
+                     "API_HOST": "127.0.0.1", "API_PORT": str(port)},
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )

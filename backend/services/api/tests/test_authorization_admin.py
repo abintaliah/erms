@@ -23,11 +23,16 @@ def _create_profile(client: TestClient, code: str = "RECORDS_EDITOR") -> dict:
 def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient):
     privileges = _by_code(client, "/api/v1/privileges?limit=500")
     profiles = _by_code(client, "/api/v1/profiles?limit=500")
-    assert len(privileges) == 61
+    separately_seeded = {
+        "messaging.user_messages.exchange", "messaging.monitor",
+        "messaging.notifications.administer",
+    }
+    assert len(set(privileges) - separately_seeded) == 64
+    assert {"relationships.link", "relationships.administer", "app.settings.manage", "disposition.jobs.manage"} <= set(privileges)
     assert privileges["localization.administer"]["is_reserved"] is True
     assert {
         "classification_scheme.modify_metadata", "classification.modify_metadata",
-        "user.modify_metadata", "role.modify_metadata", "org_unit.modify_metadata",
+        "role.modify_metadata", "org_unit.modify_metadata",
         "security_level.modify_metadata",
         "profile.modify_metadata",
     } <= set(privileges)
@@ -73,6 +78,7 @@ def test_seeded_catalogue_profiles_and_existing_role_backfill(client: TestClient
 def test_composite_profile_dependencies_preview_assignment_and_audit(client: TestClient):
     privileges = _by_code(client, "/api/v1/privileges?limit=500")
     profile = _create_profile(client)
+    assert privileges["record.view"]["id"] in privileges["record.modify"]["required_privilege_ids"]
 
     invalid = client.put(
         f"/api/v1/profiles/{profile['id']}/privileges",

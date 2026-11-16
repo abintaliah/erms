@@ -20,10 +20,12 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
+from .operation_policy import operation_policy
 from .audit_context import decode_change_reason
 from .authentication import Principal, principal_from_request
 from .authorization_policy import require_global_privilege
 from .config import default_working_timezone
+from .application_configuration import ui_configuration
 from .database import get_connection, pool
 
 
@@ -87,6 +89,8 @@ class BootstrapRead(StrictModel):
     supported_languages: list[LanguageRead]
     catalogue_revision: int
     catalogue_url: str
+    application_configuration: dict[str, Any]
+    uses_default_working_timezone: bool
 
 
 class LanguageCreate(StrictModel):
@@ -165,6 +169,13 @@ ARABIC_TERMINOLOGY = {
     "Current period": "الفترة الجارية",
     "Intermediate period": "الفترة الوسيطة",
     "Destruction": "الإتلاف",
+    "Disposition Job": "عملية تصرف",
+    "Disposition Jobs": "عمليات التصرف",
+    "Destruction Job": "عملية إتلاف",
+    "Task": "مهمة",
+    "Tasks": "مهام",
+    "My Tasks": "مهامي",
+    "Role": "الدور",
     "Legal Hold": "تعليق القنوني",
     "Mixed (record medium)": "هجين",
     "Physical (record medium)": "مادي",
@@ -368,7 +379,8 @@ def synchronize_message_definitions() -> None:
             clear_catalogue_cache()
 
 
-def synchronize_generated_arabic_drafts() -> dict[str, int]:
+def synchronize_generated_arabic_drafts(*, missing_only: bool = False) -> dict[str, int]:
+    """Seed source copies; optionally preserve even explicitly superseded text."""
     path = Path(__file__).resolve().parents[3] / "frontend/webui/i18n/messages.ar.generated.json"
     if not path.exists():
         return {
@@ -421,11 +433,21 @@ def synchronize_generated_arabic_drafts() -> dict[str, int]:
                 continue
             export_provenance = item.get("provenance") if isinstance(item.get("provenance"), dict) else None
             seed_origin = "imported" if export_provenance else "generated"
+            # A canonical admin export may later gain newly generated entries.
+            # Preserve imported provenance while recording the generating batch
+            # of each new entry, rather than attributing it to the old export.
+            item_metadata = dict(common_metadata)
+            generation_metadata = item.get("generation_metadata")
+            if not export_provenance and isinstance(generation_metadata, dict):
+                item_metadata.update({
+                    key: generation_metadata[key]
+                    for key in common_metadata if key in generation_metadata
+                })
             candidates.append((
                 item["message_key"], normalized,
                 seed_origin,
                 Jsonb({
-                    **common_metadata,
+                    **item_metadata,
                     "quality_flags": item.get("quality_flags", []),
                     **({"export_provenance": export_provenance} if export_provenance else {}),
                 }),
@@ -476,12 +498,15 @@ def synchronize_generated_arabic_drafts() -> dict[str, int]:
                 WHERE translation.message_key=seed.message_key
                   AND translation.language_tag='ar'
                   AND translation.translated_text=ANY(seed.superseded_texts)
+                  AND translation.translated_text IS DISTINCT FROM seed.translated_text
+                  AND NOT %s
                   AND NOT (
                       translation.origin='source_copy'
                       AND translation.reviewed_by_user_id IS NULL
                       AND translation.published_text IS NULL
                   )
-            RETURNING translation.message_key"""
+            RETURNING translation.message_key""",
+            (missing_only,),
         ).fetchall()
         counts["corrected"] = len(corrected)
         counts["protected"] = len(candidates) - counts["stored"] - counts["corrected"]
@@ -516,11 +541,11 @@ def _preference(connection: Connection, user_id: int) -> dict | None:
     ).fetchone()
 
 
-def _effective_preference(connection: Connection, user_id: int) -> dict:
+def _effective_preference(connection: Connection, user_id: int, *, include_context=False) -> dict:
     stored = _preference(connection, user_id)
     if stored and stored["is_enabled"]:
         stored.pop("is_enabled", None)
-        return {**stored, "persisted": True}
+        return {**stored, "persisted": True, **({"uses_default_working_timezone":False} if include_context else {})}
     language = connection.execute(
         "SELECT language_tag,direction FROM supported_languages WHERE is_default AND is_enabled"
     ).fetchone()
@@ -528,7 +553,8 @@ def _effective_preference(connection: Connection, user_id: int) -> dict:
         raise RuntimeError("an enabled default language is required")
     return {
         "language_tag": language["language_tag"],
-        "working_timezone": default_working_timezone(),
+        "working_timezone": default_working_timezone(connection),
+        **({"uses_default_working_timezone":True} if include_context else {}),
         "direction": language["direction"],
         "persisted": stored is not None,
         "version": stored["version"] if stored else 0,
@@ -554,6 +580,7 @@ def _expected_preference_version(if_match: str | None) -> int:
 
 
 @router.get("/preferences", response_model=PreferenceRead)
+@operation_policy("authenticated_only")
 def get_preferences(
     principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
@@ -562,6 +589,7 @@ def get_preferences(
 
 
 @router.put("/preferences", response_model=PreferenceRead)
+@operation_policy("authenticated_only")
 def update_preferences(
     payload: PreferenceUpdate,
     if_match: str | None = Header(default=None, alias="If-Match"),
@@ -602,13 +630,14 @@ def update_preferences(
 
 
 @router.get("/i18n/bootstrap", response_model=BootstrapRead)
+@operation_policy("authenticated_only")
 def bootstrap(
     response: Response,
     principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
     languages = _languages(connection)
-    preference = _effective_preference(connection, principal.user_id)
+    preference = _effective_preference(connection, principal.user_id, include_context=True)
     fallback = connection.execute(
         "SELECT language_tag FROM supported_languages WHERE is_default AND is_enabled"
     ).fetchone()
@@ -629,6 +658,8 @@ def bootstrap(
         "supported_languages": languages,
         "catalogue_revision": revision,
         "catalogue_url": f"/api/v1/i18n/catalogues/{preference['language_tag']}",
+        "application_configuration": ui_configuration(connection),
+        "uses_default_working_timezone": preference["uses_default_working_timezone"],
     }
 
 
@@ -694,7 +725,7 @@ def _compiled_catalogue(
 
 
 def localization_readiness(connection: Connection) -> dict[str, Any]:
-    timezone_name = default_working_timezone()
+    timezone_name = default_working_timezone(connection)
     language = connection.execute(
         "SELECT language_tag,catalogue_revision FROM supported_languages WHERE is_default AND is_enabled"
     ).fetchone()
@@ -713,6 +744,7 @@ def localization_readiness(connection: Connection) -> dict[str, Any]:
 
 
 @router.get("/i18n/catalogues/{language_tag}", response_model=None)
+@operation_policy("authenticated_only")
 def catalogue(
     language_tag: str,
     request: Request,
@@ -841,6 +873,7 @@ def update_language(
 def admin_messages(
     language_tag: str,
     key: str = "",
+    source_text: str = "",
     translated_text: str = "",
     semantic_meaning: str = "",
     status_filter: str = Query(default="all", alias="status"),
@@ -884,7 +917,7 @@ def admin_messages(
     )
     predicates = ["NOT definition.is_deprecated"]
     params: list[Any] = [language["language_tag"]]
-    for column, value in (("definition.message_key",key),(translated_text_sql,translated_text),("definition.semantic_meaning",semantic_meaning),("definition.context_group",context)):
+    for column, value in (("definition.message_key",key),("definition.default_text",source_text),(translated_text_sql,translated_text),("definition.semantic_meaning",semantic_meaning),("definition.context_group",context)):
         if value.strip():
             predicates.append(f"COALESCE({column},'') ILIKE %s")
             params.append(f"%{value.strip()}%")
@@ -1606,7 +1639,9 @@ def _bulk_validation_errors(rows: list[dict]) -> list[dict[str, str]]:
             errors.append({"message_key":row["message_key"],"code":str(detail.get("code") or "invalid_translation")})
             continue
         flags = (row.get("generation_metadata") or {}).get("quality_flags") or []
-        if flags:
+        # This endpoint performs the human review. The routine review marker
+        # is acknowledged by publication; concrete or unknown defects still block.
+        if any(flag != "needs_human_review" for flag in flags):
             errors.append({"message_key":row["message_key"],"code":"generation_quality_attention"})
     return errors
 
@@ -1660,6 +1695,10 @@ def bulk_review_publish_translations(
         connection.execute(
             """UPDATE ui_message_translations
                   SET translated_text=%s,published_text=%s,status='published',needs_review=false,
+                      generation_metadata=CASE WHEN generation_metadata ? 'quality_flags'
+                        THEN jsonb_set(generation_metadata,'{quality_flags}',
+                          (generation_metadata->'quality_flags')-'needs_human_review')
+                        ELSE generation_metadata END,
                       reviewed_by_user_id=%s,date_reviewed=%s,
                       published_by_user_id=%s,date_published=%s,updated_by_user_id=%s
                 WHERE message_key=%s AND language_tag=%s""",
