@@ -10,6 +10,9 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
+SEARCH_RESULT_LIMIT_MAXIMUM = 5000
+
+
 @dataclass(frozen=True)
 class Setting:
     key: str
@@ -63,7 +66,7 @@ _DEFINITIONS = (
     integer("MAX_RENDITION_SIZE_BYTES", "content", 104857600, "Maximum rendition size", "Maximum generated document rendition size in bytes."),
     integer("AUTH_SESSION_IDLE_MINUTES", "authentication", 30, "Session idle lifetime", "Idle session lifetime in minutes; changes apply on the next evaluation and never revive an expired session."),
     integer("AUTH_SESSION_ABSOLUTE_HOURS", "authentication", 12, "Session absolute lifetime", "Absolute session lifetime in hours; changes never revive an expired session."),
-    integer("AUTH_LOCKOUT_ATTEMPTS", "authentication", 5, "Lockout attempts", "Failed login attempts before temporary credential lockout."),
+    integer("AUTH_LOCKOUT_ATTEMPTS", "authentication", 5, "Lockout attempts", "Incorrect login or current-password attempts before temporary credential lockout; both share one counter. New-password validation errors do not count."),
     integer("AUTH_LOCKOUT_MINUTES", "authentication", 15, "Lockout duration", "Temporary credential lockout duration in minutes."),
     integer("AUTH_PASSWORD_MIN_LENGTH", "authentication", 12, "Minimum password length", "Minimum characters for newly set or changed passwords; existing password hashes remain valid.", 8),
     integer("AUTH_SESSION_RETENTION_DAYS", "authentication", 90, "Session history retention", "Session history retention in days.", 0),
@@ -75,6 +78,9 @@ _DEFINITIONS = (
     integer("DASHBOARD_REVIEW_PREVIEW_LIMIT", "interface_limits", 5, "Dashboard review preview limit", "Maximum resources shown in the dashboard review preview."),
     integer("CLASSIFICATION_RECENT_SELECTION_LIMIT", "interface_limits", 4, "Recent classification selection limit", "Maximum recent classification selections shown."),
     integer("USER_DETAILS_SESSION_LIMIT", "interface_limits", 5, "User session page size", "Session rows per page in user details; server pagination remains required."),
+    integer("CHILD_AGGREGATION_PAGE_SIZE", "interface_limits", 10, "Child aggregations per page", "Number of child aggregations shown per page in aggregation details.", maximum=100),
+    integer("CONTAINED_RECORD_PAGE_SIZE", "interface_limits", 25, "Contained records per page", "Number of records shown per page in aggregation details.", maximum=100),
+    integer("SEARCH_RESULTS_PAGE_SIZE", "interface_limits", 25, "Search results per page", "Default page size for Global Search, Advanced Search, and aggregation and record filters.", maximum=100),
     Setting("FULL_TEXT_SEARCH_ENABLED", "search", "boolean", False, "Full-text search enabled", "Availability of API-enforced full-text search."),
     Setting("CONTENT_INDEXING_SCHEDULING_ENABLED", "search", "boolean", False, "Content indexing scheduling enabled", "Schedule API-owned content indexing work."),
     integer("CONTENT_INDEXING_HISTORY_RETENTION_DAYS", "search", 365, "Indexing history retention", "Content indexing history retention in days.", 0),
@@ -85,6 +91,10 @@ _DEFINITIONS = (
     integer("SEARCH_RATE_LIMIT_PER_MINUTE", "search", 600, "Search request rate limit", "Maximum authenticated search requests per minute."),
     integer("MANUAL_REINDEX_RATE_LIMIT_PER_MINUTE", "search", 60, "Manual reindex rate limit", "Maximum manual reindex requests per minute."),
     integer("AUDIT_TRAIL_SEARCH_RESULT_LIMIT", "search", 1000, "Audit Trail search result limit", "Maximum matching Audit Trail results and bounded count work; one effective cap applies throughout each request."),
+    integer("SEARCH_RESULT_LIMIT", "search", 1000, "Search result limit", "Maximum results across all pages of Global Search, Advanced Search, and aggregation or record filters.", maximum=SEARCH_RESULT_LIMIT_MAXIMUM),
+    integer("GLOBAL_SEARCH_CACHE_IDLE_MINUTES", "search", 15, "Search results cache idle timeout", "Minutes of inactivity before the shared search result list for a browser tab expires. The list is also unavailable when the login session ends."),
+    integer("GLOBAL_SEARCH_CACHE_CLEANUP_INTERVAL_SECONDS", "search", 60, "Search results cache cleanup interval", "Seconds between expired search-list cleanup passes. Independent of login-session cleanup and cache expiry."),
+    integer("GLOBAL_SEARCH_CACHE_CLEANUP_BATCH_SIZE", "search", 5000, "Search results cache cleanup batch size", "Maximum expired search lists deleted per pass. Each list belongs to one browser tab; this does not count individual search hits."),
     Setting("DISPOSITION_DESTRUCTION_REVIEW_ROUTE", "disposition", "enum", "standard", "Destruction review route", "New jobs capture this route permanently. Records Manager Only omits independent internal review.", choices=("standard", "simplified", "records_manager_only")),
     Setting("DISPOSITION_CLASSIFICATION_SCHEME_ID", "disposition", "scheme", None, "Classification scheme", "Scheme for both disposition destinations; unset blocks the relevant artifact tasks.", nullable=True, group="destinations"),
     Setting("DISPOSITION_UPLOADED_EVIDENCE_CLASSIFICATION_ID", "disposition", "classification", None, "Uploaded evidence classification", "Terminal classification in the selected scheme for uploads and the digital destruction certificate.", nullable=True, group="destinations"),

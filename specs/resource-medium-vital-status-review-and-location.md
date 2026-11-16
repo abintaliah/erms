@@ -620,8 +620,9 @@ without additional per-resource requests.
 
 ### 13.2 Resource detail and lists
 
-Medium and vital status are visible metadata. Vital resources receive a text
-label as well as an icon so status is not communicated by color alone. Due and
+Medium and vital status are visible in the Details dialog. The Vital icon
+opens a text summary, including **Contains vital resources** when applicable.
+See the [approved amendment](aggregation-and-record-page-amendment.md#2-header-and-status-summaries). Due and
 overdue review indicators must be accessible and must display the exact date.
 An aggregation with a vital descendant at any depth displays **Contains vital
 resources** on its detail page and, where supported, in browse trees and lists.
@@ -638,6 +639,13 @@ For an aggregation with vital descendants, the explanation states that the
 branch contains vital resources without exposing unauthorized titles.
 
 ## 14. Dashboard and notifications
+
+All dashboard resource metrics and review counts/previews/pages use the live
+scope in [common disposition section 4](disposition.md#4-disposition-status-catalogue):
+exclude disposed statuses 10, 11 and 12 for every user, including governance.
+Status 13 remains in scope subject to the normal authorization and review
+ownership rules. This scope also applies to the rows used to calculate the
+medium, vital, hold and digital-component/storage totals.
 
 The consolidated dashboard summary endpoint should be extended rather than
 adding per-widget requests. It should return authorized counts and bounded

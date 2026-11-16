@@ -657,6 +657,12 @@ org-unit code and name.
 The dashboard must show separate aggregation and record counts for each
 distinct org unit represented by the user's currently effective roles.
 
+These are live holdings: exclude disposed statuses 10 (Destroyed), 11
+(Permanently transferred), and 12 (Retained as local archives), for all callers
+including governance users, as defined in [common disposition section 4](disposition.md#4-disposition-status-catalogue).
+Status 13 remains in scope subject to normal authorization. The same live scope
+applies to the medium and digital-storage totals derived from these holdings.
+
 Each org unit appears once even when the user has several effective roles in
 that unit. Counts include only aggregations and records the user is authorized
 to view; ownership alone must not reveal inaccessible holdings. A qualifying
@@ -800,6 +806,24 @@ both its containing record and that record's containing aggregation; only the
 newest qualifying view per resource is retained. The UI labels these entries
 **Viewed**, applies current resource-visibility checks, and does not expose the
 component as a separate activity item.
+
+The landing pages request one resource type through
+`GET /api/v1/auth/me/recent-activity` using `entity_type=aggregation` or
+`entity_type=record`. The response includes the current title and number for
+each card. PostgreSQL uses the ordinary view scope and evaluates permissions
+for the distinct candidates before applying the limit. Keep the latest event
+per resource and activity type, preferring the larger event ID for equal
+timestamps. **View all** retains up to 50 authorized entries per activity type,
+ordered by newest event timestamp and then resource ID ascending. Where view
+access uses information governance, record the bypass once per returned
+resource using the existing audit policy.
+
+Each WebUI client retains the latest authorized response separately for Records
+and Aggregations, scoped to the signed-in user, login session and effective
+language. A return visit can render that resource's snapshot while one
+background refresh checks current access. Navigation, disconnect and identity
+changes invalidate pending responses. Sign-out and scope changes discard
+snapshots. Data refresh after a mutation still uses the authorized endpoint.
 
 ## 15. Event history and audit
 

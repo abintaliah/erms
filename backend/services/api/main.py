@@ -10,10 +10,14 @@ from uuid import UUID, uuid4
 import psycopg
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from psycopg import Connection
 from psycopg_pool import PoolTimeout
 from psycopg.types.json import Jsonb
+from backend.services.component_formats import native_preview_kind
 
+from .operation_policy import operation_policy
+from .component_pages import component_summary, previewable_component_page
 from .audit_context import (
     decode_change_reason,
     actor_email_context,
@@ -25,7 +29,7 @@ from .audit_context import (
     event_source_context,
     request_id_context,
 )
-from .authentication import CSRF_COOKIE, SESSION_COOKIE, hash_secret, resolve_principal, router as authentication_router
+from .authentication import CSRF_COOKIE, SESSION_COOKIE, Principal, hash_secret, principal_from_request, resolve_principal, router as authentication_router
 from .service_authentication import (
     TEXT_INDEXING_ROUTE_PREFIX, resolve_text_indexer_principal, service_request_allowed,
 )
@@ -33,7 +37,7 @@ from .crud import create_row, delete_row, get_or_404, list_rows, update_row
 from .concurrency import expected_version
 from .continuity_lock import acquire_continuity_shared_lock
 from .content_storage import configured_storage, inspect_upload
-from .database import close_pool, get_connection, open_pool, pool
+from .database import close_pool, get_connection, get_consistent_connection, open_pool, pool
 from .document_conversion import ConversionUnavailable, UnsupportedPreview, pdf_rendition
 from .number_suggestions import router as number_suggestions_router
 from .entity_localization import localized_projection, preferred_language
@@ -245,11 +249,13 @@ async def validation_error_handler(request: Request, error: RequestValidationErr
 
 
 @app.post("/api/v1/full-text-search", response_model=None, tags=["search"])
+@operation_policy("resource_scoped", "record.view", "record.view")
 def full_text_search(
     payload: GlobalSearchRequest,
+    principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return global_search_rows(connection,payload)
+    return global_search_rows(connection, payload, session_id=principal.session_id, user_id=principal.user_id)
 
 EVENT_SOURCES = {
     "api", "web_ui", "mobile", "bulk_import", "background_worker", "scheduled_job",
@@ -313,23 +319,44 @@ async def audit_request_context(request: Request, call_next):
     request_settings = None
     if internal_text_indexing_path or session_token:
         try:
-            with pool.connection() as authentication_connection:
-                if internal_text_indexing_path and bearer_token:
-                    service_principal = resolve_text_indexer_principal(
-                        authentication_connection, bearer_token,
-                        worker_id=request.headers.get("X-Worker-ID"),
-                    )
-                elif session_token:
-                    principal = resolve_principal(
-                        authentication_connection, session_token,
-                        refresh_activity=request.url.path != "/api/v1/auth/me/session-status",
-                    )
-                    request.state.policy_context = (
-                        load_policy_context(authentication_connection, principal)
-                        if principal else None
-                    )
-                if service_principal or principal:
-                    request_settings = settings_cache.for_connection(authentication_connection)
+            def authenticate():
+                # A search-cache INSERT takes a foreign-key KEY SHARE lock on its
+                # login_sessions row until the search transaction commits. A
+                # simultaneous request used to authenticate with FOR UPDATE here
+                # on the event-loop thread. Waiting for that row could freeze the
+                # loop, preventing the first request's dependency cleanup/commit
+                # from releasing it: a database/application wait cycle which
+                # PostgreSQL alone cannot identify as a database deadlock.
+                #
+                # resolve_principal now uses a compatible NO KEY UPDATE lock,
+                # but revocation/expiry writes and pool exhaustion can still
+                # legitimately wait. Run the WHOLE synchronous transaction in a
+                # worker, including policy/settings reads and connection exit.
+                # The loop remains free to finish requests and their cleanup.
+                # Do not move just the SELECT to a worker or return its connection
+                # to the event loop. Set request state only after commit below.
+                principal = service_principal = policy_context = request_settings = None
+                with pool.connection() as authentication_connection:
+                    if internal_text_indexing_path and bearer_token:
+                        service_principal = resolve_text_indexer_principal(
+                            authentication_connection, bearer_token,
+                            worker_id=request.headers.get("X-Worker-ID"),
+                        )
+                    elif session_token:
+                        principal = resolve_principal(
+                            authentication_connection, session_token,
+                            refresh_activity=request.url.path != "/api/v1/auth/me/session-status",
+                        )
+                        policy_context = (
+                            load_policy_context(authentication_connection, principal)
+                            if principal else None
+                        )
+                    if service_principal or principal:
+                        request_settings = settings_cache.for_connection(authentication_connection)
+                return principal, service_principal, policy_context, request_settings
+
+            principal, service_principal, policy_context, request_settings = await run_in_threadpool(authenticate)
+            request.state.policy_context = policy_context
         except PoolTimeout:
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -353,7 +380,7 @@ async def audit_request_context(request: Request, call_next):
                             headers={"Retry-After": "1"})
     if principal and request.method == "POST":
         is_reindex = request.url.path.endswith("/reindex")
-        is_search = request.url.path.endswith("/search") or request.url.path == "/api/v1/full-text-search"
+        is_search = request.url.path.endswith(("/search", "/advanced-search")) or request.url.path == "/api/v1/full-text-search"
         if is_reindex and not service_request_allowed(
             -1_000_000_000-principal.user_id,
             request_settings["MANUAL_REINDEX_RATE_LIMIT_PER_MINUTE"],
@@ -367,8 +394,7 @@ async def audit_request_context(request: Request, call_next):
             return JSONResponse(status_code=429,content={"detail":{"code":"search_rate_limit_exceeded"}},
                                 headers={"Retry-After":"1"})
     if principal and principal.must_change_password and request.url.path not in {
-        "/api/v1/auth/me", "/api/v1/auth/me/session-status",
-        "/api/v1/auth/change-password", "/api/v1/auth/logout"
+        "/api/v1/auth/me", "/api/v1/auth/me/session-status", "/api/v1/auth/change-password", "/api/v1/auth/logout"
     }:
         return JSONResponse(status_code=403, content={"detail": "password change required"})
     if principal and cookie_token and not bearer_token and request.method not in {"GET", "HEAD", "OPTIONS"}:
@@ -524,6 +550,7 @@ async def database_error_handler(_, exception: psycopg.Error):
 
 
 @app.get("/health", tags=["system"])
+@operation_policy("public")
 def health(connection: Connection = Depends(get_connection, scope="function")) -> dict[str, Any]:
     connection.execute("SELECT 1")
     settings = settings_cache.for_connection(connection)
@@ -613,6 +640,7 @@ def _select_creator_role(
     "/api/v1/creation-role-options",
     response_model=list[CreationRoleOption], tags=["authorization"],
 )
+@operation_policy("authenticated_only")
 def creation_role_options(
     request: Request,
     parent_aggregation_id: int | None = None,
@@ -629,6 +657,7 @@ def creation_role_options(
     response_model=list[OwnershipDashboardCount],
     tags=["dashboard"],
 )
+@operation_policy("authenticated_only")
 def dashboard_ownership_counts(
     request: Request,
     connection: Connection = Depends(get_connection, scope="function"),
@@ -672,6 +701,7 @@ def dashboard_ownership_counts(
     status_code=status.HTTP_201_CREATED,
     tags=["aggregations"],
 )
+@operation_policy("resource_scoped", "aggregation.create_root")
 def create_aggregation(
     payload: AggregationCreate,
     connection: Connection = Depends(get_connection, scope="function"),
@@ -715,6 +745,7 @@ def create_aggregation(
 
 
 @app.get("/api/v1/aggregations", response_model=list[AggregationRead], tags=["aggregations"])
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def list_aggregations(
     parent_aggregation_id: int | None = None,
     owning_org_unit_id: int | None = None,
@@ -742,16 +773,31 @@ def list_aggregations(
     response_model=None,
     tags=["aggregations"],
 )
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def search_aggregations(
     payload: SearchRequest,
     record_creation: bool = False,
     digital_only: bool = False,
+    display_filter: str | None = None,
+    principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return search_rows(connection, "aggregations", payload, endpoint="/api/v1/aggregations/search", record_creation=record_creation, digital_only=digital_only)
+    return search_rows(connection, "aggregations", payload, session_id=principal.session_id, user_id=principal.user_id, endpoint="/api/v1/aggregations/search", record_creation=record_creation, digital_only=digital_only, display_filter=display_filter)
+
+
+@app.post("/api/v1/aggregations/advanced-search", response_model=None, tags=["aggregations"])
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
+def advanced_search_aggregations(
+    payload: SearchRequest,
+    principal: Principal = Depends(principal_from_request),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return search_rows(connection, "aggregations", payload, session_id=principal.session_id, user_id=principal.user_id, endpoint="/api/v1/aggregations/advanced-search",
+                       max_results=settings_cache.for_connection(connection)["SEARCH_RESULT_LIMIT"])
 
 
 @app.get("/api/v1/aggregations/{aggregation_id}", response_model=AggregationRead, tags=["aggregations"])
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def get_aggregation(aggregation_id: int, connection: Connection = Depends(get_connection, scope="function")):
     aggregation = get_or_404(connection, "aggregations", aggregation_id)
     audit_governance_view_if_used(connection, "aggregation", aggregation)
@@ -759,6 +805,7 @@ def get_aggregation(aggregation_id: int, connection: Connection = Depends(get_co
 
 
 @app.get("/api/v1/aggregations/{aggregation_id}/capabilities", response_model=ResourceCapabilitiesRead, tags=["authorization"])
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def get_aggregation_capabilities(
     aggregation_id: int,
     connection: Connection = Depends(get_connection, scope="function"),
@@ -838,6 +885,7 @@ def get_aggregation_capabilities(
 
 
 @app.patch("/api/v1/aggregations/{aggregation_id}", response_model=AggregationRead, tags=["aggregations"])
+@operation_policy("resource_scoped", "aggregation.modify", "aggregation.modify_metadata")
 def update_aggregation(
     aggregation_id: int,
     payload: AggregationUpdate,
@@ -969,6 +1017,7 @@ def update_aggregation(
 
 
 @app.delete("/api/v1/aggregations/{aggregation_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["aggregations"])
+@operation_policy("resource_scoped", "aggregation.delete", "aggregation.delete")
 def delete_aggregation(aggregation_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     require_resource_operation(connection, "aggregation", aggregation_id,
                                "aggregation.delete", "aggregation.delete")
@@ -977,6 +1026,7 @@ def delete_aggregation(aggregation_id: int, version: int = Depends(expected_vers
 
 
 @app.post("/api/v1/aggregations/{aggregation_id}/vital-status", response_model=AggregationRead, tags=["aggregations"])
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def change_aggregation_vital_status(aggregation_id: int, payload: VitalStatusChange, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     existing = require_resource_operation(connection, "aggregation", aggregation_id, "aggregation.vital_status.change", "aggregation.vital_status.change")
     if existing["is_vital"] == payload.is_vital:
@@ -988,6 +1038,7 @@ def change_aggregation_vital_status(aggregation_id: int, payload: VitalStatusCha
 
 
 @app.post("/api/v1/aggregations/{aggregation_id}/location", response_model=AggregationRead, tags=["aggregations"])
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def change_aggregation_location(aggregation_id: int, payload: AggregationLocationChange, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     existing = require_resource_operation(connection, "aggregation", aggregation_id, "aggregation.location.change", "aggregation.location.change")
     values = payload.model_dump(exclude={"reason"}, exclude_unset=True)
@@ -998,6 +1049,7 @@ def change_aggregation_location(aggregation_id: int, payload: AggregationLocatio
 
 
 @app.post("/api/v1/aggregations/{aggregation_id}/location-preview", response_model=AggregationLocationPreviewRead, tags=["aggregations"])
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def preview_aggregation_location_change(aggregation_id: int, payload: AggregationLocationPreview, connection: Connection = Depends(get_connection, scope="function")):
     require_resource_operation(connection, "aggregation", aggregation_id, "aggregation.location.change", "aggregation.location.change")
     proposed = payload.model_dump(exclude_unset=True)
@@ -1043,6 +1095,7 @@ def preview_aggregation_location_change(aggregation_id: int, payload: Aggregatio
 
 
 @app.post("/api/v1/aggregations/{aggregation_id}/review-date", response_model=AggregationRead, tags=["aggregations"])
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def change_aggregation_review_date(aggregation_id: int, payload: ReviewDateChange, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     existing = require_resource_operation(connection, "aggregation", aggregation_id, "aggregation.review_date.change", "aggregation.review_date.change")
     if existing["date_of_next_review"] == payload.date_of_next_review:
@@ -1054,6 +1107,7 @@ def change_aggregation_review_date(aggregation_id: int, payload: ReviewDateChang
 
 
 @app.post("/api/v1/records", response_model=RecordRead, status_code=status.HTTP_201_CREATED, tags=["records"])
+@operation_policy("resource_scoped", "record.create", "aggregation.add_record")
 def create_record(payload: RecordCreate, connection: Connection = Depends(get_connection, scope="function")):
     acquire_continuity_shared_lock(connection)
     parent = connection.execute(
@@ -1084,6 +1138,7 @@ def create_record(payload: RecordCreate, connection: Connection = Depends(get_co
 
 
 @app.get("/api/v1/records", response_model=list[RecordRead], tags=["records"])
+@operation_policy("resource_scoped", "record.view", "record.view")
 def list_records(
     aggregation_id: int | None = None,
     owning_org_unit_id: int | None = None,
@@ -1111,14 +1166,29 @@ def list_records(
     response_model=None,
     tags=["records"],
 )
+@operation_policy("resource_scoped", "record.view", "record.view")
 def search_records(
     payload: SearchRequest,
+    display_filter: str | None = None,
+    principal: Principal = Depends(principal_from_request),
     connection: Connection = Depends(get_connection, scope="function"),
 ):
-    return search_rows(connection, "records", payload, endpoint="/api/v1/records/search")
+    return search_rows(connection, "records", payload, session_id=principal.session_id, user_id=principal.user_id, endpoint="/api/v1/records/search", display_filter=display_filter)
+
+
+@app.post("/api/v1/records/advanced-search", response_model=None, tags=["records"])
+@operation_policy("resource_scoped", "record.view", "record.view")
+def advanced_search_records(
+    payload: SearchRequest,
+    principal: Principal = Depends(principal_from_request),
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    return search_rows(connection, "records", payload, session_id=principal.session_id, user_id=principal.user_id, endpoint="/api/v1/records/advanced-search",
+                       max_results=settings_cache.for_connection(connection)["SEARCH_RESULT_LIMIT"])
 
 
 @app.get("/api/v1/records/{record_id}", response_model=RecordRead, tags=["records"])
+@operation_policy("resource_scoped", "record.view", "record.view")
 def get_record(record_id: int, connection: Connection = Depends(get_connection, scope="function")):
     record = get_or_404(connection, "records", record_id)
     audit_governance_view_if_used(connection, "record", record)
@@ -1126,6 +1196,7 @@ def get_record(record_id: int, connection: Connection = Depends(get_connection, 
 
 
 @app.get("/api/v1/records/{record_id}/capabilities", response_model=ResourceCapabilitiesRead, tags=["authorization"])
+@operation_policy("resource_scoped", "record.view", "record.view")
 def get_record_capabilities(
     record_id: int,
     connection: Connection = Depends(get_connection, scope="function"),
@@ -1155,6 +1226,10 @@ def get_record_capabilities(
     capabilities = {name: operation_allowed(connection, "record", record_id, *policy)
                     for name, policy in mappings.items()}
     capabilities.update({"view": True, "list_components": component_metadata})
+    if component_metadata:
+        capabilities.update(component_summary(
+            connection, record_id, can_view=capabilities["view_component"],
+        ))
     capability_reasons = {}
     hold_status = connection.execute(
         """SELECT count(*) effective_hold_count,
@@ -1196,6 +1271,7 @@ def get_record_capabilities(
 
 
 @app.patch("/api/v1/records/{record_id}", response_model=RecordRead, tags=["records"])
+@operation_policy("resource_scoped", "record.modify", "record.modify_metadata")
 def update_record(
     record_id: int,
     payload: RecordUpdate,
@@ -1275,6 +1351,7 @@ def update_record(
 
 
 @app.delete("/api/v1/records/{record_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["records"])
+@operation_policy("resource_scoped", "record.delete", "record.delete")
 def delete_record(record_id: int, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     require_resource_operation(connection, "record", record_id, "record.delete", "record.delete")
     delete_row(connection, "records", record_id, version)
@@ -1282,6 +1359,7 @@ def delete_record(record_id: int, version: int = Depends(expected_version), conn
 
 
 @app.post("/api/v1/records/{record_id}/vital-status", response_model=RecordRead, tags=["records"])
+@operation_policy("resource_scoped", "record.view", "record.view")
 def change_record_vital_status(record_id: int, payload: VitalStatusChange, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     existing = require_resource_operation(connection, "record", record_id, "record.vital_status.change", "record.vital_status.change")
     if existing["is_vital"] == payload.is_vital:
@@ -1293,6 +1371,7 @@ def change_record_vital_status(record_id: int, payload: VitalStatusChange, versi
 
 
 @app.post("/api/v1/records/{record_id}/review-date", response_model=RecordRead, tags=["records"])
+@operation_policy("resource_scoped", "record.view", "record.view")
 def change_record_review_date(record_id: int, payload: ReviewDateChange, version: int = Depends(expected_version), connection: Connection = Depends(get_connection, scope="function")):
     existing = require_resource_operation(connection, "record", record_id, "record.review_date.change", "record.review_date.change")
     if existing["date_of_next_review"] == payload.date_of_next_review:
@@ -1314,7 +1393,27 @@ def _effective_closure(connection: Connection, aggregation_id: int) -> dict | No
     ).fetchone()
 
 
+def _closure_details(connection: Connection, aggregation_id: int) -> dict | None:
+    closure = _effective_closure(connection, aggregation_id)
+    if closure is None:
+        return None
+    source = connection.execute(
+        """SELECT id, aggregation_number, title, date_closed FROM aggregations
+           WHERE id=%s AND current_user_can_view_aggregation(id)""",
+        (closure["id"],),
+    ).fetchone()
+    return source if source else {"restricted": True}
+
+
+@app.get("/api/v1/records/{record_id}/effective-closure", tags=["records"])
+@operation_policy("resource_scoped", "record.view", "record.view")
+def get_effective_record_closure(record_id: int, connection: Connection = Depends(get_connection, scope="function")):
+    record = require_resource_operation(connection, "record", record_id, "record.view", "record.view", lock=False)
+    return {"closure": _closure_details(connection, record["aggregation_id"])}
+
+
 @app.get("/api/v1/aggregations/{aggregation_id}/effective-closure", tags=["aggregations"])
+@operation_policy("resource_scoped", "aggregation.view", "aggregation.view")
 def get_effective_aggregation_closure(
     aggregation_id: int,
     connection: Connection = Depends(get_connection, scope="function"),
@@ -1329,13 +1428,7 @@ def get_effective_aggregation_closure(
         "aggregation.view", "aggregation.view",
         lock=False,
     )
-    closure = _effective_closure(connection, aggregation_id)
-    if closure is not None:
-        closure = connection.execute(
-            "SELECT id, aggregation_number, title, date_closed FROM aggregations WHERE id=%s",
-            (closure["id"],),
-        ).fetchone()
-    return {"closure": closure}
+    return {"closure": _closure_details(connection, aggregation_id)}
 
 
 def _governance_basis(connection: Connection, security_level_ids: list[int]) -> list[dict]:
@@ -1353,6 +1446,7 @@ def _governance_basis(connection: Connection, security_level_ids: list[int]) -> 
 
 
 @app.post("/api/v1/records/{record_id}/correct-placement", response_model=RecordRead, tags=["records"])
+@operation_policy("resource_scoped", "closure.correct_record_placement", "record.move")
 def correct_record_placement(
     record_id: int, payload: RecordPlacementCorrection, request: Request,
     version: int = Depends(expected_version),
@@ -1407,6 +1501,7 @@ def _open_draft(connection: Connection, draft_id: int, *, lock: bool = False) ->
 
 
 @app.post("/api/v1/record-drafts", response_model=RecordDraftRead, status_code=201, tags=["record drafts"])
+@operation_policy("resource_scoped", "record.create")
 def create_record_draft(payload: RecordDraftCreate, connection: Connection = Depends(get_connection, scope="function")):
     require_global(connection, "record.create")
     values = payload.model_dump(exclude_none=True)
@@ -1425,11 +1520,13 @@ def create_record_draft(payload: RecordDraftCreate, connection: Connection = Dep
 
 
 @app.get("/api/v1/record-drafts/{draft_id}", response_model=RecordDraftRead, tags=["record drafts"])
+@operation_policy("resource_scoped", "record.create")
 def get_record_draft(draft_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return _open_draft(connection, draft_id)
 
 
 @app.patch("/api/v1/record-drafts/{draft_id}", response_model=RecordDraftRead, tags=["record drafts"])
+@operation_policy("resource_scoped", "record.create")
 def update_record_draft(draft_id: int, payload: RecordDraftUpdate, connection: Connection = Depends(get_connection, scope="function")):
     draft = _open_draft(connection, draft_id)
     values = payload.model_dump(exclude_unset=True)
@@ -1461,6 +1558,7 @@ def update_record_draft(draft_id: int, payload: RecordDraftUpdate, connection: C
 
 
 @app.delete("/api/v1/record-drafts/{draft_id}", status_code=204, tags=["record drafts"])
+@operation_policy("resource_scoped", "record.create")
 def discard_record_draft(draft_id: int, connection: Connection = Depends(get_connection, scope="function")):
     _open_draft(connection, draft_id, lock=True)
     connection.execute("DELETE FROM record_drafts WHERE id = %s", (draft_id,))
@@ -1468,6 +1566,7 @@ def discard_record_draft(draft_id: int, connection: Connection = Depends(get_con
 
 
 @app.get("/api/v1/record-drafts/{draft_id}/components", response_model=list[RecordDraftComponentRead], tags=["record drafts"])
+@operation_policy("resource_scoped", "record.create")
 def list_record_draft_components(draft_id: int, connection: Connection = Depends(get_connection, scope="function")):
     _open_draft(connection, draft_id)
     return list(connection.execute(
@@ -1480,7 +1579,29 @@ def list_record_draft_components(draft_id: int, connection: Connection = Depends
     ).fetchall())
 
 
+@app.head("/api/v1/record-drafts/{draft_id}/components/{component_id}/rendition", include_in_schema=False)
+@app.get("/api/v1/record-drafts/{draft_id}/components/{component_id}/rendition", tags=["record drafts"])
+@operation_policy("resource_scoped", "record.create")
+def view_record_draft_component(
+    draft_id: int, component_id: int, request: Request,
+    connection: Connection = Depends(get_connection, scope="function"),
+):
+    # Staging is the private record-creation package, not a saved record whose
+    # permissions could be inferred from ownership. Recheck the existing draft
+    # policy on every request, including HEAD and byte-range requests.
+    _open_draft(connection, draft_id)
+    component = connection.execute(
+        "SELECT * FROM record_draft_components WHERE id=%s AND draft_id=%s FOR SHARE",
+        (component_id, draft_id),
+    ).fetchone()
+    if component is None:raise HTTPException(404, detail="record draft component not found")
+    if component['content_status'] != 'available':
+        raise HTTPException(409, detail="draft component upload is not complete")
+    return _rendition_response(component, request, connection, draft=True)
+
+
 @app.post("/api/v1/record-drafts/{draft_id}/components", response_model=RecordDraftComponentRead, status_code=201, tags=["record drafts"])
+@operation_policy("resource_scoped", "record.create")
 def upload_record_draft_component(
     draft_id: int,
     file: UploadFile = File(...),
@@ -1535,6 +1656,7 @@ def _reorder_components(connection: Connection, table: str, parent_column: str, 
 
 
 @app.put("/api/v1/record-drafts/{draft_id}/components/order", status_code=204, tags=["record drafts"])
+@operation_policy("resource_scoped", "record.create")
 def reorder_record_draft_components(draft_id: int, payload: ComponentReorderRequest, connection: Connection = Depends(get_connection, scope="function")):
     _open_draft(connection, draft_id, lock=True)
     messaging_capture.protect_components(connection, draft_id)
@@ -1544,6 +1666,7 @@ def reorder_record_draft_components(draft_id: int, payload: ComponentReorderRequ
 
 
 @app.delete("/api/v1/record-drafts/{draft_id}/components/{component_id}", status_code=204, tags=["record drafts"])
+@operation_policy("resource_scoped", "record.create")
 def delete_record_draft_component(draft_id: int, component_id: int, connection: Connection = Depends(get_connection, scope="function")):
     _open_draft(connection, draft_id, lock=True)
     messaging_capture.protect_components(connection, draft_id)
@@ -1564,6 +1687,7 @@ def delete_record_draft_component(draft_id: int, component_id: int, connection: 
 
 
 @app.post("/api/v1/record-drafts/{draft_id}/commit", response_model=RecordRead, status_code=201, tags=["record drafts"])
+@operation_policy("resource_scoped", "record.create", "aggregation.add_record")
 def commit_record_draft(
     draft_id: int, request: Request, creator_acl_role_id: int | None = None,
     connection: Connection = Depends(get_connection, scope="function"),
@@ -1647,6 +1771,7 @@ def commit_record_draft(
 
 
 @app.post("/api/v1/record-drafts/{draft_id}/commit-placement-correction", response_model=RecordRead, status_code=201, tags=["record drafts"])
+@operation_policy("resource_scoped", "record.create", "aggregation.add_record")
 def commit_record_draft_placement_correction(
     draft_id: int,
     request: Request,
@@ -1706,6 +1831,7 @@ def commit_record_draft_placement_correction(
         "digital component with its metadata and stored content."
     ),
 )
+@operation_policy("resource_scoped", "record.component.add", "record.component.add")
 def create_digital_component(
     payload: DigitalComponentCreate,
     connection: Connection = Depends(get_connection, scope="function"),
@@ -1721,6 +1847,7 @@ def create_digital_component(
     response_model=list[DigitalComponentRead],
     tags=["digital components"],
 )
+@operation_policy("resource_scoped", "record.view", "record.component.list")
 def list_digital_components(
     record_id: int | None = None,
     limit: int = Query(default=100, ge=1, le=500),
@@ -1742,6 +1869,7 @@ def list_digital_components(
     response_model=None,
     tags=["digital components"],
 )
+@operation_policy("resource_scoped", "record.component.add", "record.component.add")
 def search_digital_components(
     payload: SearchRequest,
     connection: Connection = Depends(get_connection, scope="function"),
@@ -1750,10 +1878,30 @@ def search_digital_components(
 
 
 @app.get(
+    "/api/v1/records/{record_id}/digital-components/previewable",
+    response_model=SearchResponse[DigitalComponentRead],
+    tags=["digital components"],
+)
+@operation_policy("resource_scoped", "record.component.view", "record.component.view")
+def list_previewable_components(
+    record_id: int,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    selected_component_id: int | None = Query(default=None, gt=0),
+    connection: Connection = Depends(get_consistent_connection, scope="function"),
+):
+    return previewable_component_page(
+        connection, record_id, limit=limit, offset=offset,
+        selected_component_id=selected_component_id,
+    )
+
+
+@app.get(
     "/api/v1/digital-components/{component_id}",
     response_model=DigitalComponentRead,
     tags=["digital components"],
 )
+@operation_policy("resource_scoped", "record.view", "record.component.list")
 def get_digital_component(component_id: int, connection: Connection = Depends(get_connection, scope="function")):
     return get_or_404(connection, "digital_components", component_id)
 
@@ -1763,6 +1911,7 @@ def get_digital_component(component_id: int, connection: Connection = Depends(ge
     response_model=DigitalComponentRead,
     tags=["digital components"],
 )
+@operation_policy("resource_scoped", "record.component.replace", "record.component.replace")
 def update_digital_component(
     component_id: int,
     payload: DigitalComponentUpdate,
@@ -1787,6 +1936,7 @@ def update_digital_component(
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["digital components"],
 )
+@operation_policy("resource_scoped", "record.component.remove", "record.component.remove")
 def delete_digital_component(
     component_id: int,
     version: int = Depends(expected_version),
@@ -1813,6 +1963,7 @@ def delete_digital_component(
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["digital components"],
 )
+@operation_policy("resource_scoped", "record.component.reorder", "record.component.reorder")
 def reorder_digital_components(
     record_id: int,
     payload: ComponentReorderRequest,
@@ -1829,6 +1980,7 @@ def reorder_digital_components(
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["digital components"],
 )
+@operation_policy("resource_scoped", "record.component.reorder", "record.component.reorder")
 def move_digital_component(
     record_id: int,
     component_id: int,
@@ -1914,6 +2066,7 @@ def _content_range(value: str | None, total: int) -> tuple[int, int, int]:
     status_code=status.HTTP_201_CREATED,
     tags=["digital component content"],
 )
+@operation_policy("resource_scoped", "record.component.add", "record.component.add")
 def upload_digital_component(
     record_id: int,
     file: UploadFile = File(...),
@@ -1964,6 +2117,7 @@ def upload_digital_component(
     "/api/v1/digital-components/{component_id}/content",
     tags=["digital component content"],
 )
+@operation_policy("resource_scoped", "record.component.download", "record.component.download")
 def download_digital_component_content(
     component_id: int,
     request: Request,
@@ -2008,28 +2162,38 @@ from .processing_copies import protect_response
 def _component_rendition_response(
     component: dict, request: Request, connection: Connection, *, _temporary_root=None,
 ):
+    return _rendition_response(component, request, connection, _temporary_root=_temporary_root)
+
+
+def _rendition_response(
+    component: dict, request: Request, connection: Connection, *, draft=False, _temporary_root=None,
+):
+    """Shared safe PDF/native rendering; draft previews do not create record events."""
     storage = configured_storage()
     component_id = component["id"]
-    location = storage.location(connection, component_id)
-    if location is None:
-        raise HTTPException(status_code=404, detail="digital component content not found")
+    if draft:
+        size = component['size_in_bytes']
+        read_content = lambda: storage.read_draft(connection, component_id)
+    else:
+        location = storage.location(connection, component_id)
+        if location is None:
+            raise HTTPException(status_code=404, detail="digital component content not found")
+        size = location.size_in_bytes
+        read_content = lambda: storage.read(connection, component_id)
+
+    def viewed(facts):
+        if not draft:_append_content_event(connection, component_id, "CONTENT_VIEWED", facts)
     mime_type = component["mime_type"].lower()
-    native_preview = (
-        mime_type in {
-            "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/avif",
-        }
-        or mime_type.startswith("audio/")
-        or mime_type.startswith("video/")
-    )
+    native_preview = native_preview_kind(mime_type) is not None
     if native_preview or mime_type == "application/pdf":
         rendered_mime = mime_type if native_preview else "application/pdf"
-        _append_content_event(connection, component_id, "CONTENT_VIEWED", {
+        viewed({
             "rendition_mime_type": rendered_mime,
             "rendering_method": "browser-native" if native_preview else "original",
             "original_checksum": component["checksum_value"],
         })
         encoded_name = quote(component["file_name"], safe="")
-        start, end, response_status = _content_range(request.headers.get("range"), location.size_in_bytes)
+        start, end, response_status = _content_range(request.headers.get("range"), size)
         headers = {
             "Content-Disposition": f"inline; filename*=UTF-8''{encoded_name}",
             "Content-Length": str(end - start),
@@ -2040,7 +2204,7 @@ def _component_rendition_response(
             "Content-Security-Policy": "sandbox",
         }
         if response_status == 206:
-            headers["Content-Range"] = f"bytes {start}-{end - 1}/{location.size_in_bytes}"
+            headers["Content-Range"] = f"bytes {start}-{end - 1}/{size}"
         if request.method == "HEAD":
             return Response(status_code=response_status, media_type=rendered_mime, headers=headers)
         # The web viewer buffers renditions before passing them to PDF.js or a
@@ -2048,10 +2212,10 @@ def _component_rendition_response(
         # sent so an interrupted browser request cannot strand a server-side
         # cursor, poison its pooled connection, or terminate a fixed-length
         # response early.
-        content = storage.read(connection, component_id)
+        content = read_content()
         if content is None:
             raise HTTPException(status_code=404, detail="digital component content not found")
-        if len(content) != location.size_in_bytes:
+        if len(content) != size:
             raise HTTPException(status_code=500, detail="digital component content size mismatch")
         return Response(
             content=content[start:end], status_code=response_status,
@@ -2059,9 +2223,9 @@ def _component_rendition_response(
         )
     content_settings = settings_cache.for_connection(connection)
     maximum_source = content_settings["MAX_RENDITION_SIZE_BYTES"]
-    if location.size_in_bytes > maximum_source:
+    if size > maximum_source:
         raise HTTPException(status_code=413, detail="source document exceeds the configured rendition size limit")
-    content = storage.read(connection, component_id)
+    content = read_content()
     if content is None:
         raise HTTPException(status_code=404, detail="digital component content not found")
     try:
@@ -2070,7 +2234,7 @@ def _component_rendition_response(
         raise HTTPException(status_code=415, detail=str(error)) from error
     except ConversionUnavailable as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
-    _append_content_event(connection, component_id, "CONTENT_VIEWED", {
+    viewed({
         "rendition_mime_type": "application/pdf", "rendering_method": method,
         "original_checksum": component["checksum_value"],
     })
@@ -2095,6 +2259,7 @@ def _component_rendition_response(
     "/api/v1/digital-components/{component_id}/rendition",
     tags=["digital component content"],
 )
+@operation_policy("resource_scoped", "record.component.view", "record.component.view")
 def view_digital_component_rendition(
     component_id: int,
     request: Request,
@@ -2114,6 +2279,7 @@ def view_digital_component_rendition(
     "/api/v1/digital-components/{component_id}/print-rendition",
     tags=["digital component content"],
 )
+@operation_policy("resource_scoped", "record.view", "record.component.list")
 def print_digital_component_rendition(
     component_id: int,
     request: Request,
@@ -2131,6 +2297,7 @@ def print_digital_component_rendition(
     response_model=DigitalComponentRead,
     tags=["digital component content"],
 )
+@operation_policy("resource_scoped", "record.component.replace", "record.component.replace")
 def replace_digital_component_content(
     component_id: int,
     file: UploadFile = File(...),
@@ -2168,6 +2335,7 @@ def replace_digital_component_content(
     response_model=DigitalComponentRead,
     tags=["digital component content"],
 )
+@operation_policy("resource_scoped", "record.component.remove", "record.component.remove")
 def delete_digital_component_content(
     component_id: int,
     version: int = Depends(expected_version),
@@ -2345,6 +2513,7 @@ def _entity_history(
     response_model=list[EventHistoryRead],
     tags=["event history"],
 )
+@operation_policy("resource_scoped", "audit.view", "aggregation.history.view")
 def get_aggregation_history(
     aggregation_id: int,
     limit: int = Query(default=100, ge=1, le=500),
@@ -2370,6 +2539,7 @@ def get_aggregation_history(
     response_model=list[EventHistoryRead],
     tags=["event history"],
 )
+@operation_policy("resource_scoped", "audit.view", "record.history.view")
 def get_record_history(
     record_id: int,
     limit: int = Query(default=100, ge=1, le=500),
@@ -2394,6 +2564,7 @@ def get_record_history(
     response_model=list[EventHistoryRead],
     tags=["event history"],
 )
+@operation_policy("resource_scoped", "audit.view", "record.history.view")
 def get_digital_component_history(
     component_id: int,
     limit: int = Query(default=100, ge=1, le=500),
