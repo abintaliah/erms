@@ -101,7 +101,7 @@ def test_localization_change_reason_is_utf8_encoded_for_http_header():
             await client.close()
 
     asyncio.run(exercise())
-    assert captured_reason == "UTF-8''%D8%AA%D8%AD%D8%AF%D9%8A%D8%AB%20%D8%A7%D9%84%D8%AA%D8%B1%D8%AC%D9%85%D8%A9"
+    assert captured_reason == "تحديث الترجمة"
 
 
 def test_reference_lists_are_cached_revalidated_and_invalidated_by_mutation():
@@ -724,7 +724,7 @@ def test_recent_resource_activity_uses_one_scoped_card_request(resource, entity_
             await client.close()
 
     assert asyncio.run(exercise()) == [{
-        "id": 8, "title": "Activity resource", f"{entity_type}_number": "ITEM-8",
+        "id": 8, "title": "Activity resource", f"{entity_type}_number": "ITEM-8", "created_by": None,
         "_activity_at": "2026-09-25T18:00:00Z", "_operation": "CONTENT_VIEWED",
     }]
     assert requests == [("/api/v1/auth/me/recent-activity", {"limit": "50", "entity_type": entity_type})]

@@ -8,18 +8,8 @@ import time
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
-from urllib.parse import quote
 
 import httpx
-
-
-def _change_reason_header(reason: str) -> str:
-    """Return an ASCII-safe X-Change-Reason value without altering ASCII clients."""
-    try:
-        reason.encode("ascii")
-    except UnicodeEncodeError:
-        return "UTF-8''" + quote(reason, safe="", encoding="utf-8", errors="strict")
-    return reason
 
 
 class ApiError(RuntimeError):
@@ -266,7 +256,7 @@ class ErmsApiClient:
     ) -> dict[str, Any]:
         return await self.request(
             "POST", "/api/v1/admin/i18n/languages", json=payload,
-            headers={"X-Change-Reason": _change_reason_header(reason)},
+            headers={"X-Change-Reason": reason},
         )
 
     async def update_localization_language(
@@ -274,7 +264,7 @@ class ErmsApiClient:
     ) -> dict[str, Any]:
         return await self.request(
             "PUT", f"/api/v1/admin/i18n/languages/{language_tag}", json=payload,
-            headers={"If-Match": str(version), "X-Change-Reason": _change_reason_header(reason)},
+            headers={"If-Match": str(version), "X-Change-Reason": reason},
         )
 
     async def localization_messages(self, **params: Any) -> dict[str, Any]:
@@ -292,7 +282,7 @@ class ErmsApiClient:
     ) -> dict[str, Any]:
         return await self.request(
             "PUT", f"/api/v1/admin/i18n/messages/{message_key}/translations/{language_tag}",
-            json=payload, headers={"If-Match": str(version), "X-Change-Reason": _change_reason_header(reason)},
+            json=payload, headers={"If-Match": str(version), "X-Change-Reason": reason},
         )
 
     async def publish_localization_translation(
@@ -300,7 +290,7 @@ class ErmsApiClient:
     ) -> dict[str, Any]:
         return await self.request(
             "POST", f"/api/v1/admin/i18n/messages/{message_key}/translations/{language_tag}/publish",
-            headers={"If-Match": str(version), "X-Change-Reason": _change_reason_header(reason)},
+            headers={"If-Match": str(version), "X-Change-Reason": reason},
         )
 
     async def localization_generation_report(self, language_tag: str) -> dict[str, Any]:
@@ -321,7 +311,7 @@ class ErmsApiClient:
     ) -> dict[str, Any]:
         return await self.request(
             "POST", f"/api/v1/admin/i18n/translations/{language_tag}/bulk-review-publish",
-            json={"items": items}, headers={"X-Change-Reason": _change_reason_header(reason)},
+            json={"items": items}, headers={"X-Change-Reason": reason},
         )
 
     async def store_generated_localization_drafts(
@@ -329,7 +319,7 @@ class ErmsApiClient:
     ) -> dict[str, Any]:
         return await self.request(
             "POST", f"/api/v1/admin/i18n/generated-drafts/{language_tag}",
-            json=payload, headers={"X-Change-Reason": _change_reason_header(reason)},
+            json=payload, headers={"X-Change-Reason": reason},
         )
 
     async def preview_localization_export(
@@ -361,7 +351,7 @@ class ErmsApiClient:
     ) -> dict[str, Any]:
         return await self.request(
             "POST", f"/api/v1/admin/i18n/translations/{language_tag}/import",
-            json={"artifact": artifact}, headers={"X-Change-Reason": _change_reason_header(reason)},
+            json={"artifact": artifact}, headers={"X-Change-Reason": reason},
         )
 
     async def preferences(self) -> dict[str, Any]:
