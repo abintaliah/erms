@@ -147,12 +147,30 @@ invalidation policy.
 
 ## 6. Page API orchestration
 
+Long disposition operations must use the durable server-owned contract in
+`specs/disposition.md` §17.10. A browser callback obtains acceptance, then releases
+its busy state; it must not await application, bulk execution or PDF generation
+through a long HTTP request or modal. Navigation and disconnect never cancel
+accepted work. Poll only mounted views, stop/ignore abandoned responses, keep
+reads bounded and treat failed status reads separately from failed work. Reopen
+from fresh authorized server state. Approval has indeterminate phase progress;
+digital destruction uses real committed-unit counts. Do not invent percentages.
+No new progress cache is introduced; identities and languages retain their
+existing page-session isolation.
+
 Independent requests should run concurrently with `asyncio.gather`, within the
 bounded request concurrency enforced by `ErmsApiClient`. Current examples are:
 
 - favourites and recent activity on Records and Aggregations landing pages;
-- recent activity and the aggregation hierarchy needed to decorate it; and
 - role reference lists that are independent of one another.
+
+Records and Aggregations activity uses one resource-scoped card request per
+refresh. The response contains the display fields for both the preview and
+the existing bounded **View all** list. Render from that response without
+fetching resource details, parent labels or closure state for each card. Keep
+the two snapshots separate within a WebUI client, keyed by user, login and
+effective language. Revalidate on entry, discard late responses from abandoned
+views and clear the snapshots on sign-out or identity/language changes.
 
 Do not parallelize requests when one determines the authorization, identifier,
 version, or parameters of another. Do not bypass the API client's request-slot
@@ -239,12 +257,35 @@ resolve a parent label, effective closure, or inherited status. Use direct ID
 reads, walk only the selected ancestor chain, or expose a narrow authorized API
 such as `aggregations/{id}/effective-closure`.
 
-Non-search-first administration listings use true server pagination. Search,
-status, account type, sort, page size, and offset belong in the API request.
-Page totals come from the server. Client-side pagination is permitted only
-after the server has returned a deliberately complete finite result. Primary
-record/aggregation search-result limits are governed separately by each search
-screen's result contract and must still avoid an unbounded download.
+### Paginated results and submitted filters
+
+Apply authorization and filters to the full matching set on the server. Sort
+the result using a stable order with a unique tie-breaker, then select a bounded
+page using an offset or cursor. Compute displayed counts from the same
+authorized query, including per-tab counts when a result view has type tabs.
+If the screen only needs to know whether another page exists, a look-ahead row
+can supply that signal.
+
+Keep the last submitted filters and sort in the view's applied query. When a
+screen has Search or Apply, editing the controls leaves that query in use until
+submission. Previous and Next reuse it and change only the page. A new search
+or applied filter set starts on the first page. Keep the filter controls
+available when a query returns zero rows. Preserve each screen's existing
+submission and refresh behavior.
+
+A page-size limit bounds one response. A capped first batch of 50 or 100 rows
+cannot support pagination over the full match set. This applies to searches,
+assignments, dashboard drill-downs and event lists. Use client-side pagination
+only for deliberately complete finite data. An approved limit on the entire
+result set, such as a preview, belongs in the screen's result contract.
+
+Regression coverage for a paging fix should verify that the last submitted
+query survives draft edits and that a known match beyond the old cap appears
+on a later page. Check the displayed range and enabled controls at the final
+page. Where totals are shown, verify that they reflect the full filtered set
+from the first page. For example, Recent security events with 103 matches
+shows 1–10 of 103 first and reaches events 101–103 on the last page.
+Role Assignments with 51 matches must reach assignment 51.
 
 Dashboard complete-review lists use true server pagination: 25 visible rows
 plus one look-ahead row to determine whether another page exists. Do not loop
@@ -313,6 +354,34 @@ Use revision or ETag validation for immutable/versioned resources. Use
 stale-while-revalidate for overview information where immediate navigation and
 automatic freshness are both required. Do not cache mutation responses as if
 they were generally reusable reads.
+
+Global Search uses a server list scoped to the user, login session, tab and
+submitted query. A normal page request rechecks the current access and match
+state for the saved candidates. If the list is unavailable, the WebUI retries
+once with the same submitted query and requested page, then uses the new list
+and page tokens. It discards a late retry response after sign-out, navigation
+away or a new submission. See the [Global Search contract](../specs/full-text-search.md#103-global-search-endpoint).
+
+The search response supplies the two record display capabilities used by this
+screen. Do not follow it with per-record requests to the general capabilities
+endpoint. Page evidence and capabilities use request-local, shared SQL
+authorization; they are not cached permissions.
+
+Synchronous authentication, policy/settings reads and connection cleanup must
+run together in a worker thread. Never wait for a PostgreSQL session lock or a
+synchronous pool connection on the API event loop. Authentication uses
+`FOR NO KEY UPDATE` to serialize session changes while permitting the
+`KEY SHARE` reference held by a search-cache foreign-key insert. The stronger
+`FOR UPDATE` lock previously conflicted with that insert; waiting on the event
+loop could also prevent the search request from committing and releasing it.
+Keep both protections: compatible row locking and a nonblocking event loop.
+Concurrent lock regressions verify progress and rejection after revocation.
+
+When profiling Global Search, measure initial and cached pages separately.
+Inspect candidate lookup, authorization, scoring and details for the returned
+page. The cap limits the saved list, but a broad query can still score far more
+candidates. Include a selective query and a query that matches much of the
+collection, and compare the ranked IDs and scores when changing the query.
 
 ## 10. Verification requirements
 
@@ -474,3 +543,131 @@ inherited catalogue for Aggregations and Records in both English and Arabic.
 All four cases pass. A database-free browser preview confirmed repeated refresh
 and navigation retain the expected English and Arabic labels. No translation
 keys or wording changed. The owned preview process and tab were shut down.
+
+### Dashboard identity isolation and batched summaries (4 November 2026)
+
+The visual snapshot remains private to one browser-page client. Its key is the
+login-session revision, user ID, effective language, working timezone, known
+global privileges and effective role IDs. Sign-out, session rejection and every
+successful login clear the snapshot and advance the revision, including another
+login as the same account. Unknown/legacy keys are never rendered. No snapshot
+is written to browser storage or shared server state.
+
+Each dashboard view captures its principal, key and a unique view token.
+Responses are checked before writing any cache, application configuration,
+favourites or UI. An identity/language change, disconnected/deleted client,
+deleted container, navigation or newer dashboard view invalidates the response.
+The API client also advances a token generation, cancels pending reads and
+discards late responses (including 401s) from previous credentials. Old 401s
+must not sign out the new identity. Review and favourite callbacks use the same
+session/view guards. Sign-out removes protected content before remote logout
+finishes. Failed same-user background refreshes retain the visible snapshot and
+restore the Refresh control; fresh-load failures show an error without another
+identity's data.
+
+The summary authorizes record/aggregation sets with request-local materialized
+CTEs equivalent to the canonical view predicates within the dashboard live
+scope. Effective roles, global
+privileges, maximum clearance, governance clearance, organizational activity,
+contextual managers/file administrators and ACL sources are calculated as sets.
+Inherited aggregation ACL sources propagate down the hierarchy once, respecting
+custom child defaults and inheritance breaks. Direct/inherited record ACLs join
+those sets without calling a permission function per record. These visible sets
+feed counts, medium/vital/held totals, ownership, storage, true root counts,
+review counts/previews, favourites, relationship redaction and recent activity.
+This is SQL statement reuse, not a cross-request cache. All dashboard resource
+outputs exclude disposed statuses 10, 11 and 12, including for governance users.
+Status 13 remains in scope subject to normal authorization. Overview
+authorization must be explicit: the
+search views' names alone do not confer visibility.
+
+Materialize nonterminal resources (`disposition_status NOT IN (10,11,12)`)
+before computing ACL targets and hold propagation. Historical metadata is retained,
+so filtering only the final authorized output permits historical data to enlarge
+the working graph. Include only nonterminal aggregations/records and the
+ancestors/containers they actually need. Preserve a required ancestor even if
+it has terminal status: pruning must remain equivalent to canonical inherited
+ACL and hold rules. Do not add unrelated disposed branches to that graph.
+
+Active hold assignments propagate down the hierarchy once with a distinct
+recursive set. Direct record holds are calculated once. This must remain
+equivalent to the canonical effective-hold functions, including half-open
+validity windows, inherited holds across ACL inheritance breaks, overlapping
+holds and holds without resource-state preservation. Avoid restoring an
+ancestry walk per dashboard record.
+
+Classification activity and inherited retention-rule existence also propagate
+as sets, rather than walking each terminal's ancestors. Differential tests must
+compare batched authorization/classification results with the canonical functions
+when either implementation changes. No dashboard SQL may restore per-resource
+permission, role-effectiveness, contextual-ACL or hold-ancestry function calls.
+Iterating a small set of grouped unit totals to localize response labels is
+permitted; fetching or authorizing resources in a Python loop is not.
+
+Recent activity retains the same latest-event grouping, per-group cap,
+visibility checks and ordering, but resolves only bounded candidate IDs against
+the reused authorized sets. Index `event_history_dashboard_resource_latest_idx`
+matches resource-activity filters and ordering; the partial covering
+`event_history_dashboard_content_views_idx` handles personal component-view
+activity by actor/time without unrelated history. Include both component ID
+and operation so the content-view query is covered completely. The covering
+`digital_components_dashboard_storage_idx` on record ID including byte size
+allows storage totals without loading component metadata. All three indexes
+are in the standalone canonical schema; existing installations apply migrations
+`098_dashboard_resource_activity_index.sql`,
+`099_dashboard_content_activity_index.sql` and
+`100_dashboard_component_storage_index.sql` separately.
+Migration `101_dashboard_live_resource_indexes.sql` adds the narrow partial
+indexes `aggregations_dashboard_live_idx` and `records_dashboard_live_idx` on
+ID. Its original status-10-only predicate is replaced by
+`102_dashboard_nonterminal_resource_indexes.sql` with
+`disposition_status NOT IN (10,11,12)`, matching the live-resource queries.
+The final definitions are also in the canonical schema. They allow history-heavy
+tables to read the nonterminal subset without
+filtering the entire metadata heap. The planner can still choose a cheaper
+sequential scan when most rows are live. Avoid covering these indexes with
+large titles or other unbounded metadata. Exact counts still process the
+authorized live subset; personal audit-history work is a separate cost.
+No setting or translation catalogue changes are needed. Restart the API/WebUI
+after deploying the code; local stack startup does not apply migrations.
+
+The dashboard-specific design, index inventory, maintenance rules and regression
+map are in the [dashboard guide](dashboard.md#optimization-and-maintenance).
+Regression matrix, query plans, benchmark scope and cleanup evidence are in
+[dashboard isolation and performance verification](verification/dashboard-isolation-performance.md).
+
+## Search performance acceptance
+
+All search and filtering implementations must follow the normative
+[search performance contract](search-performance.md). Use SQL for matching, authorization, ranking and paging;
+reuse batch permission calculations and indexable candidate predicates.
+Changes require the disposable large-data correctness and latency gate: more
+than 50,000 aggregations and 150,000 records, a 1,000-result cap, exact expected
+counts/ranking/order, and every measured response within 3 seconds.
+
+## Shared tab result lists (13 November 2026)
+
+Global Search, Advanced Search (including saved searches), and aggregation/record
+collection filters share one PostgreSQL UNLOGGED cache slot per login session and
+NiceGUI `client.tab_id`, additionally checked against the signed-in user. Wait for
+the framework connection before reading this ID. Reuse it across reloads and
+verify duplicated-tab isolation; never invent a per-page UUID.
+
+Each screen preserves its own submitted query and returned list ID. Reusing a
+slot requires matching list ID and fingerprint (search type/endpoint, resource,
+criteria, sorting, display filter, saved version, cap/idle setting versions).
+A different screen's submission replaces the slot. Paging an older search
+silently rebuilds it and serves its requested page. Do not use editable draft
+controls for that rebuild. Mutation refreshes and explicit submissions rerun;
+permission checks and current display details are never cached. Language-specific
+rendering remains per request; these lists contain IDs/scores, not translated UI.
+
+All four flows use the administrator cap (default 1,000, maximum 5,000). Selectors,
+hierarchy branches and unrelated domains retain their separate contracts and
+must not replace this slot. Existing cache idle/cleanup settings now govern all
+four flows; no new environment variables are required. Migration 111 renames
+`global_search_results` to `search_results_cache` in place, preserving entries,
+UNLOGGED storage, indexes and the login-session cascade. Login expiry,
+revocation/deletion, idle expiry, settings changes and UNLOGGED-table loss retain
+the existing invalidation rules. See the Advanced Search specification for the
+complete contract and API recovery behavior.

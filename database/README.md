@@ -2,21 +2,131 @@
 
 ## New database
 
-Initialize a new empty database from the canonical schema alone:
+For Arabic-primary deployments supporting English, the recommended database
+default is **UTF-8 with ICU locale `ar`**. Create the database explicitly before
+loading the schema, for example from a maintenance database such as `postgres`:
 
-```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+```sql
+CREATE DATABASE erms
+    WITH TEMPLATE template0
+         ENCODING 'UTF8'
+         LOCALE_PROVIDER icu
+         ICU_LOCALE 'ar';
 ```
 
-`database/schema.sql` is complete and self-contained. It does not execute or
-depend on migrations or seeds. All SQL files contain portable PostgreSQL SQL;
+Run database creation outside a transaction, using an appropriately authorized
+deployment role and the intended database name. Verify `datlocprovider = i` and
+`datlocale = ar`; an `en_US.UTF-8` OS label alone does not establish the active
+provider. See [collation rationale, measured examples and restore guidance](../docs/database-collation.md).
+Existing databases need an explicit rebuild to change their default locale;
+`schema.sql` does not change it.
+
+Create the complete current structure from the canonical schema, then explicitly
+install required reference data and the fresh-install version baseline:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/schema.sql \
+  -f database/seeds/000_required_reference_data.sql \
+  -f database/baseline.sql
+```
+
+`database/schema.sql` is complete and self-contained **DDL only**. It creates
+each final object once and does not execute or depend on migrations or seeds.
+The required seed contains current built-in settings, languages, permissions,
+profiles and service-role defaults; it creates audit events with source `seeding`.
+`database/baseline.sql` registers the installation’s version. It executes no
+historical migrations. It records which upgrade versions are already included in
+this fresh schema. Both initialization files
+are for fresh installations only; neither reconciles an existing database.
+
+The equivalent Python entry point is
+`backend/services/api/.venv/bin/python tools/initialize_database.py`. It refuses
+a database that already contains the application schema.
+
+See [canonical maintenance and verification](../docs/database-canonical-baseline.md).
+All SQL files contain portable PostgreSQL SQL;
 client meta-commands such as `\\i`, `\\ir`, `\\set`, and `\\copy` are prohibited.
 
 ## Existing database
 
+Migration `112_search_vector_storage.sql` changes the physical storage of file
+search vectors to `MAIN` with LZ4 compression. PostgreSQL must be built with LZ4
+support. `MAIN` prefers an inline compressed value but still supports overflow
+for larger vectors; it does not truncate lexemes, positions or weights.
+
+Changing a column's compression policy alone does not convert existing values.
+Migration 112 rewrites the chunk table and its indexes using a logically
+identical vector expression, without extracting or parsing document text again.
+Plan a maintenance window: stop new searches and pause index publishing, allow
+existing transactions to finish, and provision space for the replacement table,
+indexes and generated WAL while the old files still exist. The rewrite takes
+an `ACCESS EXCLUSIVE` lock. A failure rolls back the migration and its version
+marker. Take the normal deployment backup before upgrading.
+
+After applying this migration, run the following outside a transaction before
+resuming traffic, to complete post-rewrite visibility/statistics maintenance:
+
+```sql
+VACUUM ANALYZE public.digital_component_search_chunks;
+```
+
+Verify the column policy and the actual values independently; small values may
+legitimately remain uncompressed:
+
+```sql
+SELECT attstorage, attcompression FROM pg_attribute
+WHERE attrelid='public.digital_component_search_chunks'::regclass
+  AND attname='search_vector'; -- m, l
+SELECT pg_column_compression(search_vector), count(*)
+FROM public.digital_component_search_chunks GROUP BY 1;
+```
+
+No PostgreSQL-wide memory, planner, durability or compression default is changed.
+The fresh schema contains the same column policy without replaying this rewrite.
+See [the measured investigation](../docs/verification/search-score-reuse-2026-11-13.md).
+
+Migration `080_fix_held_component_trigger.sql` fixes table-specific field access in
+legal-hold protection without weakening holds. Apply it after migration 079,
+then restart the API-owned content cleanup worker (or local stack) with the
+updated cleanup code. Cleanup retains upload sessions for held records and
+reclaims eligible expired sessions after the hold is released.
+
+
+Migration `050_application_settings.sql` installs the typed application-settings
+foundation and protected administration privilege without importing environment
+values or overwriting configured settings. Apply it after migration 049 and
+follow [the API/key upgrade guidance](../docs/application-settings-upgrade.md).
+
+Migration `048_hierarchical_oversight_acls.sql` adds the approved organizational
+role designations and contextual ACL principals. It changes defaults only for
+future resource creation; it preserves every existing ACL grant. See
+[implementation and verification](../docs/hierarchical-oversight-acls-implementation.md).
+
 Migrations upgrade an existing database containing data. Inspect
 `schema_migrations` and apply only missing files from `database/migrations/` in
-filename order:
+filename order for upgrades newer than its recorded baseline. A fresh canonical
+installation must not replay older files merely because their historical marker
+is absent.
+
+Migration **113** adds the application settings for child aggregation,
+contained record, and search result page sizes. It adds defaults of 10, 25,
+and 25 and preserves values already present. Apply it before restarting the
+API and WebUI with code that reads those settings.
+
+Migration **079** originally omitted its history insert. Use the corrected
+`079_disposition_admission_reason.sql` from the current checkout when reconciling
+an existing installation. It records its version and is safe to repeat. If
+migration 084 or its reason-free claim behavior is already present, 079 verifies
+the superseding function and reason constraint, records only the missing marker,
+and preserves those newer definitions. Detected drift stops reconciliation for
+inspection. On an older schema, 079 applies its original change; continue later
+migrations in order. Fresh installations record 079 through `baseline.sql`.
+Do not replay an older copy of 079 over a post-084 database: it can reinstate the
+task-claim reason requirement. Pulling code or running the local stack does not
+automatically apply these upgrade scripts. See
+[079 reconciliation evidence](../docs/verification/migration-079-reconciliation.md).
+
+Examples of explicitly applying missing upgrade files:
 
 ```bash
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
@@ -243,3 +353,20 @@ Actor suggestions query only current users and return at most 25 matches after
 two characters. Unselected text on Apply searches historical snapshots, including
 deleted accounts. Apply API configuration
 changes by restarting the API process.
+
+## Disposition/application-settings upgrades through 071
+
+For an existing database current through 049, follow the ordered missing-only
+050–071 procedure and separate seeds in [the controlled rollout runbook](../docs/disposition-rollout.md).
+New empty databases still use `schema.sql` alone. The runbook includes explicit
+settings preview/apply/check for each database; applying schema is not a legacy
+settings import. Persistent deployment requires explicit authorization. Migration 071 removes
+temporary release gates; existing workflow/permission checks still authorize
+each destruction action. No destruction occurs merely by applying migrations.
+
+Migration 111 renames the shared UNLOGGED result-list table from
+`global_search_results` to `search_results_cache`, preserving rows, ownership,
+constraints, expiry index and login-session cascade. Deploy API and independent
+cleanup-worker code together after this migration. All four record/aggregation
+search screens replace the same session/tab slot; schema initialization uses the
+new name directly. See `docs/application-settings-upgrade.md`.

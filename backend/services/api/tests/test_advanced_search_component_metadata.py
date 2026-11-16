@@ -130,6 +130,8 @@ def test_component_fields_are_records_only_filters_and_not_sort_fields(
 def test_record_metadata_combines_with_arabic_component_full_text(
     client: TestClient,
 ):
+    from backend.services.api.tests.test_application_settings_phase4 import save
+    assert save(client, {"FULL_TEXT_SEARCH_ENABLED": True}).status_code == 200
     response = client.post("/api/v1/records/search", json={
         "where": {"and": [
             {"field": "title", "operator": "contains_ci", "value": "ملف"},
@@ -231,8 +233,21 @@ def test_component_filters_respect_limit_and_use_record_correlation_index(
     with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
         connection.execute("SET LOCAL enable_seqscan=off")
         plan = connection.execute(
-            sql.SQL("EXPLAIN (COSTS OFF) SELECT resource.id FROM records resource WHERE {}")
+            sql.SQL("EXPLAIN (COSTS OFF, FORMAT JSON) SELECT resource.id FROM records resource WHERE {}")
             .format(clause),
             parameters,
-        ).fetchall()
-    assert "digital_components_record_id_idx" in "\n".join(row[0] for row in plan)
+        ).fetchone()[0][0]["Plan"]
+        record_indexes = {row[0] for row in connection.execute("""
+            SELECT index_class.relname FROM pg_index definition
+            JOIN pg_class index_class ON index_class.oid=definition.indexrelid
+            JOIN pg_attribute key ON key.attrelid=definition.indrelid AND key.attnum=definition.indkey[0]
+            WHERE definition.indrelid='digital_components'::regclass AND key.attname='record_id'
+              AND definition.indisvalid AND definition.indisready
+        """).fetchall()}
+    def used_indexes(node):
+        return ({node["Index Name"]} if "Index Name" in node else set()).union(
+            *(used_indexes(child) for child in node.get("Plans", [])))
+    # The covering (record_id) INCLUDE (size_in_bytes) index is also a valid
+    # correlation path and can avoid heap reads. Do not force one index name.
+    assert used_indexes(plan) & record_indexes, plan
+    assert "search_component.record_id=resource.id" in clause.as_string()

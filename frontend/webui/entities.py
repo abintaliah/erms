@@ -37,13 +37,13 @@ ENTITIES = {
     ),
     "classification-schemes": EntitySpec(
         "classification-schemes", "Classification schemes", "classification scheme",
-        (("code", "Code"), ("title", "Title"), ("date_published", "Published"), ("date_deactivated", "Deactivated")),
+        (),
         (FieldSpec("code", "Code", required=True), FieldSpec("title", "Title", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("authority", "Authority"), FieldSpec("scope_note", "Scope note", "textarea"), FieldSpec("edition", "Edition"), FieldSpec("date_published", "Date published", "datetime")),
         False, ("code", "title", "description"),
     ),
     "classifications": EntitySpec(
         "classifications", "Classifications", "classification",
-        (("code", "Code"), ("title", "Title"), ("type_display", "Type"), ("scheme_display", "Scheme")),
+        (),
         (
             FieldSpec("classification_scheme_id", "Classification scheme", "lookup", True, "classification-schemes", ("code", "title")),
             FieldSpec("parent_classification_id", "Parent classification", "lookup", False, "classifications", ("code", "title")),
@@ -56,12 +56,12 @@ ENTITIES = {
             FieldSpec("final_disposition", "Final disposition", "disposition"),
             FieldSpec("instructions", "Retention and disposal instructions", "textarea"),
         ),
-        True, ("code", "title", "description", "keywords"),
+        search_fields=("code", "title", "description", "keywords"),
     ),
     "org-units": EntitySpec(
         "org-units", "Organization units", "organization unit",
         (("code", "Code"), ("name", "Name"), ("effective_status", "Status"), ("parent_org_unit_display", "Parent")),
-        (FieldSpec("parent_org_unit_id", "Parent organization unit", "lookup", lookup_resource="org-units", lookup_label_fields=("code", "name")), FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea")),
+        (FieldSpec("parent_org_unit_id", "Parent organization unit", "lookup", lookup_resource="org-units", lookup_label_fields=("code", "name")), FieldSpec("code", "Code", required=True), FieldSpec("name", "Name", required=True), FieldSpec("description", "Description", "textarea"), FieldSpec("managing_role_id", "Managing role", "lookup", lookup_resource="roles", lookup_label_fields=("code", "name")), FieldSpec("file_administrator_role_id", "File Administrator role", "lookup", lookup_resource="roles", lookup_label_fields=("code", "name"))),
         search_fields=("code", "name", "description"),
     ),
     "users": EntitySpec(
@@ -97,3 +97,6 @@ ENTITIES = {
         (),
     ),
 }
+
+# Entity definitions also serve editors and API resources without collection pages.
+COLLECTION_ENTITIES = {key: spec for key, spec in ENTITIES.items() if spec.columns}

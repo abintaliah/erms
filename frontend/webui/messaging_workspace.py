@@ -162,6 +162,9 @@ async def messaging_workspace(
     capture_record=None,
     browse_recipients=None,
     inspect_resource=None,
+    open_disposition_task=None,
+    open_disposition_job=None,
+    open_disposition_eligibility=None,
 ):
     view = {
         "revision": 0,
@@ -169,6 +172,8 @@ async def messaging_workspace(
         "cursor": None,
         "previous": [],
         "next": None,
+        "criteria": {},
+        "loading": False,
         "deleted": False,
         "mode": "list",
     }
@@ -395,7 +400,7 @@ async def messaging_workspace(
                     ui.button(
                         text("field.search"),
                         icon="search",
-                        on_click=lambda: load(reset=True),
+                        on_click=lambda: apply_filters(),
                     ).props("flat no-caps")
             progress = ui.label(text("state.loading")).props("role=status")
             with ui.grid().classes("w-full grid-cols-1 lg:grid-cols-2 gap-4 items-start"):
@@ -410,42 +415,41 @@ async def messaging_workspace(
                 detail.set_visibility(False)
 
     async def page(forward):
+        if view["loading"] or (forward and not view["next"]) or (not forward and not view["previous"]):
+            return
         if forward:
-            view["previous"].append(view["cursor"])
-            view["cursor"] = view["next"]
-        elif view["previous"]:
-            view["cursor"] = view["previous"].pop()
-        await load()
+            await load(position=(view["next"], [*view["previous"], view["cursor"]]))
+        else:
+            await load(position=(view["previous"][-1], view["previous"][:-1]))
 
-    async def load(reset=False):
+    async def apply_filters():
+        criteria = {key: control.value for key, control in filters.items() if control.value not in (None, "")}
+        for key in ("sent_from", "sent_before"):
+            if key in criteria:
+                criteria[key] += "T00:00:00Z"
+        if mailbox in ("inbox", "outbox", "drafts") and can_exchange and recipient.value:
+            target, index = divmod(int(recipient.value), 3)
+            criteria.update(recipient_kind=filter_kinds[index], recipient_id=target)
+        await load(reset=True, criteria=criteria)
+
+    async def load(reset=False, *, position=None, criteria=None):
         view["revision"] += 1
         revision = view["revision"]
+        view["loading"] = True
         view["mode"] = "list"
-        if reset:
-            view.update(cursor=None, previous=[])
+        cursor, history = (None, []) if reset else position or (view["cursor"], view["previous"])
+        criteria = view["criteria"] if criteria is None else criteria
         content.set_visibility(True)
         filters_host.set_visibility(not view["deleted"] or mailbox == "drafts")
         pagination.set_visibility(True)
         progress.text = text("state.loading")
         params = {"limit": 25}
-        if view["cursor"]:
-            params["cursor"] = view["cursor"]
+        if cursor:
+            params["cursor"] = cursor
         if mailbox == "drafts":
             params["deleted"] = view["deleted"]
-        elif not view["deleted"]:
-            params.update(
-                {
-                    key: control.value
-                    for key, control in filters.items()
-                    if control.value not in (None, "")
-                }
-            )
-            for key in ("sent_from", "sent_before"):
-                if key in params:
-                    params[key] += "T00:00:00Z"
-        if (mailbox == "drafts" or not view["deleted"]) and can_exchange and recipient.value:
-            target, index = divmod(int(recipient.value), 3)
-            params.update(recipient_kind=filter_kinds[index], recipient_id=target)
+        if mailbox == "drafts" or not view["deleted"]:
+            params.update(criteria)
         try:
             result = await request(
                 "GET",
@@ -464,8 +468,12 @@ async def messaging_workspace(
                 progress.text = text("error.failed")
                 warn(error)
             return
+        finally:
+            if view["revision"] == revision:
+                view["loading"] = False
         if not current(revision):
             return
+        view.update(cursor=cursor, previous=history, criteria=criteria)
         progress.text = ""
         content.clear()
         read_badges.clear()
@@ -940,6 +948,15 @@ async def messaging_workspace(
                     await receipts()
 
     def render_body(message):
+        if message.get('disposition_job') and open_disposition_job:
+            from .disposition.messages import text as disposition_text
+            ui.button(disposition_text('job_details'),icon='open_in_new',on_click=lambda:open_disposition_job(message['disposition_job'])).props('outline no-caps')
+        if message.get("disposition_eligibility") and open_disposition_eligibility:
+            from .disposition.messages import text as disposition_text
+            ui.button(disposition_text("eligibility"),icon="event_available",on_click=open_disposition_eligibility).props("outline no-caps")
+        if message.get('disposition_task') and open_disposition_task:
+            from .disposition.messages import text as disposition_text
+            ui.button(disposition_text('open'),icon='task_alt',on_click=lambda:open_disposition_task(message['disposition_task']['job_id'],message['disposition_task']['task_id'])).props('outline no-caps')
         with ui.column().classes('w-full gap-2 break-words').props('dir=' + message.get('direction', 'auto')):
             body = body_without_resources(message['body_rich_text'])
             if body.strip():

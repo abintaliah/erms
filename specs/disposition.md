@@ -1,17 +1,59 @@
 # Disposition — Product and Technical Specification
 
-**Status:** Discussion draft — no implementation authorized
-**Prepared:** 30 September 2026
+**Status:** Approved
+**Approval reaffirmed:** 12 October 2026 for revision 1.5
+**Prepared:** 7 October 2026
 **Project:** ERMS / Wathiq
-**Revision:** 0.1
+**Revision:** 1.27
+**Amendment approved:** 9 November 2026
+
+## Revision history
+
+| Revision | Date | Summary |
+| --- | --- | --- |
+| 1.27 | 9 November 2026 | Use existing application navigation instead of duplicate My Tasks buttons in progress cards; show digital progress only after an execution request |
+| 1.26 | 9 November 2026 | Define a personal My Tasks inbox for all disposition types while preserving authorized job-based reassignment and current eligibility checks |
+| 1.25 | 9 November 2026 | Require durable nonblocking background execution for long operations across all disposition types; share operation tracking without adding future workflows |
+| 1.24 | 5 November 2026 | Select available rows on the current eligibility page, retain explicit selections across pages/sorts, and clear the full cross-page selection |
+| 1.23 | 5 November 2026 | Define simple remaining-review setup warnings, progression gates and the retained existing-job File Administrator skip exceptions |
+| 1.22 | 5 November 2026 | Validate compatible eligibility selections early; filter destination jobs by exact common owning unit/type and require currently staffed Standard destruction review roles at creation |
+| 1.21 | 5 November 2026 | Remove Membership controls from job/task Aggregations; automatically list retained aggregations and place Add aggregations beside that list |
+| 1.20 | 5 November 2026 | Cap the job-scoped picker at 1,100px and 75% desktop viewport height; fit sparse results, keep heading/actions visible and retain phone viewport sizing |
+| 1.19 | 4 November 2026 | Keep Add aggregations inside a job-scoped dialog with fixed admission criteria, bounded filtering, immediate persistence and current-state revalidation |
+| 1.18 | 4 November 2026 | Define dashboard live scope to exclude all disposed outcomes (10, 11, 12) for every user and section; preserve status 13 as action required and apply the same predicate to supporting indexes |
+| 1.17 | 29 October 2026 | Compact job/task aggregation rows, disclose complete effective retention rules on demand, default to current membership and open proposals from nonzero counts |
+| 1.16 | 29 October 2026 | Summarize one recorded disposition action once in job history, retain paginated underlying events, distinguish affected changes, and disclose previous review comments in review tasks |
+| 1.15 | 29 October 2026 | Allow eligible additions by the claimed Records Manager during Simplified destruction review, preserving admission and original-round integrity |
+| 1.14 | 29 October 2026 | Allow compatible exceptional acceleration of reopened active members within their existing job; preserve membership, blockers and review invalidation |
+| 1.13 | 29 October 2026 | Default the Disposition Jobs page to Active while retaining explicit lifecycle filters and server pagination |
+| 1.12 | 29 October 2026 | Summarize membership additions in one toast with count and job number; show paginated details only for failed additions |
+| 1.11 | 29 October 2026 | Use aggregation/aggregations in disposition interface wording wherever root/roots refers to an aggregation; use ملف/ملفات in Arabic |
+| 1.10 | 22 October 2026 | Separate accelerated eligibility from hold, vital and security protections; retain job-admission, execution and preserve-state closure checks |
+| 1.9 | 21 October 2026 | Clarified closure as a prerequisite for all eligibility, retention starting at closure, and atomic closure during exceptional acceleration; placed acceleration in the effective retention-rule section |
+| 1.8 | 21 October 2026 | Require immediate exceptional-acceleration notifications to all Information Governance users and the governing root aggregation’s owning Unit Manager through the existing notification subsystem |
+| 1.7 | 20 October 2026 | Approved clarification of section 14.2 and DISP-35: preserve protected governed evidence and permanent provenance; defer a separate evidence-expiry/deletion workflow pending an approved policy |
+| 1.5 | 12 October 2026 | Reconciled destruction-specific review, membership, proposal execution, reason fallback, dual-role authorization, and post-physical termination rules |
+| 1.4 | 12 October 2026 | Required all disposition system notifications to reuse the existing messaging and notifications subsystem |
+| 1.3 | 12 October 2026 | Aligned the common authorization contract with agreed limited File Administrator and Unit Manager destruction-review task authority; resource-changing execution remains subject to Records Manager privileges |
+| 0.1 | 30 September 2026 | Initial discussion draft |
+| 0.2 | 6 October 2026 | Clarified the disposition actions, FSM, repeated job membership, blockers that arise during a job, termination versus completion, the one-active-job rule, destruction records, and open decisions; renamed selective-appraisal statuses to selective-transfer statuses |
+| 0.3 | 6 October 2026 | Added status 13 for a mixed disposition unit whose physical material was destroyed but whose digital material must be preserved after job termination; restored termination after physical destruction; defined individual and bulk IGU recovery from status 13; defined reopening, hierarchy-change, and retention-rule recalculation behavior; required status propagation to descendants; defined the active-job requirement for pending statuses, the active/completed/terminated job lifecycle, mandatory assignment before job membership, separate final-executor records, externally supplied disposition numbers, metadata and evidence retained after destruction, per-aggregation results for multi-selection job addition, the prohibition on adding redacted disposition units, blocker enforcement during acceleration, and the single `disposition.jobs.manage` privilege |
+| 1.0 | 6 October 2026 | Approved the common disposition specification after resolving all common workflow, authorization, status, hierarchy, timing, identifier, destruction-metadata, access, integrity, and verification decisions |
+| 1.1 | 6 October 2026 | Relationships do not block job admission or acceleration; outside-job aggregation and record links block final disposition until authorized removal, with relationship review UI and current-state enforcement |
+| 1.2 | 7 October 2026 | Defined the shared purpose-built workflow architecture and logical data model for disposition jobs, membership episodes, tasks, review rounds, decisions, document links, resource outcome fields, protected operations, and canonical SQL ownership |
 
 ## 1. Purpose
+
+Disposition screens, actions, counts, guidance and messages use **aggregation**
+or **aggregations** wherever “root” or “roots” means an aggregation. Arabic uses
+the approved **ملف / ملفات** terminology. Technical identifiers and the
+governing-aggregation eligibility and membership rules retain their meaning.
 
 Disposition is the controlled process that starts after records have been kept
 for their required retention periods. In Wathiq, disposition may result in
 **destruction**,
 **permanent preservation and transfer to an external archive**, **selective
-transfer/appraisal**, or **retention as local archives**. Destruction is one
+transfer**, or **retention as local archives**. Destruction is one
 possible disposition action; it is not synonymous with disposition.
 
 This specification defines the rules shared by all four disposition actions.
@@ -22,7 +64,7 @@ exceptional cases, local retention rules, and the information recorded when
 the final action is completed.
 
 The action-specific review, evidence, approval, and completion requirements for
-destruction, permanent transfer, selective transfer/appraisal, and retention as
+destruction, permanent transfer, selective transfer, and retention as
 local archives will be defined in separate specifications. Section 14 contains
 the initial rules already discussed for destruction, including what happens to
 metadata and to aggregations that contain both physical and digital material.
@@ -30,8 +72,13 @@ Its inclusion does not give destruction priority over the other actions. Until
 the relevant action-specific specification is approved, Wathiq must not permit
 a job of that type to execute its final action.
 
-This revision is a discussion draft. It records unresolved decisions in
-Section 18 and does not authorize implementation.
+This approved specification is the product contract for requirements shared by
+all disposition actions. Each action's separate specification remains the
+contract for its action-specific review, evidence, approval, and execution
+requirements.
+
+For aggregation and record relationship blockers and their disposition-review
+UI, see [Record and Aggregation Relationships, section 7](record-and-aggregation-relationships.md#7-disposition).
 
 ## 2. Relationship to existing Wathiq rules
 
@@ -40,12 +87,23 @@ Section 18 and does not authorize implementation.
 2. The effective retention rule is resolved in this order:
    - a local retention rule on the governing root aggregation; otherwise
    - the root aggregation's effective classification retention rule.
-3. The due-date calculation uses the governing root's closure date plus the
-   effective current and intermediate retention periods.
-4. An open governing root has no disposition due date and remains not ready.
+3. Retention starts only when the governing root is closed. The current and
+   intermediate retention periods run from that closure timestamp; time spent
+   open does not count toward either period. The due date is the closure
+   timestamp plus both effective retention periods.
+4. An open governing root has no disposition due date and must remain in
+   status 1 (not ready), never an eligible status (2–5). This invariant applies
+   to every eligibility path, including scheduled evaluation, recalculation,
+   recovery and exceptional acceleration. Normal eligibility requires completion
+   of both retention periods under the strict boundary in Section 7.
+   Acceleration may waive the wait, but never closure: Section 11 requires
+   closing an open root atomically before making it eligible.
 5. Legal holds work as defined in the Legal Holds specification, including
-   protection inherited from a parent aggregation. Wathiq must check the
-   current holds; it must not rely on an old copied value.
+   protection inherited from a parent aggregation. When adding an aggregation
+   to a disposition job and before completing the final action, Wathiq must
+   determine whether an effective legal hold currently protects the
+   aggregation or any descendant. It must use the current hold definitions,
+   assignments, aggregation hierarchy, and server time.
 6. Security blocking uses the existing `security_levels.prevents_disposition`
    policy flag.
 7. Vital protection uses the effective `is_vital` value on each aggregation
@@ -59,9 +117,10 @@ Section 18 and does not authorize implementation.
 ### 3.1 Information-governance user (IGU)
 
 **IGU** means an authorized information-governance user. It is only a short
-name used in this document. It does not create a new role or give anyone new
-permissions. Access must use explicit permissions and the existing Information
-Governance Manager and Information Governance Officer profiles.
+name used in this document. An IGU is authorized to perform disposition work
+through the `disposition.jobs.manage` privilege granted by an
+information-governance role. Calling someone an IGU does not itself grant the
+privilege or access to any resource.
 
 ### 3.2 Disposition unit
 
@@ -70,18 +129,24 @@ digital components. This complete group is processed together.
 
 ### 3.3 Eligible aggregation
 
-A root aggregation whose retention periods have ended and whose disposition
-status is 2, 3, 4, or 5. Eligible does not mean ready for the final action. A
+A closed root aggregation whose current and intermediate retention periods
+have ended, or whose remaining wait has been explicitly waived by authorized
+acceleration under Section 11, and whose disposition status is 2, 3, 4, or 5.
+Its descendants are effectively closed under the existing closure rules;
+individual descendant closure timestamps are not required. Eligible does not mean ready for the final action. A
 vital record, a security level, a legal hold, missing approval, missing
 evidence, or an action-specific rule may still block it.
 
 ### 3.4 Due date
 
-The root aggregation's closure date plus its current and intermediate
-retention periods. Wathiq uses the same date calculation as the existing
-calculated-disposition-date feature. The aggregation becomes due on the first
-calendar date after the calculated date, using the timezone chosen in Section
-18.7. It does not become due on the calculated date itself.
+The root aggregation's closure timestamp plus its current and intermediate
+retention periods. `date_closed` is stored as `timestamptz`, so the database
+calculation produces an absolute moment in time. The scheduled service uses the
+UTC value returned by the database and compares it with the database's current
+timestamp. The aggregation becomes due only when the current timestamp is
+strictly later than the calculated value; it does not become due at the exact
+calculated instant. A user's working timezone affects only how the value is
+displayed.
 
 ### 3.5 Disposition job
 
@@ -89,6 +154,24 @@ A group of aggregations being processed together. Every aggregation in a job
 must have the same disposition action. The job tracks review, work performed
 outside Wathiq, evidence, approvals, and completion of the final action. Adding
 an aggregation to a job does not remove any protection from it.
+
+### 3.6 Active, completed, and terminated jobs
+
+A job becomes **active** when it is created. It becomes **completed** when its
+final disposition action has been completed. It becomes **terminated** when an
+authorized IGU terminates it before completion. These are the only job states.
+Completed and terminated are different job outcomes.
+
+An IGU with `disposition.jobs.manage` may terminate an active job at any point
+in its process. Termination stops all further work in that job. It does not mark
+the job as completed or claim that unfinished disposition actions occurred.
+Aggregations remain members of completed and terminated jobs as permanent
+history. Membership in a completed or terminated job does not count as
+membership in an active job. Membership in a completed job means the
+disposition unit reached status 10, 11, or 12 and cannot enter another
+disposition job. Membership in a terminated job may coexist with later
+membership in an active job if the unit is in an eligible status. Status 13
+requires a separate resolution before the unit may enter another job.
 
 ## 4. Disposition status catalogue
 
@@ -100,17 +183,42 @@ following controlled values:
 | 1 | `not_ready` | Not ready for disposition |
 | 2 | `eligible_destruction` | Eligible for destruction |
 | 3 | `eligible_permanent_transfer` | Eligible for permanent transfer |
-| 4 | `eligible_selective_appraisal` | Eligible for selective transfer / appraisal |
+| 4 | `eligible_selective_transfer` | Eligible for selective transfer |
 | 5 | `eligible_local_archives` | Eligible for retention as local archives |
 | 6 | `pending_destruction` | Pending destruction |
 | 7 | `pending_permanent_transfer` | Pending permanent transfer |
-| 8 | `pending_selective_appraisal` | Pending selective transfer / appraisal |
+| 8 | `pending_selective_transfer` | Pending selective transfer |
 | 9 | `pending_local_archives` | Pending retention as local archives |
 | 10 | `destroyed` | Destroyed |
 | 11 | `permanently_transferred` | Permanently transferred |
 | 12 | `retained_local_archives` | Retained as local archives |
+| 13 | `partially_disposed_action_required` | Partially disposed — action required |
 
-The database accepts only these 12 values. New aggregations and records start
+For dashboard reporting, statuses **10, 11 and 12** are completed disposition
+outcomes and are outside the **live** resource scope. Every dashboard
+resource count and its supporting rows must exclude those statuses, including
+overview, organizational holdings, medium/vital/hold totals, component/storage
+metrics, review counts/previews/pages, favourites and recent activity. The rule
+applies to every caller, including information-governance users; retained-resource
+search authority does not add disposed material to dashboard live counts.
+Supporting partial indexes must use the same nonterminal predicate.
+
+Status **13** is not terminal: material remains and recovery/action is required.
+It remains eligible for the dashboard live scope, subject to the existing
+resource authorization and ownership/review rules. This reporting rule does not
+change controlled retained-resource search, disposition/audit access or the
+status transition catalogue. Implementation and regression evidence are linked
+from the [dashboard guide](../docs/dashboard.md#optimization-and-maintenance).
+
+Every disposition job also stores a `disposition_status` from this same
+catalogue. While an aggregation belongs to an active job, the job, aggregation,
+and all descendant aggregations and records must have the same disposition
+status. Adding, removing, or transitioning job contents must preserve this
+rule as one operation. Sections 6.1 and 12 define exceptions when reopening or
+a retention-rule change recalculates a member's status while it remains in the
+job.
+
+The database accepts only these 13 values. New aggregations and records start
 at status 1. Existing data also starts at status 1 unless an approved migration
 can prove that a final disposition action already took place. The interface
 translates the labels shown to users. The numeric codes and stable names do not
@@ -118,9 +226,9 @@ change between languages.
 
 ## 5. Finite-state machine
 
-### 5.1 Valid transitions
+### 5.1 Normal valid transitions
 
-The following are the only valid transitions:
+The following are the valid transitions in the normal disposition flow:
 
 ```text
 1 -> 2    1 -> 3    1 -> 4    1 -> 5
@@ -137,11 +245,11 @@ stateDiagram-v2
     state "1 — Not ready for disposition" as S1
     state "2 — Eligible for destruction" as S2
     state "3 — Eligible for permanent transfer" as S3
-    state "4 — Eligible for selective transfer / appraisal" as S4
+    state "4 — Eligible for selective transfer" as S4
     state "5 — Eligible for retention as local archives" as S5
     state "6 — Pending destruction" as S6
     state "7 — Pending permanent transfer" as S7
-    state "8 — Pending selective transfer / appraisal" as S8
+    state "8 — Pending selective transfer" as S8
     state "9 — Pending retention as local archives" as S9
     state "10 — Destroyed" as S10
     state "11 — Permanently transferred" as S11
@@ -176,19 +284,52 @@ stateDiagram-v2
     S12 --> [*]: Ends
 ```
 
-The transition from status 8 records the appraisal outcome. Selective
-appraisal has no separate terminal status: it results in destruction,
-permanent transfer, or retention as local archives and then follows that
-outcome's workflow.
+The diagram and transition list describe the normal state flow for a
+disposition job and the aggregations and records it contains. When a job moves
+to another disposition state, every aggregation and record currently in that
+job moves to the corresponding state as part of the same operation.
+
+Job termination is an exceptional action, not another disposition state, so it
+is not shown in the diagram or added to the transition list. An authorized IGU
+may terminate an active job at any point before completion. Every aggregation
+remains in the terminated job, but its disposition status returns to the
+eligible state that matches the job type: `6 -> 2`, `7 -> 3`, `8 -> 4`, or
+`9 -> 5`. If physical destruction has been confirmed for a mixed disposition
+unit but its digital material has not been destroyed, termination instead sets
+that unit to status 13, **Partially disposed — action required**. Its digital
+material must be preserved. Status 13 is an exception caused by termination,
+not part of the normal flow shown in the diagram.
+
+Recovery from status 13 is also handled outside the normal diagram. An
+authorized IGU explicitly selects the new eligible status for each affected
+aggregation: 2, 3, 4, or 5. Wathiq requires a reason and records the decision
+in permanent event history. The aggregation may then be added to a new job that
+matches its new eligible status.
+
+An authorized IGU may instead resolve all status-13 aggregations in the same
+terminated job in one bulk action. The IGU selects one eligible status and
+provides one reason. That status and reason apply to every status-13
+aggregation in the job.
+
+Reopening is another exception outside the normal diagram. Section 6.1 defines
+how reopening resets an eligible or pending disposition unit to status 1 and
+blocks an active job until the aggregation is explicitly removed or restored
+through compatible acceleration within that job under Section 11.
+
+The transition from status 8 records the selective-transfer decision.
+Selective transfer has no separate final status. The decision results in
+destruction, permanent transfer, or retention as local archives and then
+follows the workflow for that outcome.
 
 ### 5.2 Transition causes
 
 | Transition | Cause |
 | --- | --- |
-| `1 -> 2/3/4/5` | Scheduled eligibility evaluation or authorized acceleration |
+| `1 -> 2/3/4/5` | Scheduled eligibility evaluation or authorized acceleration outside a job |
+| `1 -> 6/7/8/9` | Authorized acceleration restores a reopened member to its existing compatible active job |
 | `2 -> 6`, `3 -> 7`, `4 -> 8`, `5 -> 9` | Addition to a disposition job of the corresponding type |
 | `6 -> 2`, `7 -> 3`, `8 -> 4`, `9 -> 5` | Removal from the disposition job before final execution |
-| `8 -> 2/3/5` | Recorded and approved selective-appraisal outcome |
+| `8 -> 2/3/5` | Recorded and approved selective-transfer decision |
 | `6 -> 10`, `7 -> 11`, `9 -> 12` | Authorized final execution after all common and action-specific gates pass |
 
 Clients cannot set any status they choose. Each transition is made only by the
@@ -198,13 +339,18 @@ that the transition is allowed.
 ### 5.3 Removal transitions
 
 An aggregation may be removed from its disposition job at any time before
-final execution. Removal restores the corresponding eligible status:
+final execution, subject to the action-specific workflow's authorized stages.
+For destruction, Records Officer membership removal occurs only during
+preparation or correction, not while reviewers hold the job. After confirmed
+physical destruction, correction follows termination and status-13 rules;
+ordinary membership removal must not restore destroyed physical material to
+normal eligibility. Removal otherwise restores the corresponding eligible status:
 
 - pending destruction returns to eligible for destruction (`6 -> 2`);
 - pending permanent transfer returns to eligible for permanent transfer
   (`7 -> 3`);
-- pending selective transfer/appraisal returns to eligible for selective
-  transfer/appraisal (`8 -> 4`); and
+- pending selective transfer returns to eligible for selective transfer
+  (`8 -> 4`); and
 - pending retention as local archives returns to eligible for retention as
   local archives (`9 -> 5`).
 
@@ -214,33 +360,143 @@ added to a job again, it follows the same transition from eligible to pending.
 Every addition and every removal creates a new event. A later event never
 changes or deletes an earlier one, so the full history is kept.
 
+If an aggregation was reopened while it belonged to a job, it is already in
+status 1. Removing it from the job does not apply one of the eligible-state
+transitions above. It removes only the active-job membership and leaves the
+aggregation and its descendants in status 1. Wathiq records both the earlier
+reopening and the later removal as separate permanent events.
+
+If a retention-rule change has marked a member for removal under Section 12,
+removing it changes only its active-job membership. The aggregation and its
+descendants remain in the status calculated under the changed rule: status 1,
+2, 3, 4, or 5. Wathiq records the rule change, recalculation, and later removal
+as separate permanent events.
+
+### 5.4 Pending status requires active-job membership
+
+An aggregation and its descendants may enter status 6, 7, 8, or 9 only when
+the root aggregation is successfully added to an active disposition job of the
+matching type:
+
+- a destruction job sets status 6;
+- a permanent-transfer job sets status 7;
+- a selective-transfer job sets status 8; and
+- a retention-as-local-archives job sets status 9.
+
+Adding the aggregation to the job and changing the root and every descendant
+aggregation and record to the matching pending status must either both succeed
+or both fail. A user, API client, scheduled service, import, background process,
+or direct database operation must not set a pending status without matching
+active-job membership.
+
+A pending status always requires matching active-job membership. A member may
+temporarily have a non-pending status while recovery or removal is required:
+the reopened aggregation stays in status 1 until compatible in-job acceleration
+or explicit removal under Section 6.1, and
+a retention-rule change may leave a member in status 1 or in a non-matching
+eligible status under Section 12. If the recalculated disposition action still
+matches the active job, the member remains in the matching pending status.
+
 ## 6. Status scope and propagation
 
 The governing root is the only independently evaluated and listed disposition
 unit. Every aggregation and record stores its own `disposition_status` so its
 current disposition state and final outcome can be reported explicitly.
 
-Subject to the decision in Section 18.1, this draft proposes that each
-transition changes the status of the root aggregation and all its descendant
-aggregations and records. All those changes must succeed or fail together.
-Digital components do not store a separate disposition status; they use the
-status of their record. Wathiq must never leave only part of the group in the
-new status.
+The valid transitions also govern the state of a disposition job. When the job
+state changes, Wathiq changes the `disposition_status` of every aggregation and
+record currently contained in the job to the matching state. The job and all
+of its current contents must either change together or remain unchanged, except
+for the temporary reopening and retention-rule-change cases defined in Sections
+6.1 and 12.
 
-Creating or moving content must not break this rule. A later decision must
-define whether users may create, move, or edit content after the group becomes
-eligible, pending, or complete.
+Each transition changes the status of the root aggregation and all its
+descendant aggregations and records. All those changes must succeed or fail
+together. This ensures that when a user finds or views the metadata of a
+descendant, its stored disposition status accurately reflects what is happening
+to the root disposition unit. Digital components do not store a separate
+disposition status; they use the status of their record. Wathiq must never
+leave only part of the group in the new status.
+
+Every aggregation eligible for or added to a disposition job is closed.
+Wathiq's existing closure rules already prohibit creating, moving, or editing
+content in a closed aggregation. This specification does not create another
+content-editing rule or a disposition override to the closure rules.
+
+Ordinary closure does not require clearing vital status or removing a normal
+hold. Neither prevents an otherwise authorized close. An applicable effective
+hold with `preserve_resource_state = true` can block closure under the existing
+hold rules. These rules apply independently of acceleration; closing preserves
+the vital designation and hold assignments and does not authorize disposition.
+
+### 6.1 Reopening an aggregation
+
+An authorized user may reopen an aggregation under Wathiq's existing closure
+rules. Reopening clears `date_closed`. In the same operation, Wathiq resets the
+root aggregation and every descendant aggregation and record to status 1,
+**Not ready for disposition**.
+
+If the aggregation belongs to an active disposition job, reopening preserves
+its membership and blocks job progression and final action while it remains in
+status 1. The interface identifies it as reopened and explains the alternatives:
+restore compatible eligibility through exceptional acceleration within the job,
+or explicitly remove it.
+
+An authorized IGU may accelerate the reopened member under Section 11. The
+current effective retention action must match the existing job type and the
+aggregation must still satisfy the job's organizational scope. Acceleration
+closes it if open using the current database date/time (never the closure
+date cleared by reopening; if already reclosed, preserve its current closure
+date, including a valid historical date), restores the complete unit directly to that job's matching
+pending status (6, 7, 8 or 9), and clears only its reopening-related
+`removal_required` flag/reason in one transaction. Preserve the membership ID,
+job, original addition time/actor, work and history. Do not require removal and
+re-addition, create another membership episode, advance the workflow, resume
+execution, grant access, clear protections or reuse invalid reviews/approvals.
+
+Existing IGU authorization, resource/job access, optimistic version, reason,
+closure permissions, preserve-state hold rules and irreversible-work safeguards
+remain mandatory. A missing rule or incompatible action/scope rejects the
+whole operation; closure, statuses, membership, flags, history and notifications
+remain unchanged. Protection facts and relationships continue to block their
+existing actions. After successful recovery, the job may progress only through
+its usual explicit actions and all other current checks.
+
+In preparation with saved proposals only, recovery preserves those proposals
+and the current stage. It creates no review round and requires no prior
+approval. Where review or approval has occurred, validity follows the existing
+approved-facts comparison and current action checks. Reopening is not an
+unconditional reason to discard approval. If the aggregation is restored to
+its approved state, including its original valid closure date and all approved
+contents and other facts, that approval may remain valid. Historical closure
+dates, including those of migrated physical files, are legitimate. Preserve a
+valid closure date already supplied when the aggregation was reclosed.
+Changed approved contents or other material approved facts require renewed
+review through the existing correction/return and complete-review flow.
+Restoring pending status alone does not renew an invalid approval. Earlier
+work, decisions, documents and permanent history are retained.
+
+Explicit removal remains available. It changes only membership and leaves the
+unit at status 1. Ordinary reclosure alone does not clear the reopening flag;
+automatic eligibility evaluation does not restore an active member. Record
+reopening, the status reset and job block, and subsequent acceleration or
+removal as separate permanent events. Every successful acceleration retains
+its mandatory reason, actor, current rule/due-date provenance and notifications.
 
 ## 7. Automatic eligibility service
 
 A scheduled backend service checks root aggregations in status 1. It processes
-a limited number at a time and can safely continue after an interruption.
+a limited number at a time and can safely continue after an interruption. It
+uses the UTC calculated-disposition value returned by the database and the
+database's current timestamp. It does not recalculate eligibility in a user's
+working timezone.
 
 A root qualifies only when all of the following are true:
 
 1. it has a closure date;
 2. Wathiq can find the retention rule that applies to it;
-3. the applicable business date is strictly later than its calculated due date;
+3. the database's current timestamp is strictly later than its calculated
+   disposition timestamp;
 4. the root and its descendants have not changed while Wathiq performs the
    update; and
 5. its status remains 1.
@@ -254,8 +510,14 @@ The service maps the effective rule's `final_disposition` as follows:
 | `selective_preservation` | 4 |
 | `retain_as_local_archives` | 5 |
 
+`selective_preservation` remains the existing retention-rule value defined by
+the Classification Scheme specification. In this disposition workflow, it maps
+to the selective-transfer statuses 4 and 8. Renaming that existing retention
+rule value is outside this specification.
+
 Vital status, security levels, and legal holds do not stop an aggregation from
-becoming eligible. They stop it from being added to a job or reaching the final
+becoming eligible, whether through normal retention expiry or exceptional
+acceleration. They stop it from being added to a job or reaching the final
 status. In this way, Wathiq shows that the retention period has ended while
 also showing that disposition is currently blocked.
 
@@ -289,7 +551,7 @@ Each row shows at least:
   the number of blocking resources;
 - a clear **Blocked from disposition job** state and the reasons the caller may
   see; and
-- current job membership, if any.
+- current active-job membership, if any.
 
 The default order is oldest due date first. If two due dates are the same,
 Wathiq uses the aggregation identifier to keep the order consistent.
@@ -303,10 +565,31 @@ The design must follow Wathiq's established table pattern, include loading,
 empty, and error states, and remain usable in LTR and RTL. Color is not the only
 blocked-state cue.
 
-Existing security rules still apply. A user who may see the root but not a
-blocking descendant may be told that the unit is blocked, but must not receive
-the descendant's identity, title, security level, hold name, or other concealed
-details unless separately authorized.
+A redacted disposition unit cannot be selected or added to a disposition job.
+The listing must disable or omit its selection control and clearly state that
+the user does not have enough access to add it. Knowing that a redacted unit
+exists does not grant authority to act on it.
+
+Existing security rules still apply. If a user may see the root but cannot see
+a blocking descendant, Wathiq shows a redacted copy of that descendant instead
+of hiding it completely. The redacted copy must make clear that a specific
+descendant is blocking disposition and must show the reason it blocks
+disposition:
+
+- the descendant is marked as vital;
+- its security level prevents disposition; or
+- an effective legal hold protects it.
+
+Wathiq applies its existing redaction rules to the rest of the copy.
+Fields the user is not allowed to see—such as the descendant's identity or
+title, the security-level details, or the legal-hold name—remain redacted. When
+several inaccessible descendants block disposition, Wathiq shows a separate
+redacted copy for each one so the user can see how many blocking units exist
+and the reason for each blocker.
+
+This blocker display does not make a redacted descendant selectable. Redacted
+blocking descendants are shown only to explain why the visible root disposition
+unit is blocked.
 
 ## 9. Common disposition blockers
 
@@ -325,12 +608,49 @@ aggregation to a job and while completing the final action. The database must
 prevent another change from slipping between the check and the update. Direct
 SQL, background services, imports, and API clients cannot bypass these rules.
 
+Aggregation and record relationships are **final-action blockers only**. They
+do not prevent job admission. A link from any aggregation or record in the
+disposition unit to an endpoint in a unit outside the current job blocks final
+disposition until authorized removal from either endpoint, regardless of the
+related unit's eligibility. This includes units in different jobs or with no
+active job. Links within one unit or between units in the same job do not block
+and need not be removed. Apply every relationship type in both directions, including
+links on descendants, as defined in
+[Record and Aggregation Relationships, section 7](record-and-aggregation-relationships.md#7-disposition).
+
+The review UI must distinguish these final-action blockers from admission
+blockers and show the relationship summary and table required by that section
+to Records Officers and Records Managers. An admitted unit with outside-job
+links enters its normal pending status and is marked blocked from final
+disposition. Removing a link during review requires `disposition.jobs.manage`,
+`relationships.link`, current view authorization on both endpoints, and a
+recorded reason. For destruction review, proposing removal is distinct from
+execution: authorized task participants may propose it without execution
+privileges, and individual proposal reasons are optional. The approving Records
+Manager executes approved removals with all underlying privileges and endpoint
+access checked at execution. Use the proposal reason when supplied, otherwise
+optional submission comments or the system description of the approved operation. Relationship privileges do not bypass access to a redacted
+endpoint.
+
+Adding or removing a relationship does not itself require repeating review
+approvals. A new link to a unit outside the job blocks final execution until
+removed; the server checks the current links again before execution. Other
+changes remain subject to their existing approval rules.
+
+For destruction, relationship removal through review requires Records Manager
+approval of the proposal. A new removal proposal after approval follows the
+destruction extension's renewed-review rules; the general statement above
+does not authorize bypassing that approval.
+
 ### 9.1 Blocker arising after addition to a job
 
 Vital status may be set, security may be upgraded to a level that prevents
 disposition, or an effective legal hold may begin protecting a disposition
 unit after that unit has been added to a job but before the final action.
 Wathiq must allow these protective changes even when disposition is pending.
+A newly created outside-job aggregation or record relationship, or a job-
+membership change that makes an existing link outside-job, also blocks the
+final action without removing membership or changing the pending status.
 
 When a blocker arises after addition to a job:
 
@@ -345,8 +665,14 @@ When a blocker arises after addition to a job:
 6. the system never automatically clears vital status, lowers security,
    releases a hold, or removes the unit from the job.
 
+These rules cover independently arising blockers. For destruction, an explicit
+Records Manager **Approve and apply proposals** action also authorizes the
+extension's removal of complete units made unsuitable by those approved
+proposals, including cascading removals. That authorized execution is not an
+automatic removal merely because a blocker was detected.
+
 Wathiq calculates whether an item is blocked from the current resource,
-security, hierarchy, and legal-hold data. Users cannot edit the blocked state,
+security, hierarchy, legal-hold, and relationship data. Users cannot edit the blocked state,
 and Wathiq must not rely on a saved copy that may become out of date. The
 assigned IGU and other authorized job participants must see the blocked state
 in Wathiq. Email, text messages, and other notification channels are outside
@@ -356,15 +682,18 @@ When a user action causes a pending item to become blocked, that action creates
 a permanent event-history entry. A legal hold may also become active because
 its start time arrives. In that case, Wathiq records the event when it first
 detects the new blocker. The event records the job, root aggregation, type of
-blocker, user or system source, and time. It must not reveal protected details
-to a user who is not allowed to see them.
+blocker, user or system source, and time. When the event or blocker details are
+shown to a user who cannot see the blocking descendant, Wathiq shows the same
+redacted copy and blocker reason defined in Section 8.
 
 ### 9.2 A protective change at the same time as the final action
 
 Immediately before every action that cannot be undone, Wathiq checks the root
 and all descendants again for vital resources, security levels that prevent
-disposition, and direct or inherited legal holds. The final action and changes
-to these protections must use the same database locking rules and lock records
+disposition, direct or inherited legal holds, and outside-job aggregation and
+record relationships. The final action and changes
+to these protections, relationships, or related job membership must use the
+same database locking rules and lock records
 in the same order. This prevents a protection added at the same time from being
 missed.
 
@@ -389,12 +718,12 @@ the specification for that disposition action still apply.
 
 Each job has at least:
 
-- a permanent internal identifier and a job number shown to users;
-- exactly one type: destruction, permanent transfer, selective
-  transfer/appraisal, or retention as local archives;
-- a controlled set of job states, to be completed by the action-specific
-  specifications;
-- optional assigned IGU;
+- a permanent internal identifier and a system-generated job number shown to users;
+- exactly one type: destruction, permanent transfer, selective transfer, or
+  retention as local archives;
+- one lifecycle state: active, completed, or terminated;
+- the specific IGU assigned to the job, nullable only while the job is an empty
+  active job is empty;
 - creator and creation timestamp;
 - the last user to update it, the update time, and a version number used to
   prevent one user's changes from silently overwriting another's;
@@ -407,31 +736,319 @@ Assignment makes the IGU responsible for the work. It does not give the IGU
 access to records they could not already access, add permissions, increase
 security clearance, or expand organizational access.
 
+### 10.1.0 Job creation and numbering
+
+Both Information Governance Officers and Information Governance Managers with
+`disposition.jobs.manage` may create every job type, regardless of destruction
+review route. Creation precedes preparation, review and approval; it does not
+grant authority to perform those later stages. All four types remain visible.
+
+The public creation API and form do not accept a manually entered job number.
+At successful creation Wathiq allocates `<prefix>-<year>-<sequence>`: `DT` for
+destruction, `PT` for permanent transfer, `ST` for selective transfer, and `LA`
+for local archives. Each type has its own counter per calendar year, beginning
+at 1, based on `DEFAULT_WORKING_TIMEZONE`. Allocation is transactional and safe
+under concurrent creation. An exact retry returns the same job and number;
+a failed creation does not consume a number. Existing numbers are preserved;
+new allocation advances beyond existing numbers matching that type/year.
+The internal SQL explicit-number argument remains for upgrade compatibility;
+the public creation API always requests allocation.
+
+The form defaults Assigned person to its creator only when that person is an
+eligible assignee for the selected job type and saved review route. The user
+may choose another eligible person. Otherwise the field starts empty and the creator must select an eligible
+preparer before saving. Preparer is mandatory both for standalone creation and
+creation from selected aggregations. Changing type reapplies this default.
+Creating a job does not require a change reason. Creator, time, type, number,
+assignment and normal audit history are still recorded. Routine additions of
+roots also require no reason (§10.2); other changes and exceptional actions
+retain their existing reason requirements.
+
+### 10.1.1 Assignment to a specific IGU
+
+Every new job must be assigned to one specific eligible preparer at creation.
+Both the creation form and API reject a missing preparer, and the database
+rejects an unassigned insert. A role cannot be the assignment target. Existing
+empty unassigned jobs are preserved on upgrade and must be assigned before
+adding aggregations.
+
+For Standard and Simplified destruction jobs, a Records Manager may prepare
+the job herself or assign preparation to an eligible Records Officer. Both
+profiles are eligible preparers; the selected review route remains unchanged.
+Records Manager Only continues to require a Records Manager preparer. An
+Officer remains ineligible to prepare that route.
+
+During initial preparation, an authorized Records Manager may add eligible
+aggregations to a job assigned to an Officer, including the aggregations
+selected before creation. This does not reassign or complete the Officer's
+preparation task, authorize the Manager to edit that task's draft work, or
+permit membership removal on the Officer's behalf. Current actor and assigned
+preparer access, clearance, membership, owner-scope and blocker checks remain
+mandatory. Correction and later review stages retain their existing rules.
+
+The `disposition.jobs.manage` privilege and existing access rules determine who
+may work on disposition jobs. Assignment identifies the individual responsible
+for progressing this job. The assigned user must already have the privilege,
+security clearance, and organizational access required for the job. Assignment
+does not grant any of them.
+
+Wathiq must reject adding an aggregation to an unassigned job. Reassignment
+must select another specific authorized IGU and must create a permanent event-
+history entry.
+
+The assigned IGU is not automatically treated as the person who performs the
+final action. Wathiq records the actual final-action executor separately under
+Section 13.
+
 ### 10.2 Membership rules
+
+Destruction jobs normally change membership during preparation/correction.
+As defined in Destruction Process Section 10, the current claimed Records
+Manager reviewer may also **add** eligible units in Simplified review before
+approval. This exception uses the job's saved route, grants no immediate removal
+permission and preserves all common admission rules. The original round stays
+immutable; final approval covers the complete current set while requiring all
+originally submitted units to remain unchanged. Standard review and later
+approval/execution stages retain their existing restrictions.
+
+Routine addition of governing roots to a job does not require a change reason.
+The API accepts an omitted or blank reason for `membership_add`; actor, acting
+role, time, job, roots, outcomes and command identity remain audited. Exact
+retries remain idempotent. Removal, reassignment, submission and exceptional
+actions retain their existing reason requirements.
+
+On the standalone Disposition Eligibility page, update selection validity as
+soon as a checkbox changes. Disable **Add selected aggregations to job** if the
+selection mixes eligible disposition types or its owning units have no common
+organizational ancestor. Different branches sharing an ancestor are compatible:
+for example, Records Unit and Audit Office can share a new job owned by their
+nearest common ancestor, the GM's Office. Show a concise,
+non-modal inline warning beside the selection actions explaining each problem;
+clear it and re-enable Add when the selection becomes compatible. An empty
+selection leaves Add disabled without a warning. These checks precede both
+existing-job selection and new-job creation, and also guard the Add callback.
+Provide **Select this page**, a total selected count, and **Clear selection**
+beside the eligibility table. Select this page selects only currently available,
+accessible rows on the displayed server page; locked, redacted and otherwise
+unavailable rows remain unselected. The header checkbox selects or deselects
+only the displayed page. Preserve explicit row/version selections across server
+pagination, sorting and page-size changes. Clear selection removes every
+selection across all pages. Refresh, changed filters, successful membership
+addition and leaving the mounted page clear selection and its warnings; no
+selection is saved in navigation state or shared with another identity/language.
+Keep the existing 100-aggregation addition limit. If selecting a whole page
+would exceed it, leave the existing selection unchanged and explain the limit;
+do not silently select part of that page. Individual row selection cannot
+exceed the same limit. Rereading a selected row never silently updates its
+selected version. Admission still checks current access, clearance, eligibility
+and versions for every selected aggregation.
+
+Determine branch compatibility server-side for owners visible on the bounded
+current page. When selections span pages whose owning-unit relationship is not
+already known, use the existing bounded suggested-owner read for the explicit
+selection. Disable Add and show a short checking state until it returns. Ignore
+late responses after selection changes, clearing or navigation. Show the
+existing incompatibility warning if no common owner exists, or a safe error if
+the selection can no longer be checked. Do not download an organization
+hierarchy, unseen result pages or expose unseen owner IDs.
+This early UI check does not replace authoritative admission checks or alter
+the independently job-scoped Add aggregations dialog.
+
+From an eligibility selection, the destination chooser lists only jobs matching
+the selected disposition type. Destruction jobs must be owned by the selection's
+nearest common owning unit, exactly; do not show jobs owned by a higher ancestor
+or a narrower or unrelated unit. Apply this scope before server counts and
+pagination (`matching_scope=true` with the bounded selected `root_ids`). Show the
+scope and owning-unit name as concise inline guidance, including when no jobs
+match; Create job remains available. Other disposition job types have no owning
+unit field and are filtered by disposition type. Current
+job lifecycle, permitted membership stage, assignment and access/protection checks
+remain advisory inputs; matching jobs that fail these checks remain disabled
+with their explanation. Checks are server-side and bounded to the selected roots
+and displayed job page; no entire organizational hierarchy is downloaded.
+Missing or inaccessible roots must not disclose ownership. Save-time locking,
+authorization, current-hierarchy checks and partial-success semantics remain
+authoritative for races, direct API callers and stale clients.
+
 
 1. A job contains only governing root aggregations.
 2. A unit's eligible status/final disposition must match the job type.
-3. A unit may belong to no more than one active disposition job.
-4. Wathiq checks all common blockers before adding the aggregation.
-5. Wathiq prevents conflicting additions and removals and records each action.
-6. Wathiq checks a selected aggregation again before adding it. If it changed
-   or became blocked after the list was displayed, Wathiq does not add it and
+3. The job must be assigned to one specific authorized IGU before any
+   aggregation is added.
+4. A disposition unit may belong to only one active disposition job at a time.
+   Memberships in terminated jobs are excluded when applying this rule because
+   they are permanent history, not active-job membership.
+   If it already belongs to an active job, it must be removed from that job
+   before it can be added to another active job. The removal follows Section
+   5.3 and creates a new permanent event-history entry.
+5. A disposition unit may remain a member of any number of terminated jobs.
+   Those historical memberships do not prevent addition to a new active job.
+   Terminating a job or adding the unit to a later job must not delete or change
+   any earlier membership or event-history records.
+6. A disposition unit that remains a member of a completed job has reached
+   status 10, 11, or 12. It cannot be added to another active disposition job.
+   Its completed-job membership and all related history remain permanent.
+7. Wathiq checks all admission blockers before adding the aggregation.
+   Aggregation and record relationships do not prevent addition; outside-job
+   links are shown as blockers to the final action under Section 9.
+8. The user must be allowed to view the root aggregation without redaction. A
+   redacted root disposition unit cannot be added to a job. Redacted
+   descendants shown only as blocker explanations are never selectable job
+   members.
+9. Wathiq prevents conflicting additions and removals and records each action.
+10. Wathiq checks a selected aggregation again before adding it. If it changed
+   or acquired an admission blocker after the list was displayed, Wathiq does not add it and
    explains why using only information the user may see.
-7. Section 18.5 asks whether adding several selected aggregations must succeed
-   or fail as a group, or whether Wathiq may add the valid ones and report the
-   failures.
-8. A unit may be removed until the final action begins. The removal and status
+11. When an IGU selects several aggregations, Wathiq checks and processes each
+    one separately. It adds every valid aggregation and reports every failure.
+    A failed aggregation remains unchanged and does not undo successful
+    additions from the same request. Each successful addition must still add
+    the membership and change the complete disposition unit to the matching
+    pending status as one operation. Each failure report must explain the
+    reason without revealing information the IGU is not allowed to see.
+    The API retains per-aggregation outcomes. The UI reports complete success
+    with one toast naming the added count and destination job number, without
+    a persistent success list. Partial success reports the added/selected and
+    failed counts; zero success displays a warning. Failed additions provide
+    a **View failures (count)** action opening failure-only details in pages of
+    ten, with each permitted aggregation identity and safe reason. Successful
+    additions never occupy that detail list. Refresh the current eligibility
+    page after the command and ignore late feedback after navigation.
+12. A unit may be removed until the final action begins. The removal and status
    change must both succeed or both fail. It returns to the matching eligible
    status under Section 5.3. The final action must either complete as one
    operation or safely continue after interruption. Removing job membership
    cannot undo a completed final action.
+13. If a member aggregation is reopened, Section 6.1 applies. Job progression
+    remains blocked until an authorized IGU restores compatible pending status
+    through in-job acceleration or explicitly removes it. Removal leaves
+    status 1; acceleration preserves membership and restores matching pending
+    status without advancing the job or reusing invalid approval.
+14. If a member's effective retention rule changes, Section 12 applies. A
+    matching disposition action keeps the unit in the job and in its matching
+    pending status. A unit whose new due date is not yet due, or whose new
+    disposition action does not match the job, must be explicitly removed
+    before the job can continue.
 
-### 10.3 Work performed outside Wathiq
+For Standard destruction jobs, creation also requires the nearest effective File
+Administrator role and the owning unit's own managing role, each with a current
+effective assignment to an active person. The creation form disables Save and
+identifies needed reviewers with a simple System Administrator help message; the database checks
+the same rule atomically at creation. This applies both with and without selected
+aggregations. Existing jobs, other routes/types and current authorization checks
+remain as specified in Destruction Process §5.1.1. That section explicitly
+distinguishes strict new-job creation from existing-job routing: no File
+Administrator designation anywhere in the owning-unit ancestor chain still
+skips that stage before routing; a configured but unstaffed role blocks. An
+already-started task is not automatically rerouted. Only remaining Standard
+reviews produce warnings on load/Refresh; authorized Save and return for
+correction remain available. Completed/terminated jobs, later stages and other
+routes/types are excluded. Disposition Jobs marks affected rows and the job/task
+workspace explains which reviewer is needed and directs the user to the System
+Administrator. The existing server progression checks revalidate current facts.
+
+### 10.3 Terminating a job
+
+An IGU with `disposition.jobs.manage` may terminate any active job at any stage
+before completion. Wathiq must require confirmation and a reason that is not
+empty. Termination creates a permanent event-history entry and records the IGU,
+time, and reason.
+
+Termination keeps every aggregation in the terminated job as permanent
+history. It resets each aggregation's disposition status to the eligible status
+that matches the job type: `6 -> 2`, `7 -> 3`, `8 -> 4`, or `9 -> 5`. The job
+and all membership, review, approval, evidence, and event-history records remain
+available and unchanged.
+
+There is one exception to the normal status reset. If physical destruction has
+been confirmed for a mixed disposition unit but its digital material has not
+been destroyed, Wathiq sets that unit and its descendants to status 13,
+**Partially disposed — action required**. Wathiq must preserve all remaining
+digital components and prevent their destruction. Any unit in the same job for
+which no irreversible action occurred returns to status 2. Any unit that
+already reached a final status remains in that final status.
+
+Status 13 does not mean that the destruction job completed. The job remains
+terminated, and the unit remains a member of it as permanent history. The unit
+cannot be added to another disposition job until an authorized IGU completes
+the status-13 resolution in Section 10.4.
+
+For destruction, after physical destruction is confirmed, a blocker or required
+correction that prevents continuing the approved job requires termination,
+not an ordinary correction round or membership removal. Partially disposed
+units follow status 13; fully disposed units retain their final status.
+Resumable technical execution failures or certificate-only recovery do not
+require termination when the approved scope remains valid and unblocked.
+
+### 10.4 Resolving status 13
+
+An IGU with `disposition.jobs.manage` may resolve status 13 for one aggregation
+or for all status-13 aggregations in one terminated job.
+
+#### 10.4.1 Individual resolution
+
+For one status-13 aggregation, the IGU must:
+
+1. choose status 2, 3, 4, or 5 as the new eligible disposition status; and
+2. provide a reason that is not empty.
+
+Wathiq changes the status of the root aggregation and every descendant
+aggregation and record together. The change must either fully succeed or leave
+the complete unit in status 13. Wathiq records the IGU, time, previous status,
+new status, reason, terminated job, physical-destruction evidence, and preserved
+digital-material identifiers in permanent event history. The event history
+must not contain copies of the digital content itself.
+
+The original terminated-job membership remains unchanged. After the change,
+the aggregation may be added to a new active job only when that job's type
+matches the newly selected eligible status. Adding it to the new job follows
+the normal eligible-to-pending transition. All current vital, security, and
+legal-hold blockers still apply.
+
+#### 10.4.2 Bulk resolution for a terminated job
+
+The IGU may resolve every status-13 aggregation in one terminated job through
+one bulk action. The IGU must:
+
+1. choose one new eligible status—2, 3, 4, or 5—for every status-13
+   aggregation in the job; and
+2. provide one reason that applies to every affected aggregation.
+
+Before making any change, Wathiq shows the number of affected root
+aggregations and requires confirmation. The bulk action includes only
+aggregations in status 13. It does not change aggregations in that job that are
+already eligible or in a final status.
+
+Wathiq updates every affected root and all its descendant aggregations and
+records. The complete bulk action must either succeed or fail. If any affected
+unit cannot be updated, no unit changes status. Wathiq reports the failure
+without revealing information the IGU is not allowed to see.
+
+Wathiq creates a permanent job-level event for the bulk action and a permanent
+event for every affected aggregation. The events record the IGU, time, previous
+status, selected eligible status, shared reason, terminated job, and one
+identifier that links all events from the same bulk action. They also keep
+references to the physical-destruction evidence and identifiers for the
+preserved digital material. Event history must not contain copies of the
+digital content itself.
+
+After the bulk action succeeds, each affected aggregation may be added to a new
+active job whose type matches the selected eligible status. The aggregations
+remain members of the terminated job as permanent history. All current vital,
+security, and legal-hold blockers still apply when they are added to a new job.
+
+### 10.5 Work performed outside Wathiq
 
 An assigned IGU reviews the aggregation and descendants, obtains the owning
 organization-unit manager's approval and the organization's records manager's
 approval, performs the required real-world activities, and records their
 outcomes and evidence in Wathiq.
+
+For destruction, the saved Standard or Simplified route governs required
+reviews. Simplified omits Unit Manager approval. A consolidated job may cover
+the owning unit and its descendants; Standard uses the job-owning unit's
+manager approval for the combined batch rather than separate descendant-unit
+approvals. Records Manager approval remains required in both routes.
 
 Wathiq records these facts, but an uploaded file or checked box does not by
 itself prove that work outside Wathiq occurred. The separate specifications
@@ -440,10 +1057,49 @@ withdrawal, delegation, expiry, and controls for each disposition action.
 
 ## 11. Exceptional acceleration
 
-An IGU with the required permission may make a root aggregation eligible early.
-The aggregation moves from status 1 to status 2, 3, 4, or 5 according to its
-retention rule. The IGU does not need to wait for the aggregation to close or
-for its retention periods to end.
+An IGU with `disposition.jobs.manage` may make a root aggregation eligible
+early. Outside a job it moves from status 1 to status 2, 3, 4, or 5 according to
+its retention rule without waiting for its retention periods to end. A reopened
+active member may instead be restored directly from status 1 to its existing
+job’s matching pending status under Section 6.1. This exception is limited to
+active membership marked for recovery because of reopening; it does not permit
+arbitrary acceleration of pending, final or unrelated removal-required states. If the
+governing root is open, acceleration closes it at the current database time
+before changing eligibility, using the existing closure authorization and
+integrity rules. Closure and eligibility form one atomic action: failure rolls
+back both changes and their events. An existing closure date is preserved.
+Closing the root makes its descendants effectively closed under the existing
+closure rules; their individual closure dates are not overwritten. Acceleration
+must never leave an open governing root in an eligible status.
+
+The **Accelerate disposition eligibility** action belongs in the **Effective
+retention rule** section of Aggregation overview. Its confirmation explains
+that an open aggregation will be closed as part of the action.
+
+The retention section also displays the current eligibility episode's recorded
+acceleration timestamp, actor name and reason, together with the
+current disposition status. The actor's existing translated name is displayed
+in the viewer's language, falling back to the recorded actor-name snapshot.
+The immutable audit snapshot is never rewritten for localization.
+It labels the unchanged calculated date **Normal
+retention due date** and explains that the remaining retention wait was waived;
+existing protections and disposition checks still apply. Descendants show the
+same governing-root provenance when that root is visible to the reader.
+Existing acceleration events receive this presentation without rewriting
+history. Reopening or an effective-rule recalculation that invalidates the
+acceleration removes the indicator; an unchanged rule or ordinary job admission
+and removal preserves it. A later acceleration displays its own provenance.
+
+The Disposition eligibility table uses the same current acceleration episode.
+Its date column and corresponding sort choice are labelled **Normal retention
+due date**. Accelerated rows show **Accelerated · [date]** beneath the status,
+with the recorded actor and reason in a tooltip. Their date cell displays
+**Remaining retention period waived** instead of days overdue. Ordinary rows
+retain their overdue count. Do not repeat the final action beneath a status
+that already names it (for example, “Destruction” beneath “Eligible for
+destruction”). Admission blockers remain a separate column and keep their
+existing enforcement. Dates and date-range filtering continue to use the
+normal retention calculation, not the acceleration timestamp.
 
 Acceleration:
 
@@ -456,9 +1112,70 @@ Acceleration:
   retention rule, the IGU, time, reason, and new status; and
 - is clearly identified as early eligibility in history and reports.
 
-Whether acceleration itself is allowed while a common blocker exists remains
-open in Section 18.4. In all cases, a blocked accelerated unit cannot enter a
-job or execute.
+Vital status, disposition-blocking security levels, and direct or inherited
+effective legal holds on the root, descendant aggregations, or records do not
+prevent accelerated eligibility. An eligible disposition unit may remain
+blocked: eligibility records the waived retention wait and does not grant
+permission to add the unit to a job or execute disposition. Those protection
+facts and all hold assignments remain unchanged. The same current-state checks
+still reject job admission and final execution under Section 9. Relationships
+also do not prevent acceleration; their final-action blockers remain in force.
+Existing access, clearance, IGU authorization, reason, effective-rule, version,
+and existing job compatibility checks still apply. Active membership is allowed
+for the reopened-member recovery case in Section 6.1. A disposition-blocking security level is
+separate from the actor's permission to view or act on the resource.
+
+For an open root, distinguish a normal hold from one with
+`preserve_resource_state = true`. A normal hold blocks disposition but permits
+closure; acceleration may close the root and make the unit eligible while the
+hold continues to block job admission and execution. A preserve-state hold
+continues to enforce the existing closure rules: if it prohibits closing the
+root, acceleration fails atomically, leaving the root open and the unit in
+status 1, with no successful acceleration event or notification. A root already
+closed under a preserve-state hold may accelerate because the eligibility
+change is status-only bookkeeping; the closure date, protected metadata,
+content and holds remain unchanged. Acceleration never overrides a separate
+closure prohibition or changes the hold's preservation setting.
+
+Example: a closed vital aggregation on hold with ten years of retention
+remaining may be accelerated to status 2 (eligible for destruction) when that
+is its effective rule's action. It stays vital and on hold and cannot be added
+to a destruction job. After the protections are lawfully resolved, its
+accelerated eligibility remains; an IGU may explicitly admit it to a matching
+job, subject to fresh authorization and admission checks. Removing protections
+does not add it to a job or execute disposition automatically. Reopening or a
+retention-policy change continues to follow the existing recalculation rules.
+The exceptional reason, normal due date, audit provenance and mandatory
+acceleration notifications remain required.
+
+### 11.1 Acceleration notifications
+
+Every successful exceptional acceleration must trigger an immediate system
+notification through Wathiq's existing messaging and notifications subsystem.
+This requirement applies to all four eligible disposition outcomes. Delivery
+must follow the committed acceleration; it must not wait for the periodic
+destruction-eligibility reminder.
+
+The recipient audience is the union of:
+
+- all active people with a currently effective assignment to an active
+  Information Governance role; and
+- all active people with a currently effective assignment to the active managing
+  role designated by `org_units.managing_role_id` on the governing root
+  aggregation's owning organizational unit.
+
+The Information Governance audience is organization-wide, not limited to the
+initiator or to the aggregation's owning unit. The Unit Manager is resolved
+from that owning unit, not from a disposition job's owning unit, a role name,
+or a profile name. A person qualifying through multiple roles or both audiences
+receives only one notification for the same acceleration. Notification receipt
+does not grant access to the aggregation or its history; notification content
+and linked views must respect existing access and confidentiality rules.
+
+A rejected or rolled-back acceleration must not produce a success notification.
+Retries and overlapping delivery attempts must not create duplicate
+notifications for the same acceleration and recipient. The mandatory reason and
+other acceleration provenance remain recorded as required by Section 11.
 
 ## 12. Local retention-rule override
 
@@ -469,13 +1186,77 @@ inherited from the classification.
 
 Creating, changing, or removing a local rule still requires the existing
 permission and a reason. This specification gives no additional user that
-permission. After the rule changes, Wathiq must promptly check any affected
-status-1 root again.
+permission.
 
-Changing a rule after an aggregation becomes eligible or enters a job may
-change its due date or disposition action. Section 18.2 asks what Wathiq should
-do in that situation. This draft does not change the job or its history
-silently.
+Whenever an aggregation's effective retention rule changes, whether because
+of a local-rule change or a change to the rule it inherits, Wathiq immediately
+recalculates its disposition due date and disposition action. The database's
+current timestamp and the strict eligibility boundary in Section 7 apply:
+
+- if the aggregation is open, has no calculable due date, or its calculated
+  disposition timestamp is equal to or later than the database's current
+  timestamp, Wathiq sets the complete disposition unit to status 1; or
+- if the database's current timestamp is strictly later than its calculated
+  disposition timestamp, Wathiq determines the eligible status from the
+  recalculated disposition action: status 2, 3, 4, or 5.
+
+If the aggregation does not belong to an active disposition job, Wathiq uses
+that recalculated status directly.
+
+If the aggregation already belongs to an active disposition job, the following
+rules apply:
+
+1. If the recalculated result is status 1, the aggregation remains a member of
+   the job, is marked **Removal required**, and the complete disposition unit
+   is set to status 1. The job cannot move to another state or perform its
+   final action until an authorized IGU explicitly removes the aggregation.
+2. If the database's current timestamp is strictly later than the recalculated
+   disposition timestamp and the recalculated disposition action matches the
+   job type, the aggregation remains in the job and remains in the matching
+   pending status: 6, 7, 8, or 9. It is not marked for removal, and the job may
+   continue.
+3. If the database's current timestamp is strictly later than the recalculated
+   disposition timestamp but the recalculated disposition action does not
+   match the job type, the aggregation remains a member of the job, is marked
+   **Removal required**, and the complete disposition unit is set to the new
+   eligible status: 2, 3, 4, or 5. The job cannot move to another state or
+   perform its final action until an authorized IGU explicitly removes the
+   aggregation.
+
+Removal under item 1 or 3 changes only active-job membership and preserves the
+recalculated status. After removal, the job may continue if all remaining
+members pass the normal checks.
+
+The rule change, due-date and action recalculation, status decision, job-type
+comparison, any **Removal required** mark, and any resulting job block must be
+saved together. Wathiq records the previous and new rule source, due date,
+disposition action, and status; the user, time, and reason for the rule change;
+and whether the unit's action matched its active job. No existing job,
+membership, or event-history record is deleted or changed.
+
+### 12.1 Hierarchy changes
+
+Disposition eligibility or active-job membership does not authorize a hierarchy
+change that existing closure rules prohibit. Eligible roots are closed, and
+their descendants are effectively closed. If existing rules permit a hierarchy
+change, it must preserve the closure prerequisite for eligibility. Before
+committing an authorized change, Wathiq
+determines the aggregation's effective retention rule before and after the
+change.
+
+If the hierarchy change does not alter the effective retention rule, Wathiq
+leaves the aggregation's disposition status and active-job membership
+unchanged. If the hierarchy change alters the effective retention rule, Wathiq
+applies all recalculation, complete-unit update, active-job matching, required
+removal, job blocking, and event-history rules in this section. These safeguards
+apply both before and after the aggregation has been added to a job.
+
+An authorized IGU may change an aggregation's retention rule while reviewing
+it in a disposition job when the change is warranted. The IGU must provide a
+reason, and the retention-rule change still requires the existing
+retention-rule administration privilege because it is a policy change. The
+`disposition.jobs.manage` privilege alone does not authorize it. After the
+change, Wathiq applies the recalculation and active-job rules above.
 
 ## 13. Information recorded after the final action
 
@@ -490,20 +1271,59 @@ outcome:
 - `disposition_job_id`; and
 - the identifier that links the change to its permanent event-history entry.
 
-Status 10 also requires a unique destruction number. Status 11 also requires a
-unique transfer number. Number format, numbering coverage, and whether numbers
-may ever be voided are open in Section 18.6. Status 12 has no extra number in
-the current proposal.
+Wathiq also records the following on the job and, where applicable, on every
+affected aggregation and record:
 
-The history must still identify the IGU if that user is later renamed or
-deactivated. Wathiq keeps the user reference and, when required by its audit
-rules, the name displayed at the time of execution.
+- the stable user ID of the authenticated IGU who actually performs the final
+  action in Wathiq;
+- that user's display name at the time of execution;
+- the server-recorded execution date and time;
+- the disposition job ID;
+- the resulting disposition status;
+- the destruction number or transfer number, where applicable;
+- the event-history identifier; and
+- every action-specific confirmation and evidence reference required by the
+  relevant specification.
+
+The final-action executor may be different from the IGU assigned to the job.
+The executor must independently have `disposition.jobs.manage` and the security
+clearance and organizational access required at the time of execution. Wathiq
+must record the authenticated user who performs the final-action operation. It
+must not substitute the assigned IGU, a role, or a service account as the
+executor.
+
+Status 10 also requires a unique destruction number. Status 11 also requires a
+unique transfer number. These values are supplied by the external archival
+authority; Wathiq does not generate, allocate, or control them. Each value is
+free-format text that may contain letters, numbers, and special characters and
+must not exceed 20 characters. Wathiq stores the value exactly as supplied and
+enforces the applicable uniqueness requirement. Status 12 has no extra number.
+
+The history must still identify the executor if that user is later renamed or
+deactivated. Wathiq keeps both the stable user reference and the display name
+captured at the time of execution.
 
 Before completing the final action, the server checks the job type, membership,
-status, assigned user and permissions, required approvals and evidence, all
-blockers, and record versions. If any check fails, no resource status changes.
+status, assigned user, `disposition.jobs.manage`, required approvals and
+evidence, all blockers, and record versions. If any check fails, no resource
+status changes.
 
 ## 14. Destruction outcome
+
+If a partially completed destruction job is terminated and an unfinished unit
+enters a new job, retain links to units already destroyed in the former job as
+historical evidence. Those links do not block later destruction of the
+unfinished unit. Links to live resources continue to follow the normal
+relationship-blocking rules. Retained evidence remains protected and does not
+provide ordinary navigation to destroyed resources.
+
+
+If destruction stops after some work has completed, preserve that progress and
+allow an authorized retry or resumption of unfinished work in the same job.
+Do not repeat completed destruction or mark the job complete early. Retained
+links between units in that job do not block resumption merely because one
+linked unit finished first. Recheck current authority and final-action blockers
+before resuming, as detailed in the destruction extension.
 
 ### 14.1 Meaning of destruction
 
@@ -515,51 +1335,113 @@ setting status 10 is not destruction by itself.
 For digital material, destruction covers the original component files and all
 copies managed by Wathiq within the approved scope. Search text, previews,
 thumbnails, temporary processing files, and caches must no longer reveal the
-destroyed content. The destruction-specific specification and storage policy
-must define what happens to backups and copies held outside Wathiq. Wathiq must
-not claim that data has been erased immediately from backup media when it can
-only guarantee removal through the normal backup-expiry process.
+destroyed content. Wathiq must not claim that data has been erased immediately
+from backup media managed by Wathiq when it can only guarantee removal through
+the normal backup-expiry process.
+
+When a destruction job is completed, Wathiq shows the IGU a warning that any
+backups or copies held outside Wathiq must also be destroyed. The warning must
+also state that ensuring the destruction of those external backups and copies
+is outside Wathiq's responsibility.
 
 For physical material, Wathiq records that an authorized person confirmed the
 destruction and supplied the required evidence. Wathiq cannot itself verify a
 physical act performed outside the system.
 
-### 14.2 Proposed metadata-retention rule
+### 14.2 Metadata retained after destruction
 
-This draft proposes removing the record content while keeping a small,
-permanent record of the disposition, together with the job, evidence, and event
-history. Some metadata must remain because every aggregation and record must
-keep status 10, the destruction time, the IGU, the job ID, and the destruction
-number. Deleting those rows would make that impossible and would remove proof
-that authorized destruction took place.
+Wathiq removes the records content but keeps a limited permanent disposition
+record for each destroyed aggregation and record. The permanent record contains:
 
-This remaining record should contain only the information needed to prove and
-explain the disposition:
-
-- stable resource identifier and resource type;
-- enough information about its former place in the hierarchy to identify what
-  was destroyed;
-- classification and owner organization unit at execution time;
-- final disposition and a copy of the retention rule used at the time;
-- closure date, calculated due date, and acceleration reason when applicable;
-- destruction timestamp, executor, job ID, and destruction number;
-- medium at execution and separate physical/digital confirmations where
+- Wathiq's stable resource identifier and the resource type;
+- final disposition status 10, **Destroyed**;
+- enough of the former hierarchy to establish which disposition unit contained
+  the resource;
+- the classification and owning organization unit at the time of destruction;
+- the closure date and calculated disposition due date;
+- a snapshot or reference that identifies the retention rule applied;
+- any acceleration or retention-rule override and its recorded reason;
+- the destruction job identifier and job type;
+- the externally supplied destruction number;
+- the final-destruction date and time;
+- the stable user identifier and execution-time name of the IGU who executed
+  the final action;
+- whether the resource was physical, digital, or mixed;
+- the separate physical- and digital-destruction confirmations where
   applicable;
-- references to approvals, evidence, and permanent event history; and
-- checksums or manifest values needed to identify what was destroyed, without
-  keeping the destroyed content.
+- the destruction method, confirmation time, and confirming user;
+- approval decisions, approvers, decision times, and reasons;
+- identifiers, provenance, and descriptive metadata for destruction evidence;
+- the permanent disposition event history;
+- retained aggregation and record relationships within the same disposition
+  unit or job, including endpoint identifiers, relationship type, and direction;
+- a manifest containing resource identifiers, counts, media information, and
+  checksums where needed to prove what was destroyed without retaining the
+  destroyed content; and
+- the security level and access restrictions that applied when destruction
+  occurred, so the retained information remains appropriately protected.
 
-The remaining record must not appear in ordinary search with extracted text,
-previews, filenames, free-text descriptions, or personal information that is
-no longer needed. Section 18.3 and the destruction-specific specification must
-decide exactly which titles and numbers remain, who may view them, how long
-evidence is kept, and whether a legal erasure requirement may remove more
-metadata.
+The aggregation/record number and title are retained permanently to identify
+what was destroyed. The original aggregation and record rows remain read-only
+with status 10; they are not deleted from those tables. Descriptions, content
+and prohibited derivatives are still erased. Former parent paths, original
+filenames and other descriptive metadata remain subject to the necessity rule;
+retaining a title/number does not authorize retaining all previous metadata.
+
+Uploaded approval documents, destruction certificates, photographs or videos
+of physical destruction, correspondence with the external archival authority,
+and other supporting evidence files remain protected governed Wathiq records,
+stored separately from the destroyed disposition units. A separate evidence-file
+expiry or deletion workflow is outside the current implementation scope.
+Any future approved evidence-deletion policy must permanently preserve each
+file's identifier, provenance, descriptive metadata, deletion date, deletion
+authority, and deletion event.
+
+Wathiq must not retain:
+
+- record content or digital component files;
+- copies, downloadable renditions, or working copies of the destroyed content;
+- OCR or other extracted text;
+- search-index content;
+- previews or thumbnails;
+- temporary processing files or cached copies;
+- access links or storage locations that imply the destroyed content remains
+  recoverable; or
+- free-text descriptions, notes, personal information, or other metadata that
+  is not needed to identify the destroyed material or prove and explain its
+  authorized disposition.
+
+Event messages, evidence descriptions, and manifest fields must not contain a
+copy or extract of the destroyed content.
+
+Destroyed resources do not appear as live resources in ordinary browse or
+hierarchy views. Search uses the existing disposition-status filter, not a
+separate include-destroyed flag. An active information-governance person with
+`disposition.jobs.manage` may search aggregations and records by **Destroyed
+(10)**, **Permanently transferred (11)** or **Retained as local archives (12)**,
+subject to current resource access and clearance. The disposition-status
+filter is available in Advanced Search only to that authorized governance
+context. Destroyed rows enter results only when the search expression explicitly
+filters disposition status; their retained titles and numbers can then be used
+as additional conditions. They remain read-only and open a retained-metadata
+view, never a live editor or content viewer. Other users cannot select this
+filter and server-side enforcement returns no terminal-status rows even for a
+forged or shared/saved search request. Counts and pagination obey the same
+predicate. Removed content, OCR and component indexes must not be recreated to
+support these searches. Statuses 11/12 retain their existing controlled names;
+this change creates no new status called permanently archived or kept indefinitely.
+ A user with
+`disposition.jobs.manage` may view a retained record through the disposition
+view only when the user's existing security clearance and organizational access
+also permit it. A user with the applicable audit privilege may view it through
+the audit view subject to the same access restrictions. Assignment to the
+former job does not grant access, and a system administrator does not receive
+access merely by being an administrator. Evidence files may have narrower
+access than the retained disposition record.
 
 The remaining database rows are read-only records of destroyed resources. They
-cannot be reopened, reclassified, moved, restored, added to another job, or
-used as a parent. Ordinary search and browse must not show them as live records.
-Authorized disposition and audit views may show them.
+cannot be reopened, reclassified, moved, restored, added to another job, used
+as a parent, or changed back into live resources.
 
 ### 14.3 Mixed-medium destruction sequence
 
@@ -586,32 +1468,97 @@ destruction completes, Wathiq must stop before digital destruction. The unit
 remains in the destruction job with status 6 and is marked both **Blocked** and
 **Partially destroyed**. Wathiq preserves the physical-destruction confirmation
 and complete event history. It clearly states that the physical destruction
-cannot be undone. The destruction-specific specification must define how an
-authorized user resolves this exceptional case. Removing the blocker does not
-automatically start digital destruction.
+cannot be undone. Removing the blocker does not automatically start digital
+destruction.
+
+An authorized IGU may terminate the job while it is in this condition.
+Termination preserves the digital material and sets the affected unit and its
+descendants to status 13, **Partially disposed — action required**. The
+destruction-specific specification must define how an authorized user resolves
+this exceptional status and records the final treatment of the preserved
+digital material.
 
 ## 15. Authorization and separation of duties
 
-Calling a user an IGU or assigning a job does not give that user permission to
-act. The authorization specification must define separate permissions for at
-least:
+The destruction extension's Records Manager Only route assigns preparation,
+correction, and approval to one authorized Records Manager without requiring an
+Officer role or separate internal approval task. The common specific-IGU
+assignment, access, blocker, history, and execution-authorization rules still
+apply. All destruction preparation, review, and correction participants have
+Save without submission as defined in that extension; Save never advances the
+workflow or executes proposals.
+
+All disposition system notifications must use Wathiq's existing messaging and
+notifications subsystem, including notifications defined by action-specific
+extensions. No separate notification store or delivery subsystem is introduced.
+
+Wathiq uses one global privilege for disposition-job management:
+`disposition.jobs.manage`. This privilege is granted through an
+information-governance role. It covers:
 
 - viewing the eligibility queue and visible blocker summaries;
 - creating and editing jobs;
 - admitting and removing disposition units;
 - assigning/reassigning a job;
+- terminating an active job;
+- resolving status 13 and selecting its new eligible disposition status;
+- resolving all status-13 aggregations in one terminated job through a bulk
+  action;
 - accelerating eligibility;
-- managing local retention overrides (an existing protected action);
 - recording evidence and real-world outcomes;
 - approving on behalf of an owning organization unit;
 - approving as the organization's records manager;
-- recording selective-appraisal outcomes; and
+- recording selective-transfer decisions; and
 - executing each final disposition action.
 
-The specification for each action must decide whether the same person may
-prepare, approve, and complete a job. A system administrator does not receive
-disposition permission or bypass record security merely by being an
-administrator.
+For destruction jobs, assigned File Administrator and Unit Manager review tasks
+use the limited role/task authority defined in Section 17.5 of the Destruction
+Process extension, not the full `disposition.jobs.manage` privilege. Those
+participants may create, revise, or withdraw proposals, record Review comments,
+and complete their review decisions while authorized for their open task.
+They cannot execute proposals or make lasting resource changes through that
+task authority. Records Manager final approval and proposal execution still
+require `disposition.jobs.manage` and the underlying operation's authorization.
+
+Removing a relationship during disposition review additionally requires
+`relationships.link`, view authorization on both endpoints, and a recorded
+reason, as specified in Section 9. `disposition.jobs.manage` alone does not
+authorize link removal.
+
+For destruction, this execution requirement applies to the approving Records
+Manager, not merely to a task participant proposing removal. Optional submission comments supply the execution reason if no individual
+proposal reason was provided; if both are blank, use the system description
+of the approved operation with approval-derived provenance.
+
+Retention-rule administration, including creating, changing, or removing a
+local retention-rule override, is policy management rather than disposition
+execution. It remains protected by its existing privilege and is not included
+in `disposition.jobs.manage`.
+
+The `disposition.jobs.manage` privilege does not grant access to an
+aggregation, record, component, or concealed metadata; raise a user's security
+clearance; expand organizational access; or bypass a vital, security-level, or
+legal-hold blocker. Every operation remains subject to the user's current
+resource access, security clearance, organizational access, and all rules in
+this specification. Assigning a job to a user does not grant the privilege or
+any of those forms of access.
+
+Separation of duties is enforced through the workflow requirements defined by
+this specification and the four action-specific specifications, not by
+creating a separate privilege for each duty or job type. Those specifications
+must define whether the same IGU may prepare, approve, and complete a job. A
+system administrator does not receive `disposition.jobs.manage` or bypass
+record security merely by being an administrator.
+
+Destruction permits a Records Manager to prepare Standard/Simplified jobs
+without an Officer profile, and the same person may subsequently approve or
+execute when independently authorized for that action and task. Each action
+records its eligible acting role; preparation does not supply approval or
+execution privileges. The interface resolves this role
+automatically from the operation's current eligible-role projection instead of
+asking the user to choose an acting role. Assignment of a person or destination
+role queue remains an explicit business choice. See destruction-process.md,
+Automatic acting-role attribution, for selection and retry rules.
 
 ## 16. Audit, reporting, and data integrity
 
@@ -621,24 +1568,338 @@ Permanent event history must record at least:
 - the due date and the copy of the retention rule used for automatic
   eligibility;
 - acceleration and its exceptional reason;
-- job creation, type, membership addition/removal, assignment, and reassignment;
+- job creation, type, membership addition/removal, assignment, reassignment,
+  completion, and termination reason;
 - blocker detection when addition or a final action is rejected, a blocker arising
   during pending disposition, and resolution of all blockers, without leaking
   concealed details;
 - evidence addition/replacement and approval decisions;
-- selective-appraisal outcome;
+- selective-transfer decision;
 - physical and digital destruction confirmations;
+- status-13 creation and resolution, including the IGU's selected eligible
+  status and reason, and the shared reason and bulk-action identifier when the
+  resolution is performed in bulk;
+- reopening an eligible or pending aggregation, resetting its disposition unit
+  to status 1, blocking its job, and later removing it from the job;
+- an effective retention-rule change, its previous and new rule source, due
+  date, disposition action, and status, whether the new action matched the
+  active job, any required-removal job block, and the later explicit removal;
+- a hierarchy change, whether it changed the effective retention rule, and any
+  resulting recalculation, status decision, required removal, or job block;
+- the actual final-action executor's stable user ID, execution-time display
+  name, execution time, authority checks, resulting status, job ID, applicable
+  destruction or transfer number, confirmations, and evidence references;
 - final-action identifiers and outcome; and
 - failed or partly completed final actions.
 
 Database rules must prevent invalid status transitions, adding an aggregation
-to the wrong type of job, membership in more than one active job, missing or
-inconsistent final fields, and changing only part of a disposition unit. Each
-protected operation must follow Wathiq's existing database authorization
-pattern. A client cannot bypass these checks by sending the fields through a
-general update request.
+to the wrong type of job, current membership in more than one active job,
+missing or inconsistent final fields, and changing only part of a disposition
+unit. The one-active-job check must exclude memberships in terminated jobs. A
+separate rule must prevent any unit in final status 10, 11, or 12, or that is a
+member of a completed job, from entering another active job. Historical
+memberships in terminated and completed jobs remain permanent. Each protected
+operation must follow Wathiq's existing database authorization pattern. A
+client cannot bypass these checks by sending the fields through a general
+update request.
 
-## 17. Verification and traceability
+Except for the explicitly limited destruction-review task actions in Section
+15, every disposition-job operation listed in Section 15 requires
+`disposition.jobs.manage`, including operations performed through the API,
+imports, and background processes acting for a user. The privilege does not
+replace resource access, security-clearance, organizational-access, or blocker
+checks. Retention-rule administration continues to require its existing
+privilege and is not authorized by `disposition.jobs.manage`.
+
+The database must also prevent status 6, 7, 8, or 9 unless the root aggregation
+belongs to one active job of the matching type. Adding active-job membership
+and setting the matching pending status on the complete disposition unit must
+be one operation. The reopening exception may leave a status-1 unit in an
+active job until explicit removal or compatible in-job acceleration restores
+its matching pending status under Section 6.1. A retention-rule change
+may leave a status-1 or non-matching eligible unit in an active job only while
+it is marked for required removal. If the recalculated action still matches
+the job, the complete unit must retain the matching pending status. None of
+these cases permits a pending status without matching active-job membership.
+
+The database and API must reject the first membership addition to a job unless
+that job is assigned to one specific authorized IGU. A role identifier cannot
+be stored as the assignee. Final-action records must identify the authenticated
+human IGU who performed the operation and must not derive the executor from the
+assignee, a role, or a service account.
+
+For a request that selects several aggregations, the API must return a result
+for each selected aggregation. A validation or update failure for one
+aggregation must leave that aggregation unchanged but must not roll back other
+successful additions. Each successful aggregation addition remains a complete
+membership-and-status operation. Failure results must follow the redaction
+rules in Section 8.
+
+The API and database authorization path must reject adding a redacted root
+disposition unit to a job. The check uses the requesting user's current access
+at the time of addition. A hidden or disabled selection control is not enough;
+API calls, imports, background processes acting for a user, and direct attempts
+to create membership must not bypass the rule. The rejection must not reveal
+the redacted unit's protected metadata.
+
+A separate database rule must prevent a unit in status 13 from entering any
+disposition job until an authorized IGU resolves it to status 2, 3, 4, or 5
+with a reason. Terminating a job after physical destruction must set status 13
+and preserve the remaining digital components as one operation. Resolving
+status 13 must update the full disposition unit and record its event history as
+one operation.
+
+A bulk status-13 resolution must target one terminated job and every status-13
+unit in that job. It must apply one selected eligible status and one shared
+reason to all of them. All affected units and their descendants must change
+together or remain unchanged.
+
+Reopening an eligible or pending aggregation must clear `date_closed` and reset
+the complete disposition unit to status 1 as one operation. If the aggregation
+belongs to an active job, the database must prevent that job from moving to
+another state or completing a final action until the aggregation is explicitly
+removed or restored through compatible in-job acceleration under Section 6.1.
+
+Recalculating an effective retention rule must update the complete disposition
+unit and its event history as one operation. For a member of an active job, a
+matching action must preserve the matching pending status. A result of status 1
+or a non-matching eligible action must mark the member for removal and must
+prevent the job from moving to another state or performing its final action
+until an authorized IGU explicitly removes it.
+
+An authorized hierarchy change must compare the effective retention rule
+before and after the change. If the rule is unchanged, the operation must
+preserve the disposition status and job membership. If the rule changes, the
+hierarchy change and every update required by Section 12 must succeed or fail
+together.
+
+## 17. Shared workflow architecture and logical data model
+
+### 17.1 Purpose-built workflow
+
+Wathiq does not require an embedded or general-purpose workflow engine for
+disposition. The workflow is a purpose-built application service using the
+states, stages, tasks, validations, and transitions approved in this
+specification and the action-specific specifications.
+
+The implementation consists of:
+
+- relational PostgreSQL tables holding authoritative workflow state;
+- database constraints, triggers, and protected transaction functions enforcing
+  invariants that must not be bypassed by another client;
+- application services authorizing and coordinating permitted operations;
+- bounded background workers for eligibility, reminders, document generation,
+  and long-running final actions; and
+- the disposition task inbox and action-specific user interfaces.
+
+Workflow stages are controlled values in application code and database
+validation. They are not administrator-authored process definitions, BPMN, or
+scripts stored in a generic workflow runtime.
+
+### 17.2 Existing resource tables
+
+`aggregations` and `records` each store the common outcome fields required by
+this specification:
+
+| Field | Requirement |
+| --- | --- |
+| `disposition_status` | Required controlled status 1–13; defaults to 1 |
+| `final_disposition_at` | Server timestamp of the completed final action; null before completion |
+| `final_disposition_by_user_id` | Stable reference to the authenticated final-action executor |
+| `disposition_job_id` | Completed job that produced the final outcome; null before completion |
+| `destruction_number` | Externally supplied destruction number where status is 10 |
+| `transfer_number` | Externally supplied transfer number where status is 11 |
+
+The database enforces complete and consistent terminal fields. Status and final
+fields cannot be changed through ordinary resource metadata updates.
+
+### 17.3 `disposition_jobs`
+
+One row represents one disposition job. Its logical fields include:
+
+- permanent identifier and unique user-facing job number;
+- job type: destruction, permanent transfer, selective transfer, or retention
+  as local archives;
+- lifecycle state: active, completed, or terminated;
+- controlled action-specific workflow stage;
+- current disposition status;
+- owning organizational unit where required by the action-specific
+  specification;
+- assigned IGU, nullable only while the active job is empty;
+- current review-round number where the workflow uses rounds;
+- creator and creation timestamp;
+- completion actor and timestamp;
+- termination actor, timestamp, and reason;
+- optimistic-concurrency version and last-update information.
+
+Constraints enforce valid job type, lifecycle state, disposition status, and
+completion or termination fields. A completed or terminated job cannot return
+to active.
+
+### 17.4 `disposition_job_memberships`
+
+One row represents one membership episode between a governing root and a job.
+Removing and later re-adding the same root creates another episode rather than
+overwriting the earlier one. Logical fields include:
+
+- job and governing-root identifiers;
+- membership state: active, removed, terminated history, or completed history;
+- addition actor and timestamp;
+- removal actor, timestamp, and reason where applicable; and
+- optimistic-concurrency version.
+
+A partial uniqueness rule permits at most one active membership for a governing
+root. Protected operations keep membership and complete-unit status changes in
+one transaction. Removed, terminated, and completed membership episodes remain
+available as history.
+
+### 17.5 `disposition_tasks`
+
+One row represents one actionable task. This is the shared data source for
+**My tasks**. Logical fields include:
+
+- job, task type, workflow stage, and review round where applicable;
+- task state: open, claimed, completed, or cancelled;
+- exactly one initial destination: a specific user or a role queue;
+- claimant and claim timestamp;
+- completion actor and timestamp;
+- release or reassignment information;
+- priority, creation timestamp, and optimistic-concurrency version.
+
+A protected claim operation permits only one eligible person to claim a shared
+task. Eligibility and resource access are checked again for every mutation and
+completion. Releasing, reassigning, losing eligibility, completing, or
+cancelling a task preserves its event history. Action-specific specifications
+define their task types, forms, routing, and completion rules.
+
+For every disposition type, **My Tasks** contains only the current person's
+authorized direct assignments, their own claims, and unclaimed role-queue work
+they can actually claim. Other people's assignments and claims are excluded
+for all viewers, including Information Governance roles. Open parallel queue
+rows for an already claimed job/stage are unavailable and excluded too. Apply
+the personal predicate on the server before counts and pagination, retaining
+current effective role, access and clearance checks. Release makes available
+queue work visible again. **Unclaimed** is a plain display label in the existing
+Task state column, highlighted in dark amber and semibold while other states
+retain normal text. Its wording conveys the meaning independently of colour.
+It is not a new state. Authorized job details retain the existing
+task-inspection and reassignment controls independently of inbox inclusion.
+
+### 17.6 `disposition_review_rounds` and `disposition_review_decisions`
+
+Workflows that require repeated review use these shared tables.
+
+`disposition_review_rounds` records the job, positive round number, actor and
+start time, completion or invalidation time and reason, and a hash or equivalent
+immutable reference to the reviewed membership and versions.
+
+`disposition_review_decisions` records the round, controlled review stage,
+decision, task, authenticated user, acting role, reason where required,
+decision time, and reviewed membership snapshot. An action-specific
+specification defines its permitted stages, decisions, ordering, and whether a
+stage may be repeated.
+
+### 17.7 `disposition_job_documents`
+
+This shared table links uploaded or generated documents to a job and, where
+required, to the governed Wathiq record and digital component created for that
+document. Logical fields include:
+
+- job and action-specific document-type code;
+- document state: generating, available, or failed;
+- review round where applicable;
+- governed record and digital-component references;
+- generating or uploading user;
+- creation timestamp, content checksum, template version, and optimistic-
+  concurrency version.
+
+Action-specific specifications define required document types, templates,
+storage destinations, evidence rules, and the transaction boundary between the
+job evidence and governed record.
+
+### 17.8 Shared protected operations and integrity
+
+At minimum, protected operations cover job creation, membership addition and
+removal, assignment, task claim/release/reassignment, review submission, status
+transition, termination, status-13 resolution, and final completion. They must
+not be implemented as unrestricted table CRUD.
+
+The database and service together enforce:
+
+- the finite-state rules and action-specific stage transitions;
+- one active job per governing root;
+- pending status only with a matching active membership;
+- complete-unit propagation and all-or-nothing updates;
+- immutable historical memberships, reviews, tasks, documents, and events;
+- current authorization, access, blocker, and version checks;
+- idempotency for retried commands and background work; and
+- durable, attributable event history for every protected operation.
+
+### 17.9 Canonical SQL ownership
+
+The logical model in the specifications is the product contract. When
+implementation is authorized, exact executable PostgreSQL belongs in:
+
+- `database/schema.sql`, which contains the complete self-contained latest
+  schema for a new empty database; and
+- a new migration that upgrades an existing database containing data.
+
+The schema and migration repeat the required DDL independently. Neither common
+nor action-specific prose specifications duplicate a second executable schema.
+Action-specific tables remain in their extension specification until another
+approved workflow proves that their semantics are genuinely shared; expected
+future reuse alone is not enough to move them into this common model.
+
+### 17.10 Long-running disposition operations
+
+Long bulk operations must not require the user to keep an HTTP request or page
+open for their complete duration. This rule applies to destruction and to future
+permanent/selective transfer and local-archives implementations. Future workflow
+requirements still need their own approval; shared infrastructure does not
+implement or authorize those processes.
+
+Use a short, idempotent acceptance command that durably records operation
+identity, job/task, confirmed payload/versions, requesting user/role, server
+checkpoints, state, error and outcome. A background worker owns execution. Reuse
+`disposition_private.operation_work`, registered purpose-built handlers, bounded
+worker passes and per-operation single-worker locks where applicable. Do not
+create a generic public mutation endpoint, configurable workflow engine,
+browser-owned background task or a separate queue/service for each disposition
+type. Existing durable destruction runs retain their per-unit checkpoints.
+
+State is queued, running, failed or succeeded; an operation-specific phase may
+explain current work. Preserve each workflow's atomicity boundary. Approval
+applies its complete proposal set atomically; digital destruction persists each
+successful irreversible unit. Record acceptance before acknowledging it,
+revalidate current authority and resource facts when execution begins/resumes,
+and preserve actor/role attribution. Checkpoints and exact command/document
+identities must survive crashes and prevent duplicate application or destruction.
+The client retains a submitted command identity across transport-uncertain retries;
+it does not silently submit new work after a lost acceptance response. A fresh
+explicit attempt follows a reread of the definitive outcome. Progress display
+and sorting use the latest attempt rather than an earlier failed attempt.
+
+Permit navigation, read-only inspection and work on other jobs. Only conflicting
+actions on the processing job are unavailable. Retain the owning task until its
+required processing/evidence and routing commit successfully; never equate
+acceptance with completion. Provide prominent nonmodal progress, truthful counts
+only where supported, a My Tasks status, safe failure/retry and recovery from
+lost status reads. Returning rereads server state. Polling is bounded, confined
+to mounted views, language/identity scoped and abandoned on navigation. Completion
+and actionable failure use governed, deduplicated notifications with currently
+authorized links, respecting existing administrator notification configuration.
+Shared database/resource locks still enforce integrity during transactions.
+
+Apply this contract when implementing a new long operation, and add tests for
+fast acceptance, lost responses, browser abandonment, duplicate requests/workers,
+restart, current authorization/version changes, partial/atomic rollback as
+appropriate, safe retry, deferred task completion and LTR/RTL presentation.
+
+Progress cards use the application’s existing navigation rather than adding a
+My Tasks button. Digital execution progress is shown only after execution has
+been requested; confirmation and claiming remain separate authorized actions.
+
+## 18. Verification and traceability
 
 Implementation is not complete until every approved requirement is linked to
 the code that implements it and the tests that prove it. The following tests
@@ -647,91 +1908,356 @@ are required at a minimum:
 | ID | Requirement | Minimum verification |
 | --- | --- | --- |
 | DISP-01 | Controlled statuses and allowed transitions | Database constraint/trigger and API tests |
-| DISP-02 | The root and every descendant change status together | Disposable-database hierarchy and rollback tests |
-| DISP-03 | Due-date mapping and strict time boundary | Clock-controlled service tests, including leap years |
+| DISP-02 | The root and every descendant change status together, and descendant metadata shows the status of the root disposition unit | Disposable-database hierarchy, rollback, search, browse, and metadata-view tests |
+| DISP-03 | Retention starts only at closure; open roots remain status 1 on every eligibility path, and ordinary eligibility requires both retention periods to finish. Due-date mapping and the strict eligibility boundary use the UTC calculated-disposition value and current timestamp returned by the database; user timezone affects display only | Clock-controlled database and service tests across UTC boundaries and leap years, plus display-timezone tests |
 | DISP-04 | Open roots remain status 1 | Service and database tests |
 | DISP-05 | Local rule takes precedence | Rule-resolution and rescheduling tests |
 | DISP-06 | The eligibility service works in limited batches, is safe to repeat, and handles simultaneous changes | Disposable-database concurrency tests |
-| DISP-07 | The server provides the list one page at a time, with correct filters, sorting, and protection of hidden information | API authorization and live-browser LTR/RTL tests |
-| DISP-08 | Vital descendants block addition to a job and the final action | Disposable-database hierarchy tests |
-| DISP-09 | A security level can block addition to a job and the final action | Disposable-database authorization tests |
-| DISP-10 | Direct and inherited legal holds block addition to a job and the final action | Disposable-database hold-boundary tests |
-| DISP-11 | An aggregation can be in only one active job, of the correct type | Database uniqueness and simultaneous-addition tests |
+| DISP-07 | The server provides the list one page at a time, with correct filters, sorting, and redacted representations of inaccessible blocking descendants | API authorization and live-browser LTR/RTL tests |
+| DISP-08 | Vital descendants block addition to a job and the final action, with a visible reason even when the descendant is redacted | Disposable-database hierarchy and redaction tests |
+| DISP-09 | A security level can block addition to a job and the final action, with a visible reason but protected security details redacted | Disposable-database authorization and redaction tests |
+| DISP-10 | Direct and inherited legal holds block addition to a job and the final action, with a visible reason but protected hold details redacted | Disposable-database hold-boundary and redaction tests |
+| DISP-11 | An aggregation can be in only one active job of the correct type, must leave that active job before joining another, may remain a member of terminated jobs, and can never join another job after completion | Database uniqueness, simultaneous-addition, removal, terminated-membership, and final-status tests |
 | DISP-12 | Assignment grants responsibility, not access | Authorization tests |
-| DISP-13 | Acceleration follows effective action and requires reason | API/database/history tests |
+| DISP-13 | Acceleration follows the effective disposition action, requires a reason, atomically closes an open root before eligibility using existing closure authorization, preserves existing closure dates, permits eligible-but-blocked units without changing protections, and is rejected without closure or status changes when a required check fails; normal holds permit closure while preserve-state holds retain their closure restrictions; its action appears in the effective retention-rule section | API, disposable-database closure, authorization, blocker, rollback, concurrency, event-history, and LTR/RTL action-location tests |
 | DISP-14 | Final fields and identifiers are complete and consistent | All-or-nothing update and rollback tests |
 | DISP-15 | Mixed destruction confirms physical before digital | Workflow, retry, and partial-failure tests |
-| DISP-16 | Destroyed content is inaccessible while the approved stub remains auditable | Storage, search, API, and authorization tests |
+| DISP-16 | Destroyed content and prohibited derivatives are removed; the approved permanent disposition record remains auditable, read-only, excluded from ordinary resource views, and protected by both privilege and existing access rules | Storage, search/index, browse, hierarchy, API, authorization-intersection, immutability, metadata-minimization, and event-content tests |
 | DISP-17 | Direct SQL/background paths cannot bypass protections | Disposable-database enforcement tests |
 | DISP-18 | A blocker arising after addition preserves job membership, pending status, work, evidence, approvals, and history while preventing the final action | Disposable-database workflow and UI tests |
 | DISP-19 | A protective change cannot be missed during the final action, and removing a blocker does not automatically continue the action | Disposable-database simultaneous-change and explicit-resume tests |
 | DISP-20 | A blocker arising between mixed-medium physical and digital destruction stops digital destruction and preserves the partial outcome | Destruction workflow and recovery tests |
+| DISP-21 | An authorized IGU may terminate an active job at any stage before completion; every aggregation remains in the terminated job, unaffected units return to the matching eligible state, and all history is preserved | Authorization, workflow, state-transition, terminated-membership, and event-history tests |
+| DISP-22 | Terminating a destruction job after physical destruction but before digital destruction sets the affected mixed unit to status 13 and preserves its digital material; an authorized IGU may then select status 2, 3, 4, or 5 with a required reason, after which the unit may enter a matching new job | Authorization, database, full-unit update, digital-content, job-admission, UI, and event-history tests |
+| DISP-23 | An authorized IGU may resolve every status-13 aggregation in one terminated job through one all-or-nothing bulk action using one selected eligible status and one shared reason | Authorization, database rollback, full-unit update, UI confirmation, job-admission, and linked event-history tests |
+| DISP-24 | Reopening an eligible or pending aggregation clears its closure date, resets the complete unit to status 1, blocks its active job until explicit removal or compatible in-job acceleration; recovery preserves the membership episode, restores the complete pending unit, clears the reopening flag, retains protections and applies the existing approved-facts comparison; exact restoration can preserve approval while changed approved facts require renewed review | Authorization, database rollback, job-blocking, UI, reclosure, recalculation, and event-history tests |
+| DISP-25 | Status 6, 7, 8, or 9 is possible only with membership in one active job of the matching type, and job addition and full-unit status change succeed or fail together | Database constraint/trigger, direct-SQL bypass, API, import/background-path, concurrency, and rollback tests |
+| DISP-26 | Every new job requires one specific eligible preparer; Managers can prepare Standard/Simplified jobs or add initial aggregations for the assigned Officer while preserving task ownership, and the actual authenticated IGU who performs the final action is recorded separately with execution-time identity and action details | Authorization, assignment/reassignment, database/API rejection, executor-versus-assignee, service-account rejection, and event-history tests |
+| DISP-27 | A multi-selection request adds every valid aggregation, leaves each failed aggregation unchanged, preserves successful additions when another selection fails, and returns each API result; the UI shows a count/job summary and on-demand paginated failure-only details without exposing protected information | API mixed-result, per-item rollback, concurrency, redaction, summary/pagination, and UI tests |
+| DISP-28 | A redacted root disposition unit cannot be selected or added to a job through the UI, API, import, background, or direct-membership path, while redacted descendants remain visible only as blocker explanations | Authorization, API, direct-database enforcement, import/background-path, redaction, and live-browser tests |
+| DISP-29 | An effective retention-rule change recalculates the due date, action, and complete-unit status; an active-job member keeps status 6, 7, 8, or 9 when its action still matches, while a not-yet-due or non-matching member is marked for explicit removal and blocks job progress | Clock-controlled boundary, rule-resolution, full-unit rollback, matching and non-matching active-job, job-blocking, explicit-removal, and event-history tests |
+| DISP-30 | Completing a destruction job warns the IGU that backups and copies held outside Wathiq must also be destroyed and that ensuring their destruction is outside Wathiq's responsibility | Destruction-completion workflow and live-browser LTR/RTL tests |
+| DISP-31 | Every disposition-job duty in Section 15 requires `disposition.jobs.manage`; removing relationship links also requires `relationships.link`; these privileges do not grant resource access or bypass blockers; retention-rule administration remains controlled by its existing privilege | Privilege catalogue, role-grant, API, direct-database authorization, access-intersection, blocker, and retention-rule negative tests |
+| DISP-32 | A hierarchy change that preserves the effective retention rule preserves disposition status and job membership; a hierarchy change that alters the rule applies the complete recalculation and active-job handling in Section 12 | Authorized hierarchy-change, effective-rule comparison, matching and non-matching job, rollback, job-blocking, and event-history tests |
+| DISP-33 | Destruction and transfer numbers are unique externally supplied values, accept letters, numbers, and special characters, contain at most 20 characters, and are never generated or allocated by Wathiq | Boundary, character-preservation, uniqueness, API, database, and final-action tests |
+| DISP-34 | A job is active upon creation, completed only when its final action completes, and terminated only when an authorized IGU terminates it before completion | Job-creation, completion, termination, invalid-transition, API, database, and event-history tests |
+| DISP-35 | Supporting destruction evidence remains protected as governed records outside the destroyed units, with permanent identifiers, provenance and event history; a separate evidence-expiry/deletion workflow is deferred pending an approved policy | Evidence survival, storage-boundary, provenance, authorization and immutability tests; expiry/deletion acceptance is outside the current implementation scope |
+| DISP-36 | Aggregation and record relationships allow job admission and acceleration but outside-job links block final disposition until authorized removal, regardless of eligibility; links within one unit or the same job do not block or require removal; removal from either endpoint clears the link blocker for both units | Admission, acceleration, descendant, both-direction, all-type, same-job, authorization, redaction, audit, removal-refresh, concurrency, and live-browser Officer/Manager review tests |
+| DISP-37 | Shared jobs enforce controlled type, lifecycle, action-specific stage, assignment, status, completion, termination, and optimistic-concurrency fields without a generic workflow engine | Schema, constraint, transition, API, and stale-version tests |
+| DISP-38 | Membership episodes preserve every addition and removal and permit no more than one active job per governing root | Partial-uniqueness, repeated-membership, termination, completion, concurrency, and history tests |
+| DISP-39 | Shared tasks support exactly one user or role-queue destination, atomic claiming, release, reassignment, eligibility loss, completion, and immutable history; My Tasks is personal, excluding other people’s work and unavailable parallel queues while retaining authorized job management | Constraint, simultaneous-claim, authorization-change, reassignment, API, and event-history tests |
+| DISP-40 | Review rounds and decisions preserve ordered rounds, membership/version snapshots, stage decisions, actors, acting roles, invalidation, and history | Snapshot, repeat-round, stale-membership, invalidation, authorization, and history tests |
+| DISP-41 | Shared document links connect job evidence to governed records and components with controlled state, provenance, checksums, and action-defined transaction boundaries | Upload, generation, governed-record, failure, retry, authorization, and rollback tests |
+| DISP-42 | Common protected operations cannot be bypassed through general CRUD or direct SQL, and canonical schema and migration produce equivalent logical structures and constraints | API negative, direct-database, schema-from-empty, migration, catalogue-parity, and rollback tests |
+| DISP-43 | Every committed exceptional acceleration immediately notifies all active Information Governance role holders and the governing root’s owning Unit Manager through the existing subsystem, once per person per acceleration, respecting access rules | All-outcome audience, owning-unit designation, effective-assignment, dual-audience deduplication, rollback, retry, privacy, and live-notification tests |
 
 Every database-backed test must use a newly created disposable PostgreSQL
 database initialized from the canonical schema or required migration path and
 must drop that database after the run, including after failure.
 
-## 18. Decisions required before approval
+### Eligibility-list admission cues and active-job filter
 
-### 18.1 Do eligible and pending statuses propagate to every descendant?
+The eligibility list includes eligible governing roots and roots belonging to
+active jobs. Rows with current protection blockers or active-job membership
+have a pale amber background and a focusable lock instead of a selection
+checkbox. Text retains normal contrast; authorized details, blocker and job
+links remain usable. The lock explains the applicable blockers and/or active
+job membership without disclosing hidden resources. Active-job membership must
+not be described as available for admission.
 
-This draft proposes changing the root and all descendants together for every
-transition. The alternative is to change only the root while work is in
-progress, then give descendants status 10, 11, or 12 at the end. Under that
-alternative, a descendant would still say “not ready” while its root is already
-eligible or pending, which is misleading.
+An Active job filter offers Any, In an active job, and No active job. Filtering
+and result counts occur on the server before pagination. Only active membership
+in an active job counts; removed and historical memberships do not. The filter
+is retained with the existing page-view state. Current disposition status is
+shown, including pending states for roots already in jobs. These presentation
+changes do not relax admission or execution checks.
 
-### 18.2 What happens when closure, hierarchy, or the effective rule changes
-after eligibility or addition to a job?
+The Active job filter defaults to No active job on the first visit. An explicit
+Any or In an active job selection is retained with the page state. The API
+also defaults to no active job; `active_job=all` explicitly requests both.
 
-The specification must define what happens if someone reopens an aggregation,
-moves it, changes its parent or classification, or changes its local retention
-rule after it becomes eligible or enters a job. The recommendation is to block
-these changes while disposition is pending. Before the pending stage, Wathiq
-should require a recorded reassessment and, when needed, removal from or
-cancellation of the job.
+### Disposition jobs list filters and ordering
 
-### 18.3 Which metadata survives destruction, for how long, and who may see it?
+The jobs list supports combined server-side filters for job number (partial
+match), job type, lifecycle state, owning organization name, and assigned
+person name, plus an Unassigned option. Name searches accept the displayed
+localized name or canonical name. All five data columns support ascending and
+descending sorting; Actions is not a data sort. Owner and assignee sorting uses
+the displayed localized name, with missing names last and job ID as a stable
+tie-breaker. Filtering and counts precede server pagination.
 
-This draft recommends keeping a small permanent record of the disposition,
-together with job, approval, evidence, and event history. Destroyed resources
-would not appear in ordinary search and browse. A decision is still needed on
-the exact fields, how long to keep evidence, privacy and erasure exceptions,
-and who may use the audit view.
+Filters are collapsed on the first visit. Expansion/collapse is remembered in
+the existing browser user storage, keyed by authenticated user ID, and restored
+when that user returns. Filter and sort values use the existing page-view state.
+Applying filters resets pagination; refresh retains the current page. The
+existing bounded loading, empty, error and stale-response behavior is retained.
 
-### 18.4 May a blocked status-1 unit be accelerated into the eligibility queue?
+On the first visit, the Job state filter defaults to **Active**. Completed and
+terminated jobs remain available through their explicit filters or **Any**.
+Retain an explicit lifecycle selection in the existing page-view state when
+restoring navigation history, including Any; do not reset it to Active. Opening
+the jobs page afresh uses the default. The default applies
+to this WebUI listing; other callers of the shared jobs API retain their current
+explicit-filter behavior.
 
-Allowing early eligibility would show the exceptional case in the eligibility
-list, but the blocker would still prevent adding it to a job. Prohibiting early
-eligibility would avoid placing blocked work in that list. This draft leans
-toward allowing it because “eligible by date or exception” and “currently
-blocked” describe different facts.
+### Creating a job while choosing an admission destination
 
-### 18.5 What happens when some selected aggregations cannot be added?
+The eligibility page's job chooser offers Create job, including when its search
+has no matches. It uses the same creation form and authorization rules as the
+jobs page. Successful creation selects the returned job and opens the existing
+add-roots confirmation with the original selected roots. Creation alone does not
+admit roots; normal version, assignment, compatibility and blocker checks still
+apply. Cancelling creation leaves the chooser's search and root selection intact.
+A response received after leaving the page must not reopen the flow.
 
-Choose whether all selected aggregations must be added together or none are
-added, or whether Wathiq may add each valid aggregation and report the failures.
-This draft recommends the second option. Each individual addition must still
-fully succeed or fully fail, and failure messages must not reveal protected
-information.
+For destruction creation in this chooser, the editable owner suggestion follows
+Destruction Process §5.1.1: shared owner, otherwise nearest common ancestor, or
+an explanation to split the selection if none exists. This does not relax
+admission checks or infer ownership for jobs created without selected roots.
+Prefill the selected disposition type too. Explain the suggested owning unit
+inline, including when all selected aggregations already share one unit.
 
-### 18.6 How are destruction and transfer numbers allocated?
+### Separate job and task details (22 October 2026)
 
-Define the number format, whether numbering applies across the whole Wathiq
-installation or within an organization, when a number is issued, how uniqueness
-is enforced, whether gaps are allowed, and whether a number can be voided. The
-server, not the browser or another client, must issue the number.
+Jobs → Job details focuses on job metadata, overall workflow progress,
+aggregation membership, documents, authorized templates and history. My Tasks →
+Task details focuses on the explicitly selected task and the stage information
+and actions required to complete it. The views link to each other and share
+components, but Job details does not load a task form. Task details does not
+include the overall tracker, templates or job-wide history. Refresh and restored
+navigation preserve task identity. Unsaved task work survives tab switching;
+supporting lists refresh on entry and ignore abandoned responses. Existing
+permissions, routes and transitions remain authoritative.
 
-### 18.7 Which business timezone controls automatic eligibility?
+### Compact aggregation membership listing
 
-The current interface calculates dates in the user's working timezone. The
-scheduled service needs one agreed timezone to decide when a new business day
-begins. Define that timezone for the Wathiq installation or organization, and
-make the interface distinguish the disposition due date from timestamps shown
-in the user's local timezone.
+The Aggregations tab in job and task details displays a compact effective
+retention-rule source: **Classification · code** or **Local override**. It does
+not repeat the defining classification title, retention periods and disposition
+action in every row. Activating the source opens a read-only dialog containing
+the aggregation identity, full defining source (including classification code
+and title where applicable), current and intermediate periods in years, and
+disposition action. Unknown or restricted rules remain unavailable; the
+disclosure does not grant access or change the rule.
 
-### 18.8 What states can a job have?
+The Aggregations tab automatically lists only aggregations retained in the job:
+active and completed entries while work continues, and the retained completed
+or terminated entries afterwards. Removed membership episodes are excluded from
+both the displayed rows and server pagination counts, including earlier removal
+episodes of an aggregation later re-added to the job. Do not offer a Membership
+dropdown, a Show removed control, a Membership column or a Removed at column.
+Ignore obsolete membership-filter values in saved navigation state. Removal
+events and historical dates remain permanently available through job History;
+this presentation does not delete or rewrite audit data.
+The existing paginated memberships endpoint supports `state=retained` for this
+listing, applying the exclusion before both count and page queries. Existing
+historical read modes remain available to authorized API consumers.
 
-The four action-specific specifications must define the job states, when a
-draft job becomes active, cancellation, completion, reassignment, when an
-approval must be obtained again, and what history remains after the job ends.
+Place **Add aggregations** beside the Aggregations tab's heading in both job and
+task workspaces, rather than in the Job details tab. Preserve the existing
+actor/stage permissions, dirty-work guard and job-scoped selection dialog.
+
+A Review proposals count above zero is a keyboard-accessible link-style control
+opening the existing aggregation-scoped proposals dialog. Zero remains plain
+text, and restricted counts are unavailable. This reuses the existing authorized,
+server-paginated proposal disclosure and revision/details controls; it does not
+change proposal scope, state, permissions or execution. No proposal request is
+made merely to render the aggregation count.
+
+### Readable disposition history
+
+Job history presents one row per recorded action, including submission or
+resubmission, review decisions, routing, draft saves, membership changes,
+assignment, evidence, termination and completion. Related events are grouped
+only by recorded command identity within the same transaction, actor, source
+and request. A legacy event without a command ID may join the single known
+command in that scope; ambiguous events remain separate. Similar wording,
+timestamps, reasons or actors alone never establish that two actions are the
+same. Every summary and underlying event uses its existing authorized projection.
+An inaccessible event remains a restricted envelope inside the action; it
+contributes no protected actor, reason, snapshot or reference. Counts include
+restricted envelopes, consistently with the existing raw event count. Raw
+correlation and representative selection are server-internal and do not expose
+protected snapshots. Only the requested summary/detail page is projected and
+enriched; the browser never receives unprojected events.
+
+A review submission is labelled **Review round N submitted** using the recorded
+round. One details action opens a summary with the actor, time and original
+comments once, and a collapsed **Recorded changes (N)** disclosure. The disclosure
+loads original authorized events in server pages of 25 (maximum 50), including
+the completed preparation/correction task, round creation, job changes, new
+review tasks, routing and each carried proposal. Each event has a meaningful
+recorded-change label, affected item and its own readable details. The main
+table counts and pages actions before results reach the browser; grouping must
+not split an action between pages or download all of its events initially.
+Summary rows carry only the recorded scalar facts needed for their labels,
+not complete membership/proposal snapshots. All actions, including those with
+one original event, expose their full authorized facts in the lazy detail page.
+
+The existing raw event list, revision history and global Audit Trail preserve
+their individual event rows and reuse the contextual change labels. Every
+underlying event remains immutable and individually authorized. Current job
+state must never be used to invent a historical outcome. No data migration or
+audit deletion is required. Supporting reads are refreshed on navigation or
+disclosure, with no shared history cache; abandoned responses are ignored.
+
+Job history and proposal/note revision dialogs present human-readable event
+facts in the user's language. Membership events identify the job number,
+aggregation number/title and people; blocker observations show the affected
+aggregation, detection actor/time and recorded protection/relationship flags.
+Review, assignment, evidence, delivery, execution and completion events use
+named fields, translated states, localized dates and meaningful values.
+Completion commands can audit several distinct row changes. Their presentation
+must use the authorized event's entity type and recorded before/after values
+to distinguish digital-destruction task completion, certificate-task creation
+or completion, entry into certificate generation, and the job's completion
+being recorded. The separate destruction-job completion outcome remains
+distinct. `FINAL_COMPLETE` is an internal command code, not a user-facing
+operation label. Redacted or insufficient event data uses a translated neutral
+completion label without inferring hidden details. Both job history and the
+global Audit Trail, including their details dialogs and operation filter, use
+the shared English/Arabic presentation. Job and task subjects use localized
+entity names and authorized job numbers; internal identifiers and operation
+codes remain in the collapsed technical details for audit viewers. Historical
+events are neither rewritten nor removed, and labels never use the current
+job/task state to reinterpret what happened earlier.
+Only changed business fields appear in before/after comparisons. Creation and
+observation events have no empty comparison panels. A cleared field is shown
+as “Not set”, never as the JSON literal `null`.
+
+History page responses enrich the existing authorized event projection with
+`display_references` (typed ID to current localized label or null) and
+`can_view_technical_details` (the existing `audit.view` privilege). Enrichment
+uses only IDs in the bounded authorized page, with current resource/hold access
+checks; redacted envelopes are never enriched. Missing, destroyed or inaccessible
+resources have an unavailable/access-restricted label. Display names describe
+current accessible entities, explicitly distinguished from immutable historical
+snapshots. The event records themselves are not rewritten.
+
+Raw projected event JSON is available only to users with `audit.view`, inside a
+collapsed Technical details section. It never bypasses event redaction. Normal
+users see the readable event details. The same presentation applies to old and
+new events; no historical-data migration is required.
+
+The global Audit Trail must reuse the same readable disposition facts and
+reference enrichment on list, search and individual-event reads. It retains the
+standard global event dialog shell, actor/time/source layout and current-entity
+navigation. Technical identifiers and raw projected JSON appear in a collapsed
+section for audit viewers, consistently with other global event details.
+
+
+### Review-round progress and returns (23 October 2026)
+
+The Job details workflow panel has one tracker for the current review cycle.
+A correction after rejection displays “Preparing review round N”, where N is
+the last submitted round plus one. This is a presentation of pending work,
+not a new database round: submission/approval retains the existing transaction
+that creates the immutable round. On resubmission the same number becomes the
+current submitted round. Current-stage highlighting resets to preparation or
+correction; subsequent stages are upcoming, subject to the saved route.
+
+A return notice identifies the preceding round, rejecting review stage, actor,
+time and recorded reason. External rejection and invalidated approval are
+represented from their actual recorded facts; an invalidation is not labelled
+as a reviewer rejection. Names follow the interface language with existing
+fallbacks. Reasons remain the original authored text.
+
+“View previous rounds” is collapsed initially. It expands to reverse-chronological
+round summaries, each showing its submission (where applicable) and actual decisions in time order,
+with actor, time, result and reason. It does not repeat the full stage tracker,
+show unreached stages, or infer approvals from a job's current stage. Earlier
+rounds load in server pages (at most 25); inaccessible snapshots remain redacted.
+The latest preceding round is fetched once for the notice and reused in the
+expanded history. This is read-only presentation, with no new workflow states,
+privileges, mutations or changes to historical audit rows. Task details retain
+their stage-specific focus.
+
+During a second or later internal review, task details also offer collapsed
+**View previous rounds** beside the latest submitted comments. Opening it loads
+the existing authorized, paginated round summaries with original submission
+comments and review decisions, attributed to their authors and times. This is
+read-only review context and does not load job-wide audit history or add a
+request to initial task rendering.
+
+### Immediate proposal persistence and optional explanations (3 November 2026)
+
+For destruction review tasks, Add/Update and confirmed Withdraw persist proposals
+immediately; Save remains for unsaved Review comments and session work. Proposal
+reasons are optional for every type, including removal from the job. Submission,
+resubmission, routine completion and approval comments are optional on every route;
+rejection/return for correction requires comments explaining the issue. Labels and
+helpers identify optional fields and required correction comments in both languages.
+The detailed contract is destruction-process.md §6.6–6.6.1 (DEST-18/24/29/41).
+
+### 18.1 Bulk membership removal amendment (4 November 2026)
+
+Explicit selection of up to 100 current memberships in one job may be removed
+in one atomic command, using the same actor/stage/access gates and whole-unit
+status transitions as individual removal. A failure rolls back every selected
+removal, status change and event. Retain individual events linked by the command
+UUID and exact-payload idempotent retries. Individual actions and multi-add's
+per-item results remain unchanged. Destruction proposal bulk controls follow
+`destruction-process.md` section 6.5.1.
+
+Individual and bulk membership removal must refresh the job or task workspace
+on the Aggregations tab, retaining its search, sorting and
+page size. Retain the current page when valid; if removal empties the last page,
+show the preceding valid page. A conflict's Refresh selection action retains
+the same workspace view.
+
+### 18.2 Job-scoped aggregation selection (4 November 2026)
+
+**Add aggregations** from a job or its Current task opens a centered dialog over
+the mounted workspace, rather than navigating to the general eligibility page.
+Show the job number and type; for destruction, explicitly show its owning unit
+and descendant-unit scope. The standalone eligibility page and its job-creation
+and destination-chooser flows remain available and unchanged.
+
+The standalone eligibility page is a browsing and assessment view by default;
+do not display instructions that assume the user is selecting aggregations.
+Selection guidance belongs in the explicit Add aggregations dialog.
+
+Sizing refinement approved 5 November 2026: cap the dialog width at 1,100px,
+with viewport margins. Height fits its contents, capped at 75% of desktop
+viewport height. Only the body scrolls; the heading and action buttons remain
+visible. On phones, allow nearly the full viewport height with margins.
+Sparse results must not force an otherwise unnecessary tall empty dialog.
+
+The picker returns only governing root aggregations currently compatible with
+the target job: matching eligible disposition status, closed, no active-job
+membership, no admission protection blockers, current actor access/clearance,
+and current assigned Preparer access/clearance and eligibility. Destruction
+roots must be owned by the job's owning unit or a descendant. Criteria are
+enforced by the server before counts and pagination; optional filters can only
+narrow them. Inaccessible candidates are omitted, not exposed as redacted
+selection rows. No user-editable type/status/blocker filter can escape the scope.
+Search by aggregation number/title, due-date filters, stable sortable columns
+and bounded server pagination remain available.
+
+Relationships do not exclude admission candidates. Show a generic warning for
+outside-job links that can block final disposition, without related-resource
+identities; links within one unit or the same job remain non-blocking under the
+existing relationship rules. The warning and selection do not waive final
+execution checks.
+
+Use **Cancel** and **Add selected (N)**. Selection contains at most 100 explicit
+root/version snapshots, with current-page select-all; paging/sorting preserve
+snapshots and filters/refresh clear them. Selection belongs only to the mounted
+dialog, identity and language, and is discarded on close/navigation. Display a
+contextual no-matches message, loading feedback and recoverable errors. Retain
+the existing unsaved-session-work guard before opening the dialog.
+
+Add selected invokes the existing immediate-persistence membership command,
+without a second job chooser or Save requirement. It rechecks job stage/version,
+role/task/claim authorization, resource versions, ownership, access/clearance,
+protections and active-job membership. Preserve multi-add's per-item results:
+valid additions commit and failures remain unchanged. On full success, close and
+refresh the first, unfiltered page of active job aggregations. On partial/no success, retain the dialog,
+show the existing count summary and paginated failure details, clear stale
+selection and reload candidates. Closing after a successful or uncertain add
+refreshes the workspace. Transport-uncertain retries retain the exact payload,
+version and command UUID; definitive conflicts require a fresh selection.
+
+DISP-44: Verify the job-scoped dialog and fixed server scope, descendant ownership,
+admission versus final blockers, both actors' current access/clearance, existing
+partial-add results, safe retry, refresh/abandonment and English/Arabic rendering.

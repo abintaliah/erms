@@ -136,6 +136,33 @@ resource ACL for governed content, subject to the restrictions in Section 12.
 It is not a system-administrator role and is not a universal authorization
 bypass.
 
+### 3.7.1 Why governance status belongs to the Role
+
+`is_information_governance` remains an explicit attribute of the Role, not the
+Profile. This placement is reaffirmed on 21 October 2026; it clarifies the
+existing model without changing authorization behavior.
+
+A Profile defines reusable action capabilities. A Role defines an organizational
+responsibility, with its own clearance, organizational owner, and assignments.
+Information-governance status designates that responsibility and its qualified
+access treatment; it is not implied by possession of a particular capability
+set or by a role or Profile display name.
+
+Two roles may deliberately share a Profile while only one is designated for
+information governance. Placing the flag on the Profile would force all roles
+using it to share that status, or require duplicate Profiles merely to preserve
+the distinction. Editing or replacing a shared capability Profile must not
+implicitly confer or remove a role's governance designation. Profile changes
+can still affect privileges and therefore whether the role qualifies for a
+particular operation or continuity safeguard.
+
+Retain the existing effective-assignment, role/organization activation, global
+privilege, clearance, and resource-state checks. In particular, the governance
+role used for ACL bypass must itself supply the required clearance; governance
+status is not a universal bypass. Assigning `INFO_GOV_MGR`, `INFO_GOV_OFFICER`, or
+a custom Profile does not itself replace the explicit role flag. Existing
+operation-specific Profile checks remain applicable where separately specified.
+
 ## 4. Security levels
 
 ### 4.1 Data and ordering
@@ -825,7 +852,14 @@ ACL configuration while retaining deliberate branch-level control.
 
 The default child-record ACL remains a record-permission template and cannot
 directly mirror the aggregation resource ACL because the two use different
-permission catalogues. It defaults to Everyone/all and can be customized.
+permission catalogues. On creation, it is initialized with the aggregation's
+creator ACL role and All org unit members record grant sets defined in Sections
+9.3, 9.4, and 10.1 of
+[Organizational Ownership and Default ACLs](organizational-ownership-and-default-acls.md),
+plus the Owning and Higher-Level Unit Managers and Effective File Administrator
+record grants defined in Section 4.2 of
+[Hierarchical Oversight Default ACLs](hierarchical-oversight-default-acls.md).
+An authorized ACL manager can customize this template.
 
 Changing an ACL near the top of a mirrored chain may affect an arbitrarily deep
 subtree. Preview and validation must therefore traverse all affected descendants
@@ -2229,3 +2263,13 @@ human messages, as specified in notifications-and-messaging.md. This does not
 create a role, grant privileges, change ACL matching, or bypass effective-role
 and security-clearance gates. Messaging expansion uses its own recipient
 eligibility rules; ACL matching still represents all authenticated accounts.
+
+### Built-in File Administrator profile
+
+`FILE_ADMIN` (File Administrator) is a built-in profile using the 34 privileges
+approved from the demo profile on 2026-10-21, enumerated in canonical schema SQL
+and migration 073. Its creation does not assign users, designate an organization
+unit's File Administrator role, or confer Information Governance status. Existing
+resource authorization and workflow checks remain mandatory. Upgrade migration
+073 promotes an exact existing match in place; conflicting profiles require
+explicit reconciliation rather than automatic privilege replacement.
