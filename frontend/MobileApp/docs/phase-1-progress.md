@@ -1,5 +1,29 @@
 # Phase 1 progress record
 
+## Required-password-change follow-up — 16 November 2026
+
+Fixed the integration gap found during the post-refactor review: temporary-password
+sign-in previously requested `/i18n/bootstrap` while the server permitted only
+principal/status reads, password change and logout. Its 403 response cleared the
+mobile session before the mandatory form was shown.
+
+The controller now checks the principal's credential state first, retains the
+session, and uses the existing packaged English form. Successful password change
+refreshes the principal and loads the saved language and current capabilities
+before opening the authenticated shell. Shared setup also handles safe recovery:
+an offline or uncertain completion gates interaction and Retry revalidates without
+resubmitting the password mutation. Invalid-current-password responses retain the
+form, and 401/late responses follow the existing revocation/generation boundary.
+
+All 90 Flutter tests pass and analysis is clean. Added coverage includes a real
+HTTP transport against a test server reproducing the API gate, bilingual
+phone/tablet form-to-shell widget transitions, failure/retry and late-response
+cases. No persistent database was used and no backend, schema, environment or
+catalogue change was made. Native rebuild/installation and device acceptance of
+this follow-up remain unclaimed. Password-attempt cooldown presentation and the
+stale administrator-export provenance assertion from the review remain separate
+outstanding items; this change addresses review finding 1 only.
+
 ## Phase 1 closure — 5 November 2026
 
 The user explicitly approved closing Phase 1 and confirmed all three requested

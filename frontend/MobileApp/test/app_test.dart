@@ -213,6 +213,72 @@ void main() {
     expect(find.text('Dashboard'), findsNothing);
   });
 
+  for (final language in ['en', 'ar']) {
+    for (final size in [const Size(390, 844), const Size(1024, 768)]) {
+      testWidgets('temporary password continues to $language shell at $size', (
+        tester,
+      ) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final controller = SessionController(
+          _FakeAuthApi(
+            principal: _principal(mustChangePassword: true),
+            languageTag: language,
+          ),
+        );
+        addTearDown(controller.dispose);
+        addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
+        await tester.pumpWidget(
+          WathiqApp(catalogue: _catalogue, sessionController: controller),
+        );
+        await controller.signIn(
+          email: 'user@example.test',
+          password: 'temporary',
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Set a new password'), findsOneWidget);
+        expect(
+          Directionality.of(
+            tester.element(find.byKey(const ValueKey('current-password'))),
+          ),
+          TextDirection.ltr,
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey('current-password')),
+          'temporary',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey('new-password')),
+          'replacement',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey('confirm-password')),
+          'replacement',
+        );
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(
+          find.byKey(const ValueKey('password-change-submit')),
+        );
+        await tester.tap(find.byKey(const ValueKey('password-change-submit')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('authenticated-shell')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const ValueKey('current-password')), findsNothing);
+        expect(
+          Directionality.of(
+            tester.element(find.byKey(const ValueKey('authenticated-shell'))),
+          ),
+          language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
   testWidgets('phone shell exposes authenticated navigation in a drawer', (
     tester,
   ) async {
@@ -564,7 +630,7 @@ class _FakeAuthApi implements AuthApi {
     this.searchEnabled = true,
   }) : principal = principal ?? _principal();
 
-  final AuthPrincipal principal;
+  AuthPrincipal principal;
   final String languageTag;
   bool searchEnabled;
   String? lastEmail;
@@ -599,7 +665,12 @@ class _FakeAuthApi implements AuthApi {
   }
 
   @override
-  Future<String> effectiveLanguage(String token) async => languageTag;
+  Future<String> effectiveLanguage(String token) async {
+    if (principal.mustChangePassword) {
+      throw const ApiFailure(ApiFailureKind.forbidden);
+    }
+    return languageTag;
+  }
 
   @override
   Future<List<SupportedLanguage>> supportedLanguages(String token) async =>
@@ -640,7 +711,9 @@ class _FakeAuthApi implements AuthApi {
     required String token,
     required String currentPassword,
     required String newPassword,
-  }) async {}
+  }) async {
+    principal = _principal();
+  }
 
   @override
   Future<void> signOut(String token) async {}

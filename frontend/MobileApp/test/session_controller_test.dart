@@ -32,6 +32,196 @@ void main() {
     expect(controller.status, SessionStatus.passwordChangeRequired);
   });
 
+  for (final language in ['en', 'ar']) {
+    test(
+      'password change loads saved $language only after server clearance',
+      () async {
+        final api = _FakeAuthApi(
+          principal: _principal(mustChangePassword: true),
+        )..languageTag = language;
+        final controller = SessionController(api);
+        await controller.signIn(
+          email: 'user@example.test',
+          password: 'temporary',
+        );
+        expect(controller.hasProtectedState, isTrue);
+        expect(controller.effectiveLanguageTag, 'en');
+        expect(controller.destinations, isEmpty);
+        expect(api.languageReads, 0);
+        expect(api.capabilityReads, 0);
+        await controller.onBackgrounded();
+        await controller.onResumed();
+        expect(controller.status, SessionStatus.passwordChangeRequired);
+        expect(api.languageReads, 0);
+        await controller.changePassword(
+          currentPassword: 'temporary',
+          newPassword: 'replacement',
+        );
+        expect(controller.status, SessionStatus.authenticated);
+        expect(controller.effectiveLanguageTag, language);
+        expect(controller.principal!.mustChangePassword, isFalse);
+        expect(controller.destinations, contains('dashboard'));
+        expect(api.languageReads, 1);
+        expect(api.capabilityReads, 1);
+      },
+    );
+  }
+
+  for (final kind in [
+    ApiFailureKind.invalidRequest,
+    ApiFailureKind.unauthenticated,
+  ]) {
+    test('password-change rejection $kind does not open the shell', () async {
+      final api = _FakeAuthApi(principal: _principal(mustChangePassword: true))
+        ..passwordChangeFailure = ApiFailure(kind);
+      final controller = SessionController(api);
+      await controller.signIn(
+        email: 'user@example.test',
+        password: 'temporary',
+      );
+      await controller.changePassword(
+        currentPassword: 'wrong',
+        newPassword: 'replacement',
+      );
+      expect(
+        controller.status,
+        kind == ApiFailureKind.unauthenticated
+            ? SessionStatus.signedOut
+            : SessionStatus.passwordChangeRequired,
+      );
+      expect(
+        controller.hasProtectedState,
+        kind != ApiFailureKind.unauthenticated,
+      );
+      expect(controller.destinations, isEmpty);
+      expect(api.languageReads, 0);
+    });
+  }
+
+  for (final lostMutationResponse in [false, true]) {
+    test(
+      'offline password completion recovers without replay; lost response=$lostMutationResponse',
+      () async {
+        final api = _FakeAuthApi(
+          principal: _principal(mustChangePassword: true),
+        )..languageTag = 'ar';
+        final controller = SessionController(api);
+        await controller.signIn(
+          email: 'user@example.test',
+          password: 'temporary',
+        );
+        if (lostMutationResponse) {
+          api.passwordChangeFailure = const ApiFailure(ApiFailureKind.offline);
+        } else {
+          api.languageFailure = const ApiFailure(ApiFailureKind.offline);
+        }
+        await controller.changePassword(
+          currentPassword: 'temporary',
+          newPassword: 'replacement',
+        );
+        expect(controller.status, SessionStatus.validatingSession);
+        expect(controller.hasProtectedState, isTrue);
+        expect(controller.destinations, isEmpty);
+        // The server may have committed even if the mutation response was lost.
+        api.principal = _principal();
+        api.passwordChangeFailure = null;
+        api.languageFailure = null;
+        await controller.validateSession();
+        expect(controller.status, SessionStatus.authenticated);
+        expect(controller.effectiveLanguageTag, 'ar');
+        expect(api.passwordChanges, 1);
+      },
+    );
+  }
+
+  test(
+    'offline before password commit returns to the required form on safe retry',
+    () async {
+      final api = _FakeAuthApi(principal: _principal(mustChangePassword: true))
+        ..passwordChangeFailure = const ApiFailure(ApiFailureKind.offline);
+      final controller = SessionController(api);
+      await controller.signIn(
+        email: 'user@example.test',
+        password: 'temporary',
+      );
+      await controller.changePassword(
+        currentPassword: 'temporary',
+        newPassword: 'replacement',
+      );
+      await controller.validateSession();
+      expect(controller.status, SessionStatus.passwordChangeRequired);
+      expect(controller.hasProtectedState, isTrue);
+      expect(api.passwordChanges, 1);
+      expect(api.languageReads, 0);
+      expect(controller.destinations, isEmpty);
+    },
+  );
+
+  test('revoked post-password setup clears protected state', () async {
+    final api = _FakeAuthApi(principal: _principal(mustChangePassword: true))
+      ..capabilityFailure = const ApiFailure(ApiFailureKind.unauthenticated);
+    final controller = SessionController(api);
+    await controller.signIn(email: 'user@example.test', password: 'temporary');
+    await controller.changePassword(
+      currentPassword: 'temporary',
+      newPassword: 'replacement',
+    );
+    expect(controller.status, SessionStatus.signedOut);
+    expect(controller.hasProtectedState, isFalse);
+    expect(controller.destinations, isEmpty);
+  });
+
+  test(
+    'post-password capability failure retries setup rather than the mutation',
+    () async {
+      final api = _FakeAuthApi(principal: _principal(mustChangePassword: true))
+        ..languageTag = 'ar'
+        ..capabilityFailure = const ApiFailure(ApiFailureKind.server);
+      final controller = SessionController(api);
+      await controller.signIn(
+        email: 'user@example.test',
+        password: 'temporary',
+      );
+      await controller.changePassword(
+        currentPassword: 'temporary',
+        newPassword: 'replacement',
+      );
+      expect(controller.status, SessionStatus.validatingSession);
+      expect(controller.destinations, isEmpty);
+      expect(controller.effectiveLanguageTag, 'en');
+      api.capabilityFailure = null;
+      await controller.validateSession();
+      expect(controller.status, SessionStatus.authenticated);
+      expect(controller.effectiveLanguageTag, 'ar');
+      expect(api.passwordChanges, 1);
+    },
+  );
+
+  test(
+    'late post-password bootstrap cannot restore a revoked session',
+    () async {
+      final api = _FakeAuthApi(principal: _principal(mustChangePassword: true));
+      final controller = SessionController(api);
+      await controller.signIn(
+        email: 'user@example.test',
+        password: 'temporary',
+      );
+      api.languageCompletion = Completer<String>();
+      final pending = controller.changePassword(
+        currentPassword: 'temporary',
+        newPassword: 'replacement',
+      );
+      await Future<void>.delayed(Duration.zero);
+      controller.clearForRevocation();
+      api.languageCompletion!.complete('ar');
+      await pending;
+      expect(controller.status, SessionStatus.signedOut);
+      expect(controller.effectiveLanguageTag, 'en');
+      expect(controller.destinations, isEmpty);
+      expect(api.capabilityReads, 0);
+    },
+  );
+
   test('failed sign-in exposes category without retaining identity', () async {
     final api = _FakeAuthApi(
       signInFailure: const ApiFailure(ApiFailureKind.unauthenticated),
@@ -231,7 +421,7 @@ class _FakeAuthApi implements AuthApi {
     this.signInCompletion,
   }) : principal = principal ?? _principal();
 
-  final AuthPrincipal principal;
+  AuthPrincipal principal;
   final ApiFailure? signInFailure;
   final ApiFailure? signOutFailure;
   final Completer<AuthSession>? signInCompletion;
@@ -239,6 +429,13 @@ class _FakeAuthApi implements AuthApi {
   ApiFailure? principalFailure;
   ApiFailure? preferenceFailure;
   int principalReads = 0;
+  int languageReads = 0;
+  int capabilityReads = 0;
+  int passwordChanges = 0;
+  String languageTag = 'en';
+  ApiFailure? passwordChangeFailure;
+  ApiFailure? languageFailure;
+  ApiFailure? capabilityFailure;
   Completer<AuthPrincipal>? principalCompletion;
   Completer<String>? languageCompletion;
   Completer<UserPreferences>? preferenceCompletion;
@@ -259,15 +456,22 @@ class _FakeAuthApi implements AuthApi {
   }
 
   @override
-  Future<List<String>> mobileCapabilities(String token) async => const [
-    'global-search',
-    'dashboard',
-    'classification-browser',
-    'favourites',
-    'recent-activity',
-    'user-profile',
-    'sign-out',
-  ];
+  Future<List<String>> mobileCapabilities(String token) async {
+    capabilityReads++;
+    if (principal.mustChangePassword) {
+      throw const ApiFailure(ApiFailureKind.forbidden);
+    }
+    if (capabilityFailure case final error?) throw error;
+    return const [
+      'global-search',
+      'dashboard',
+      'classification-browser',
+      'favourites',
+      'recent-activity',
+      'user-profile',
+      'sign-out',
+    ];
+  }
 
   @override
   Future<AuthPrincipal> currentPrincipal(String token) async {
@@ -278,8 +482,16 @@ class _FakeAuthApi implements AuthApi {
   }
 
   @override
-  Future<String> effectiveLanguage(String token) async =>
-      languageCompletion != null ? await languageCompletion!.future : 'en';
+  Future<String> effectiveLanguage(String token) async {
+    languageReads++;
+    if (principal.mustChangePassword) {
+      throw const ApiFailure(ApiFailureKind.forbidden);
+    }
+    if (languageFailure case final error?) throw error;
+    return languageCompletion != null
+        ? await languageCompletion!.future
+        : languageTag;
+  }
 
   @override
   Future<List<SupportedLanguage>> supportedLanguages(String token) async =>
@@ -328,7 +540,11 @@ class _FakeAuthApi implements AuthApi {
     required String token,
     required String currentPassword,
     required String newPassword,
-  }) async {}
+  }) async {
+    passwordChanges++;
+    if (passwordChangeFailure case final error?) throw error;
+    principal = _principal();
+  }
 
   @override
   Future<void> signOut(String token) async {

@@ -5,6 +5,21 @@ and retained validation mapping. A row is added or updated in the same change
 as its implementation. A phase cannot complete with an unresolved delivered
 row.
 
+## Required-password-change correction — 16 November 2026
+
+| Requirement | Implementation | Verification | Status |
+| --- | --- | --- | --- |
+| Existing credential-state handling (mobile §§8.1, 26 Phase 1) and unchanged server access gate | `SessionController._completeSessionSetup` handles `must_change_password` before localization/capability requests; retains the session and shows the existing English password-change screen | `test/auth_api_test.dart`: HTTP gate rejects bootstrap/capabilities before password clearance; exact request sequence and bearer-session continuity verified for saved English/Arabic. `test/session_controller_test.dart`: forced login/resume retain identity without calling forbidden routes | Automated verified |
+| Saved language and server-owned navigation after credential replacement (mobile §§6, 7, 8.1) | Refresh principal, initialize effective language, then load capabilities before publishing authenticated state | `test/app_test.dart`: submit the actual form and verify English/LTR or Arabic/RTL shell on phone and tablet; `test/session_controller_test.dart`: saved-language setup and capability failure/recovery | Automated verified |
+| Safe failure, revocation and late-response handling (mobile §§8.3, 17.4) | Failed current password retains the required form; uncertain mutation outcome gates interaction; Retry reads current state without replaying password changes; generation checks suppress stale setup results | Controller regressions cover invalid credentials, offline before/after server commit, bootstrap failure, capability failure, 401 and delayed bootstrap after revocation | Automated verified |
+
+Validation: clean Flutter analysis and all 90 Flutter tests pass. HTTP tests use a
+local test server matching the verified API restriction; they do not run against
+a persistent ERMS database. No API access rule, endpoint, database setting,
+translation key, catalogue wording or provenance changed. New native builds and
+manual device acceptance for this correction have not been performed; previously
+installed builds predate it. The historical Phase 1 approval remains recorded below.
+
 ## Phase 1 acceptance decision — 5 November 2026
 
 Phase 1 is closed by explicit user approval. The user confirmed Android/iOS

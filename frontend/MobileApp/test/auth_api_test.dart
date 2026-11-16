@@ -4,8 +4,91 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wathiq_mobile/core/network/api_failure.dart';
 import 'package:wathiq_mobile/features/auth/data/auth_api.dart';
+import 'package:wathiq_mobile/features/auth/application/session_controller.dart';
 
 void main() {
+  for (final language in ['en', 'ar']) {
+    test('temporary-password HTTP gate completes in $language', () async {
+      var mustChange = true;
+      final paths = <String>[];
+      final server = await _server((request) async {
+        final path = request.uri.path;
+        paths.add(path);
+        request.response.headers.contentType = ContentType.json;
+        if (path != '/api/v1/auth/login') {
+          expect(
+            request.headers.value(HttpHeaders.authorizationHeader),
+            'Bearer temporary-session',
+          );
+        }
+        if (mustChange &&
+            !const [
+              '/api/v1/auth/login',
+              '/api/v1/auth/me',
+              '/api/v1/auth/change-password',
+              '/api/v1/auth/logout',
+            ].contains(path)) {
+          request.response
+            ..statusCode = 403
+            ..write(jsonEncode({'detail': 'password change required'}));
+        } else if (path == '/api/v1/auth/login' || path == '/api/v1/auth/me') {
+          if (path.endsWith('/login')) {
+            request.response.cookies.add(
+              Cookie('erms_session', 'temporary-session'),
+            );
+          }
+          request.response.write(
+            jsonEncode({
+              ..._principalJson(),
+              'must_change_password': mustChange,
+            }),
+          );
+        } else if (path == '/api/v1/auth/change-password') {
+          final body = jsonDecode(await utf8.decoder.bind(request).join());
+          expect(body, {
+            'current_password': 'temporary',
+            'new_password': 'replacement',
+          });
+          mustChange = false;
+          request.response.statusCode = 204;
+        } else if (path == '/api/v1/i18n/bootstrap') {
+          request.response.write(jsonEncode({'effective_language': language}));
+        } else if (path == '/api/v1/auth/me/mobile-capabilities') {
+          request.response.write(jsonEncode(['dashboard', 'sign-out']));
+        } else {
+          request.response.statusCode = 404;
+        }
+        await request.response.close();
+      });
+      addTearDown(() => server.close(force: true));
+      final controller = SessionController(
+        IoAuthApi(Uri.parse('http://${server.address.address}:${server.port}')),
+      );
+      addTearDown(controller.dispose);
+      await controller.signIn(
+        email: 'user@example.test',
+        password: 'temporary',
+      );
+      expect(controller.status, SessionStatus.passwordChangeRequired);
+      expect(controller.effectiveLanguageTag, 'en');
+      expect(paths, ['/api/v1/auth/login']);
+      await controller.changePassword(
+        currentPassword: 'temporary',
+        newPassword: 'replacement',
+      );
+      expect(controller.status, SessionStatus.authenticated);
+      expect(controller.effectiveLanguageTag, language);
+      expect(controller.destinations, ['dashboard', 'sign-out']);
+      expect(paths, [
+        '/api/v1/auth/login',
+        '/api/v1/auth/change-password',
+        '/api/v1/auth/me',
+        '/api/v1/i18n/bootstrap',
+        '/api/v1/auth/me/mobile-capabilities',
+      ]);
+    });
+  }
+
   test('sign-in uses existing contract and captures session cookie', () async {
     late HttpRequest received;
     late Map<String, Object?> body;

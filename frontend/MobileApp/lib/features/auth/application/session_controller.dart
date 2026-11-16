@@ -31,6 +31,7 @@ class SessionController extends ChangeNotifier {
   ApiFailure? preferencesFailure;
   String? _token;
   bool _needsResumeValidation = false;
+  bool _needsLanguageInitialization = false;
   int _generation = 0;
   int? _validationGeneration;
 
@@ -124,19 +125,14 @@ class SessionController extends ChangeNotifier {
       }
       _token = session.token;
       principal = session.principal;
-      final language = await _api.effectiveLanguage(session.token);
-      if (generation != _generation) {
+      _needsLanguageInitialization = true;
+      if (!await _completeSessionSetup(
+        session.principal,
+        session.token,
+        generation,
+      )) {
         return;
       }
-      effectiveLanguageTag = language;
-      if (!session.principal.mustChangePassword) {
-        final capabilities = await _api.mobileCapabilities(session.token);
-        if (generation != _generation) return;
-        destinations = capabilities;
-      }
-      status = session.principal.mustChangePassword
-          ? SessionStatus.passwordChangeRequired
-          : SessionStatus.authenticated;
       notifyListeners();
     } on ApiFailure catch (error) {
       if (generation != _generation) {
@@ -157,6 +153,7 @@ class SessionController extends ChangeNotifier {
       return;
     }
     final generation = _generation;
+    var passwordChanged = false;
     status = SessionStatus.changingPassword;
     failure = null;
     notifyListeners();
@@ -166,17 +163,12 @@ class SessionController extends ChangeNotifier {
         currentPassword: currentPassword,
         newPassword: newPassword,
       );
-      final refreshed = await _api.currentPrincipal(token);
-      if (generation != _generation) {
-        return;
-      }
-      final capabilities = await _api.mobileCapabilities(token);
       if (generation != _generation) return;
-      principal = refreshed;
-      destinations = capabilities;
-      status = refreshed.mustChangePassword
-          ? SessionStatus.passwordChangeRequired
-          : SessionStatus.authenticated;
+      passwordChanged = true;
+      _needsLanguageInitialization = true;
+      final refreshed = await _api.currentPrincipal(token);
+      if (generation != _generation) return;
+      if (!await _completeSessionSetup(refreshed, token, generation)) return;
       notifyListeners();
     } on ApiFailure catch (error) {
       if (generation != _generation) {
@@ -187,7 +179,11 @@ class SessionController extends ChangeNotifier {
         return;
       }
       failure = error;
-      status = SessionStatus.passwordChangeRequired;
+      // A lost response may follow a committed password change. Revalidate on
+      // Retry instead of resubmitting the old password or opening the shell.
+      status = error.kind == ApiFailureKind.offline || passwordChanged
+          ? SessionStatus.validatingSession
+          : SessionStatus.passwordChangeRequired;
       notifyListeners();
     }
   }
@@ -233,20 +229,7 @@ class SessionController extends ChangeNotifier {
     try {
       final refreshed = await _api.currentPrincipal(token);
       if (generation != _generation) return;
-      // A session may never silently switch identity.
-      if (refreshed.user.id != principal?.user.id) {
-        clearForRevocation();
-        return;
-      }
-      final capabilities = refreshed.mustChangePassword
-          ? const <String>[]
-          : await _api.mobileCapabilities(token);
-      if (generation != _generation) return;
-      principal = refreshed;
-      destinations = capabilities;
-      status = refreshed.mustChangePassword
-          ? SessionStatus.passwordChangeRequired
-          : SessionStatus.authenticated;
+      if (!await _completeSessionSetup(refreshed, token, generation)) return;
     } on ApiFailure catch (error) {
       if (generation != _generation) return;
       if (error.kind == ApiFailureKind.unauthenticated) {
@@ -258,6 +241,40 @@ class SessionController extends ChangeNotifier {
       if (_validationGeneration == generation) _validationGeneration = null;
     }
     notifyListeners();
+  }
+
+  Future<bool> _completeSessionSetup(
+    AuthPrincipal refreshed,
+    String token,
+    int generation,
+  ) async {
+    if (generation != _generation) return false;
+    // A session may never silently switch identity.
+    if (refreshed.user.id != principal?.user.id) {
+      clearForRevocation();
+      return false;
+    }
+    if (refreshed.mustChangePassword) {
+      principal = refreshed;
+      destinations = const [];
+      _needsLanguageInitialization = true;
+      status = SessionStatus.passwordChangeRequired;
+      return true;
+    }
+    // Bootstrap and capabilities are forbidden while a password change is
+    // required. Publish authenticated state only after both have succeeded.
+    final language = _needsLanguageInitialization
+        ? await _api.effectiveLanguage(token)
+        : effectiveLanguageTag;
+    if (generation != _generation) return false;
+    final capabilities = await _api.mobileCapabilities(token);
+    if (generation != _generation) return false;
+    principal = refreshed;
+    effectiveLanguageTag = language;
+    destinations = capabilities;
+    _needsLanguageInitialization = false;
+    status = SessionStatus.authenticated;
+    return true;
   }
 
   Future<bool> authorizeNavigation() async {
@@ -282,6 +299,7 @@ class SessionController extends ChangeNotifier {
     destinations = const [];
     _token = null;
     _needsResumeValidation = false;
+    _needsLanguageInitialization = false;
     effectiveLanguageTag = 'en';
     preferences = null;
     supportedLanguages = const [];
