@@ -1,17 +1,25 @@
 """Run only through the disposable database test runner."""
 from .test_messaging import account, db
 from .test_global_privilege_enforcement import _bearer
+from .test_application_settings import save
 
 
 def test_mobile_destinations_follow_server_availability(client, monkeypatch):
+    administrator_token = client.cookies.get("erms_session")
     token, _, _ = account(client, privileges=())
+    monkeypatch.setitem(client.headers, "Authorization", f"Bearer {administrator_token}")
     path = "/api/v1/auth/me/mobile-capabilities"
     expected = ["global-search", "dashboard", "classification-browser", "favourites",
                 "recent-activity", "user-profile", "sign-out"]
+    # The legacy environment must never override database ownership.
+    monkeypatch.setenv("FULL_TEXT_SEARCH_ENABLED", "true")
+    assert client.get(path, headers=_bearer(token)).json() == expected[1:]
+    assert save(client, {"FULL_TEXT_SEARCH_ENABLED": True}).status_code == 200
+    monkeypatch.setenv("FULL_TEXT_SEARCH_ENABLED", "false")
     response = client.get(path, headers=_bearer(token))
     assert response.status_code == 200
     assert response.json() == expected
-    monkeypatch.setenv("FULL_TEXT_SEARCH_ENABLED", "false")
+    assert save(client, {"FULL_TEXT_SEARCH_ENABLED": False}).status_code == 200
     assert client.get(path, headers=_bearer(token)).json() == expected[1:]
 
 

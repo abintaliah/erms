@@ -1,10 +1,15 @@
 import json
+import re
 from pathlib import Path
+import subprocess
 
 import pytest
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from tools.generate_policy_inventory import PROJECT_ROOT, _target_policy, build_inventory
+from backend.services.api.authorization_policy import require_global_privilege
+from backend.services.api.operation_policy import operation_policy
+from tools.generate_policy_inventory import PROJECT_ROOT, api_operations, build_inventory
 
 
 REGISTRY_PATH = PROJECT_ROOT / "security" / "operation-policy-registry.json"
@@ -13,7 +18,12 @@ SEED_PATH = PROJECT_ROOT / "security" / "catalogue-seed.json"
 
 def test_database_sql_contains_no_psql_meta_commands():
     offenders = []
-    for path in sorted(PROJECT_ROOT.rglob("*.sql")):
+    # Check project SQL, including new untracked files, but not ignored
+    # pg_dump backups, virtual environments, or other local artifacts.
+    project_sql = subprocess.check_output([
+        "git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.sql",
+    ], cwd=PROJECT_ROOT, text=True).splitlines()
+    for path in (PROJECT_ROOT / name for name in sorted(set(project_sql))):
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if line.lstrip().startswith("\\"):
                 offenders.append(f"{path.relative_to(PROJECT_ROOT)}:{line_number}: {line}")
@@ -29,9 +39,13 @@ def test_canonical_schema_is_self_contained_and_current():
 
     assert "\\i " not in schema
     assert "\\ir " not in schema
-    assert "CREATE TABLE schema_migrations" in schema
+    assert "CREATE TABLE public.schema_migrations" in schema
+    executable = "\n".join(line for line in schema.splitlines() if not line.lstrip().startswith("--"))
+    assert "database/migrations/" not in executable
+    assert "050_application_settings" in (PROJECT_ROOT / "database/baseline.sql").read_text()
     assert "INSERT INTO schema_migrations" not in schema
-    assert "aggregation.location.change" in schema
+    assert "CREATE OR REPLACE FUNCTION" not in schema
+    assert "aggregation.location.change" in (PROJECT_ROOT / "database/seeds/000_required_reference_data.sql").read_text()
     assert "aggregations_protect_vital_deletion" in schema
     assert "aggregations_owner_review_due_idx" in schema
 
@@ -40,7 +54,7 @@ def test_seed_utilities_are_distinct_from_migrations():
     seeds = PROJECT_ROOT / "database" / "seeds"
     for path in sorted(seeds.glob("*.sql")):
         sql = path.read_text(encoding="utf-8")
-        assert "app.event_source', 'seeding'" in sql, path
+        assert re.search(r"set_config\('app\.event_source',\s*'seeding'", sql), path
         assert "INSERT INTO schema_migrations" not in sql, path
 
     importer = (seeds / "import_mutamathilah.py").read_text(encoding="utf-8")
@@ -85,13 +99,64 @@ def test_api_operation_inventory_is_complete_and_current():
     )
 
 
-def test_unclassified_api_operation_is_rejected_instead_of_getting_a_fallback():
-    with pytest.raises(ValueError, match="has no explicit policy classification"):
-        _target_policy("POST", "/api/v1/new-unreviewed-operation")
+@pytest.mark.parametrize("include_in_schema", [True, False])
+def test_unclassified_api_operation_is_rejected(include_in_schema):
+    application = FastAPI()
+    router = APIRouter()
+
+    @router.get("/future-command", include_in_schema=include_in_schema)
+    def future_command():
+        pass
+
+    application.include_router(router, prefix="/api/v1/disposition")
+    with pytest.raises(ValueError, match="GET /api/v1/disposition/future-command has no explicit policy classification"):
+        api_operations(application)
+
+
+def test_declared_policy_must_match_its_global_dependency():
+    application = FastAPI()
+
+    @application.get("/api/v1/example", dependencies=[Depends(require_global_privilege("audit.view"))])
+    @operation_policy("globally_privileged", "authorization.administer")
+    def example():
+        pass
+
+    with pytest.raises(ValueError, match="declares a privilege absent from its dependencies"):
+        api_operations(application)
+
+
+def test_a_global_dependency_supplies_the_registry_privilege():
+    application = FastAPI()
+
+    @application.get("/api/v1/example", dependencies=[Depends(require_global_privilege("audit.view"))])
+    def example():
+        pass
+
+    entry, = api_operations(application)
+    assert entry["target_policy_class"] == "globally_privileged"
+    assert entry["global_privilege"] == "audit.view"
+
+
+def _registered_policy(method, path):
+    operation = next(item for item in api_operations()
+                     if item["method"] == method and item["path"] == path)
+    return operation["target_policy_class"], operation["global_privilege"], operation["resource_permission"]
+
+
+def test_disposition_policy_distinguishes_management_and_limited_task_scope():
+    assert _registered_policy('POST', '/api/v1/disposition/jobs') == (
+        'globally_privileged', 'disposition.jobs.manage', None,
+    )
+    for method, path in [
+        ('POST', '/api/v1/disposition/tasks/{task_id}/claim'),
+        ('GET', '/api/v1/disposition/jobs/{job_id}/operation-progress'),
+        ('POST', '/api/v1/disposition/jobs/{job_id}/retry-approval-documents'),
+    ]:
+        assert _registered_policy(method, path) == ('relationship_scoped', None, None)
 
 
 def test_number_suggestions_have_explicit_relationship_scoped_policy():
-    assert _target_policy("GET", "/api/v1/number-suggestions/{resource}") == (
+    assert _registered_policy("GET", "/api/v1/number-suggestions/{resource}") == (
         "relationship_scoped",
         None,
         None,
@@ -184,7 +249,7 @@ def test_phase_zero_current_access_characterization(client: TestClient):
 
 
 def test_permission_catalogue_records_conditional_policy():
-    assert _target_policy("GET", "/api/v1/permissions") == ("relationship_scoped", None, None)
+    assert _registered_policy("GET", "/api/v1/permissions") == ("relationship_scoped", None, None)
     registry = build_inventory()
     conditional = [operation for operation in registry["api_operations"]
                    if "conditional_global_privileges" in operation]
