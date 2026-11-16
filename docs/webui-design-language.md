@@ -111,6 +111,29 @@ Do not make an existing renderer accept unrelated modes merely to avoid a new
 component. Reuse means shared semantics, not a single function with many
 unrelated flags.
 
+### 3.1.1 Literal localized text and markup boundaries
+
+`render_message`, `render_message_plain`, and `render_english` return literal
+text, with interpolated values independently isolated for bidirectional display.
+Pass it directly to NiceGUI text properties (labels, titles, buttons, tooltips,
+notifications and selector options). NiceGUI/Vue perform DOM text escaping;
+HTML-encoding names before that boundary displays entities such as `&#x27;`
+verbatim. Never decode entity-like user input or apply a screen-specific
+`html.unescape` workaround.
+
+When embedding a message in an HTML/Vue slot template, explicitly `html.escape`
+the complete message at that boundary. Never pass catalogue text directly to
+`ui.html` or `v-html`. For textual `.props(...)` values, use Python quoting, for
+example `f"aria-label={message!r}"`, so quotes cannot split the property string.
+Keep existing sanitized rich-content workflows separate from catalogue text.
+These are output-boundary requirements implementing the internationalization
+specification's escaping rule; ordinary translations never authorize markup.
+
+Collection editors must refresh the current bounded server page after Save,
+using its existing language, filters, sort and paging state. Do not append a
+created role to a downloaded page or reorder it by internal ID. The server
+remains responsible for sorting the complete collection before pagination.
+
 ### 3.2 Location of new shared code
 
 Small extensions may remain beside the current shared helper in `app.py`.
@@ -371,10 +394,13 @@ service identity, legal hold, or similarly consequential resource.
 - At narrower widths, the command column moves below the overview without
   hiding actions or changing their order.
 
-Record details retain the complete Digital Components interface immediately
-after the record overview/metadata region. Do not move components into a
-separate primary destination or require an additional dialog merely to reach
-the list.
+Aggregation details place Child aggregations and Records in this aggregation
+immediately below a compact header. Each section shows its count and creation
+action together. Record details place the complete Digital Components interface
+immediately below the header. Both pages use the
+[Details dialog](../specs/aggregation-and-record-page-amendment.md) for metadata
+and governed actions. Metadata comes first in reading order. Its action column
+shows common actions and keeps specialist actions under Advanced.
 
 Do not turn a detail page into a vertical sequence of unrelated full-width
 panels when a compact overview and command rail communicate the task better.
@@ -494,8 +520,8 @@ with isolated statistic cards or a decorative chart.
 
 The stages mean Current (active), Intermediate (semi-active), and Final
 disposition. The vertical blue line and stage markers express sequence. On an
-aggregation detail page, the retention panel sits beside the primary metadata
-surface and wraps below it on narrower viewports. Child-aggregation and record
+aggregation detail page, the retention panel is in the Retention rule tab of
+the Details dialog. Child-aggregation and record
 totals appear once in the metadata field named **Contains** and are not repeated
 as oversized statistics.
 
@@ -672,6 +698,9 @@ unreadable cells.
   search may be expensive or semantically meaningful.
 - Distinguish server search from filtering rows already loaded.
 - Keep related filters in one wrapping row and align their lower edges.
+- When a screen uses Search or Apply, page through the last submitted query.
+  Keep draft edits in the controls and keep the controls visible for zero
+  results. See the [server pagination contract](webui-performance.md#paginated-results-and-submitted-filters).
 - Show a concise result count/range.
 - Use deterministic sort tie-breakers so pagination does not reorder items.
 - Keep page-size choices bounded and consistent with comparable screens.
@@ -836,6 +865,17 @@ or documented style surface rather than duplicating them.
 
 ### 19.1 NiceGUI-first layout and RTL troubleshooting
 
+The record page uses native NiceGUI rows, disclosure buttons, and upload
+controls for digital components. Inspection of the old layout showed that the
+upload queue displayed its own empty state even when the separate list held
+files, and the card grid limited each file to part of the available width.
+The record page now puts the native upload trigger in the section header and
+uses the file list for the empty state. NiceGUI Upload handles the chooser,
+multiple selection, and transport. Its native drop area is limited to the
+uploader, so the record page uses a scoped overlay that passes dropped files
+to the same Quasar uploader. A container query wraps row actions at narrow
+widths, and the closed disclosure chevron mirrors in RTL.
+
 The sign-in page restores document and dialog direction before authentication,
 using the remembered localization context. Previously the direction script
 ran during authenticated bootstrap, leaving signed-out portal content without
@@ -928,6 +968,21 @@ See [RTL desktop evidence](verification/retention-rtl/arabic.png) and
 
 The shared action-panel correction and verification are documented in
 [detail action RTL verification](detail-action-rtl-verification.md).
+
+The Aggregation Details dialog previously put single-line retention summaries
+directly in an expansion. Browser inspection showed that the expansion stayed
+502 px wide while its unwrapped children grew past 900 px. The expansion now
+uses a bounded NiceGUI column, one row per classification level, and wrapping
+labels for titles and instructions. The existing timeline's horizontal arrows
+are hidden at narrow dialog widths, where the stages stack in reading order.
+The metadata action column reuses the scoped button icon treatment. The
+row-direction rule stays on rows, so Arabic buttons stack in the same order as
+English with leading icons at the reading start.
+At phone widths the identity and actions wrap onto separate rows when they
+cannot fit side by side. Explicit flex bases reserve space for the identity
+and filter field because this NiceGUI build does not bundle the corresponding
+Tailwind utilities. Contained record rows reuse the existing result grid. At
+phone widths their actions occupy the second row so titles have room to read.
 
 The shared Users, Roles, and Organization Units item-card header uses a native
 NiceGUI three-column grid: icon, wrapping title/identity, and trailing status

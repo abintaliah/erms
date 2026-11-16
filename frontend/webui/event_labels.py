@@ -17,6 +17,10 @@ EVENT_MESSAGE_KEYS = {
     'DIGITAL_DESTRUCTION_REQUESTED': 'audit.event.digital_destruction_requested',
     'DIGITAL_DESTRUCTION_FAILED': 'audit.event.digital_destruction_failed',
     'DIGITAL_DESTRUCTION_UNIT_COMPLETED': 'audit.event.digital_destruction_unit_completed',
+    'DISPOSITION_OPERATION_REQUESTED': 'audit.event.disposition_operation_requested',
+    'DISPOSITION_OPERATION_READY': 'audit.event.disposition_operation_ready',
+    'DISPOSITION_OPERATION_FAILED': 'audit.event.disposition_operation_failed',
+    'DISPOSITION_DOCUMENTS_RETRY_REQUESTED': 'audit.event.disposition_documents_retry_requested',
     'DIGITAL_DESTRUCTION_SUCCEEDED': 'audit.event.digital_destruction_succeeded',
     'DIGITAL_DESTRUCTION_PROGRESS': 'audit.event.digital_destruction_progress',
     'DISPOSITION_RETAINED_RECORD_MIGRATED': 'audit.event.disposition_retained_record_migrated',
@@ -139,7 +143,6 @@ EVENT_MESSAGE_KEYS = {
 }
 
 
-
 def event_label(code: str, *, event: dict | None = None) -> str:
     """Describe the recorded change using only the authorized event projection.
 
@@ -199,7 +202,6 @@ def event_label(code: str, *, event: dict | None = None) -> str:
                     return render_message('audit.event.workflow_stage_changed',stage=text(after['workflow_stage']))
                 if before.get('current_review_round') is not None and isinstance(after.get('current_review_round'),int) and before['current_review_round']!=after['current_review_round']:
                     return render_message('audit.event.current_review_round_changed',number=after['current_review_round'])
-
     key = EVENT_MESSAGE_KEYS.get(code)
     return render_message(key) if key else code
 
