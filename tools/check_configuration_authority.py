@@ -39,6 +39,19 @@ SEARCH_POLICY_CONSUMERS={
         {'path':'backend/services/api/session_cleanup.py','scope':'Bounds expired search-list rows deleted in one cleanup transaction.'},
     ],
 }
+PAGE_SIZE_CONSUMERS={
+    'CHILD_AGGREGATION_PAGE_SIZE': [
+        {'path':'frontend/webui/aggregation_details.py','scope':'Pages direct child aggregations independently in aggregation details.'},
+    ],
+    'CONTAINED_RECORD_PAGE_SIZE': [
+        {'path':'frontend/webui/aggregation_details.py','scope':'Pages directly contained records independently in aggregation details.'},
+    ],
+    'SEARCH_RESULTS_PAGE_SIZE': [
+        {'path':'frontend/webui/global_search.py','scope':'Supplies the default Global Search page size.'},
+        {'path':'frontend/webui/advanced_search.py','scope':'Supplies the default Advanced Search page size; per-search choices may override it.'},
+        {'path':'frontend/webui/collection_controls.py','scope':'Supplies the default page size for aggregation and record filters.'},
+    ],
+}
 
 
 def service_for(key, authority):
@@ -76,6 +89,22 @@ def inventory():
         result[key]={
             'setting':key,'authority':'database','contract':'specs/application-configuration.md section 5.5',
             'default_or_requirement':setting.default,'category':setting.category,'consumers':[],'templates':[],
+        }
+    for key, consumers in PAGE_SIZE_CONSUMERS.items():
+        setting=REGISTRY[key]
+        section='3-aggregation-page' if key!='SEARCH_RESULTS_PAGE_SIZE' else '7-created-by-in-listings'
+        contracts[key]={
+            'current_consumers':[
+                {'path':'backend/services/api/application_configuration.py','scope':'Exposes the validated database value through authenticated application configuration.'},
+                *consumers,
+            ],
+            'runtime_status':'database_only_page_size_consumer',
+        }
+        result[key]={
+            'setting':key,'authority':'database',
+            'contract':'specs/aggregation-and-record-page-amendment.md#'+section,
+            'default_or_requirement':setting.default,'category':setting.category,
+            'consumers':[],'templates':[],
         }
     registered={key for key,item in result.items() if item['authority']=='database'}
     if registered!=set(REGISTRY):
