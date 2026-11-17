@@ -121,25 +121,168 @@ void main() {
     );
   });
 
-  testWidgets('sign-in defaults to English independently of device locale', (
-    tester,
-  ) async {
-    tester.platformDispatcher.localeTestValue = const Locale('ar');
-    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
-    final controller = SessionController(_FakeAuthApi());
-    await tester.pumpWidget(
-      WathiqApp(catalogue: _catalogue, sessionController: controller),
-    );
+  for (final device in [
+    const Locale('ar', 'AE'),
+    const Locale('en', 'GB'),
+    const Locale('fr', 'FR'),
+  ]) {
+    testWidgets('sign-in uses device language with English fallback: $device', (
+      tester,
+    ) async {
+      tester.platformDispatcher.localeTestValue = device;
+      addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+      final controller = SessionController(_FakeAuthApi());
+      addTearDown(controller.dispose);
+      addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
+      await tester.pumpWidget(
+        WathiqApp(catalogue: _catalogue, sessionController: controller),
+      );
+      await tester.pumpAndSettle();
+      final language = device.languageCode == 'ar' ? 'ar' : 'en';
+      final label = language == 'ar' ? 'البريد الإلكتروني' : 'Email address';
+      expect(find.text(label), findsOneWidget);
+      expect(
+        Directionality.of(tester.element(find.text(label))),
+        language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+      );
+      expect(controller.hasEffectiveLanguagePreference, isFalse);
+    });
+  }
 
-    expect(find.byKey(const ValueKey('wathiq-logo-mark')), findsOneWidget);
-    expect(find.text('Wathiq'), findsOneWidget);
-    expect(find.text('Sign in'), findsNWidgets(2));
-    expect(find.text('Email address'), findsOneWidget);
-    expect(
-      Directionality.of(tester.element(find.text('Email address'))),
-      TextDirection.ltr,
-    );
-  });
+  testWidgets(
+    'device-language changes apply before authentication but never override saved preference',
+    (tester) async {
+      tester.platformDispatcher.localeTestValue = const Locale('en');
+      addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+      final controller = SessionController(_FakeAuthApi(languageTag: 'en'));
+      addTearDown(controller.dispose);
+      addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
+      await tester.pumpWidget(
+        WathiqApp(catalogue: _catalogue, sessionController: controller),
+      );
+      await tester.pumpAndSettle();
+      tester.platformDispatcher.localeTestValue = const Locale('ar');
+      await tester.pumpAndSettle();
+      expect(find.text('البريد الإلكتروني'), findsOneWidget);
+      await controller.signIn(email: 'user@example.test', password: 'secret');
+      await tester.pumpAndSettle();
+      expect(controller.hasEffectiveLanguagePreference, isTrue);
+      expect(find.text('Dashboard'), findsWidgets);
+      tester.platformDispatcher.localeTestValue = const Locale('ar', 'SA');
+      await tester.pumpAndSettle();
+      expect(find.text('Dashboard'), findsWidgets);
+      await controller.signOut();
+      await tester.pumpAndSettle();
+      expect(controller.hasEffectiveLanguagePreference, isFalse);
+      expect(find.text('البريد الإلكتروني'), findsOneWidget);
+    },
+  );
+
+  for (final device in [const Locale('en'), const Locale('ar')]) {
+    for (final size in [const Size(390, 844), const Size(1024, 768)]) {
+      testWidgets(
+        'temporary-password feedback uses $device then saved opposite language at $size',
+        (tester) async {
+          tester.platformDispatcher.localeTestValue = device;
+          addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final saved = device.languageCode == 'ar' ? 'en' : 'ar';
+          final controller = SessionController(
+            _FakeAuthApi(
+              principal: _principal(mustChangePassword: true),
+              languageTag: saved,
+            ),
+          );
+          addTearDown(controller.dispose);
+          addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
+          await controller.signIn(
+            email: 'user@example.test',
+            password: 'temporary',
+          );
+          controller.failure = const ApiFailure(
+            ApiFailureKind.invalidRequest,
+            messageKey: 'mobile.authentication.password_too_short',
+            parameters: {'minimum': 15},
+            passwordField: 'new_password',
+          );
+          await tester.pumpWidget(
+            WathiqApp(catalogue: _catalogue, sessionController: controller),
+          );
+          await tester.pumpAndSettle();
+          final newField = tester.widget<TextField>(
+            find.byKey(const ValueKey('new-password')),
+          );
+          expect(
+            newField.decoration!.errorText,
+            _catalogue.text(
+              'mobile.authentication.password_too_short',
+              device,
+              parameters: {'minimum': 15},
+            ),
+          );
+          expect(
+            Directionality.of(
+              tester.element(find.byKey(const ValueKey('new-password'))),
+            ),
+            device.languageCode == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+          );
+          expect(controller.hasEffectiveLanguagePreference, isFalse);
+          await tester.enterText(
+            find.byKey(const ValueKey('new-password')),
+            'replacement',
+          );
+          await tester.enterText(
+            find.byKey(const ValueKey('confirm-password')),
+            'different',
+          );
+          await tester.pumpAndSettle();
+          expect(
+            tester
+                .widget<TextField>(
+                  find.byKey(const ValueKey('confirm-password')),
+                )
+                .decoration!
+                .errorText,
+            _catalogue.text(
+              'webui.save_password.notify.new_passwords_do_not_match_26d93e32',
+              device,
+            ),
+          );
+          await controller.changePassword(
+            currentPassword: 'temporary',
+            newPassword: 'replacement',
+          );
+          await tester.pumpAndSettle();
+          expect(controller.hasEffectiveLanguagePreference, isTrue);
+          expect(
+            find.text(saved == 'ar' ? 'لوحة المعلومات' : 'Dashboard'),
+            findsWidgets,
+          );
+          expect(
+            Directionality.of(
+              tester.element(find.byKey(const ValueKey('authenticated-shell'))),
+            ),
+            saved == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+          );
+          controller.clearForRevocation();
+          await tester.pumpAndSettle();
+          expect(
+            find.text(
+              device.languageCode == 'ar'
+                  ? 'البريد الإلكتروني'
+                  : 'Email address',
+            ),
+            findsOneWidget,
+          );
+          expect(controller.hasEffectiveLanguagePreference, isFalse);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
 
   testWidgets('saved Arabic preference becomes authoritative after sign-in', (
     tester,
@@ -276,6 +419,179 @@ void main() {
         );
         expect(tester.takeException(), isNull);
       });
+    }
+  }
+
+  for (final language in ['en', 'ar']) {
+    for (final field in [
+      'new_password',
+      'current_password',
+      'cooldown',
+      'unknown',
+    ]) {
+      testWidgets(
+        'password feedback $field uses saved $language wording and real field errors',
+        (tester) async {
+          final controller = SessionController(
+            _FakeAuthApi(languageTag: language),
+          );
+          addTearDown(controller.dispose);
+          addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
+          await controller.signIn(
+            email: 'user@example.test',
+            password: 'secret',
+          );
+          controller.status = SessionStatus.passwordChangeRequired;
+          controller.failure = switch (field) {
+            'new_password' => const ApiFailure(
+              ApiFailureKind.invalidRequest,
+              messageKey: 'mobile.authentication.password_too_short',
+              parameters: {'minimum': 15},
+              passwordField: 'new_password',
+            ),
+            'current_password' => const ApiFailure(
+              ApiFailureKind.invalidRequest,
+              messageKey: 'mobile.authentication.current_password_incorrect',
+              passwordField: 'current_password',
+            ),
+            'cooldown' => const ApiFailure(
+              ApiFailureKind.invalidRequest,
+              messageKey: 'authentication.error.password_attempts_locked',
+              parameters: {'seconds': 120},
+            ),
+            _ => const ApiFailure(ApiFailureKind.invalidRequest),
+          };
+          await tester.pumpWidget(
+            WathiqApp(catalogue: _catalogue, sessionController: controller),
+          );
+          await tester.pumpAndSettle();
+          final newField = tester.widget<TextField>(
+            find.byKey(const ValueKey('new-password')),
+          );
+          final currentField = tester.widget<TextField>(
+            find.byKey(const ValueKey('current-password')),
+          );
+          if (field == 'new_password') {
+            expect(
+              newField.decoration!.errorText,
+              _catalogue.text(
+                'mobile.authentication.password_too_short',
+                Locale(language),
+                parameters: {'minimum': 15},
+              ),
+            );
+            expect(currentField.decoration!.errorText, isNull);
+          } else if (field == 'current_password') {
+            expect(
+              currentField.decoration!.errorText,
+              _catalogue.text(
+                'mobile.authentication.current_password_incorrect',
+                Locale(language),
+              ),
+            );
+            expect(newField.decoration!.errorText, isNull);
+          } else {
+            expect(newField.decoration!.errorText, isNull);
+            expect(currentField.decoration!.errorText, isNull);
+            expect(
+              find.text(
+                field == 'cooldown'
+                    ? _catalogue.text(
+                        'authentication.error.password_attempts_locked',
+                        Locale(language),
+                        parameters: {'seconds': 120},
+                      )
+                    : _catalogue.text(
+                        'common.error.bad_request',
+                        Locale(language),
+                      ),
+              ),
+              findsOneWidget,
+            );
+          }
+          expect(
+            find.text(
+              _catalogue.text(
+                'common.error.validation_failed',
+                Locale(language),
+              ),
+            ),
+            findsNothing,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  for (final language in ['en', 'ar']) {
+    for (final size in [const Size(390, 844), const Size(1024, 768)]) {
+      testWidgets(
+        'password confirmation explains mismatch and clears on correction $language $size',
+        (tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final controller = SessionController(
+            _FakeAuthApi(languageTag: language),
+          );
+          addTearDown(controller.dispose);
+          addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
+          await controller.signIn(
+            email: 'user@example.test',
+            password: 'secret',
+          );
+          controller.status = SessionStatus.passwordChangeRequired;
+          await tester.pumpWidget(
+            WathiqApp(catalogue: _catalogue, sessionController: controller),
+          );
+          await tester.pumpAndSettle();
+          const confirmKey = ValueKey('confirm-password');
+          const submitKey = ValueKey('password-change-submit');
+          String? error() => tester
+              .widget<TextField>(find.byKey(confirmKey))
+              .decoration!
+              .errorText;
+          VoidCallback? submit() =>
+              tester.widget<FilledButton>(find.byKey(submitKey)).onPressed;
+          expect(error(), isNull);
+          expect(submit(), isNull);
+          await tester.enterText(
+            find.byKey(const ValueKey('new-password')),
+            'replacement',
+          );
+          await tester.pumpAndSettle();
+          expect(error(), isNull);
+          await tester.enterText(find.byKey(confirmKey), 'different');
+          await tester.pumpAndSettle();
+          expect(
+            error(),
+            _catalogue.text(
+              'webui.save_password.notify.new_passwords_do_not_match_26d93e32',
+              Locale(language),
+            ),
+          );
+          expect(submit(), isNull);
+          await tester.enterText(find.byKey(confirmKey), 'replacement');
+          await tester.pumpAndSettle();
+          expect(error(), isNull);
+          expect(submit(), isNotNull);
+          // Editing the original after confirmation must also explain the mismatch.
+          await tester.enterText(
+            find.byKey(const ValueKey('new-password')),
+            'edited',
+          );
+          await tester.pumpAndSettle();
+          expect(error(), isNotNull);
+          expect(submit(), isNull);
+          await tester.enterText(find.byKey(confirmKey), '');
+          await tester.pumpAndSettle();
+          expect(error(), isNull);
+          expect(submit(), isNull);
+          expect(tester.takeException(), isNull);
+        },
+      );
     }
   }
 
@@ -540,6 +856,13 @@ void main() {
 
 const _catalogue = MessageCatalogue(
   english: {
+    'webui.save_password.notify.new_passwords_do_not_match_26d93e32':
+        'New passwords do not match',
+    'mobile.authentication.password_too_short':
+        'The new password must contain at least {minimum} characters.',
+    'mobile.authentication.current_password_incorrect':
+        'The current password is incorrect.',
+    'authentication.error.password_attempts_locked': 'Password attempts are temporarily locked. Try again in {seconds} seconds.',
     'mobile.navigation.global_search': 'Global Search',
     'mobile.navigation.classification_browser': 'Classification Browser',
     'mobile.navigation.favourites': 'Favourites',
@@ -581,6 +904,14 @@ const _catalogue = MessageCatalogue(
         'Replace your temporary password.',
   },
   arabic: {
+    'webui.save_password.notify.new_passwords_do_not_match_26d93e32':
+        'كلمتا المرور الجديدتان غير متطابقتين',
+    'mobile.authentication.password_too_short':
+        'يجب أن تتكون كلمة المرور الجديدة من {minimum} حرفًا على الأقل.',
+    'mobile.authentication.current_password_incorrect':
+        'كلمة المرور الحالية غير صحيحة.',
+    'authentication.error.password_attempts_locked':
+        'محاولات كلمة المرور مقفلة مؤقتًا. حاول مجددًا بعد {seconds} ثانية.',
     'mobile.navigation.global_search': 'البحث الشامل',
     'mobile.navigation.classification_browser': 'متصفح التصنيفات',
     'mobile.navigation.favourites': 'المفضلة',

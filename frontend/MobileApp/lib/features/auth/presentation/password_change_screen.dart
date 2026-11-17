@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/design/wathiq_brand.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/localization/message_catalogue.dart';
 import '../application/session_controller.dart';
 
@@ -35,6 +36,19 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
   Widget build(BuildContext context) {
     final locale = Localizations.localeOf(context);
     String text(String key) => widget.catalogue.text(key, locale);
+    final failure = widget.controller.failure;
+    final message = failure == null
+        ? null
+        : widget.catalogue.text(
+            failure.messageKey ??
+                (failure.kind == ApiFailureKind.server
+                    ? 'common.error.service_unavailable'
+                    : 'common.error.bad_request'),
+            locale,
+            parameters: failure.parameters,
+          );
+    final confirmationMismatch =
+        _confirmation.text.isNotEmpty && _next.text != _confirmation.text;
     final busy = widget.controller.status == SessionStatus.changingPassword;
     return Scaffold(
       body: SafeArea(
@@ -72,6 +86,9 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
                       'webui.show_change_password.input.current_password_00f4f73a',
                     ),
                     enabled: !busy,
+                    errorText: failure?.passwordField == 'current_password'
+                        ? message
+                        : null,
                   ),
                   const SizedBox(height: 14),
                   _passwordField(
@@ -81,6 +98,9 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
                       'webui.show_change_password.input.new_password_28399c5b',
                     ),
                     enabled: !busy,
+                    errorText: failure?.passwordField == 'new_password'
+                        ? message
+                        : null,
                   ),
                   const SizedBox(height: 14),
                   _passwordField(
@@ -90,11 +110,16 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
                       'webui.show_change_password.input.confirm_new_password_abd1d774',
                     ),
                     enabled: !busy,
+                    errorText: confirmationMismatch
+                        ? text(
+                            'webui.save_password.notify.new_passwords_do_not_match_26d93e32',
+                          )
+                        : null,
                   ),
-                  if (widget.controller.failure != null) ...[
+                  if (failure != null && failure.passwordField == null) ...[
                     const SizedBox(height: 14),
                     Text(
-                      text('common.error.validation_failed'),
+                      message!,
                       key: const ValueKey('password-change-error'),
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
@@ -135,6 +160,7 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
     required TextEditingController controller,
     required String label,
     required bool enabled,
+    String? errorText,
   }) => TextField(
     key: key,
     controller: controller,
@@ -143,6 +169,8 @@ class _PasswordChangeScreenState extends State<PasswordChangeScreen> {
     onChanged: (_) => setState(() {}),
     decoration: InputDecoration(
       labelText: label,
+      errorText: errorText,
+      errorMaxLines: 3,
       prefixIcon: const Icon(Icons.lock_outline),
     ),
   );

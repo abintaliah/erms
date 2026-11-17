@@ -4,10 +4,10 @@
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
   "specification_sha256": "baaabf44ff7d57a43ab01de3d9501de4b1533391100886f66b01622ca555112b",
-  "catalogue_sha256": "d964034f2b42c7927284b5f0cd643c5f013a1015156f5dc173451ea42ea578ce",
+  "catalogue_sha256": "65c107e8a1abd444bd7d7c66f34bfc700812f7944898bccfd6e4109c301699b8",
   "terminology_sha256": "1679184ec9090d2fdbbb9dab6c65debe24c3066667397a2f7b19bb2a6bb3508c",
-  "batch_id": "admin-export-ar-20261116125230",
-  "generated_at": "2026-11-16T12:52:30.779511+04:00",
+  "batch_id": "admin-export-ar-20261117101841",
+  "generated_at": "2026-11-17T10:18:41.969598+04:00",
   "artifact_type": "wathiq_translation_administration_export",
   "language_tag": "ar",
   "language_metadata": {
@@ -18,7 +18,7 @@
       "locale": "ar"
     }
   },
-  "catalogue_revision": 23,
+  "catalogue_revision": 26,
   "includes_reviewed_drafts": false,
   "superseded_translations": {
     "localization.bulk.action.review_publish_all": [
@@ -21088,6 +21088,30 @@
         "source_status": "published",
         "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
         "date_published": "2026-11-16T08:41:02.260696+00:00"
+      }
+    },
+    {
+      "message_key": "mobile.authentication.current_password_incorrect",
+      "translated_text": "كلمة المرور الحالية غير صحيحة.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-11-17T05:53:26.109939+00:00",
+        "date_published": "2026-11-17T05:53:26.109939+00:00"
+      }
+    },
+    {
+      "message_key": "mobile.authentication.password_too_short",
+      "translated_text": "يجب أن تتكون كلمة المرور الجديدة من {minimum} حرفًا على الأقل.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "admin_catalogue_export",
+        "source_origin": "generated",
+        "source_status": "published",
+        "date_reviewed": "2026-11-17T05:53:58.621923+00:00",
+        "date_published": "2026-11-17T05:53:58.621923+00:00"
       }
     },
     {

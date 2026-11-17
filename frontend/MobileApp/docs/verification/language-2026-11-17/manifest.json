@@ -1,0 +1,41 @@
+{
+  "recorded_at": "2026-11-17T07:04:24.873270+00:00",
+  "tested_base_commit": "8dc48674439ce4638560246616436af7a1029be1",
+  "included_working_tree_changes": true,
+  "scope": "Native emulator/simulator rendering; controlled Flutter platform locale and injected AuthApi; no persistent OS settings or ERMS account/database interaction",
+  "targets": [
+    "Wathiq Pixel 8 API 36 emulator",
+    "iPhone 18 Pro iOS 27 simulator"
+  ],
+  "source_sha256": {
+    "frontend/MobileApp/lib/app/app.dart": "44ce92781641398fb50786c486b2cc1620f43b1894da86ed293b1871c1da7fd8",
+    "frontend/MobileApp/lib/features/auth/application/session_controller.dart": "67fe08eea4e409e30a6c922c38bf12ad53b30e973641b36fadb5998c4afa7ff8",
+    "frontend/MobileApp/lib/features/auth/data/auth_api.dart": "15ae83fe711f62f0cbf87e68f779e8434093020cecb0d0f4384ec69cbd799ea2",
+    "frontend/MobileApp/lib/features/auth/presentation/password_change_screen.dart": "c591769f509ae381f22c448a06071b7088ec85c2fa25512c6c3340c74258697b",
+    "frontend/MobileApp/assets/i18n/messages.en.json": "7eea14da52d6b332d34147a990eea9556f2c32e465ed4fc80023f72c2a62758a",
+    "frontend/MobileApp/assets/i18n/messages.ar.json": "6fc868dca04b5dc5c391d74d62113fedd49f4ec77aa55e48e226b8214d87a55b",
+    "frontend/MobileApp/integration_test/language_acceptance_test.dart": "a53d0e2d3d5ed074eeaa5d2a29833a013bfb5d6bd18f5bee5522f42e1de34efc"
+  },
+  "evidence_sha256": {
+    "android-ar-password-feedback.png": "19c0317a0b7238bba18cd808cb125c19e24851a1dcc3986807d97532311792f3",
+    "android-ar-saved-en-shell.png": "f9e5830d5cc1e8726dc81cab89a88492cd7402afb6b976a611030714e2f5f71d",
+    "android-ar-sign-in.png": "0f4d63a8e3639819e50c95187b28ef8887f5978f47112ed08a7fc755244c99e2",
+    "android-en-password-feedback.png": "df22a9807b4d6b831fa8e6329b293f766a3af61d29ea8c9cf7ca9e3707c39ee1",
+    "android-en-saved-ar-shell.png": "a20efd336a9e2a7836ae59f430bb635c15b79c572fc25a6d3b4d1eb894fcb622",
+    "android-en-sign-in.png": "744c93ce62eb209f584b3b45b5092c247b2090dde54c425d61ba91eaecc33282",
+    "android-fr-password-feedback.png": "df22a9807b4d6b831fa8e6329b293f766a3af61d29ea8c9cf7ca9e3707c39ee1",
+    "android-fr-saved-ar-shell.png": "a20efd336a9e2a7836ae59f430bb635c15b79c572fc25a6d3b4d1eb894fcb622",
+    "android-fr-sign-in.png": "744c93ce62eb209f584b3b45b5092c247b2090dde54c425d61ba91eaecc33282",
+    "android-results.json": "b9d095bb60b3c25c094e8b6a2e4c2d01bb43b4b11c43d120b5da5f61b584aa22",
+    "ios-ar-password-feedback.png": "32557da3a8397201c765128e0bbd2ecee114f3becd196861ad1244d4d6c189cc",
+    "ios-ar-saved-en-shell.png": "109c209957a5891f602c5681908d9f74d04b20749aa4a7985f6c960718038832",
+    "ios-ar-sign-in.png": "bd20043b4b285b7ca2b414d44ca5a269c03f707a26e9579e500ea2eca7434d18",
+    "ios-en-password-feedback.png": "31d946f28e1fd2d4a6c18a87d81ff9de811fcc3befd5488a835bf169bb29857d",
+    "ios-en-saved-ar-shell.png": "fd15308a471397161862e78ec58bf508ef6cdb930618cb627a1c3602fbaa8d72",
+    "ios-en-sign-in.png": "f07c1c857517b0a22c62f4cd5f3f2db63f340ca580b5c543d77e866ebd0651d7",
+    "ios-fr-password-feedback.png": "f27359abec55632cc16bdcd1cd991b00c727caa83a304c2f978eaaab0f24fc5d",
+    "ios-fr-saved-ar-shell.png": "fd15308a471397161862e78ec58bf508ef6cdb930618cb627a1c3602fbaa8d72",
+    "ios-fr-sign-in.png": "f07c1c857517b0a22c62f4cd5f3f2db63f340ca580b5c543d77e866ebd0651d7",
+    "ios-results.json": "de133edb7851f077f5ac70071dfa0cfcf53ab5316f99750151b77baab736cd69"
+  }
+}

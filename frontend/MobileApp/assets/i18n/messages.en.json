@@ -1720,6 +1720,8 @@
   "messaging.test.label": "TEST — not a production notification",
   "messaging.value.false": "No",
   "messaging.value.true": "Yes",
+  "mobile.authentication.current_password_incorrect": "The current password is incorrect.",
+  "mobile.authentication.password_too_short": "The new password must contain at least {minimum} characters.",
   "mobile.navigation.classification_browser": "Classification Browser",
   "mobile.navigation.favourites": "Favourites",
   "mobile.navigation.global_search": "Global Search",

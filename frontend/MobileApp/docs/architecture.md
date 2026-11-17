@@ -1,67 +1,103 @@
-# Phase 0 architecture boundary
+# Mobile architecture
 
-## Principles
+Current implementation as of 17 November 2026. The
+[mobile specification](../../../specs/flutter-mobile-application.md) is the
+product authority; [Phase 1 status](phase-1-progress.md) owns acceptance and
+remaining work. Historical implementations are not architecture requirements.
 
-- Flutter is a presentation client of the existing ERMS API.
-- The server is authoritative for identity, capabilities, authorization,
-  validation, concurrency, resource visibility, and audit outcomes.
-- User-specific and protected state remains in memory in the initial online-only
-  client.
-- Feature code must depend on typed client boundaries rather than reconstructing
-  server policy.
-- Requests are owned by a route or state generation so obsolete responses can
-  be ignored after navigation, query changes, refresh, logout, or user changes.
-- Mutations are never retried automatically.
+## Ownership and source layout
 
-## Source layout
+Flutter presents existing ERMS APIs. Identity, credential policy, expiry,
+capabilities, resource authorization, concurrency and audit outcomes belong to
+the server. The current client is online-only and keeps user-specific protected
+state in process memory. No networking, routing, persistence or state-management
+package is required for the delivered foundation.
 
-```text
-lib/
-  app/                  application composition and shell
-  core/
-    design/             Wathiq mobile tokens and shared presentation
-    localization/       governed catalogue loading and lookup
-    network/            shared transport-safe failure categories
-    routing/            future typed route ownership
-  features/
-    auth/                typed authentication contract and session ownership
-```
+| Owner | Responsibility |
+| --- | --- |
+| `lib/app/app.dart` | App composition, lifecycle, locale resolution and the blocking session-validation overlay |
+| `lib/core/config/app_environment.dart` | Explicit API base URL; HTTPS except allowed loopback development addresses |
+| `lib/core/design/` | Wathiq brand and light-theme tokens |
+| `lib/core/localization/message_catalogue.dart` | Validated packaged English/Arabic catalogues and parameter substitution |
+| `lib/core/network/api_failure.dart` | Safe failure category and whitelisted feedback metadata; no arbitrary server diagnostics |
+| `lib/features/auth/data/auth_api.dart` | Injectable `AuthApi`; `dart:io` transport; bearer headers, mobile identity and response parsing |
+| `lib/features/auth/application/session_controller.dart` | Principal/token, credential state, initialized language preference, capability destinations and session-generation guards |
+| `lib/features/auth/presentation/` | Sign-in, required-password form and Preferences |
+| `lib/features/shell/presentation/` | Server-filtered drawer, retained Back navigation and responsive destination foundations |
 
-The Phase 1 authentication client uses `dart:io` HTTP facilities behind an
-injectable `AuthApi` boundary and keeps session state in a plain controller.
-No networking, state-management, persistence, or routing package is required
-for this unit. A later package may be selected only when a concrete requirement
-cannot be met cleanly with the pinned SDK.
+API URLs are supplied at build/launch time. Do not compile credentials, session
+material or protected content into the app. Later resource/discovery owners must
+be designed against their approved phase, not added to the authentication owner.
 
-## Environment boundary
+## Authentication and language sequence
 
-API base URLs and other environment values must be supplied at build or launch
-time. Production credentials, session material, API tokens, and protected
-content must never be committed to the repository or compiled as constants.
+1. Before the saved preference is available, `WathiqApp` resolves the device's
+   primary language: Arabic/RTL or English/LTR fallback. Regional Arabic is
+   supported. The packaged catalogues require no authenticated request.
+2. Login returns the existing session cookie and principal. The client retains
+   the token only in memory and uses bearer authentication afterward.
+3. If `must_change_password` is true, show the required form immediately. Do not
+   request bootstrap or capabilities: the API intentionally forbids them in
+   that credential state. No access-rule exception was introduced.
+4. After successful replacement, refresh the principal, fetch effective language,
+   then capabilities. Publish authenticated shell state only when setup succeeds.
+   Ordinary login uses the same setup without the password-change step.
+5. `hasEffectiveLanguagePreference` distinguishes a loaded server preference
+   from fallback. Once loaded, the saved preference overrides device language;
+   later device-language changes cannot replace it. Preferences updates remain
+   server-authoritative. Clearing identity restores device fallback, not a
+   previous user's language.
 
-## Phase 1 server-owned session scope
+## Sessions, requests and recovery
 
-Preferences, capabilities, principal and locale are process-memory state owned
-by the current session generation. Freshness comes from sign-in, explicit
-Preferences reads/mutations, and foreground session validation. Logout,
-revocation and server-owned expiry clear that state; obsolete requests cannot
-write into a later generation. Errors retain existing in-memory data behind a
-noninteractive gate and never populate persistent caches. English is restored
-when identity clears; saved language remains server-authoritative.
+`AUTH_SESSION_IDLE_MINUTES` and `AUTH_SESSION_ABSOLUTE_HOURS` are database-owned
+API policy. The client records whether background return needs validation; it
+has no elapsed-time expiry, session warning or reminder scheduler. Native startup
+only cancels reminders left by older builds, without requesting notification
+permission.
 
-Session idle and absolute expiry belong exclusively to the API application
-settings (`AUTH_SESSION_IDLE_MINUTES` and `AUTH_SESSION_ABSOLUTE_HOURS`). The
-client records only whether a background return needs server validation; it has
-no elapsed-time cutoff, local expiry clock or reminder scheduler. Server-valid
-sessions resume, unauthenticated responses clear protected state, and network
-failures retain the noninteractive validation gate. Native startup cancels only
-legacy reminders from older builds without requesting notification permission.
+There is no periodic check on a healthy untouched foreground screen. Protected
+navigation, authenticated request rejection and background return detect expiry
+or revocation. An untouched screen may remain visible until such an action.
+WebUI behavior and backend revocation remain unchanged. The retained backend
+`/auth/me/session-status` endpoint is not called by Flutter.
 
-Revocation detection is action-triggered, as approved on 5 November 2026. There
-is no periodic validity check for a healthy foreground session. Protected
-navigation performs ordinary principal/capability validation before pushing a
-route, with mounted/generation checks so delayed responses cannot reopen stale
-screens. Authenticated failures and background return use the same clearing and
-offline-gate paths. Only an existing offline gate performs bounded foreground
-reconnect probes. The backend and WebUI are unchanged; the earlier passive
-status endpoint is retained server-side but is not used by the Flutter client.
+Each asynchronous result belongs to the current session generation. Sign-out,
+revocation or identity change makes old responses ineligible to update state or
+restore protected navigation. A 401 clears identity; a 403 is not automatically
+interpreted as expiry. Principal revalidation must not silently switch user IDs.
+
+Network failures retain data behind a noninteractive gate with Retry/Sign out.
+Only that existing foreground offline gate performs bounded reconnect reads.
+Mutations are never replayed automatically. In particular, a lost password-change
+response can follow a committed change: Retry reads the principal and resumes
+setup rather than submitting the old password again.
+
+## Password feedback
+
+The transport recognizes only established password-change outcomes:
+
+| API outcome | Mobile presentation |
+| --- | --- |
+| 422, `password must contain at least N characters` | Localized new-password field error using the server-provided minimum |
+| 400, `current password is incorrect` | Localized current-password field error |
+| 429, `password_attempts_locked` | Existing localized cooldown message using validated server seconds, with numeric `Retry-After` fallback |
+| Other/unrecognized response | Safe generic failure; no reflected raw diagnostics or invented field highlighting |
+
+Confirmation mismatch is a local equality check, not a password-policy rule.
+A nonempty mismatch explains why submit is disabled and clears when corrected.
+The client does not calculate password policy or recreate the lockout deadline.
+Login failures retain established non-disclosing behavior.
+
+## Translation lifecycle
+
+Canonical English and Arabic live under `frontend/webui/i18n/`. Mobile assets are
+synchronized copies; never edit them directly. Published database translations
+become portable only after a complete administrator export is deliberately
+merged into the canonical artifact, validated and synchronized into a build.
+Publication does not live-update an installed mobile binary.
+
+Preserve administrator wording and per-item provenance by `message_key`. Seed
+missing local Arabic drafts only with `--missing-only`; do not overwrite
+published translations to reconcile files. The current translation status is tracked
+in [Phase 1 status](phase-1-progress.md#remaining-handoff-work).

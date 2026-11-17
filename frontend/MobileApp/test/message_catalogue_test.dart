@@ -39,6 +39,33 @@ void main() {
     );
   });
 
+  test('localized feedback substitutes server parameters without exposing placeholders', () {
+    const catalogue = MessageCatalogue(
+      english: {'example': 'At least {minimum} characters.'},
+      arabic: {'example': '{minimum} حرفًا على الأقل.'},
+    );
+    expect(
+      catalogue.text(
+        'example',
+        const Locale('en'),
+        parameters: {'minimum': 15},
+      ),
+      'At least 15 characters.',
+    );
+    expect(
+      catalogue.text(
+        'example',
+        const Locale('ar'),
+        parameters: {'minimum': 15},
+      ),
+      '15 حرفًا على الأقل.',
+    );
+    expect(
+      () => catalogue.text('example', const Locale('en')),
+      throwsArgumentError,
+    );
+  });
+
   test('catalogue rejects blank translations', () {
     expect(
       () => MessageCatalogue.fromJson(

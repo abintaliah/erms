@@ -1,8 +1,16 @@
 # Phase 2 existing API contract map
 
-Reviewed 5 November 2026 on `MobileFlutterv0.4.2`.
-Status: source mapping complete; mobile implementation and runtime verification
-have not started. This document approves no new API, UI workflow or scope change.
+Historical source snapshot reviewed 5 November 2026 on `MobileFlutterv0.4.2`.
+
+**Refresh required before implementation.** This map predates the 16 November
+integration of main `7bd0b4d8`, including resource/creator metadata, favourites,
+history and pagination changes. Its field inventories, defaults and response
+claims below describe that earlier checkout and are not a current API contract.
+Phase 2 implementation/runtime verification have not started. Its recommendations
+remain decisions to review, not approvals for a new API, UI workflow or scope.
+See [current status](phase-1-progress.md#remaining-handoff-work),
+[current API inventory](existing-api-inventory.md) and the
+[integration review](integration-review-2026-11.md) before refreshing this map.
 
 ## Authority and boundary
 

@@ -24,6 +24,7 @@ class SessionController extends ChangeNotifier {
   ApiFailure? failure;
   String? signInNoticeKey;
   String effectiveLanguageTag = 'en';
+  bool _hasEffectiveLanguagePreference = false;
   List<String> destinations = const [];
   UserPreferences? preferences;
   List<SupportedLanguage> supportedLanguages = const [];
@@ -36,6 +37,8 @@ class SessionController extends ChangeNotifier {
   int? _validationGeneration;
 
   int get sessionGeneration => _generation;
+
+  bool get hasEffectiveLanguagePreference => _hasEffectiveLanguagePreference;
 
   bool get hasProtectedState => principal != null && _token != null;
 
@@ -91,6 +94,7 @@ class SessionController extends ChangeNotifier {
       if (generation != _generation) return false;
       preferences = updated;
       effectiveLanguageTag = updated.languageTag;
+      _hasEffectiveLanguagePreference = true;
       return true;
     } on ApiFailure catch (error) {
       if (generation != _generation) return false;
@@ -115,6 +119,7 @@ class SessionController extends ChangeNotifier {
   Future<void> signIn({required String email, required String password}) async {
     final generation = ++_generation;
     status = SessionStatus.signingIn;
+    _hasEffectiveLanguagePreference = false;
     failure = null;
     signInNoticeKey = null;
     notifyListeners();
@@ -271,6 +276,7 @@ class SessionController extends ChangeNotifier {
     if (generation != _generation) return false;
     principal = refreshed;
     effectiveLanguageTag = language;
+    _hasEffectiveLanguagePreference = true;
     destinations = capabilities;
     _needsLanguageInitialization = false;
     status = SessionStatus.authenticated;
@@ -301,6 +307,7 @@ class SessionController extends ChangeNotifier {
     _needsResumeValidation = false;
     _needsLanguageInitialization = false;
     effectiveLanguageTag = 'en';
+    _hasEffectiveLanguagePreference = false;
     preferences = null;
     supportedLanguages = const [];
     preferencesBusy = false;

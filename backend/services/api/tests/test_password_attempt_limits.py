@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import json
 import os
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 import psycopg
@@ -265,16 +266,40 @@ def test_cooldown_arabic_seed_is_unpublished_and_source_changes_preserve_curated
         synchronize_generated_arabic_drafts, synchronize_message_definitions,
     )
 
+    artifact = json.loads(
+        (Path(__file__).resolve().parents[4] / 'frontend/webui/i18n/messages.ar.generated.json').read_text()
+    )
+    exported = next(
+        item for item in artifact['items']
+        if item['message_key'] == 'authentication.error.password_attempts_locked'
+    )
+    assert exported['provenance']['source_status'] == 'published'
+
     result = synchronize_generated_arabic_drafts(missing_only=True)
     assert result["failed"] == 0 and result["awaiting_generation"] == 0
     with db() as connection:
         draft = connection.execute(
             "SELECT * FROM ui_message_translations WHERE message_key='authentication.error.password_attempts_locked' AND language_tag='ar'"
         ).fetchone()
-        assert draft["origin"] == "generated" and draft["status"] == "draft"
+        # Published administrator exports retain their provenance on import,
+        # but seeding must never publish or review translations in this database.
+        assert draft["origin"] == "imported" and draft["status"] == "draft"
         assert draft["published_text"] is None and draft["date_reviewed"] is None
+        assert draft["date_published"] is None
+        assert draft["translated_text"] == exported['translated_text']
         assert "{seconds}" in draft["translated_text"] and "مؤقتاً" in draft["translated_text"]
-        assert draft["generation_metadata"]["batch_id"] == "wathiq-ar-password-attempt-cooldown-20261104"
+        assert draft["generation_metadata"]["export_provenance"] == exported['provenance']
+        assert draft["generation_metadata"]["batch_id"] == artifact['batch_id']
+        assert draft["generation_metadata"]["catalogue_sha256"] == artifact['catalogue_sha256']
+        assert draft["generation_metadata"]["quality_flags"] == exported['quality_flags']
+
+    repeated = synchronize_generated_arabic_drafts(missing_only=True)
+    assert repeated['failed'] == 0 and repeated['stored'] == 0 and repeated['corrected'] == 0
+    with db() as connection:
+        unchanged = connection.execute(
+            "SELECT * FROM ui_message_translations WHERE message_key='authentication.error.password_attempts_locked' AND language_tag='ar'"
+        ).fetchone()
+        assert unchanged == draft
         connection.execute("SELECT set_config('app.change_reason','Prepare source-change preservation verification',true)")
         connection.execute(
             "UPDATE ui_message_translations SET translated_text='صياغة إدارية محفوظة',origin='manual' WHERE message_key='settings.field.auth_lockout_attempts.description' AND language_tag='ar'"

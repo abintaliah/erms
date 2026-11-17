@@ -408,6 +408,7 @@ void main() {
       await signingIn;
       expect(controller.hasProtectedState, isFalse);
       expect(controller.effectiveLanguageTag, 'en');
+      expect(controller.hasEffectiveLanguagePreference, isFalse);
       expect(controller.destinations, isEmpty);
     },
   );

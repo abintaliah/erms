@@ -1,5 +1,10 @@
 # Post-upgrade mobile compatibility review — 4 November 2026
 
+> Historical review, preserved for its evidence. Its pending items, build/service
+> state and "next step" refer to 4 November, not the current checkout. Use the
+> [current status](phase-1-progress.md) and
+> [November integration review](integration-review-2026-11.md) for maintained guidance.
+
 Reviewed mobile revision `5ee545f` against main revision `0cfd587` after the
 authorized local `erms` database upgrade. This records findings only; no main
 integration or compatibility fixes are included. Phase 1 remains in progress.

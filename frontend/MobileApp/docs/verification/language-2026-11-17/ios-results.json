@@ -1,0 +1,73 @@
+{
+  "fixture": "production widgets/canonical catalogues; injected AuthApi and platform locale; no ERMS database",
+  "cases": [
+    {
+      "platform_locale": "en",
+      "fallback": "en",
+      "saved_language": "ar",
+      "width": 402.0,
+      "height": 874.0,
+      "passed": true,
+      "checks": [
+        "sign-in copy/direction",
+        "live pre-auth locale change",
+        "credential gate",
+        "minimum-length feedback",
+        "confirmation mismatch",
+        "saved-language override",
+        "device change cannot override preference",
+        "sign-out fallback",
+        "revocation fallback"
+      ]
+    },
+    {
+      "platform_locale": "ar",
+      "fallback": "ar",
+      "saved_language": "en",
+      "width": 402.0,
+      "height": 874.0,
+      "passed": true,
+      "checks": [
+        "sign-in copy/direction",
+        "live pre-auth locale change",
+        "credential gate",
+        "minimum-length feedback",
+        "confirmation mismatch",
+        "saved-language override",
+        "device change cannot override preference",
+        "sign-out fallback",
+        "revocation fallback"
+      ]
+    },
+    {
+      "platform_locale": "fr",
+      "fallback": "en",
+      "saved_language": "ar",
+      "width": 402.0,
+      "height": 874.0,
+      "passed": true,
+      "checks": [
+        "sign-in copy/direction",
+        "live pre-auth locale change",
+        "credential gate",
+        "minimum-length feedback",
+        "confirmation mismatch",
+        "saved-language override",
+        "device change cannot override preference",
+        "sign-out fallback",
+        "revocation fallback"
+      ]
+    }
+  ],
+  "screenshot_files": [
+    "ios-en-sign-in.png",
+    "ios-en-password-feedback.png",
+    "ios-en-saved-ar-shell.png",
+    "ios-ar-sign-in.png",
+    "ios-ar-password-feedback.png",
+    "ios-ar-saved-en-shell.png",
+    "ios-fr-sign-in.png",
+    "ios-fr-password-feedback.png",
+    "ios-fr-saved-ar-shell.png"
+  ]
+}

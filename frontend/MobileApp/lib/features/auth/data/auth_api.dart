@@ -260,10 +260,7 @@ class IoAuthApi implements AuthApi {
           ? null
           : jsonDecode(utf8.decode(bytes, allowMalformed: false));
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw ApiFailure(
-          _failureKind(response.statusCode),
-          statusCode: response.statusCode,
-        );
+        throw _responseFailure(path, response, payload);
       }
       return _ApiResponse(payload: payload, cookies: response.cookies);
     } on ApiFailure {
@@ -281,6 +278,64 @@ class IoAuthApi implements AuthApi {
     } on JsonUnsupportedObjectError catch (_) {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
+  }
+
+  ApiFailure _responseFailure(
+    String path,
+    HttpClientResponse response,
+    Object? payload,
+  ) {
+    final status = response.statusCode;
+    // Only established password-change responses may supply field feedback.
+    // Never display arbitrary server strings or expose login-account state.
+    if (path == '/api/v1/auth/change-password' && payload is Map) {
+      final detail = payload['detail'];
+      if (status == 422 && detail is String) {
+        final match = RegExp(
+          r'^password must contain at least ([1-9][0-9]*) characters$',
+        ).firstMatch(detail);
+        final minimum = match == null ? null : int.tryParse(match[1]!);
+        if (minimum != null) {
+          return ApiFailure(
+            ApiFailureKind.invalidRequest,
+            statusCode: status,
+            messageKey: 'mobile.authentication.password_too_short',
+            parameters: Map.unmodifiable({'minimum': minimum}),
+            passwordField: 'new_password',
+          );
+        }
+      }
+      if (status == 400 && detail == 'current password is incorrect') {
+        return ApiFailure(
+          ApiFailureKind.invalidRequest,
+          statusCode: status,
+          messageKey: 'mobile.authentication.current_password_incorrect',
+          passwordField: 'current_password',
+        );
+      }
+      if (status == 429 &&
+          detail is Map &&
+          detail['code'] == 'password_attempts_locked' &&
+          detail['message_key'] ==
+              'authentication.error.password_attempts_locked') {
+        final values = detail['parameters'];
+        final supplied = values is Map ? values['seconds'] : null;
+        final seconds = supplied is int && supplied > 0
+            ? supplied
+            : int.tryParse(
+                response.headers.value(HttpHeaders.retryAfterHeader) ?? '',
+              );
+        if (seconds != null && seconds > 0) {
+          return ApiFailure(
+            ApiFailureKind.invalidRequest,
+            statusCode: status,
+            messageKey: 'authentication.error.password_attempts_locked',
+            parameters: Map.unmodifiable({'seconds': seconds}),
+          );
+        }
+      }
+    }
+    return ApiFailure(_failureKind(status), statusCode: status);
   }
 
   AuthPrincipal _principal(Object? payload) {

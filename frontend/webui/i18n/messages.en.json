@@ -25225,6 +25225,36 @@
     "is_html": false
   },
   {
+    "message_key": "mobile.authentication.current_password_incorrect",
+    "context_group": "mobile.authentication",
+    "default_text": "The current password is incorrect.",
+    "semantic_meaning": "Shown only on an authenticated password-change response rejecting the current password, never during sign-in.",
+    "common_locations": [
+      "Flutter mobile password-change form"
+    ],
+    "translator_guidance": "Shown only on an authenticated password-change response rejecting the current password, never during sign-in.",
+    "grammatical_role": "validation message",
+    "parameter_schema": {},
+    "rendered_example": "The current password is incorrect.",
+    "is_html": false
+  },
+  {
+    "message_key": "mobile.authentication.password_too_short",
+    "context_group": "mobile.authentication",
+    "default_text": "The new password must contain at least {minimum} characters.",
+    "semantic_meaning": "The minimum length is provided by the rejected server response; preserve {minimum}. Do not imply another password policy.",
+    "common_locations": [
+      "Flutter mobile password-change form"
+    ],
+    "translator_guidance": "The minimum length is provided by the rejected server response; preserve {minimum}. Do not imply another password policy.",
+    "grammatical_role": "validation message",
+    "parameter_schema": {
+      "minimum": "integer"
+    },
+    "rendered_example": "The new password must contain at least 12 characters.",
+    "is_html": false
+  },
+  {
     "message_key": "mobile.navigation.classification_browser",
     "context_group": "mobile.navigation",
     "default_text": "Classification Browser",

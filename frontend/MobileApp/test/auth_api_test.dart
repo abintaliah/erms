@@ -221,6 +221,134 @@ void main() {
     expect(requests[4].headers.value(HttpHeaders.ifMatchHeader), '"1"');
   });
 
+  final passwordErrors = [
+    (
+      422,
+      'password must contain at least 15 characters',
+      'mobile.authentication.password_too_short',
+      'new_password',
+      {'minimum': 15},
+    ),
+    (
+      400,
+      'current password is incorrect',
+      'mobile.authentication.current_password_incorrect',
+      'current_password',
+      <String, int>{},
+    ),
+    (
+      429,
+      {
+        'code': 'password_attempts_locked',
+        'message_key': 'authentication.error.password_attempts_locked',
+        'parameters': {'seconds': 120},
+      },
+      'authentication.error.password_attempts_locked',
+      null,
+      {'seconds': 120},
+    ),
+  ];
+  for (final (status, detail, key, field, parameters) in passwordErrors) {
+    test(
+      'password response $status retains only recognized safe feedback',
+      () async {
+        final server = await _server((request) async {
+          request.response
+            ..statusCode = status
+            ..headers.contentType = ContentType.json
+            ..write(jsonEncode({'detail': detail}));
+          await request.response.close();
+        });
+        addTearDown(() => server.close(force: true));
+        final api = IoAuthApi(
+          Uri.parse('http://${server.address.address}:${server.port}'),
+        );
+        try {
+          await api.changePassword(
+            token: 'token',
+            currentPassword: 'old',
+            newPassword: 'short',
+          );
+          fail('Expected rejected password');
+        } on ApiFailure catch (error) {
+          expect(error.statusCode, status);
+          expect(error.kind, ApiFailureKind.invalidRequest);
+          expect(error.messageKey, key);
+          expect(error.passwordField, field);
+          expect(error.parameters, parameters);
+        }
+      },
+    );
+  }
+
+  test('unknown password errors never expose raw server details', () async {
+    final server = await _server((request) async {
+      request.response
+        ..statusCode = 422
+        ..headers.contentType = ContentType.json
+        ..write(
+          jsonEncode({'detail': 'private diagnostic or reflected password'}),
+        );
+      await request.response.close();
+    });
+    addTearDown(() => server.close(force: true));
+    final api = IoAuthApi(
+      Uri.parse('http://${server.address.address}:${server.port}'),
+    );
+    try {
+      await api.changePassword(
+        token: 'token',
+        currentPassword: 'old',
+        newPassword: 'short',
+      );
+      fail('Expected rejected password');
+    } on ApiFailure catch (error) {
+      expect(error.messageKey, isNull);
+      expect(error.passwordField, isNull);
+      expect(error.parameters, isEmpty);
+    }
+  });
+
+  test(
+    'cooldown falls back to server Retry-After for malformed seconds',
+    () async {
+      final server = await _server((request) async {
+        request.response
+          ..statusCode = 429
+          ..headers.contentType = ContentType.json
+          ..headers.set(HttpHeaders.retryAfterHeader, '30')
+          ..write(
+            jsonEncode({
+              'detail': {
+                'code': 'password_attempts_locked',
+                'message_key': 'authentication.error.password_attempts_locked',
+                'parameters': {'seconds': -1},
+              },
+            }),
+          );
+        await request.response.close();
+      });
+      addTearDown(() => server.close(force: true));
+      final api = IoAuthApi(
+        Uri.parse('http://${server.address.address}:${server.port}'),
+      );
+      try {
+        await api.changePassword(
+          token: 'token',
+          currentPassword: 'old',
+          newPassword: 'short',
+        );
+        fail('Expected cooldown');
+      } on ApiFailure catch (error) {
+        expect(error.parameters, {'seconds': 30});
+        expect(
+          error.messageKey,
+          'authentication.error.password_attempts_locked',
+        );
+      }
+    },
+  );
+
   test('authentication failure remains non-disclosing category', () async {
     final server = await _server((request) async {
       request.response

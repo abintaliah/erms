@@ -46,7 +46,11 @@ class MessageCatalogue {
     return MessageCatalogue(english: english, arabic: arabic);
   }
 
-  String text(String key, Locale locale) {
+  String text(
+    String key,
+    Locale locale, {
+    Map<String, Object> parameters = const {},
+  }) {
     final messages = locale.languageCode == arabicLocale.languageCode
         ? arabic
         : english;
@@ -54,6 +58,12 @@ class MessageCatalogue {
     if (value == null) {
       throw StateError('Missing active message key: $key');
     }
-    return value;
+    return value.replaceAllMapped(RegExp(r'\{([a-z][a-z0-9_]*)\}'), (match) {
+      final parameter = parameters[match[1]];
+      if (parameter == null) {
+        throw ArgumentError('Missing message parameter: ${match[1]}');
+      }
+      return parameter.toString();
+    });
   }
 }

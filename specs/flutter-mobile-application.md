@@ -19,7 +19,7 @@ authoritative. Where the desired mobile experience cannot be implemented with
 an existing API, this document identifies the gap for separate review; it does
 not create or approve a new endpoint.
 
-Implementation phases are intentionally outside the scope of this revision.
+Delivery phases and their exit gates are defined in section 26.
 
 ## 2. Product intent
 
@@ -157,7 +157,20 @@ workflow. Inline hard-coded English or Arabic strings are prohibited.
 
 The app must:
 
-- follow the authenticated user's existing effective language preference;
+- before the saved ERMS language preference can be read, use the device's
+  current primary language: Arabic (including regional variants) uses Arabic/RTL;
+  English and unsupported languages use English/LTR. This includes sign-in,
+  first-login/reset mandatory password changes, and their validation feedback;
+- follow the authenticated user's existing effective language preference as soon
+  as it is available, overriding device language. Load it only through already
+  permitted APIs after a required password change succeeds; do not widen the
+  credential-state access gate to fetch localization;
+- reflect device-language changes while no saved preference is available. After
+  a preference is loaded, device-language changes must not override it;
+- on logout, expiry or revocation, discard the previous user's language preference
+  and return to the current device language (with English fallback). Neither this
+  fallback nor packaged translation lookup authenticates a user or loads protected
+  data;
 - update direction, alignment, navigation affordances, and icon direction when
   the effective language changes;
 - use logical leading and trailing placement rather than hard-coded left and

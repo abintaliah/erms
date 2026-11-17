@@ -1720,6 +1720,8 @@
   "messaging.test.label": "اختبار — ليس إشعاراً إنتاجياً",
   "messaging.value.false": "لا",
   "messaging.value.true": "نعم",
+  "mobile.authentication.current_password_incorrect": "كلمة المرور الحالية غير صحيحة.",
+  "mobile.authentication.password_too_short": "يجب أن تتكون كلمة المرور الجديدة من {minimum} حرفًا على الأقل.",
   "mobile.navigation.classification_browser": "متصفح التصنيفات",
   "mobile.navigation.favourites": "المفضلة",
   "mobile.navigation.global_search": "البحث الشامل",

@@ -1,5 +1,9 @@
 # Phase 0 progress record
 
+Historical completion evidence. Counts, toolchain and workstation state below
+refer to the original run; the [current validation matrix](validation-matrix.md)
+and [current status](phase-1-progress.md) describe the maintained implementation.
+
 Status: Complete
 
 Started: 30 September 2026
@@ -76,7 +80,7 @@ Completed: 30 September 2026
   requirements justify them.
 
 All applicable Phase 0 exit gates in the mobile specification are supported by
-the evidence recorded above and in `docs/validation-matrix.md`. The deferred
+the evidence recorded above and in the [historical validation matrix](history/validation-matrix-through-2026-11-17.md). The deferred
 items are not Phase 0 blockers and remain explicit prerequisites for their
 respective later work.
 

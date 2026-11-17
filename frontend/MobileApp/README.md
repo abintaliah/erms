@@ -8,10 +8,16 @@ The product contract is maintained in
 Existing backend and domain specifications remain authoritative; this client
 must not reproduce authorization or records-management policy.
 
-Every implementation unit requires a retained automated check and traceability
-row in [`docs/validation-matrix.md`](docs/validation-matrix.md).
+For a new maintainer, start with the [documentation guide](docs/README.md),
+then read [current Phase 1 status and remaining work](docs/phase-1-progress.md).
+[Architecture](docs/architecture.md) owns implementation boundaries;
+[the validation matrix](docs/validation-matrix.md) maps each delivered requirement
+to concrete tests. Dated history is retained separately and is not a backlog.
 
-## Verified bootstrap toolchain
+## Recorded bootstrap toolchain
+
+These versions were recorded during the verified bootstrap. They are evidence
+of that setup, not a request to upgrade tools or install another SDK.
 
 - Flutter 3.47.5 stable
 - Dart 3.13.4
@@ -97,17 +103,66 @@ Native tablet layout acceptance is documented in
 [`docs/tablet-acceptance.md`](docs/tablet-acceptance.md), including its test-only
 API boundary, landscape setup, screenshot artifacts and normal-build restoration.
 
-## Session expiry
+## Language and session behavior
 
-The API enforces the application settings `AUTH_SESSION_IDLE_MINUTES` and
-`AUTH_SESSION_ABSOLUTE_HOURS`. Mobile has no independent background timeout or
-session-return reminder. Returning from the background validates the session
-with the server; an unavailable server keeps protected interaction gated with
-Retry and Sign out. Process restart still requires sign-in. Native startup
-cancels reminders left by older builds without requesting notification permission.
+Before saved preferences are available, the app follows device Arabic or falls
+back to English. Saved ERMS language takes precedence afterward. Session expiry
+and lockout remain server-owned; there are no local expiry reminders or periodic
+checks on a healthy screen. See [architecture](docs/architecture.md) for the
+credential-state sequence, offline recovery and identity-clearing rules.
 
-The Flutter client does not periodically poll a healthy foreground session.
-Revocation/expiry is detected on the next authenticated request, protected
-navigation action or background return. An untouched screen stays visible;
-server rejection clears protected state and prevents Back from restoring it.
-Offline reconnect checks run only while the existing offline gate is open.
+## Build and install for local review
+
+Start/check the managed services from the **repository root**:
+
+```sh
+./run-local-stack.sh up
+./run-local-stack.sh status
+```
+
+The launcher synchronizes definitions and seeds only missing Arabic drafts. It
+does not publish translations or run migrations. Use the URLs printed by status;
+the commands below assume the ordinary local API port 8000.
+
+From `frontend/MobileApp`, build normal development entrypoints:
+
+```sh
+flutter build apk --debug \
+  --dart-define=WATHIQ_API_BASE_URL=http://127.0.0.1:8000
+flutter build ios --simulator --debug \
+  --dart-define=WATHIQ_API_BASE_URL=http://127.0.0.1:8000
+```
+
+Outputs are `build/app/outputs/flutter-apk/app-debug.apk` and
+`build/ios/iphonesimulator/Runner.app`. The latter is a simulator build, not a
+signed physical-iPhone package. Credentials are not compiled into either build.
+
+Inspect `adb devices -l` and `xcrun simctl list devices booted`; choose explicit
+targets before installing. Do not overwrite another target by guessing its ID.
+For an Android emulator, reverse its API port:
+
+```sh
+adb -s <android-serial> reverse tcp:8000 tcp:8000
+adb -s <android-serial> install -r build/app/outputs/flutter-apk/app-debug.apk
+xcrun simctl install <booted-ios-udid> build/ios/iphonesimulator/Runner.app
+```
+
+A physical device needs an appropriate reachable API configuration; host
+loopback does not automatically refer to the development Mac. Do not disable TLS
+validation or embed private environment values to make a device test work.
+The product environment validator requires HTTPS outside loopback development.
+
+For acceptance, use [the current handoff checklist](docs/phase-1-progress.md#remaining-handoff-work).
+Use dedicated local test accounts and existing administrative password-reset
+flows when a new mandatory-password trial is needed. Resets revoke that user's
+sessions; do not reset another user's password or change password policy merely
+to manufacture a test. Never put temporary credentials in documentation or Git.
+
+## Publishing translations
+
+Publish/review in Translation Administration, then obtain a complete Arabic
+export with reviewed drafts excluded. Deliberately merge it into the canonical
+artifact while preserving per-item administrator wording and provenance; run
+catalogue checks and `dart run tool/sync_i18n.dart`, then rebuild the mobile app.
+Publication alone updates the selected database, not installed mobile binaries.
+Current translation status and any remaining work are tracked in [Phase 1 status](docs/phase-1-progress.md#remaining-handoff-work).

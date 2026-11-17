@@ -1,5 +1,9 @@
 # Phase 1 authentication and shell mockup review
 
+> Historical visual proposal. The current [mobile specification](../../../../specs/flutter-mobile-application.md)
+> and [architecture](../architecture.md) govern session and language behavior.
+> Mockup imagery does not reinstate retired reminders, local expiry or polling.
+
 Status: Approved with WebUI logo refinement
 
 Created: 30 September 2026

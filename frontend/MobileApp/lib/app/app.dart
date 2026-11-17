@@ -42,6 +42,24 @@ class _WathiqAppState extends State<WathiqApp> with WidgetsBindingObserver {
   }
 
   @override
+  void didChangeLocales(List<Locale>? locales) {
+    if (!sessionController.hasEffectiveLanguagePreference) {
+      setState(() {});
+    }
+  }
+
+  Locale get _effectiveLocale {
+    if (sessionController.hasEffectiveLanguagePreference) {
+      return Locale(sessionController.effectiveLanguageTag);
+    }
+    final deviceLanguage =
+        WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+    return deviceLanguage == 'ar'
+        ? MessageCatalogue.arabicLocale
+        : MessageCatalogue.englishLocale;
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
@@ -59,7 +77,7 @@ class _WathiqAppState extends State<WathiqApp> with WidgetsBindingObserver {
         key: ValueKey(sessionController.sessionGeneration),
         debugShowCheckedModeBanner: false,
         title: 'Wathiq',
-        locale: Locale(sessionController.effectiveLanguageTag),
+        locale: _effectiveLocale,
         supportedLocales: MessageCatalogue.supportedLocales,
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,

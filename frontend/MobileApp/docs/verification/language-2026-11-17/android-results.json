@@ -1,0 +1,73 @@
+{
+  "fixture": "production widgets/canonical catalogues; injected AuthApi and platform locale; no ERMS database",
+  "cases": [
+    {
+      "platform_locale": "en",
+      "fallback": "en",
+      "saved_language": "ar",
+      "width": 411.42857142857144,
+      "height": 914.2857142857143,
+      "passed": true,
+      "checks": [
+        "sign-in copy/direction",
+        "live pre-auth locale change",
+        "credential gate",
+        "minimum-length feedback",
+        "confirmation mismatch",
+        "saved-language override",
+        "device change cannot override preference",
+        "sign-out fallback",
+        "revocation fallback"
+      ]
+    },
+    {
+      "platform_locale": "ar",
+      "fallback": "ar",
+      "saved_language": "en",
+      "width": 411.42857142857144,
+      "height": 914.2857142857143,
+      "passed": true,
+      "checks": [
+        "sign-in copy/direction",
+        "live pre-auth locale change",
+        "credential gate",
+        "minimum-length feedback",
+        "confirmation mismatch",
+        "saved-language override",
+        "device change cannot override preference",
+        "sign-out fallback",
+        "revocation fallback"
+      ]
+    },
+    {
+      "platform_locale": "fr",
+      "fallback": "en",
+      "saved_language": "ar",
+      "width": 411.42857142857144,
+      "height": 914.2857142857143,
+      "passed": true,
+      "checks": [
+        "sign-in copy/direction",
+        "live pre-auth locale change",
+        "credential gate",
+        "minimum-length feedback",
+        "confirmation mismatch",
+        "saved-language override",
+        "device change cannot override preference",
+        "sign-out fallback",
+        "revocation fallback"
+      ]
+    }
+  ],
+  "screenshot_files": [
+    "android-en-sign-in.png",
+    "android-en-password-feedback.png",
+    "android-en-saved-ar-shell.png",
+    "android-ar-sign-in.png",
+    "android-ar-password-feedback.png",
+    "android-ar-saved-en-shell.png",
+    "android-fr-sign-in.png",
+    "android-fr-password-feedback.png",
+    "android-fr-saved-ar-shell.png"
+  ]
+}
