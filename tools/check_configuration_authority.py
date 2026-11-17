@@ -40,6 +40,9 @@ SEARCH_POLICY_CONSUMERS={
     ],
 }
 PAGE_SIZE_CONSUMERS={
+    'MESSAGES_PAGE_SIZE': [
+        {'path':'frontend/webui/messaging_workspace.py','scope':'Supplies server pagination size for Inbox, Outbox and Drafts.'},
+    ],
     'CHILD_AGGREGATION_PAGE_SIZE': [
         {'path':'frontend/webui/aggregation_details.py','scope':'Pages direct child aggregations independently in aggregation details.'},
     ],
@@ -102,7 +105,7 @@ def inventory():
         }
         result[key]={
             'setting':key,'authority':'database',
-            'contract':'specs/aggregation-and-record-page-amendment.md#'+section,
+            'contract':('specs/application-configuration.md section 5.4' if key=='MESSAGES_PAGE_SIZE' else 'specs/aggregation-and-record-page-amendment.md#'+section),
             'default_or_requirement':setting.default,'category':setting.category,
             'consumers':[],'templates':[],
         }

@@ -3,8 +3,8 @@
   "model": "database-reviewed-translations",
   "model_version": "1",
   "prompt_version": "manual-admin-export-v1",
-  "specification_sha256": "baaabf44ff7d57a43ab01de3d9501de4b1533391100886f66b01622ca555112b",
-  "catalogue_sha256": "65c107e8a1abd444bd7d7c66f34bfc700812f7944898bccfd6e4109c301699b8",
+  "specification_sha256": "ad6a5fce0fbb3a0bcaeeee9b015524c8844a34bef406c11eb6e2b9699b5c77d7",
+  "catalogue_sha256": "de53ffe7727b62aca2b91e8e330797c0a62d3aa05e8b8ab906c70c752fd93a9b",
   "terminology_sha256": "1679184ec9090d2fdbbb9dab6c65debe24c3066667397a2f7b19bb2a6bb3508c",
   "batch_id": "admin-export-ar-20261117101841",
   "generated_at": "2026-11-17T10:18:41.969598+04:00",
@@ -17515,6 +17515,22 @@
       }
     },
     {
+      "message_key": "messaging.action.apply_filters",
+      "translated_text": "تطبيق عوامل التصفية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-messaging-redesign-v1",
+        "generated_at": "2026-11-16T04:48:44.999794+00:00",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.action.browse_recipients",
       "translated_text": "استعراض الهيكل التنظيمي",
       "quality_flags": [],
@@ -17536,6 +17552,22 @@
         "source_status": "published",
         "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
         "date_published": "2026-11-16T08:41:02.260696+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.action.clear_filters",
+      "translated_text": "مسح عوامل التصفية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-messaging-redesign-v1",
+        "generated_at": "2026-11-16T04:48:44.999794+00:00",
+        "review_required": true
       }
     },
     {
@@ -17563,6 +17595,22 @@
       }
     },
     {
+      "message_key": "messaging.action.filters",
+      "translated_text": "عوامل التصفية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-messaging-redesign-v1",
+        "generated_at": "2026-11-16T04:48:44.999794+00:00",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.action.follow_up",
       "translated_text": "إرسال متابعة",
       "quality_flags": [],
@@ -17584,6 +17632,22 @@
         "source_status": "published",
         "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
         "date_published": "2026-11-16T08:41:02.260696+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.action.more",
+      "translated_text": "المزيد من إجراءات الرسالة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-messaging-redesign-v1",
+        "generated_at": "2026-11-16T04:48:44.999794+00:00",
+        "review_required": true
       }
     },
     {
@@ -17620,6 +17684,22 @@
         "source_status": "published",
         "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
         "date_published": "2026-11-16T08:41:02.260696+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.action.open_draft",
+      "translated_text": "فتح في المسودات",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-messaging-redesign-v1",
+        "generated_at": "2026-11-16T04:48:44.999794+00:00",
+        "review_required": true
       }
     },
     {
@@ -17728,6 +17808,22 @@
         "source_status": "published",
         "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
         "date_published": "2026-11-16T08:41:02.260696+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.action.view_sent",
+      "translated_text": "عرض في الصادر",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-messaging-redesign-v1",
+        "generated_at": "2026-11-16T04:48:44.999794+00:00",
+        "review_required": true
       }
     },
     {
@@ -19183,18 +19279,6 @@
       }
     },
     {
-      "message_key": "messaging.field.resources",
-      "translated_text": "الموارد",
-      "quality_flags": [],
-      "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "imported",
-        "source_status": "published",
-        "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
-        "date_published": "2026-11-16T08:41:02.260696+00:00"
-      }
-    },
-    {
       "message_key": "messaging.field.role",
       "translated_text": "الدور",
       "quality_flags": [],
@@ -19216,6 +19300,38 @@
         "source_status": "published",
         "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
         "date_published": "2026-11-16T08:41:02.260696+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.field.search_body",
+      "translated_text": "البحث في نص الرسالة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-text-filters-v1",
+        "generated_at": "2026-11-16T06:37:08.832981+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.field.search_linked_content",
+      "translated_text": "البحث في المحتوى المرتبط",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-text-filters-v1",
+        "generated_at": "2026-11-16T06:37:08.833077+00:00",
+        "review_required": true
       }
     },
     {
@@ -19399,6 +19515,22 @@
       }
     },
     {
+      "message_key": "messaging.kind.system_notice",
+      "translated_text": "إشعار النظام",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-presentation-v1",
+        "generated_at": "2026-11-16T05:46:05.755739+00:00",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.linked.title",
       "translated_text": "الرسالة السابقة المرتبطة",
       "quality_flags": [],
@@ -19408,6 +19540,54 @@
         "source_status": "published",
         "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
         "date_published": "2026-11-16T08:41:02.260696+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.list.last_updated",
+      "translated_text": "حسب آخر تحديث",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-presentation-v1",
+        "generated_at": "2026-11-16T05:46:05.755739+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.list.newest_first",
+      "translated_text": "الأحدث أولاً",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-presentation-v1",
+        "generated_at": "2026-11-16T05:46:05.755739+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.list.page_range",
+      "translated_text": "{first}–{last}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-presentation-v1",
+        "generated_at": "2026-11-16T05:46:05.755739+00:00",
+        "review_required": true
       }
     },
     {
@@ -20659,6 +20839,230 @@
       }
     },
     {
+      "message_key": "messaging.outbox.completed_count",
+      "translated_text": "الإجراء مكتمل لدى {completed} من أصل {total}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.delivered_count",
+      "translated_text": "تم التسليم إلى {count}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.due",
+      "translated_text": "تاريخ الاستحقاق {date}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.next_recipients",
+      "translated_text": "المستلمون التالون",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.no_due_date",
+      "translated_text": "بلا تاريخ استحقاق",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.open_completion_reply",
+      "translated_text": "فتح رد تأكيد إكمال الإجراء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.previous_recipients",
+      "translated_text": "المستلمون السابقون",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.priority",
+      "translated_text": "الأولوية: {priority}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.read_count",
+      "translated_text": "قرأها {count}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.receipt_delivered_at",
+      "translated_text": "تم التسليم في {time}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-delivery-timestamp-v1",
+        "generated_at": "2026-11-16T10:19:19.027156+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.receipt_read_at",
+      "translated_text": "قُرئت في {time}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.recipient_range",
+      "translated_text": "{first}–{last} من أصل {total}",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.recipients",
+      "translated_text": "المستلمون وإيصالات القراءة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.outbox.security",
+      "translated_text": "السرية",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-outbox-reading-pane-v1",
+        "generated_at": "2026-11-16T07:59:46.932477+00:00",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.priority.high",
       "translated_text": "عالية",
       "quality_flags": [],
@@ -20692,6 +21096,22 @@
         "source_status": "published",
         "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
         "date_published": "2026-11-16T08:41:02.260696+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.reader.linked_resources",
+      "translated_text": "الموارد المرتبطة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-reading-panes-v1",
+        "generated_at": "2026-11-16T08:52:26.800179+00:00",
+        "review_required": true
       }
     },
     {
@@ -20803,6 +21223,22 @@
       }
     },
     {
+      "message_key": "messaging.section.action_history",
+      "translated_text": "سجل الإجراء",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-presentation-v1",
+        "generated_at": "2026-11-16T05:46:05.755739+00:00",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.section.amendments",
       "translated_text": "تعديلات الإجراء",
       "quality_flags": [],
@@ -20812,6 +21248,38 @@
         "source_status": "published",
         "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
         "date_published": "2026-11-16T08:41:02.260696+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.section.deleted_draft",
+      "translated_text": "مسودة محذوفة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-presentation-v1",
+        "generated_at": "2026-11-16T05:46:05.755739+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.section.edit_draft",
+      "translated_text": "تحرير المسودة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-presentation-v1",
+        "generated_at": "2026-11-16T05:46:05.755739+00:00",
+        "review_required": true
       }
     },
     {
@@ -20839,6 +21307,22 @@
       }
     },
     {
+      "message_key": "messaging.section.new_draft",
+      "translated_text": "مسودة جديدة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-presentation-v1",
+        "generated_at": "2026-11-16T05:46:05.755739+00:00",
+        "review_required": true
+      }
+    },
+    {
       "message_key": "messaging.section.original",
       "translated_text": "الإجراء الأصلي",
       "quality_flags": [],
@@ -20851,15 +21335,51 @@
       }
     },
     {
-      "message_key": "messaging.section.recipients",
-      "translated_text": "المستلمون والحالة",
+      "message_key": "messaging.section.reading_pane",
+      "translated_text": "جزء القراءة",
       "quality_flags": [],
       "provenance": {
-        "kind": "admin_catalogue_export",
-        "source_origin": "imported",
-        "source_status": "published",
-        "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
-        "date_published": "2026-11-16T08:41:02.260696+00:00"
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-presentation-v1",
+        "generated_at": "2026-11-16T05:46:05.755739+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.section.saved_drafts",
+      "translated_text": "المسودات المحفوظة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-presentation-v1",
+        "generated_at": "2026-11-16T05:46:05.755739+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.section.sent_messages",
+      "translated_text": "الرسائل المرسلة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-mailbox-presentation-v1",
+        "generated_at": "2026-11-16T05:46:05.755739+00:00",
+        "review_required": true
       }
     },
     {
@@ -21016,6 +21536,38 @@
         "source_status": "published",
         "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
         "date_published": "2026-11-16T08:41:02.260696+00:00"
+      }
+    },
+    {
+      "message_key": "messaging.state.select_draft",
+      "translated_text": "اختر مسودة لتحريرها",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-messaging-redesign-v1",
+        "generated_at": "2026-11-16T04:48:44.999794+00:00",
+        "review_required": true
+      }
+    },
+    {
+      "message_key": "messaging.state.select_message",
+      "translated_text": "اختر رسالة لقراءتها",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-messaging-redesign-v1",
+        "generated_at": "2026-11-16T04:48:44.999794+00:00",
+        "review_required": true
       }
     },
     {
@@ -26248,6 +26800,36 @@
         "source_status": "published",
         "date_reviewed": "2026-11-16T08:41:02.260696+00:00",
         "date_published": "2026-11-16T08:41:02.260696+00:00"
+      }
+    },
+    {
+      "message_key": "settings.field.messages_page_size.description",
+      "translated_text": "عدد العناصر في كل صفحة في الوارد والصادر والمسودات. أدخل عددًا صحيحًا من 1 إلى 50. القيمة الافتراضية هي 25. تُطبّق التغييرات عند فتح إحدى هذه الصفحات مجددًا.",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-messages-page-size-v1",
+        "generated_at": "2026-11-16T09:56:03.162482+00:00"
+      }
+    },
+    {
+      "message_key": "settings.field.messages_page_size.label",
+      "translated_text": "الرسائل في الصفحة",
+      "quality_flags": [],
+      "provenance": {
+        "kind": "generated_draft",
+        "source_origin": "generated",
+        "source_status": "draft",
+        "generator": "OpenAI Codex",
+        "model": "GPT-6",
+        "model_version": "GPT-6",
+        "prompt_version": "wathiq-messages-page-size-v1",
+        "generated_at": "2026-11-16T09:56:03.162099+00:00"
       }
     },
     {
