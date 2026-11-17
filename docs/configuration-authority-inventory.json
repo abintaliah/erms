@@ -351,6 +351,28 @@
       "service": "API"
     },
     {
+      "setting": "CHILD_AGGREGATION_PAGE_SIZE",
+      "authority": "database",
+      "contract": "specs/aggregation-and-record-page-amendment.md#3-aggregation-page",
+      "default_or_requirement": 10,
+      "category": "interface_limits",
+      "consumers": [
+        {
+          "path": "backend/services/api/application_configuration.py",
+          "scope": "Exposes the validated database value through authenticated application configuration."
+        },
+        {
+          "path": "frontend/webui/aggregation_details.py",
+          "scope": "Pages direct child aggregations independently in aggregation details."
+        }
+      ],
+      "templates": [],
+      "purpose": "Number of child aggregations shown per page in aggregation details.",
+      "runtime_status": "database_only_page_size_consumer",
+      "restart": "No; API 30-second cache (current committed capture at specified workflow boundaries)",
+      "service": "API"
+    },
+    {
       "setting": "CLASSIFICATION_RECENT_SELECTION_LIMIT",
       "authority": "database",
       "contract": "specs/application-configuration.md section 5.4",
@@ -371,6 +393,28 @@
       "templates": [],
       "purpose": "Maximum recent classification selections shown.",
       "runtime_status": "database_only_consumer_cutover_verified",
+      "restart": "No; API 30-second cache (current committed capture at specified workflow boundaries)",
+      "service": "API"
+    },
+    {
+      "setting": "CONTAINED_RECORD_PAGE_SIZE",
+      "authority": "database",
+      "contract": "specs/aggregation-and-record-page-amendment.md#3-aggregation-page",
+      "default_or_requirement": 25,
+      "category": "interface_limits",
+      "consumers": [
+        {
+          "path": "backend/services/api/application_configuration.py",
+          "scope": "Exposes the validated database value through authenticated application configuration."
+        },
+        {
+          "path": "frontend/webui/aggregation_details.py",
+          "scope": "Pages directly contained records independently in aggregation details."
+        }
+      ],
+      "templates": [],
+      "purpose": "Number of records shown per page in aggregation details.",
+      "runtime_status": "database_only_page_size_consumer",
       "restart": "No; API 30-second cache (current committed capture at specified workflow boundaries)",
       "service": "API"
     },
@@ -1326,6 +1370,28 @@
       "service": "API"
     },
     {
+      "setting": "MESSAGES_PAGE_SIZE",
+      "authority": "database",
+      "contract": "specs/application-configuration.md section 5.4",
+      "default_or_requirement": 25,
+      "category": "interface_limits",
+      "consumers": [
+        {
+          "path": "backend/services/api/application_configuration.py",
+          "scope": "Exposes the validated database value through authenticated application configuration."
+        },
+        {
+          "path": "frontend/webui/messaging_workspace.py",
+          "scope": "Supplies server pagination size for Inbox, Outbox and Drafts."
+        }
+      ],
+      "templates": [],
+      "purpose": "Number of entries per page in Inbox, Outbox, and Drafts. Enter a whole number from 1 to 50. The default is 25. Changes apply when a mailbox is opened again.",
+      "runtime_status": "database_only_page_size_consumer",
+      "restart": "No; API 30-second cache (current committed capture at specified workflow boundaries)",
+      "service": "API"
+    },
+    {
       "setting": "MESSAGING_CAPTURE_MAX_LINKED_MESSAGES",
       "authority": "deployment",
       "contract": "specs/notifications-and-messaging.md section 11.5 and backend/services/api/messaging/realtime.py",
@@ -1891,6 +1957,36 @@
       "templates": [],
       "purpose": "Maximum authenticated search requests per minute.",
       "runtime_status": "database_only_request_and_worker_cutover_verified",
+      "restart": "No; API 30-second cache (current committed capture at specified workflow boundaries)",
+      "service": "API"
+    },
+    {
+      "setting": "SEARCH_RESULTS_PAGE_SIZE",
+      "authority": "database",
+      "contract": "specs/aggregation-and-record-page-amendment.md#7-created-by-in-listings",
+      "default_or_requirement": 25,
+      "category": "interface_limits",
+      "consumers": [
+        {
+          "path": "backend/services/api/application_configuration.py",
+          "scope": "Exposes the validated database value through authenticated application configuration."
+        },
+        {
+          "path": "frontend/webui/global_search.py",
+          "scope": "Supplies the default Global Search page size."
+        },
+        {
+          "path": "frontend/webui/advanced_search.py",
+          "scope": "Supplies the default Advanced Search page size; per-search choices may override it."
+        },
+        {
+          "path": "frontend/webui/collection_controls.py",
+          "scope": "Supplies the default page size for aggregation and record filters."
+        }
+      ],
+      "templates": [],
+      "purpose": "Default page size for Global Search, Advanced Search, and aggregation and record filters.",
+      "runtime_status": "database_only_page_size_consumer",
       "restart": "No; API 30-second cache (current committed capture at specified workflow boundaries)",
       "service": "API"
     },
@@ -2766,7 +2862,7 @@
     }
   ],
   "reconciliation": [
-    "All 59 database settings have explicit API registry categories.",
+    "All 63 database settings have explicit API registry categories.",
     "All six environment templates are checked, including the generated API and standalone indexer examples.",
     "Later request-presentation settings follow the approved Administration Settings amendment; original phase evidence remains historical.",
     "SSL_CERT_FILE is optional process TLS infrastructure; public certificates use platform trust.",
